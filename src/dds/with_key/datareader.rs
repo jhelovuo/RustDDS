@@ -68,7 +68,7 @@ pub enum SelectByKey {
 /// ```
 ///
 /// *Note:* Many DataReader methods require mutable access to `self`, because
-/// they need to mutate the datasample ceche, which is an essential content of
+/// they need to mutate the datasample cache, which is an essential content of
 /// this struct.
 pub struct DataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>>
 where
@@ -367,7 +367,7 @@ where
     Ok(result)
   }
 
-  /// Produces an interator over the currently available NOT_READ samples.
+  /// Produces an iterator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
   ///
@@ -404,7 +404,7 @@ where
   /// }
   /// ```
   pub fn iterator(&mut self) -> ReadResult<impl Iterator<Item = Sample<&D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // read call
     Ok(
       self
@@ -413,7 +413,7 @@ where
     )
   }
 
-  /// Produces an interator over the samples filtered by a given condition.
+  /// Produces an iterator over the samples filtered by a given condition.
   /// Yields only payload data, not SampleInfo metadata
   ///
   /// # Examples
@@ -452,12 +452,12 @@ where
     &mut self,
     read_condition: ReadCondition,
   ) -> ReadResult<impl Iterator<Item = Sample<&D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // read call
     Ok(self.read_bare(std::usize::MAX, read_condition)?.into_iter())
   }
 
-  /// Produces an interator over the currently available NOT_READ samples.
+  /// Produces an iterator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// Removes samples from `DataReader`.
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the
@@ -497,7 +497,7 @@ where
   /// ```
 
   pub fn into_iterator(&mut self) -> ReadResult<impl Iterator<Item = Sample<D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // take call
     Ok(
       self
@@ -506,7 +506,7 @@ where
     )
   }
 
-  /// Produces an interator over the samples filtered by the given condition.
+  /// Produces an iterator over the samples filtered by the given condition.
   /// Yields only payload data, not SampleInfo metadata
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the
   /// samples it could have provided are still removed from the `Datareader`.
@@ -547,7 +547,7 @@ where
     &mut self,
     read_condition: ReadCondition,
   ) -> ReadResult<impl Iterator<Item = Sample<D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // take call
     Ok(self.take_bare(std::usize::MAX, read_condition)?.into_iter())
   }
@@ -725,7 +725,7 @@ where
   // we got.
 
   pub fn get_matched_publications(&self) -> impl Iterator<Item = PublicationBuiltinTopicData> {
-    //TODO: Obviously not implemented
+    // TODO: Obviously not implemented
     vec![].into_iter()
   }
 
@@ -746,8 +746,8 @@ where
   <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  // We just delegate all the operations to notification_receiver, since it alrady
-  // implements Evented
+  // We just delegate all the operations to notification_receiver, since it
+  // already implements Evented
   fn register(
     &self,
     poll: &mio_06::Poll,
@@ -1040,7 +1040,7 @@ mod tests {
   fn read_and_take() {
     // Test the read and take methods of the DataReader
 
-    let dp = DomainParticipant::new(0).expect("Particpant creation failed!");
+    let dp = DomainParticipant::new(0).expect("Participant creation failed!");
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing
@@ -1198,7 +1198,7 @@ mod tests {
   fn read_and_take_with_instance() {
     // Test the methods read_instance and take_instance of the DataReader
 
-    let dp = DomainParticipant::new(0).expect("Particpant creation failed!");
+    let dp = DomainParticipant::new(0).expect("Participant creation failed!");
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing

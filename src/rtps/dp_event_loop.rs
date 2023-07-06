@@ -156,11 +156,11 @@ impl DPEventLoop {
     poll
       .register(
         &acknack_receiver,
-        ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN,
+        ACKNACK_MESSAGE_TO_LOCAL_WRITER_TOKEN,
         Ready::readable(),
         PollOpt::edge(),
       )
-      .expect("Failed to register AckNack submessage sending from MessageReciever to DPEventLoop");
+      .expect("Failed to register AckNack submessage sending from MessageReceiver to DPEventLoop");
 
     poll
       .register(
@@ -281,7 +281,7 @@ impl DPEventLoop {
               ADD_WRITER_TOKEN | REMOVE_WRITER_TOKEN => {
                 ev_wrapper.handle_writer_action(&event);
               }
-              ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN => {
+              ACKNACK_MESSAGE_TO_LOCAL_WRITER_TOKEN => {
                 ev_wrapper.handle_writer_acknack_action(&event);
               }
               DISCOVERY_UPDATE_NOTIFICATION_TOKEN => {
@@ -400,7 +400,7 @@ impl DPEventLoop {
               Ready::readable(),
               PollOpt::edge(),
             )
-            .expect("Reader timer channel registeration failed!");
+            .expect("Reader timer channel registration failed!");
           let mut new_reader = Reader::new(new_reader_ing, self.udp_sender.clone(), timer);
 
           // Non-timed action polling
@@ -599,9 +599,9 @@ impl DPEventLoop {
             let mut reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
 
             if *writer_eid == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
-              // Simple Particiapnt Discovery Protocol (SPDP) writer is special,
+              // Simple Participant Discovery Protocol (SPDP) writer is special,
               // different from SEDP writers
-              qos = Discovery::create_spdp_patricipant_qos(); // different QoS
+              qos = Discovery::create_spdp_participant_qos(); // different QoS
                                                               // adding a multicast reader
               reader_proxy.remote_reader_guid = GUID::new_with_prefix_and_id(
                 GuidPrefix::UNKNOWN,
@@ -657,7 +657,7 @@ impl DPEventLoop {
         if let Some(reader) = self.message_receiver.available_readers.get_mut(reader_eid) {
           debug!("try update_discovery_reader - {:?}", reader.topic_name());
           let qos = if *reader_eid == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
-            Discovery::create_spdp_patricipant_qos()
+            Discovery::create_spdp_participant_qos()
           } else {
             Discovery::publisher_qos()
           };
@@ -687,9 +687,9 @@ impl DPEventLoop {
       "remote_participant_lost guid_prefix={:?}",
       &participant_guid_prefix
     );
-    // Discovery has already removed Particiapnt from Discovery DB
+    // Discovery has already removed Participant from Discovery DB
     // Now we have to remove any ReaderProxies and WriterProxies belonging
-    // to that particiapnt, so that we do not send messages to them anymore.
+    // to that participant, so that we do not send messages to them anymore.
 
     for writer in self.writers.values_mut() {
       writer.participant_lost(participant_guid_prefix);
@@ -928,12 +928,12 @@ mod tests {
     }
 
     // Send a command to remove the second reader
-    info!("\npoistetaan toka\n");
+    info!("\nremoving the second\n");
     let some_guid = reader_guids[1];
     sender_remove_reader.send(some_guid).unwrap();
     std::thread::sleep(Duration::new(0, 100));
 
-    info!("\nLopetustoken lähtee\n");
+    info!("\nsending end token\n");
     sender_stop.send(0).unwrap();
     child.join().unwrap();
   }
@@ -962,14 +962,14 @@ mod tests {
   // participant");   let sub = dp.create_subscriber(&somePolicies).unwrap();
 
   //   let topic_1 = dp
-  //     .create_topic("TOPIC_1", "jotain", &somePolicies, TopicKind::WithKey)
-  //     .unwrap();
+  //     .create_topic("TOPIC_1", "something", &somePolicies,
+  // TopicKind::WithKey)     .unwrap();
   //   let _topic_2 = dp
-  //     .create_topic("TOPIC_2", "jotain", &somePolicies, TopicKind::WithKey)
-  //     .unwrap();
+  //     .create_topic("TOPIC_2", "something", &somePolicies,
+  // TopicKind::WithKey)     .unwrap();
   //   let _topic_3 = dp
-  //     .create_topic("TOPIC_3", "jotain", &somePolicies, TopicKind::WithKey)
-  //     .unwrap();
+  //     .create_topic("TOPIC_3", "something", &somePolicies,
+  // TopicKind::WithKey)     .unwrap();
 
   //   // Adding readers
   //   let (sender_add_reader, receiver_add) = mio_channel::channel::<Reader>();
@@ -1146,7 +1146,7 @@ mod tests {
   //     ))
   //   );
 
-  //   info!("\nLopetustoken lähtee\n");
+  //   info!("\nsending end token\n");
   //   sender_stop.send(0).unwrap();
   //   child.join().unwrap();
   // }

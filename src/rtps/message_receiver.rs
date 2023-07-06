@@ -96,7 +96,7 @@ impl Default for MessageReceiverState {
 /// RTPS spec v2.3 Section 8.3.4 "The RTPS Message Receiver".
 /// It calls the message/submessage deserializers to parse the sequence of
 /// submessages. Then it processes the instructions in the Interpreter
-/// SUbmessages and forwards data in Enity Submessages to the appropriate
+/// SUbmessages and forwards data in Entity Submessages to the appropriate
 /// Entities. (See RTPS spec Section 8.3.7)
 
 pub(crate) struct MessageReceiver {
@@ -104,9 +104,9 @@ pub(crate) struct MessageReceiver {
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this
   // to locate RTPSReaderProxy if negative acknack.
   acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
-  // We send notification of remote DomainPArticiapnt liveness to Discovery to
-  // bypass Reader. DDSCache, DatasampleCache, and DataReader, because thse will drop
-  // reperated messages with duplicate SequenceNumbers, but Discovery needs to see them.
+  // We send notification of remote DomainParticipant liveness to Discovery to
+  // bypass Reader, DDSCache, DatasampleCache, and DataReader, because these will drop
+  // repeated messages with duplicate SequenceNumbers, but Discovery needs to see them.
   spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
   security_plugins: Option<SecurityPluginsHandle>,
 
@@ -306,18 +306,18 @@ impl MessageReceiver {
       } // state Prefix
 
       Some(SecureReceiverState::SecureSubmessage(sec_prefix, sec_prefix_flags, sec_submessage)) => {
-        // Secure prefix and a single other submnessage received.
+        // Secure prefix and a single other submessage received.
         // Now expecting postfix, and only that.
         match submessage.body {
           SubmessageBody::Security(SecuritySubmessage::SecurePostfix(
-            sec_postfx,
+            sec_postfix,
             sec_postfix_flags,
           )) => {
             self.handle_secure_submessage(
               sec_prefix,
               sec_prefix_flags,
               sec_submessage,
-              sec_postfx,
+              sec_postfix,
               sec_postfix_flags,
             );
           }
@@ -352,14 +352,14 @@ impl MessageReceiver {
         // expect SecureRTPSPostfix, and only that
         match submessage.body {
           SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(
-            sec_postfx,
+            sec_postfix,
             sec_postfix_flags,
           )) => {
             self.handle_secure_rtps_message(
               sec_rtps_prefix,
               sec_rtps_prefix_flags,
               sec_body,
-              sec_postfx,
+              sec_postfix,
               sec_postfix_flags,
             );
           }
@@ -397,7 +397,7 @@ impl MessageReceiver {
           for reader in self
             .available_readers
             .values_mut()
-            // exception: discovery prococol reader must read from unkonwn discovery protocol
+            // exception: discovery protocol reader must read from unknown discovery protocol
             // writers TODO: This logic here is uglyish. Can we just inject a
             // presupposed writer (proxy) to the built-in reader as it is created?
             .filter(|r| {
@@ -467,7 +467,7 @@ impl MessageReceiver {
           for reader in self
             .available_readers
             .values_mut()
-            // exception: discovery prococol reader must read from unkonwn discovery protocol
+            // exception: discovery protocol reader must read from unknown discovery protocol
             // writers TODO: This logic here is uglyish. Can we just inject a
             // presupposed writer (proxy) to the built-in reader as it is created?
             .filter(|r| {
@@ -539,7 +539,7 @@ impl MessageReceiver {
     sec_prefix: SecurePrefix,
     _sec_prefix_flags: BitFlags<SECUREPREFIX_Flags>,
     encoded_submessage: Submessage,
-    sec_postfx: SecurePostfix,
+    sec_postfix: SecurePostfix,
     _sec_postfix_flags: BitFlags<SECUREPOSTFIX_Flags>,
   ) {
     warn!("Secure submessage processing not implemented");
@@ -559,7 +559,7 @@ impl MessageReceiver {
     };
     // TODO
     // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
-    // the submessage contains and then proceed to decode and process accodringly.
+    // the submessage contains and then proceed to decode and process accordingly.
 
     let receiving_participant_crypto_handle = 0; // TODO: get real value
     let sending_participant_crypto_handle = 0; // TODO: get real value
@@ -585,7 +585,7 @@ impl MessageReceiver {
         receiving_datareader_crypto,
       )) => {
         match sec_plugins.crypto.decode_datawriter_submessage(
-          (sec_prefix, encoded_submessage, sec_postfx),
+          (sec_prefix, encoded_submessage, sec_postfix),
           receiving_datareader_crypto,
           sending_datawriter_crypto,
         ) {
@@ -600,13 +600,13 @@ impl MessageReceiver {
         }
       }
       Ok(SecureSubmessageCategory::DatareaderSubmessage(
-        sending_datawreader_crypto,
+        sending_datareader_crypto,
         receiving_datawriter_crypto,
       )) => {
         match sec_plugins.crypto.decode_datareader_submessage(
-          (sec_prefix, encoded_submessage, sec_postfx),
+          (sec_prefix, encoded_submessage, sec_postfix),
           receiving_datawriter_crypto,
-          sending_datawreader_crypto,
+          sending_datareader_crypto,
         ) {
           Ok(submessage) => {
             drop(sec_plugins);
@@ -626,7 +626,7 @@ impl MessageReceiver {
     _sec_prefix: SecureRTPSPrefix,
     _sec_prefix_flags: BitFlags<SECURERTPSPREFIX_Flags>,
     _secure_body: SecureBody,
-    _sec_postfx: SecureRTPSPostfix,
+    _sec_postfix: SecureRTPSPostfix,
     _sec_postfix_flags: BitFlags<SECURERTPSPOSTFIX_Flags>,
   ) {
     warn!("Secure RTPS message processing not implemented");
@@ -661,10 +661,10 @@ impl MessageReceiver {
         self.source_version = info_src.protocol_version;
         self.source_vendor_id = info_src.vendor_id;
 
-        // TODO: Whay are the following set on InfoSource?
+        // TODO: Why are the following set on InfoSource?
         self.unicast_reply_locator_list.clear(); // Or invalid?
         self.multicast_reply_locator_list.clear(); // Or invalid?
-        self.source_timestamp = None; // TODO: Why does InfoSource set timetamp
+        self.source_timestamp = None; // TODO: Why does InfoSource set timestamp
                                       // to None?
       }
       InterpreterSubmessage::InfoReply(info_reply, flags) => {
@@ -840,7 +840,7 @@ mod tests {
 
     let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
       "test".to_string(),
-      TypeDesc::new("testi".to_string()),
+      TypeDesc::new("test".to_string()),
       &qos_policy,
     );
 
@@ -898,7 +898,7 @@ mod tests {
         *sequence_numbers.first().unwrap(),
       )
       .expect("No data in topic cache");
-    info!("reader history chache DATA: {:?}", a.data());
+    info!("reader history cache DATA: {:?}", a.data());
 
     // Deserialize the ShapesType value from the data
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]

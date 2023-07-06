@@ -35,7 +35,7 @@ pub fn pl_cdr_rep_id_to_speedy_d(
   }
 }
 
-// This is a helper type for serializaton.
+// This is a helper type for serialization.
 // CDR (and therefore PL_CDR) mandates that strings are nul-terminated.
 // Our CDR serializer does that, but Speedy Readable and Writable need this
 // wrapper.
@@ -45,7 +45,7 @@ pub struct StringWithNul {
 }
 
 impl StringWithNul {
-  // length including null termintaor
+  // length including null terminator
   pub fn len(&self) -> usize {
     self.string.len() + 1
   }
@@ -131,9 +131,9 @@ pub(crate) fn write_pad<C: Context, T: ?Sized + Writer<C>>(
   Ok(())
 }
 
-// Helper functions for ParmeterList deserialization:
+// Helper functions for ParameterList deserialization:
 //
-// Get and deserialize first occurence of ParamterId in map
+// Get and deserialize first occurrence of ParameterId in map
 pub(crate) fn get_first_from_pl_map<'a, C, D>(
   pl_map: &'a BTreeMap<ParameterId, Vec<&Parameter>>,
   ctx: C,
@@ -157,7 +157,7 @@ where
     })
 }
 
-// same, but gets all occurences
+// same, but gets all occurrences
 #[allow(clippy::needless_pass_by_value)]
 pub(crate) fn get_all_from_pl_map<'a, C, D>(
   pl_map: &'a BTreeMap<ParameterId, Vec<&Parameter>>,
@@ -183,7 +183,7 @@ where
     .collect()
 }
 
-// same, but either gets the occurence or not. Getting nothing is not an Error.
+// same, but either gets the occurrence or not. Getting nothing is not an Error.
 pub(crate) fn get_option_from_pl_map<'a, C, D>(
   pl_map: &'a BTreeMap<ParameterId, Vec<&Parameter>>,
   ctx: C,

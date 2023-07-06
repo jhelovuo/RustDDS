@@ -60,7 +60,7 @@
 //!   is the DDS default, then use [`CDRSerializerAdapter`] and
 //!   [`CDRDeserializerAdapter`]
 //!   when such adapters are required. If you need to use another serialization format, then you should find or write
-//!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdaper.
+//!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdapter.
 //!
 //! # Polling multiple DataReaders
 //!

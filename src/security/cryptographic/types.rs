@@ -52,7 +52,7 @@ pub type CryptoTransformKeyId = u32;
 /// (v. 1.1)
 ///
 /// Used as a return type by
-///[super::cryptographic_plugin::CryptoTransform::preprocess_secure_submsg],
+/// [super::cryptographic_plugin::CryptoTransform::preprocess_secure_submsg],
 /// and therefore includes the crypto handles that would be returned in the
 /// latter two cases.
 

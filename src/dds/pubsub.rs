@@ -58,7 +58,7 @@ use super::{
 ///
 /// The Publisher and Subscriber structures are collections of DataWriters
 /// and, respectively, DataReaders. They can contain DataWriters or DataReaders
-/// of different types, and attacehd to different Topics.
+/// of different types, and attached to different Topics.
 ///
 /// They can act as a domain of sample ordering or atomicity, if such QoS
 /// policies are used. For example, DDS participants could agree via QoS
@@ -163,7 +163,7 @@ impl Publisher {
     self.inner_lock().create_datawriter(self, None, topic, qos)
   }
 
-  /// Shorthand for crate_datawriter with Commaon Data Representation Little
+  /// Shorthand for crate_datawriter with Common Data Representation Little
   /// Endian
   pub fn create_datawriter_cdr<D>(
     &self,
@@ -180,7 +180,7 @@ impl Publisher {
 
   // versions with callee-specified EntityId. These are for Discovery use only.
 
-  pub(crate) fn create_datawriter_with_entityid_with_key<D, SA>(
+  pub(crate) fn create_datawriter_with_entity_id_with_key<D, SA>(
     &self,
     entity_id: EntityId,
     topic: &Topic,
@@ -248,7 +248,7 @@ impl Publisher {
 
   // Versions with callee-specified EntityId. These are for Discovery use only.
 
-  pub(crate) fn create_datawriter_with_entityid_no_key<D, SA>(
+  pub(crate) fn create_datawriter_with_entity_id_no_key<D, SA>(
     &self,
     entity_id: EntityId,
     topic: &Topic,
@@ -268,7 +268,7 @@ impl Publisher {
   // lookup datawriter: maybe not necessary? App should remember datawriters it
   // has created.
 
-  // Suspend and resume publications are preformance optimization methods.
+  // Suspend and resume publications are performance optimization methods.
   // The minimal correct implementation is to do nothing. See DDS spec 2.2.2.4.1.8
   // and .9
   /// **NOT IMPLEMENTED. DO NOT USE**
@@ -411,10 +411,10 @@ impl InnerPublisher {
     remove_writer_sender: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
   ) -> Self {
-    // We generate an arbitrary but unique id to distiguish Publishers from each
+    // We generate an arbitrary but unique id to distinguish Publishers from each
     // other. EntityKind is just some value, since we do not show it to anyone.
     let id = EntityId::MAX;
-    //dp.clone().upgrade().unwrap().new_entity_id(EntityKind::UNKNOWN_BUILT_IN);
+    // dp.clone().upgrade().unwrap().new_entity_id(EntityKind::UNKNOWN_BUILT_IN);
 
     Self {
       id,
@@ -552,7 +552,7 @@ impl InnerPublisher {
     entity_id_opt: Option<EntityId>,
     entity_kind: EntityKind,
   ) -> EntityId {
-    // If the entity_id is given, then just use that. If not, then pull an arbirtaty
+    // If the entity_id is given, then just use that. If not, then pull an arbitrary
     // number out of participant's hat.
     entity_id_opt.unwrap_or_else(|| self.participant().unwrap().new_entity_id(entity_kind))
   }
@@ -693,7 +693,7 @@ impl Subscriber {
 
   // versions with callee-specified EntityId. These are for Discovery use only.
 
-  pub(crate) fn create_datareader_with_entityid_with_key<D: 'static, SA>(
+  pub(crate) fn create_datareader_with_entity_id_with_key<D: 'static, SA>(
     &self,
     topic: &Topic,
     entity_id: EntityId,
@@ -709,7 +709,7 @@ impl Subscriber {
       .create_datareader(self, topic, Some(entity_id), qos)
   }
 
-  // pub(crate) fn create_datareader_cdr_with_entityid<D: 'static>(
+  // pub(crate) fn create_datareader_cdr_with_entity_id<D: 'static>(
   //   &self,
   //   topic: &Topic,
   //   entity_id: EntityId,
@@ -720,8 +720,8 @@ impl Subscriber {
   //   <D as Keyed>::K: Key,
   //   for<'de> <D as Keyed>::K: Deserialize<'de>,
   // {
-  //   self.create_datareader_with_entityid::<D, CDRDeserializerAdapter<D>>(topic,
-  // entity_id, qos) }
+  //   self.create_datareader_with_entity_id::<D,
+  // CDRDeserializerAdapter<D>>(topic, entity_id, qos) }
 
   /// Create DDS DataReader for non keyed Topics
   ///
@@ -787,7 +787,7 @@ impl Subscriber {
     self.create_datareader_no_key::<D, CDRDeserializerAdapter<D>>(topic, qos)
   }
 
-  pub(crate) fn create_datareader_with_entityid_no_key<D: 'static, SA>(
+  pub(crate) fn create_datareader_with_entity_id_no_key<D: 'static, SA>(
     &self,
     topic: &Topic,
     entity_id: EntityId,
@@ -802,7 +802,7 @@ impl Subscriber {
   }
 
   // Retrieves a previously created DataReader belonging to the Subscriber.
-  // TODO: Is this even possible. Whould probably need to return reference and
+  // TODO: Is this even possible. Would probably need to return reference and
   // store references on creation
   /*
   pub(crate) fn lookup_datareader<D, SA>(
@@ -814,7 +814,7 @@ impl Subscriber {
     SA: DeserializerAdapter<D>,
   {
     todo!()
-    // TO think: Is this really necessary? Because the caller would have to know
+  // TO think: Is this really necessary? Because the caller would have to know
     // types D and SA. Should we just trust whoever creates DataReaders to also remember them?
   }
   */
@@ -1076,7 +1076,7 @@ impl InnerSubscriber {
     entity_id_opt: Option<EntityId>,
     entity_kind: EntityKind,
   ) -> EntityId {
-    // If the entity_id is given, then just use that. If not, then pull an arbirtaty
+    // If the entity_id is given, then just use that. If not, then pull an arbitrary
     // number out of participant's hat.
     entity_id_opt.unwrap_or_else(|| self.participant().unwrap().new_entity_id(entity_kind))
   }

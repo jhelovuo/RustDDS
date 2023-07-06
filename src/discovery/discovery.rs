@@ -98,7 +98,7 @@ mod with_key {
     D: Keyed + PlCdrSerialize + PlCdrDeserialize,
     <D as Keyed>::K: Key + PlCdrSerialize + PlCdrDeserialize,
   {
-    #[allow(dead_code)] // The topic may not be accesssed after initialization
+    #[allow(dead_code)] // The topic may not be accessed after initialization
     pub topic: Topic,
     pub reader: DataReaderPlCdr<D>,
     pub writer: DataWriterPlCdr<D>,
@@ -110,7 +110,7 @@ mod with_key {
     D: Keyed + Serialize + DeserializeOwned,
     <D as Keyed>::K: Key + Serialize + DeserializeOwned,
   {
-    #[allow(dead_code)] // The topic may not be accesssed after initialization
+    #[allow(dead_code)] // The topic may not be accessed after initialization
     pub topic: Topic,
     pub reader: crate::with_key::DataReaderCdr<D>,
     pub writer: crate::with_key::DataWriterCdr<D>,
@@ -130,7 +130,7 @@ mod no_key {
   where
     D: Serialize + DeserializeOwned,
   {
-    #[allow(dead_code)] // The topic may not be accesssed after initialization
+    #[allow(dead_code)] // The topic may not be accessed after initialization
     pub topic: Topic,
     pub reader: crate::no_key::DataReader<D, crate::CDRDeserializerAdapter<D>>,
     pub writer: crate::no_key::DataWriter<D, crate::CDRSerializerAdapter<D>>,
@@ -156,17 +156,17 @@ pub(crate) struct Discovery {
   // TODO: Why is this a HashMap? Are there ever more than 2?
   self_locators: HashMap<Token, Vec<Locator>>,
 
-  // DDS Subsciber and Publisher for Discovery
+  // DDS Subscriber and Publisher for Discovery
   // ...but these are not actually used after initialization
-  //discovery_subscriber: Subscriber,
-  //discovery_publisher: Publisher,
+  // discovery_subscriber: Subscriber,
+  // discovery_publisher: Publisher,
 
   // Handling of "DCPSParticipant" topic. This is the mother of all topics
   // where participants announce their presence and built-in readers and writers.
   // and
   // timer to periodically announce our presence
   dcps_participant: with_key::DiscoveryTopicPlCdr<SpdpDiscoveredParticipantData>,
-  participant_cleanup_timer: Timer<()>, // garbage collection timer for dead remote particiapnts
+  participant_cleanup_timer: Timer<()>, // garbage collection timer for dead remote participants
 
   // Topic "DCPSSubscription" - announcing and detecting Readers
   dcps_subscription: with_key::DiscoveryTopicPlCdr<DiscoveredReaderData>,
@@ -174,8 +174,8 @@ pub(crate) struct Discovery {
   // Topic "DCPSPublication" - announcing and detecting Writers
   dcps_publication: with_key::DiscoveryTopicPlCdr<DiscoveredWriterData>,
 
-  // Topic "DCPSTopic" - annoncing and detecting topics
-  #[allow(dead_code)] // Technically, the topic is not accesssed after initialization
+  // Topic "DCPSTopic" - announcing and detecting topics
+  #[allow(dead_code)] // Technically, the topic is not accessed after initialization
   dcps_topic: with_key::DiscoveryTopicPlCdr<DiscoveredTopicData>,
   topic_cleanup_timer: Timer<()>,
 
@@ -306,7 +306,7 @@ impl Discovery {
         paste! {
           let reader =
             discovery_subscriber
-            . [< create_datareader_with_entityid_ $has_key >]
+            . [< create_datareader_with_entity_id_ $has_key >]
               ::<$message_type, [<$repr DeserializerAdapter>] <$message_type>>(
               &topic,
               $reader_entity_id,
@@ -314,7 +314,7 @@ impl Discovery {
             ).expect("Unable to create DataReader. ");
 
           let writer =
-              discovery_publisher.[< create_datawriter_with_entityid_ $has_key >]
+              discovery_publisher.[< create_datawriter_with_entity_id_ $has_key >]
                 ::<$message_type, [<$repr SerializerAdapter>] <$message_type>>(
                 $writer_entity_id,
                 &topic,
@@ -362,7 +362,7 @@ impl Discovery {
       "DCPSParticipant",               // topic name
       "SPDPDiscoveredParticipantData", // topic type name over RTPS
       SpdpDiscoveredParticipantData,
-      Some(Self::create_spdp_patricipant_qos()),
+      Some(Self::create_spdp_participant_qos()),
       EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
       DISCOVERY_PARTICIPANT_DATA_TOKEN,
       EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
@@ -799,7 +799,7 @@ impl Discovery {
     } // loop
   } // fn
 
-  // Initialize our own particiapnt data into the Discovery DB.
+  // Initialize our own participant data into the Discovery DB.
   // That causes ReaderProxies and WriterProxies to be constructed and
   // and we also get our own local readers and writers connected, both
   // built-in and user-defined.
@@ -819,7 +819,7 @@ impl Discovery {
       Duration::DURATION_INFINITE,
     );
 
-    // Initialize our own particiapnt data into the Discovery DB, so we can talk to
+    // Initialize our own participant data into the Discovery DB, so we can talk to
     // ourself.
     self
       .discovery_db_write()
@@ -861,7 +861,7 @@ impl Discovery {
       Some(dp.guid()),
       String::from("DCPSParticipant"),
       String::from("SPDPDiscoveredParticipantData"),
-      &Self::create_spdp_patricipant_qos(),
+      &Self::create_spdp_participant_qos(),
       None, // <<---------------TODO: None here means we advertise no EndpointSecurityInfo
     );
     let drd = DiscoveredReaderData {
@@ -970,7 +970,7 @@ impl Discovery {
         Ok(ds) => ds
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
           .filter(|d|
-              // If a particiapnt was specified, we must match its GUID prefix.
+              // If a participant was specified, we must match its GUID prefix.
               match (read_history, d) {
                 (None, _) => true, // Not asked to filter by participant
                 (Some(participant_to_update), Sample::Value(drd)) =>
@@ -1023,7 +1023,7 @@ impl Discovery {
         // a reader and thus self
         Ok(ds) => ds
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
-          // If a particiapnt was specified, we must match its GUID prefix.
+          // If a participant was specified, we must match its GUID prefix.
           .filter(|d| match (read_history, d) {
             (None, _) => true, // Not asked to filter by participant
             (Some(participant_to_update), Sample::Value(dwd)) => {
@@ -1095,9 +1095,9 @@ impl Discovery {
             .discovery_db_write()
             .update_topic_data(&topic_data, writer, DiscoveredVia::Topic);
           // Now check if we know any readers of writers to this topic. The topic QoS
-          // could cause these to became viable matches agains local
+          // could cause these to became viable matches against local
           // writers/readers. This is because at least RTI Connext sends QoS
-          // policies on a Topic, and then (apprently) assumes that its
+          // policies on a Topic, and then (apparently) assumes that its
           // readers/writers inherit those policies unless specified otherwise.
 
           let writers = self
@@ -1128,7 +1128,7 @@ impl Discovery {
   }
 
   // These messages are for updating participant liveliness
-  // The protocol distinguises between automatic (by DDS library)
+  // The protocol distinguishes between automatic (by DDS library)
   // and manual (by by application, via DDS API call) liveness
   // TODO: rewrite this function according to the pattern above
   pub fn handle_participant_message_reader(&mut self) {
@@ -1380,7 +1380,7 @@ impl Discovery {
       .build()
   }
 
-  pub fn create_spdp_patricipant_qos() -> QosPolicies {
+  pub fn create_spdp_participant_qos() -> QosPolicies {
     QosPolicyBuilder::new()
       .reliability(Reliability::BestEffort)
       .history(History::KeepLast { depth: 1 })
@@ -1419,7 +1419,7 @@ mod tests {
   use std::net::SocketAddr;
 
   use chrono::Utc;
-  //use bytes::Bytes;
+  // use bytes::Bytes;
   use mio_06::Token;
   use speedy::{Endianness, Writable};
 
@@ -1559,7 +1559,7 @@ mod tests {
 
     let msg_data = tdata
       .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .expect("Failed to write msg dtaa");
+      .expect("Failed to write msg data");
 
     udp_sender.send_to_all(&msg_data, &addresses);
 

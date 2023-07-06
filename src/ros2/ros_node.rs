@@ -250,8 +250,8 @@ impl RosParticipantInner {
     pts
   }
 
-  //rustdds::ros2::ros_node::RosParticipantInner
-  //external_nodes: HashMap<Gid, Vec<NodeInfo, Global>, RandomState>
+  // rustdds::ros2::ros_node::RosParticipantInner
+  // external_nodes: HashMap<Gid, Vec<NodeInfo, Global>, RandomState>
 
   /*
   pub fn get_all_discovered_ros_node_infos(&self) -> HashMap<Gid, Vec<NodeInfo>> {
@@ -312,7 +312,7 @@ pub struct NodeOptions {
 impl NodeOptions {
   /// # Arguments
   ///
-  /// * `enable_rosout` -  Wheter or not ros logging is enabled (rosout writer)
+  /// * `enable_rosout` -  Whether or not ros logging is enabled (rosout writer)
   pub fn new(/* domain_id: u16, */ enable_rosout: bool) -> Self {
     Self { enable_rosout }
   }
@@ -340,7 +340,7 @@ pub struct RosNode {
 
   // builtin writers and readers
   rosout_writer: Option<NoKeyDataWriter<Log>>,
-  //rosout_reader: Option<NoKeyDataReader<Log>>, // TODO
+  // rosout_reader: Option<NoKeyDataReader<Log>>, // TODO
   parameter_events_writer: NoKeyDataWriter<ParameterEvents>,
 }
 
@@ -376,7 +376,7 @@ impl RosNode {
       readers: HashSet::new(),
       writers: HashSet::new(),
       rosout_writer,
-      //rosout_reader: None, // TODO
+      // rosout_reader: None, // TODO
       parameter_events_writer,
     })
   }
@@ -523,7 +523,7 @@ impl RosNode {
   /// * `topic` - Reference to topic created with `create_ros_topic`.
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use if
   ///   it's compatible with topics QOS. `None` indicates the use of Topics QOS.
-  pub fn create_ros_nokey_subscriber<
+  pub fn create_ros_no_key_subscriber<
     D: DeserializeOwned + 'static,
     DA: no_key::DeserializerAdapter<D>,
   >(
@@ -572,7 +572,7 @@ impl RosNode {
   /// * `qos` - Should take [QOS](../dds/qos/struct.QosPolicies.html) and use it
   ///   if it's compatible with topics QOS. `None` indicates the use of Topics
   ///   QOS.
-  pub fn create_ros_nokey_publisher<D: Serialize, SA: no_key::SerializerAdapter<D>>(
+  pub fn create_ros_no_key_publisher<D: Serialize, SA: no_key::SerializerAdapter<D>>(
     &mut self,
     topic: &Topic,
     qos: Option<QosPolicies>,

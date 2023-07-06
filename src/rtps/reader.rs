@@ -52,7 +52,7 @@ pub(crate) enum TimedEvent {
   DeadlineMissedCheck,
 }
 
-// Some pieces necessary to contruct a reader.
+// Some pieces necessary to construct a reader.
 // These can be sent between threads, whereas a Reader cannot.
 pub(crate) struct ReaderIngredients {
   pub guid: GUID,
@@ -75,7 +75,7 @@ impl ReaderIngredients {
 }
 
 impl fmt::Debug for ReaderIngredients {
-  // Need manual implementation, because channels cannot be Dubug formatted.
+  // Need manual implementation, because channels cannot be Debug formatted.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("Reader")
       .field("my_guid", &self.guid)
@@ -91,8 +91,8 @@ pub(crate) struct Reader {
   status_sender: StatusChannelSender<DataReaderStatus>,
   udp_sender: Rc<UDPSender>,
 
-  is_stateful: bool, // is this StatefulReader or Statelessreader as per RTPS spec
-  // Currently we support only stateful behaviour.
+  is_stateful: bool, // is this StatefulReader or StatelessReader as per RTPS spec
+  // Currently we support only stateful behavior.
   // RTPS Spec: Section 8.4.11.2 Reliable StatelessReader Behavior
   // "This combination is not supported by the RTPS protocol."
   // So stateful must be true whenever we are Reliable.
@@ -115,9 +115,9 @@ pub(crate) struct Reader {
 
   // TODO: Implement (use) this
   #[allow(dead_code)]
-  heartbeat_supression_duration: StdDuration,
+  heartbeat_suppression_duration: StdDuration,
 
-  received_hearbeat_count: i32,
+  received_heartbeat_count: i32,
 
   matched_writers: BTreeMap<GUID, RtpsWriterProxy>,
   writer_match_count_total: i32, // total count, never decreases
@@ -166,8 +166,8 @@ impl Reader {
       my_guid: i.guid,
 
       heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
-      heartbeat_supression_duration: StdDuration::new(0, 0),
-      received_hearbeat_count: 0,
+      heartbeat_suppression_duration: StdDuration::new(0, 0),
+      received_heartbeat_count: 0,
       matched_writers: BTreeMap::new(),
       writer_match_count_total: 0,
       requested_deadline_missed_count: 0,
@@ -199,7 +199,7 @@ impl Reader {
         .set_timeout(deadline.0.to_std(), TimedEvent::DeadlineMissedCheck);
     } else {
       trace!(
-        "GUID={:?} - no deaadline policy - do not set set_requested_deadline_check_timer",
+        "GUID={:?} - no deadline policy - do not set set_requested_deadline_check_timer",
         self.my_guid
       );
     }
@@ -290,7 +290,7 @@ impl Reader {
       match self.data_reader_command_receiver.try_recv() {
         Ok(ReaderCommand::ResetRequestedDeadlineStatus) => {
           warn!("RESET_REQUESTED_DEADLINE_STATUS not implemented!");
-          //TODO: This should be implemented.
+          // TODO: This should be implemented.
         }
         // Disconnected is normal when terminating
         Err(TryRecvError::Disconnected) => {
@@ -413,15 +413,15 @@ impl Reader {
   }
 
   // Entire remote participant was lost.
-  // Remove all remote readers belonging to it.
+  // Remove all remote writers belonging to it.
   pub fn participant_lost(&mut self, guid_prefix: GuidPrefix) {
-    let lost_readers: Vec<GUID> = self
+    let lost_writers: Vec<GUID> = self
       .matched_writers
       .range(guid_prefix.range())
       .map(|(g, _)| *g)
       .collect();
-    for reader in lost_readers {
-      self.remove_writer_proxy(reader);
+    for writer in lost_writers {
+      self.remove_writer_proxy(writer);
     }
   }
 
@@ -465,7 +465,7 @@ impl Reader {
     data_flags: BitFlags<DATA_Flags>,
     mr_state: &MessageReceiverState,
   ) {
-    //trace!("handle_data_msg entry");
+    // trace!("handle_data_msg entry");
     let receive_timestamp = Timestamp::now();
 
     // parse write_options out of the message
@@ -519,7 +519,7 @@ impl Reader {
       let elapsed = receive_timestamp.duration_since(source_timestamp);
       if lifespan.duration < elapsed {
         info!(
-          "DataFrag {:?} from {:?} lifespan exeeded. duration={:?} elapsed={:?}",
+          "DataFrag {:?} from {:?} lifespan exceeded. duration={:?} elapsed={:?}",
           seq_num, writer_guid, lifespan.duration, elapsed
         );
         return;
@@ -586,15 +586,15 @@ impl Reader {
       self.is_stateful,
     );
     if self.is_stateful {
-      let my_entityid = self.my_guid.entity_id; // to please borrow checker
+      let my_entity_id = self.my_guid.entity_id; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_mut(writer_guid) {
         if writer_proxy.should_ignore_change(writer_sn) {
           // change already present
           debug!("handle_data_msg already have this seq={:?}", writer_sn);
-          if my_entityid == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
+          if my_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
             debug!("Accepting duplicate message to participant reader.");
-            // This is an attmpted workaround to eProsima FastRTPS not
-            // incrementing sequence numbers. (eProsime shapes demo 2.1.0 from
+            // This is an attempted workaround to eProsima FastRTPS not
+            // incrementing sequence numbers. (eProsima shapes demo 2.1.0 from
             // 2021)
           } else {
             return;
@@ -606,7 +606,7 @@ impl Reader {
         // no writer proxy found
         info!(
           "handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
-          my_entityid, writer_guid, self.topic_name,
+          my_entity_id, writer_guid, self.topic_name,
         );
         // This is normal if the DATA was broadcast, but it was from another topic.
         // We just ignore the data in such a case
@@ -628,7 +628,7 @@ impl Reader {
       writer_sn,
     );
 
-    // Add to own track-keeping datastructure
+    // Add to own track-keeping data structure
     #[cfg(test)]
     self.seqnum_instant_map.insert(writer_sn, receive_timestamp);
 
@@ -773,7 +773,7 @@ impl Reader {
     // remove fragmented changes until first_sn.
     writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
-    //let received_before = writer_proxy.all_ackable_before();
+    // let received_before = writer_proxy.all_ackable_before();
     let reader_id = self.entity_id();
     // this is duplicate code from above, but needed, because we need another
     // mutable borrow. TODO: Maybe could be written in some sensible way.
@@ -1039,7 +1039,7 @@ impl Reader {
       .lock()
       .unwrap() // TODO: unwrap
       .take() // Take to nullify the reference
-      .map(|w| w.wake_by_ref()); //If Some, call wake_by_ref
+      .map(|w| w.wake_by_ref()); // If Some, call wake_by_ref
 
     // mio-0.8 notify
     self.poll_event_sender.send();
@@ -1064,7 +1064,7 @@ impl Reader {
     flags: BitFlags<ACKNACK_Flags>,
     acknack: AckNack,
     info_dst: InfoDestination,
-    dst_localtor_list: &[Locator],
+    dst_locator_list: &[Locator],
   ) {
     let infodst_flags =
       BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
@@ -1085,7 +1085,7 @@ impl Reader {
       .unwrap();
     self
       .udp_sender
-      .send_to_locator_list(&bytes, dst_localtor_list);
+      .send_to_locator_list(&bytes, dst_locator_list);
   }
 
   fn send_nackfrags_to(
@@ -1197,7 +1197,7 @@ impl fmt::Debug for Reader {
       .field("topic_name", &self.topic_name)
       .field("my_guid", &self.my_guid)
       .field("heartbeat_response_delay", &self.heartbeat_response_delay)
-      .field("received_hearbeat_count", &self.received_hearbeat_count)
+      .field("received_heartbeat_count", &self.received_heartbeat_count)
       .finish()
   }
 }
@@ -1391,7 +1391,7 @@ mod tests {
     // 5. Verify that the reader sent the data to the topic cache
     let topic_cache = topic_cache_handle.lock().unwrap();
 
-    let cc_from_chache = topic_cache
+    let cc_from_cache = topic_cache
       .get_change(reader.seqnum_instant_map.get(&sequence_num).unwrap())
       .expect("No cache change in topic cache");
 
@@ -1406,7 +1406,7 @@ mod tests {
     );
 
     assert_eq!(
-      cc_from_chache, &cc_locally_built,
+      cc_from_cache, &cc_locally_built,
       "The content of the cache change in the topic cache not as expected"
     );
   }

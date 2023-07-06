@@ -101,12 +101,12 @@ pub struct StatusInfo {
                                  * Interpretation:
                                  * empty set => Sample is ALIVE and must be present in the
                                  * message not Unregistered and
-                                 * not Disposed => ALIVE (but may be asbent)
+                                 * not Disposed => ALIVE (but may be absent)
                                  * Disposed => DataWriter disposed instance. NOT_ALIVE
                                  * Unregistered => DataWriter unregistered message. Note that
                                  * DataWriter is not required
                                  *  notify about any unregister operations. This does not make
-                                 * the instance NOT_ALIVE, but infoms
+                                 * the instance NOT_ALIVE, but informs
                                  *  that the DataWriter is not going to update that instance
                                  * anymore. Filtered =>
                                  * DataWriter wrote a sample, but it was filtered away by the
@@ -117,7 +117,7 @@ pub struct StatusInfo {
                                  *
                                  * Disposed & Unregistered:
                                  *
-                                 * Meanings of some combinations are uknown:
+                                 * Meanings of some combinations are unknown:
                                  * Disposed & Filtered : ???
                                  * Unregistered & Filtered: ???
                                  * Disposed & Unregistered & Filtered: ??? */

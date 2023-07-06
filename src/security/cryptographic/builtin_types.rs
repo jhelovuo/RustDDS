@@ -374,7 +374,7 @@ impl TryFrom<CryptoHeader> for BuiltinCryptoHeader {
     }: CryptoHeader,
   ) -> Result<Self, Self::Error> {
     let crypto_header_extra = plugin_crypto_header_extra.data;
-    //Try to cast [CryptoTransformIdentifier] to [BuiltinCryptoTransformIdentifier]
+    // Try to cast [CryptoTransformIdentifier] to [BuiltinCryptoTransformIdentifier]
     // and read 'session_id' and 'initialization_vector_suffix' from
     // 'crypto_header_extra'
     match (

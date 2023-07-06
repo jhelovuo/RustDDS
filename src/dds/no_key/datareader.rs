@@ -223,7 +223,7 @@ where
 
   // Iterator interface
 
-  /// Produces an interator over the currently available NOT_READ samples.
+  /// Produces an iterator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
   ///
@@ -251,7 +251,7 @@ where
   /// }
   /// ```
   pub fn iterator(&mut self) -> ReadResult<impl Iterator<Item = &D>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // read call
     Ok(
       self
@@ -261,7 +261,7 @@ where
     )
   }
 
-  /// Produces an interator over the samples filtered b ygiven condition.
+  /// Produces an iterator over the samples filtered by given condition.
   /// Yields only payload data, not SampleInfo metadata
   ///
   /// # Examples
@@ -291,7 +291,7 @@ where
     &mut self,
     read_condition: ReadCondition,
   ) -> ReadResult<impl Iterator<Item = &D>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // read call
     Ok(
       self
@@ -301,7 +301,7 @@ where
     )
   }
 
-  /// Produces an interator over the currently available NOT_READ samples.
+  /// Produces an iterator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// Removes samples from `DataReader`.
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the
@@ -331,7 +331,7 @@ where
   /// }
   /// ```
   pub fn into_iterator(&mut self) -> ReadResult<impl Iterator<Item = D>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // read call
     Ok(
       self
@@ -341,7 +341,7 @@ where
     )
   }
 
-  /// Produces an interator over the samples filtered b ygiven condition.
+  /// Produces an iterator over the samples filtered by given condition.
   /// Yields only payload data, not SampleInfo metadata
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the
   /// samples it could have provided are still removed from the `Datareader`.
@@ -373,7 +373,7 @@ where
     &mut self,
     read_condition: ReadCondition,
   ) -> ReadResult<impl Iterator<Item = D>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // read call
     Ok(
       self
@@ -427,14 +427,14 @@ where
 
 /// WARNING! UNTESTED
 //  TODO: test
-// This is  not part of DDS spec. We implement mio Eventd so that the
+// This is  not part of DDS spec. We implement mio Evented so that the
 // application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for DataReader<D, DA>
 where
   DA: DeserializerAdapter<D>,
 {
-  // We just delegate all the operations to notification_receiver, since it alrady
-  // implements Evented
+  // We just delegate all the operations to notification_receiver, since it
+  // already implements Evented
   fn register(
     &self,
     poll: &mio_06::Poll,
@@ -591,8 +591,8 @@ where
     match Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx) {
       Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
       Poll::Ready(Some(Ok(Sample::Value(d)))) => Poll::Ready(Some(Ok(d.d))), /* Unwraps Sample and NoKeyWrapper */
-      Poll::Ready(Some(Ok(Sample::Dispose(_)))) => Poll::Pending,            /* Disposed data is */
-      // ignored
+      // Disposed data is ignored
+      Poll::Ready(Some(Ok(Sample::Dispose(_)))) => Poll::Pending,
       Poll::Ready(None) => Poll::Ready(None), // This should never happen
       Poll::Pending => Poll::Pending,
     }

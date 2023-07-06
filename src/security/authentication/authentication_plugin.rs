@@ -12,7 +12,7 @@ use super::*;
 /// specification. The main difference is that the functions return a Result
 /// type. With this, there is no need to provide a pointer to a
 /// SecurityException type which the function would fill in case of a failure.
-/// Instead, the Err-variant of the result contains the error informaton.
+/// Instead, the Err-variant of the result contains the error information.
 /// In case of no failure, return values are returned inside the Ok-variant.
 /// When a function returns a boolean according to the
 /// specification, the Ok-variant is interpreted as true and Err-variant as

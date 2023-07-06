@@ -30,7 +30,7 @@ impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
   DA: DeserializerAdapter<D> + 'static,
 {
-  // TODO: Make it possible to construct SimpleDataReader (particualrly, no_key
+  // TODO: Make it possible to construct SimpleDataReader (particularly, no_key
   // version) from the public API. That is, From a Subscriber object like a
   // normal Datareader. This is to be then used from the ros2-client package.
   pub(crate) fn from_keyed(
@@ -146,7 +146,7 @@ where
     interests: mio_08::Interest,
   ) -> io::Result<()> {
     mio_08::event::Source::register(&mut self.keyed_simpledatareader, registry, token, interests)
-    //self.keyed_simpledatareader.register(registry, token, interests)
+    // self.keyed_simpledatareader.register(registry, token, interests)
   }
 
   fn reregister(
@@ -156,12 +156,12 @@ where
     interests: mio_08::Interest,
   ) -> io::Result<()> {
     mio_08::event::Source::reregister(&mut self.keyed_simpledatareader, registry, token, interests)
-    //self.keyed_simpledatareader.reregister(registry, token, interests)
+    // self.keyed_simpledatareader.reregister(registry, token, interests)
   }
 
   fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()> {
     mio_08::event::Source::deregister(&mut self.keyed_simpledatareader, registry)
-    //self.keyed_simpledatareader.deregister(registry)
+    // self.keyed_simpledatareader.deregister(registry)
   }
 }
 

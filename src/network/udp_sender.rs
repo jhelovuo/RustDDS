@@ -62,7 +62,7 @@ impl UDPSender {
     let mut multicast_sockets = Vec::with_capacity(1);
     for multicast_if_ipaddr in get_local_multicast_ip_addrs()? {
       let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-      // beef: specify otput interface
+      // beef: specify output interface
       info!(
         "UDPSender: Multicast sender on interface {:?}",
         multicast_if_ipaddr

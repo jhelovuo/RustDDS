@@ -8,7 +8,7 @@ use crate::{
     dds_entity::DDSEntity,
     pubsub::Publisher,
     qos::{HasQoSPolicy, QosPolicies},
-    result::{unwrap_nokey, WriteResult},
+    result::{unwrap_no_key_write_error, WriteResult},
     statusevents::{DataWriterStatus, StatusReceiverStream},
     topic::Topic,
     with_key::datawriter as datawriter_with_key,
@@ -88,7 +88,7 @@ where
     self
       .keyed_datawriter
       .write(NoKeyWrapper::<D> { d: data }, source_timestamp)
-      .map_err(unwrap_nokey)
+      .map_err(unwrap_no_key_write_error)
   }
 
   pub fn write_with_options(
@@ -99,7 +99,7 @@ where
     self
       .keyed_datawriter
       .write_with_options(NoKeyWrapper::<D> { d: data }, write_options)
-      .map_err(unwrap_nokey)
+      .map_err(unwrap_no_key_write_error)
   }
 
   /// Waits for all acknowledgements to finish
@@ -447,7 +447,7 @@ where
       .keyed_datawriter
       .async_write(NoKeyWrapper::<D> { d: data }, source_timestamp)
       .await
-      .map_err(unwrap_nokey)
+      .map_err(unwrap_no_key_write_error)
   }
 
   pub async fn async_write_with_options(
@@ -459,7 +459,7 @@ where
       .keyed_datawriter
       .async_write_with_options(NoKeyWrapper::<D> { d: data }, write_options)
       .await
-      .map_err(unwrap_nokey)
+      .map_err(unwrap_no_key_write_error)
   }
 
   pub async fn async_wait_for_acknowledgments(&self) -> WriteResult<bool, ()> {
@@ -515,7 +515,7 @@ mod tests {
       .write(data, Some(timestamp))
       .expect("Unable to write data with timestamp");
 
-    // TODO: verify that data is sent/writtent correctly
+    // TODO: verify that data is sent/written correctly
     // TODO: write also with timestamp
   }
 

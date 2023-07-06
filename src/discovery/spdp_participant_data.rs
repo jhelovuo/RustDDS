@@ -527,7 +527,7 @@ mod tests {
             eprintln!("deserialized  = {:?}", &participant_data);
             eprintln!("serialized = {:?}", &sdata);
             // order cannot be known at this point
-            //assert_eq!(
+            // assert_eq!(
             //  sdata.len(),
             //  d.serialized_payload.as_ref().unwrap().value.len()
             //);

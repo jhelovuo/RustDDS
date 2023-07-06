@@ -14,7 +14,7 @@ use crate::{
   structure::{duration::Duration, endpoint::ReliabilityKind, parameter_id::ParameterId},
 };
 
-// This is to be implemented by all DomanParticipant, Publisher, Subscriber,
+// This is to be implemented by all DomainParticipant, Publisher, Subscriber,
 // DataWriter, DataReader, Topic
 /// Trait that is implemented by all necessary DDS Entities that are required to
 /// provide QosPolicies.
@@ -33,17 +33,17 @@ pub trait MutQosPolicy {
 /// application interface
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum QosPolicyId {
-  //Invalid  // We should represent this using Option<QosPolicyId> where needed
-  //UserData,  // 1
+  // Invalid  // We should represent this using Option<QosPolicyId> where needed
+  // UserData,  // 1
   Durability,   // 2
   Presentation, // 3
   Deadline,
   LatencyBudget, // 5
   Ownership,
-  //OwnershipStrength, // 7
+  // OwnershipStrength, // 7
   Liveliness,
   TimeBasedFilter, // 9
-  //Partition,
+  // Partition,
 
   // Note: If "Partition" is ever implemented, observe also DDS Security spec v1.1
   // Section "7.3.5 Immutability of Publisher Partition Qos in combination with non-volatile
@@ -52,14 +52,14 @@ pub enum QosPolicyId {
   DestinationOrder,
   History, // 13
   ResourceLimits,
-  //EntityFactory, // 15
-  //WriterDataLifeCycle,
-  //ReaderDataLifeCycle, // 17
-  //TopicData, // 18
-  //GroupData,
-  //TransportPriority, // 20
+  // EntityFactory, // 15
+  // WriterDataLifeCycle,
+  // ReaderDataLifeCycle, // 17
+  // TopicData, // 18
+  // GroupData,
+  // TransportPriority, // 20
   Lifespan,
-  //DurabilityService, // 22
+  // DurabilityService, // 22
 }
 
 /// Utility for building [QosPolicies]
@@ -179,7 +179,7 @@ impl QosPolicyBuilder {
 /// QosPolicies are constructed using a [`QosPolicyBuilder`]
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct QosPolicies {
-  // pub(crate) beacuse as we want to have some builtin QoS Policies as constant.
+  // pub(crate) because as we want to have some builtin QoS Policies as constant.
   pub(crate) durability: Option<policy::Durability>,
   pub(crate) presentation: Option<policy::Presentation>,
   pub(crate) deadline: Option<policy::Deadline>,
@@ -283,7 +283,7 @@ impl QosPolicies {
     }
   }
 
-  /// Check if policy commplies to another policy.
+  /// Check if policy complies to another policy.
   ///
   /// `self` is the "offered" (publisher) QoS
   /// `other` is the "requested" (subscriber) QoS
@@ -318,7 +318,7 @@ impl QosPolicies {
     }
 
     // check Presentation:
-    // * If coherent_access is requsted, it must be offered also. AND
+    // * If coherent_access is requested, it must be offered also. AND
     // * Same for ordered_access. AND
     // * Offered access scope is broader than requested.
     if let (Some(off), Some(req)) = (self.presentation, other.presentation) {
@@ -519,7 +519,7 @@ impl QosPolicies {
         Some(policy::Ownership::Exclusive { strength })
       }
       (Some(OwnershipKind::Exclusive), None) => {
-        warn!("QosPolicies deserializer: Received OwnershipKind::Exclusive but no stregth value.");
+        warn!("QosPolicies deserializer: Received OwnershipKind::Exclusive but no strength value.");
         None
       }
       (None, Some(_strength)) => {
@@ -624,7 +624,7 @@ pub mod policy {
     pub value: Vec<u8>,
   }
 
-  pub struct GropupData {
+  pub struct GroupData {
     pub value: Vec<u8>,
   }
 

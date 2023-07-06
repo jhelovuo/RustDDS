@@ -376,7 +376,7 @@ where
   }
 }
 
-// This is  not part of DDS spec. We implement mio Eventd so that the
+// This is  not part of DDS spec. We implement mio Evented so that the
 // application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for SimpleDataReader<D, DA>
 where

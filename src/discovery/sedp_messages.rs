@@ -188,7 +188,7 @@ impl SubscriptionBuiltinTopicData {
       participant_key,
       topic_name,
       type_name,
-      //QoS
+      // QoS
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -440,7 +440,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
           service_instance_name,
           related_datawriter_key,
           topic_aliases,
-          security_info, //TODO: Imissing implementation
+          security_info, // TODO: missing implementation
         },
       content_filter,
     } = self;
@@ -502,7 +502,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
       StringWithNul
     );
     emit_option!(PID_RELATED_ENTITY_GUID, related_datawriter_key, GUID);
-    // TODO: Shoudl topic alaes be on paramter with vector or multiple
+    // TODO: Should topic alias be on parameter with vector or multiple
     // parameters with one alias name each?
     for topic_alias in topic_aliases.as_ref().unwrap_or(&Vec::new()) {
       emit!(
@@ -576,7 +576,7 @@ impl From<RtpsWriterProxy> for WriterProxy {
 pub struct PublicationBuiltinTopicData {
   pub key: GUID, // endpoint GUID
   pub participant_key: Option<GUID>,
-  pub topic_name: String, // TODO: Convert to method for symmetry with SubscrptionBuiltinTopicData
+  pub topic_name: String, // TODO: Convert to method for symmetry with SubscriptionBuiltinTopicData
   pub type_name: String,
   pub durability: Option<Durability>,
   pub deadline: Option<Deadline>,
@@ -678,7 +678,7 @@ impl PublicationBuiltinTopicData {
     TopicBuiltinTopicData::new(
       None, // This would be topic GUID or BuiltinInTopicKey_t. What is it and who defines it?
       // According to various googled sources, it is either 3x u32 or 4x u32
-      // or a GUID or a GuidPrefx. Does it even matter?
+      // or a GUID or a GuidPrefix. Does it even matter?
       // TODO: Find out.
       self.topic_name.clone(),
       self.type_name.clone(),
@@ -910,7 +910,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
       StringWithNul
     );
     emit_option!(PID_RELATED_ENTITY_GUID, related_datareader_key, GUID);
-    // TODO: Should topic aliaes be on paramter with vector or multiple
+    // TODO: Should topic alias be on parameter with vector or multiple
     // parameters with one alias name each?
     for topic_alias in topic_aliases.as_ref().unwrap_or(&Vec::new()) {
       emit!(
@@ -1141,7 +1141,7 @@ pub struct ParticipantMessageDataKind {
 }
 
 impl ParticipantMessageDataKind {
-  #[allow(dead_code)] // This is defined in the spec, but currenty unused.
+  #[allow(dead_code)] // This is defined in the spec, but currently unused.
   pub const UNKNOWN: Self = Self {
     value: [0x00, 0x00, 0x00, 0x00],
   };
@@ -1190,7 +1190,7 @@ mod tests {
   use byteorder::LittleEndian;
   use bytes::Bytes;
   use log::info;
-  use test_log::test; // to capture logigng macros run by test cases
+  use test_log::test; // to capture logging macros run by test cases
 
   use crate::dds::adapters::no_key::SerializerAdapter;
   use super::*;

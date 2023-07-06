@@ -242,7 +242,7 @@ where
       .fetch_sub(1, Ordering::Relaxed);
   }
 
-  // This one function provides both get_matched_subscrptions and
+  // This one function provides both get_matched_subscriptions and
   // get_matched_subscription_data TODO: Maybe we could return references to the
   // subscription data to avoid copying? But then what if the result set changes
   // while the application processes it?
@@ -398,8 +398,8 @@ where
   ///
   /// See DDS Spec 1.4 Section 2.2.2.4.1.12 wait_for_acknowledgments.
   ///
-  /// If this DataWriter is not set to Realiable, or there are no matched
-  /// DataReaders with Realibale QoS, the call succeeds imediately.
+  /// If this DataWriter is not set to Reliable, or there are no matched
+  /// DataReaders with Reliable QoS, the call succeeds immediately.
   ///
   /// Return values
   /// * `Ok(true)` - all acknowledged
@@ -462,7 +462,7 @@ where
             Ok(_) => Ok(true), // got token
             Err(e) => {
               warn!("wait_for_acknowledgments - Spurious poll event? - {e}");
-              Ok(false) // TODO: We colud also loop here
+              Ok(false) // TODO: We could also loop here
             }
           }
         } else {
@@ -598,7 +598,7 @@ where
     while let Ok(status) = self.status_receiver.try_recv() {
       match status {
         StatusChange::OfferedDeadlineMissedStatus(status) => fstatus = status,
-        // TODO: possibly save old statuses
+  // TODO: possibly save old statuses
         _ => (),
       }
     }
@@ -1002,7 +1002,7 @@ where
   sample: Option<D>,
 }
 
-// This is requred, because AsyncWrite contains "D".
+// This is required, because AsyncWrite contains "D".
 // TODO: Is it ok to promise Unpin here?
 impl<'a, D, SA> Unpin for AsyncWrite<'a, D, SA>
 where
@@ -1162,7 +1162,7 @@ where
             };
             Poll::Pending
           }
-          Err(TrySendError::Full(_otherwritercommand)) =>
+          Err(TrySendError::Full(_other_writer_command)) =>
           // We are sending WaitForAcknowledgments, so the channel
           // should return only that, if any.
           {
@@ -1317,7 +1317,7 @@ mod tests {
       .write(data, Some(timestamp))
       .expect("Unable to write data with timestamp");
 
-    // TODO: verify that data is sent/writtent correctly
+    // TODO: verify that data is sent/written correctly
     // TODO: write also with timestamp
   }
 
