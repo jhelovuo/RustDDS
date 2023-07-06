@@ -169,11 +169,13 @@ impl FragmentAssembler {
       if let Some(abuf) = self.assembly_buffers.remove(&writer_sn) {
         // Return what we have assembled.
         let ser_data_or_key = SerializedPayload::from_bytes(&abuf.buffer_bytes.freeze())
-          .map_err(|e| {
-            error!("Deserializing SeralizedPayload from DATAFRAG: {:?}", &e);
-            e
-          })
-          .ok()?;
+          .map_or_else(
+            |e| {
+              error!("Deserializing SeralizedPayload from DATAFRAG: {:?}", &e);
+              None
+            },
+            Some,
+          )?;
         let ddsdata = if flags.contains(DATAFRAG_Flags::Key) {
           DDSData::new_disposed_by_key(ChangeKind::NotAliveDisposed, ser_data_or_key)
         } else {

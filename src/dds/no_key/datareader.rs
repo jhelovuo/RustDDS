@@ -13,7 +13,7 @@ use crate::{
     no_key::datasample::DataSample,
     qos::{HasQoSPolicy, QosPolicies},
     readcondition::ReadCondition,
-    result::Result,
+    result::ReadResult,
     statusevents::DataReaderStatus,
     with_key::{
       datareader as datareader_with_key,
@@ -104,7 +104,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<&D>>> {
+  ) -> ReadResult<Vec<DataSample<&D>>> {
     let values: Vec<WithKeyDataSample<&NoKeyWrapper<D>>> =
       self.keyed_datareader.read(max_samples, read_condition)?;
     let mut result = Vec::with_capacity(values.len());
@@ -149,7 +149,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<D>>> {
+  ) -> ReadResult<Vec<DataSample<D>>> {
     let values: Vec<WithKeyDataSample<NoKeyWrapper<D>>> =
       self.keyed_datareader.take(max_samples, read_condition)?;
     let mut result = Vec::with_capacity(values.len());
@@ -186,7 +186,7 @@ where
   ///   // Do something
   /// }
   /// ```
-  pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
+  pub fn read_next_sample(&mut self) -> ReadResult<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
@@ -216,7 +216,7 @@ where
   ///   // Do something
   /// }
   /// ```
-  pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
+  pub fn take_next_sample(&mut self) -> ReadResult<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
@@ -250,7 +250,7 @@ where
   ///   // Do something
   /// }
   /// ```
-  pub fn iterator(&mut self) -> Result<impl Iterator<Item = &D>> {
+  pub fn iterator(&mut self) -> ReadResult<impl Iterator<Item = &D>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(
@@ -290,7 +290,7 @@ where
   pub fn conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
-  ) -> Result<impl Iterator<Item = &D>> {
+  ) -> ReadResult<impl Iterator<Item = &D>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(
@@ -330,7 +330,7 @@ where
   ///   // Do something
   /// }
   /// ```
-  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = D>> {
+  pub fn into_iterator(&mut self) -> ReadResult<impl Iterator<Item = D>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(
@@ -372,7 +372,7 @@ where
   pub fn into_conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
-  ) -> Result<impl Iterator<Item = D>> {
+  ) -> ReadResult<impl Iterator<Item = D>> {
     // TODO: We could come up with a more efficent implementation than wrapping a
     // read call
     Ok(
@@ -412,7 +412,7 @@ where
 
   pub fn get_requested_deadline_missed_status(
     &mut self,
-  ) -> Result<Option<RequestedDeadlineMissedStatus>> {
+  ) -> ReadResult<Option<RequestedDeadlineMissedStatus>> {
     self.keyed_datareader.get_requested_deadline_missed_status()
   }
   */
@@ -585,7 +585,7 @@ where
   D: 'static,
   DA: DeserializerAdapter<D>,
 {
-  type Item = Result<D>;
+  type Item = ReadResult<D>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     match Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx) {
@@ -625,7 +625,7 @@ where
   D: 'static,
   DA: DeserializerAdapter<D>,
 {
-  type Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>;
+  type Item = ReadResult<DataReaderStatus>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx)

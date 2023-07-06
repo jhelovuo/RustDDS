@@ -20,7 +20,14 @@ use mio_06::Evented;
 use mio_extras::channel as mio_channel;
 use mio_08::{self, event, Interest, Registry, Token};
 
-use crate::{dds::qos::QosPolicyId, mio_source::*};
+use crate::{
+  dds::{
+    qos::QosPolicyId,
+    result::{ReadError, ReadResult},
+  },
+  mio_source::*,
+  read_error_poisoned,
+};
 
 /// This trait corresponds to set_listener() of the Entity class in DDS spec.
 /// Types implementing this trait can be registered to a poll and
@@ -188,7 +195,7 @@ pub struct StatusReceiverStream<'a, T> {
 }
 
 impl<'a, T> Stream for StatusReceiverStream<'a, T> {
-  type Item = Result<T, std::sync::mpsc::RecvError>;
+  type Item = ReadResult<T>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     //debug!("poll_next");
@@ -200,9 +207,9 @@ impl<'a, T> Stream for StatusReceiverStream<'a, T> {
         *w = Some(cx.waker().clone());
         Poll::Pending
       }
-      Err(std::sync::mpsc::TryRecvError::Disconnected) => {
-        Poll::Ready(Some(Err(std::sync::mpsc::RecvError)))
-      }
+      Err(std::sync::mpsc::TryRecvError::Disconnected) => Poll::Ready(Some(read_error_poisoned!(
+        "StatusReceiver channel disconnected"
+      ))),
       Ok(t) => Poll::Ready(Some(Ok(t))), // got date
     }
   } // fn

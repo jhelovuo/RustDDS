@@ -9,9 +9,11 @@ use crate::{
   dds::qos,
   discovery,
   messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
-  security, serialization,
+  security,
   serialization::{
-    pl_cdr_adapters::{PlCdrDeserialize, PlCdrSerialize},
+    pl_cdr_adapters::{
+      PlCdrDeserialize, PlCdrDeserializeError, PlCdrSerialize, PlCdrSerializeError,
+    },
     speedy_pl_cdr_helpers::*,
   },
   structure::parameter_id::ParameterId,
@@ -451,8 +453,8 @@ impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> serialization::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -477,7 +479,10 @@ impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
 }
 
 impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> serialization::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let mut pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
@@ -520,8 +525,8 @@ impl PlCdrDeserialize for PublicationBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> serialization::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -538,7 +543,10 @@ impl PlCdrDeserialize for PublicationBuiltinTopicDataSecure {
 }
 
 impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> serialization::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let mut pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
@@ -576,8 +584,8 @@ impl PlCdrDeserialize for SubscriptionBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> serialization::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -594,7 +602,10 @@ impl PlCdrDeserialize for SubscriptionBuiltinTopicDataSecure {
 }
 
 impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> serialization::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let mut pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {

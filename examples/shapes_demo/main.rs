@@ -26,7 +26,7 @@ use mio_06::{Events, Poll, PollOpt, Ready, Token}; // polling
 use mio_extras::channel; // pollable channel
 use rand::prelude::*;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 struct Shape {
   color: String,
   x: i32,

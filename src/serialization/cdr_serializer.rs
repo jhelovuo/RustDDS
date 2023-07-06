@@ -9,7 +9,6 @@ use crate::{
     adapters::{no_key, with_key},
     key::Keyed,
   },
-  serialization::error::{Error, Result},
   RepresentationIdentifier,
 };
 
@@ -106,6 +105,8 @@ where
   D: Serialize,
   BO: ByteOrder,
 {
+  type Error = Error;
+
   fn output_encoding() -> RepresentationIdentifier {
     RepresentationIdentifier::CDR_LE
   }
@@ -227,6 +228,27 @@ where
   let mut buffer: Vec<u8> = Vec::with_capacity(std::mem::size_of_val(value) * 2);
   to_writer::<T, BO, &mut Vec<u8>>(&mut buffer, value)?;
   Ok(buffer)
+}
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+// cdr_serializer::Error
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+  #[error("CDR serialization requires sequence length to be specified at the start.")]
+  SequenceLengthUnknown,
+
+  #[error("Serde says:{0}")]
+  Serde(String),
+
+  #[error("std::io::Error {0}")]
+  Io(#[from] std::io::Error),
+}
+
+impl ser::Error for Error {
+  fn custom<T: std::fmt::Display>(msg: T) -> Self {
+    Self::Serde(msg.to_string())
+  }
 }
 
 // ----------------------------------------------------------

@@ -5,15 +5,31 @@ use log::{debug, error, info, trace, warn};
 use speedy::{Context, Readable, Reader, Writable, Writer};
 
 use crate::{
-  messages::submessages::elements::parameter::Parameter, serialization,
-  serialization::error::Result, structure::parameter_id::ParameterId, RepresentationIdentifier,
+  messages::submessages::elements::parameter::Parameter,
+  serialization::pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializeError},
+  structure::parameter_id::ParameterId,
+  RepresentationIdentifier,
 };
 
-pub fn pl_cdr_rep_id_to_speedy(encoding: RepresentationIdentifier) -> Result<speedy::Endianness> {
+pub fn pl_cdr_rep_id_to_speedy(
+  encoding: RepresentationIdentifier,
+) -> Result<speedy::Endianness, PlCdrSerializeError> {
   match encoding {
     RepresentationIdentifier::PL_CDR_LE => Ok(speedy::Endianness::LittleEndian),
     RepresentationIdentifier::PL_CDR_BE => Ok(speedy::Endianness::BigEndian),
-    _ => Err(serialization::error::Error::Message(
+    _ => Err(PlCdrSerializeError::NotSupported(
+      "Unknown encoding, expected PL_CDR".to_string(),
+    )),
+  }
+}
+
+pub fn pl_cdr_rep_id_to_speedy_d(
+  encoding: RepresentationIdentifier,
+) -> Result<speedy::Endianness, PlCdrDeserializeError> {
+  match encoding {
+    RepresentationIdentifier::PL_CDR_LE => Ok(speedy::Endianness::LittleEndian),
+    RepresentationIdentifier::PL_CDR_BE => Ok(speedy::Endianness::BigEndian),
+    _ => Err(PlCdrDeserializeError::NotSupported(
       "Unknown encoding, expected PL_CDR".to_string(),
     )),
   }
@@ -123,18 +139,16 @@ pub(crate) fn get_first_from_pl_map<'a, C, D>(
   ctx: C,
   pid: ParameterId,
   name: &str,
-) -> Result<D>
+) -> Result<D, PlCdrDeserializeError>
 where
   C: speedy::Context,
   D: Readable<'a, C>,
-  serialization::error::Error: From<<C as speedy::Context>::Error>,
+  PlCdrDeserializeError: From<<C as speedy::Context>::Error>,
 {
   pl_map
     .get(&pid)
     .and_then(|v| v.first())
-    .ok_or(serialization::error::Error::Message(
-      "Missing ".to_string() + name,
-    ))
+    .ok_or(PlCdrDeserializeError::MissingField(pid, name.to_string()))
     .and_then(|p| {
       D::read_from_buffer_with_ctx(ctx, &p.value).map_err(|e| {
         error!("PL_CDR Deserializing {name}");
@@ -150,11 +164,11 @@ pub(crate) fn get_all_from_pl_map<'a, C, D>(
   ctx: C,
   pid: ParameterId,
   name: &str,
-) -> Result<Vec<D>>
+) -> Result<Vec<D>, PlCdrDeserializeError>
 where
   C: speedy::Context + Clone,
   D: Readable<'a, C>,
-  serialization::error::Error: From<<C as speedy::Context>::Error>,
+  PlCdrDeserializeError: From<<C as speedy::Context>::Error>,
 {
   pl_map
     .get(&pid)
@@ -175,11 +189,11 @@ pub(crate) fn get_option_from_pl_map<'a, C, D>(
   ctx: C,
   pid: ParameterId,
   name: &str,
-) -> Result<Option<D>>
+) -> Result<Option<D>, PlCdrDeserializeError>
 where
   C: speedy::Context + Clone,
   D: Readable<'a, C>,
-  serialization::error::Error: From<<C as speedy::Context>::Error>,
+  PlCdrDeserializeError: From<<C as speedy::Context>::Error>,
 {
   pl_map
     .get(&pid)

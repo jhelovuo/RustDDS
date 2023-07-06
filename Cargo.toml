@@ -1,6 +1,6 @@
 [package]
 name = "rustdds"
-version = "0.8.2"
+version = "0.8.3"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", "Oiva Moisio <oiva.moisio@atostek.com>", "Miska Melkinen <miska.melkinen@atostek.com>", "Lauri Eneh <lauri.eneh@atostek.com>"]
 description = "Native Rust DDS implementation with RTPS"
 readme = "README.md"
@@ -51,6 +51,7 @@ log4rs = "1"
 test-case = "3.1.0"
 env_logger = "0.10"
 test-log = "0.2"
+hex-literal = "0.4"
 
 # ros_visualizer
 crossterm = "0.26"

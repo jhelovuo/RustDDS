@@ -128,6 +128,9 @@ impl UDPSender {
   }
 
   pub fn send_to_locator(&self, buffer: &[u8], locator: &Locator) {
+    if buffer.len() > 1500 {
+      warn!("send_to_locator: Message size = {}", buffer.len());
+    }
     let send = |socket_address: SocketAddr| {
       if socket_address.ip().is_multicast() {
         for socket in &self.multicast_sockets {

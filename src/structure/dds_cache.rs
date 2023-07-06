@@ -1,7 +1,7 @@
 use std::{
   cmp::max,
   collections::{BTreeMap, HashMap},
-  ops::Bound::{Excluded, Included},
+  ops::Bound::{Excluded, Included, Unbounded},
   sync::{Arc, Mutex},
 };
 
@@ -347,6 +347,20 @@ impl TopicCache {
     // update also SequeceNumber map
     for r in to_remove.values() {
       self.remove_sn(r);
+    }
+  }
+
+  /// Removes changes and sequence numbers corresponding to a writer GUID
+  /// starting from the given sequence number. To be called when a writer is
+  /// rediscovered, so that the old unread changes do not get mixed up with
+  /// incoming ones.
+  pub fn clear_starting_from(&mut self, writer: GUID, starting_sequence_number: SequenceNumber) {
+    if let Some(sn_to_ts) = self.sequence_numbers.get(&writer).cloned() {
+      for (_, time_stamp) in sn_to_ts.range((Included(starting_sequence_number), Unbounded)) {
+        if let Some(cache_change) = self.changes.remove(time_stamp) {
+          self.remove_sn(&cache_change);
+        }
+      }
     }
   }
 

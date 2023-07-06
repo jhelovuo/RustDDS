@@ -110,6 +110,8 @@ impl AckWaiter {
   }
 }
 
+const EPSILON_DELAY: Duration = Duration::from_nanos(10_000);
+
 pub(crate) struct Writer {
   pub endianness: Endianness,
   pub heartbeat_message_counter: i32,
@@ -136,6 +138,7 @@ pub(crate) struct Writer {
   ///from a negative acknowledgment.
   pub nack_response_delay: std::time::Duration,
   pub nackfrag_response_delay: std::time::Duration,
+  pub repairfrags_continue_delay: std::time::Duration,
 
   ///Protocol tuning parameter that
   ///allows the RTPS Writer to ignore
@@ -285,6 +288,7 @@ impl Writer {
       cache_cleaning_period,
       nack_response_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
       nackfrag_response_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
+      repairfrags_continue_delay: std::time::Duration::from_millis(1),
       nack_suppression_duration: NACK_SUPPRESSION_DURATION,
       first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
       last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
@@ -399,7 +403,7 @@ impl Writer {
             if rp.repair_frags_requested() {
               // more repair needed?
               self.timed_event_timer.set_timeout(
-                self.nackfrag_response_delay,
+                self.repairfrags_continue_delay,
                 TimedEvent::SendRepairFrags {
                   to_reader: reader_guid,
                 },
@@ -434,6 +438,15 @@ impl Writer {
   // --------------------------------------------------------------
   // --------------------------------------------------------------
   // --------------------------------------------------------------
+  fn num_frags_and_frag_size(&self, payload_size: usize) -> (u32, u16) {
+    let fragment_size = self.data_max_size_serialized as u32; //TODO: overflow check
+    let data_size = payload_size as u32; //TODO: overflow check
+                                         // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
+    let num_frags = (data_size / fragment_size) + u32::from(data_size % fragment_size != 0); // rounding up
+    debug!("Fragmenting {data_size} to {num_frags} x {fragment_size}");
+    // TODO: Check fragment_size overflow
+    (num_frags, fragment_size as u16)
+  }
 
   // Receive new data samples from the DDS DataWriter
   pub fn process_writer_command(&mut self) {
@@ -514,11 +527,9 @@ impl Writer {
             // Large payload, must fragment.
             if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp)
             {
-              let fragment_size: u32 = self.data_max_size_serialized as u32; //TODO: overflow check
-              let data_size: u32 = cache_change.data_value.payload_size() as u32; //TODO: overflow check
-                                                                                  // Formula from RTPS spec v2.5 Section "8.3.8.3.5 Logical Interpretation"
-              let num_frags =
-                (data_size / fragment_size) + u32::from(data_size % fragment_size != 0); // rounding up
+              let data_size = cache_change.data_value.payload_size();
+              let (num_frags, fragment_size) = self.num_frags_and_frag_size(data_size);
+
               if self.push_mode {
                 // loop over fragments
                 for frag_num in FragmentNumber::range_inclusive(
@@ -535,8 +546,8 @@ impl Writer {
                     EntityId::UNKNOWN,      // reader
                     self.my_guid.entity_id, // writer
                     frag_num,
-                    fragment_size as u16, // TODO: overflow check
-                    data_size,
+                    fragment_size,
+                    data_size.try_into().unwrap(),
                     self.endianness,
                   );
 
@@ -877,22 +888,35 @@ impl Writer {
 
     let mut no_longer_relevant = Vec::new();
     let mut found_data = false;
+    let mut sending_data = false;
+    let mut sending_gap = false;
+    let mut trigger_send_repair_frags = false;
     if let Some(&unsent_sn) = reader_proxy.unsent_changes.iter().next() {
       // There are unsent changes.
       if let Some(timestamp) = self.sequence_number_to_instant(unsent_sn) {
         // Try to find the cache change from topic cache
         if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp) {
-          // CacheChange found, construct DATA submessage
-          partial_message = partial_message.data_msg(
-            cache_change,
-            reader_guid.entity_id,  // reader
-            self.my_guid.entity_id, // writer
-            self.endianness,
-          );
-          // TODO: Here we are cloning the entire payload. We need to rewrite
-          // the transmit path to avoid copying.
-
-          // CC will be sent. Remove from unsent list.
+          // CacheChange found, check if we can send it in one piece (i.e. DATA)
+          if cache_change.data_value.payload_size() <= self.data_max_size_serialized {
+            // construct DATA submessage
+            partial_message = partial_message.data_msg(
+              cache_change,
+              reader_guid.entity_id,  // reader
+              self.my_guid.entity_id, // writer
+              self.endianness,
+            );
+            // TODO: Here we are cloning the entire payload. We need to rewrite
+            // the transmit path to avoid copying.
+            sending_data = true;
+          } else {
+            // Large data: arrange DATAFRAGs to be sent
+            let (num_frags, _frag_size) =
+              self.num_frags_and_frag_size(cache_change.data_value.payload_size());
+            reader_proxy.mark_all_frags_requested(unsent_sn, num_frags);
+            // We cannot set up a repair timer right here, because self is already borrowed
+            // So just set a flag.
+            trigger_send_repair_frags = true;
+          }
         } else {
           // Change not in cache anymore, mark SN as not relevant anymore
           no_longer_relevant.push(unsent_sn);
@@ -930,19 +954,31 @@ impl Writer {
     if !no_longer_relevant.is_empty() {
       partial_message =
         partial_message.gap_msg(&BTreeSet::from_iter(no_longer_relevant), self, reader_guid);
+      sending_gap = true;
     }
-    let data_gap_msg = partial_message.add_header_and_build(self.my_guid.prefix);
 
-    self.send_message_to_readers(
-      DeliveryMode::Unicast,
-      &data_gap_msg,
-      &mut std::iter::once(&*reader_proxy),
-    );
-
+    // if we have DATA or GAP to send, then build message and send
+    if sending_data || sending_gap {
+      let data_gap_msg = partial_message.add_header_and_build(self.my_guid.prefix);
+      self.send_message_to_readers(
+        DeliveryMode::Unicast,
+        &data_gap_msg,
+        &mut std::iter::once(&*reader_proxy),
+      );
+    }
+    if trigger_send_repair_frags {
+      self.timed_event_timer.set_timeout(
+        EPSILON_DELAY.into(),
+        TimedEvent::SendRepairFrags {
+          to_reader: reader_guid,
+        },
+      );
+    }
+    // Update repair_mode flag
     if found_data {
-      // Data was found. Continue.
+      // Data was found. Continue repairing.
     } else {
-      // Unset list is empty. Switch off repair mode.
+      // Unsent list is empty. Switch off repair mode.
       reader_proxy.repair_mode = false;
     }
   } // fn

@@ -28,8 +28,9 @@ use crate::{
   rtps::{rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
   security::EndpointSecurityInfo,
   serialization::{
-    error as ser,
-    pl_cdr_adapters::{PlCdrDeserialize, PlCdrSerialize},
+    pl_cdr_adapters::{
+      PlCdrDeserialize, PlCdrDeserializeError, PlCdrSerialize, PlCdrSerializeError,
+    },
     representation_identifier::RepresentationIdentifier,
     speedy_pl_cdr_helpers::*,
   },
@@ -59,8 +60,8 @@ impl PlCdrDeserialize for Endpoint_GUID {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -76,7 +77,10 @@ impl PlCdrDeserialize for Endpoint_GUID {
 }
 
 impl PlCdrSerialize for Endpoint_GUID {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let mut pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
@@ -316,8 +320,8 @@ impl PlCdrDeserialize for DiscoveredReaderData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -402,7 +406,10 @@ impl PlCdrDeserialize for DiscoveredReaderData {
 }
 
 impl PlCdrSerialize for DiscoveredReaderData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let DiscoveredReaderData {
       reader_proxy:
         ReaderProxy {
@@ -733,8 +740,8 @@ impl PlCdrDeserialize for DiscoveredWriterData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -807,7 +814,10 @@ impl PlCdrDeserialize for DiscoveredWriterData {
 }
 
 impl PlCdrSerialize for DiscoveredWriterData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let DiscoveredWriterData {
       last_updated: _, // This is never serialized
       writer_proxy:
@@ -1029,8 +1039,8 @@ impl PlCdrDeserialize for DiscoveredTopicData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -1060,7 +1070,10 @@ impl PlCdrDeserialize for DiscoveredTopicData {
 }
 
 impl PlCdrSerialize for DiscoveredTopicData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let DiscoveredTopicData {
       updated_time: _, // This is never serialized
       topic_data:

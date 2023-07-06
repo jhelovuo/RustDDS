@@ -164,8 +164,24 @@ impl DataFrag {
         ),
       ));
     }
-    let extra_octets = octets_to_inline_qos - rtps_v25_header_size;
-    cursor.set_position(cursor.position() + u64::from(extra_octets));
+    // condition to avoid subtract overflow
+    if octets_to_inline_qos > rtps_v25_header_size {
+      let extra_octets = octets_to_inline_qos - rtps_v25_header_size;
+      cursor.set_position(cursor.position() + u64::from(extra_octets));
+
+      if cursor.position() > buffer.len().try_into().unwrap() {
+        // octets_to_inline_qos told us to skip past the end of the message.
+        // This is a malformed message.
+        return Err(io::Error::new(
+          io::ErrorKind::InvalidData,
+          format!(
+            "DATAFRAG submessage octets_to_inline_qos points to byte {}, but message len={}.",
+            cursor.position(),
+            buffer.len()
+          ),
+        ));
+      }
+    }
 
     let inline_qos = if expect_qos {
       Some(

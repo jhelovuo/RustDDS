@@ -16,13 +16,13 @@ use mio_06::Token;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
+  create_error_not_allowed_by_security, create_error_out_of_resources, create_error_poisoned,
   dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
     discovery_db::DiscoveryDB,
     sedp_messages::DiscoveredTopicData,
   },
-  log_and_err_internal,
   network::{constant::*, udp_listener::UDPListener},
   rtps::{
     dp_event_loop::{DPEventLoop, DomainInfo, EventLoopCommand},
@@ -48,8 +48,8 @@ pub(crate) struct SecurityPlugins {
 pub struct DomainParticipantBuilder {
   domain_id: u16,
 
-  #[allow(dead_code)] // only_networks is a placeholder for a feture to limit
-  // to which interfaces the DomainParticiapnt will talk to.
+  #[allow(dead_code)] /* only_networks is a placeholder for a feture to limit
+  which interfaces the DomainParticiapnt will talk to. */
   only_networks: Option<Vec<String>>, // if specified, run RTPS only over these interfaces
 
   security_plugins: Option<SecurityPlugins>,
@@ -83,13 +83,13 @@ impl DomainParticipantBuilder {
     self
   }
 
-  pub fn build(self) -> Result<DomainParticipant> {
+  pub fn build(self) -> CreateResult<DomainParticipant> {
     let mut participant_guid = GUID::new_participant_guid();
 
     let participant_qos = QosPolicies::default(); // Maybe something else?
 
     // configure security
-    #[allow(unused_variables)] // TODO: actaully distribute these to particiapnt, discovery, etc.
+    #[allow(unused_variables)] // TODO: actually distribute these to participant, discovery, etc.
     let security_tokens_opt: Option<(IdentityToken, IdentityStatusToken, PermissionsToken)> =
       if let Some(mut security_plugins) = self.security_plugins {
         trace!("DomainParticipant security construction start");
@@ -97,70 +97,52 @@ impl DomainParticipantBuilder {
         // Section "8.8.1 Authentication and AccessControl behavior with local
         // DomainParticipant" TODO: handle errors
 
-        let (_outcome, identity_handle, sec_guid) = security_plugins
-          .auth
-          .validate_local_identity(
-            self.domain_id,
-            &participant_qos,
-            participant_guid, // this is now candidate
-          )
-          .unwrap();
+        let (_outcome, identity_handle, sec_guid) = security_plugins.auth.validate_local_identity(
+          self.domain_id,
+          &participant_qos,
+          participant_guid, // this is now candidate
+        )?;
 
         participant_guid = sec_guid; // just overwrite to update
 
-        let permissions_handle = security_plugins
-          .access
-          .validate_local_permissions(
-            &security_plugins.auth,
-            identity_handle,
-            self.domain_id,
-            &participant_qos,
-          )
-          .unwrap();
+        let permissions_handle = security_plugins.access.validate_local_permissions(
+          &security_plugins.auth,
+          identity_handle,
+          self.domain_id,
+          &participant_qos,
+        )?;
 
-        let may_create_participant = security_plugins
-          .access
-          .check_create_participant(permissions_handle, self.domain_id, &participant_qos)
-          .unwrap();
-        if !may_create_participant {
-          return Err(Error::Security {
-            reason: "Not allowed to create participant".to_string(),
-          });
+        if !security_plugins.access.check_create_participant(
+          permissions_handle,
+          self.domain_id,
+          &participant_qos,
+        )? {
+          return create_error_not_allowed_by_security!("Not allowed to create participant.");
         }
 
-        let identity_token = security_plugins
-          .auth
-          .get_identity_token(identity_handle)
-          .unwrap();
+        let identity_token = security_plugins.auth.get_identity_token(identity_handle)?;
 
         let identity_status_token = security_plugins
           .auth
-          .get_identity_status_token(identity_handle)
-          .unwrap();
+          .get_identity_status_token(identity_handle)?;
 
         let permissions_token = security_plugins
           .access
-          .get_permissions_token(permissions_handle)
-          .unwrap();
+          .get_permissions_token(permissions_handle)?;
 
         let permissions_credential_token = security_plugins
           .access
-          .get_permissions_credential_token(permissions_handle)
-          .unwrap();
+          .get_permissions_credential_token(permissions_handle)?;
 
-        security_plugins
-          .auth
-          .set_permissions_credential_and_token(
-            identity_handle,
-            permissions_credential_token,
-            permissions_token.clone(),
-          )
-          .unwrap();
+        security_plugins.auth.set_permissions_credential_and_token(
+          identity_handle,
+          permissions_credential_token,
+          permissions_token.clone(),
+        )?;
 
         let participant_security_attributes = security_plugins
           .access
-          .get_participant_sec_attributes(permissions_handle)
-          .unwrap();
+          .get_participant_sec_attributes(permissions_handle)?;
 
         Some((identity_token, identity_status_token, permissions_token))
       } else {
@@ -209,8 +191,7 @@ impl DomainParticipantBuilder {
       dpi: Arc::new(Mutex::new(dp)),
     };
 
-    let (discovery_started_sender, discovery_started_receiver) =
-      std::sync::mpsc::channel::<Result<()>>();
+    let (discovery_started_sender, discovery_started_receiver) = std::sync::mpsc::channel();
 
     // Construct and start background thread
     let dp_clone = dp.weak_clone();
@@ -242,9 +223,9 @@ impl DomainParticipantBuilder {
       }
       Ok(Err(e)) => {
         std::mem::drop(dp);
-        log_and_err_internal!("Failed to start discovery thread: {e:?}")
+        create_error_poisoned!("Failed to start discovery thread: {e:?}")
       }
-      Err(e) => log_and_err_internal!("Discovery thread channel error: {e:?}"),
+      Err(e) => create_error_poisoned!("Discovery thread channel error: {e:?}"),
     }
   }
 }
@@ -276,7 +257,7 @@ impl DomainParticipant {
   ///
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// ```
-  pub fn new(domain_id: u16) -> Result<Self> {
+  pub fn new(domain_id: u16) -> CreateResult<Self> {
     DomainParticipantBuilder::new(domain_id).build()
   }
 
@@ -296,9 +277,9 @@ impl DomainParticipant {
   /// let qos = QosPolicyBuilder::new().build();
   /// let publisher = domain_participant.create_publisher(&qos);
   /// ```
-  pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
+  pub fn create_publisher(&self, qos: &QosPolicies) -> CreateResult<Publisher> {
     let w = self.weak_clone(); // this must be done first to avoid deadlock
-    self.dpi.lock().unwrap().create_publisher(&w, qos)
+    self.dpi.lock()?.create_publisher(&w, qos)
   }
 
   /// Creates DDS Subscriber
@@ -317,10 +298,10 @@ impl DomainParticipant {
   /// let qos = QosPolicyBuilder::new().build();
   /// let subscriber = domain_participant.create_subscriber(&qos);
   /// ```
-  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  pub fn create_subscriber(&self, qos: &QosPolicies) -> CreateResult<Subscriber> {
     // println!("DP(outer): create_subscriber");
     let w = self.weak_clone(); // do this first, avoid deadlock
-    self.dpi.lock().unwrap().create_subscriber(&w, qos)
+    self.dpi.lock()?.create_subscriber(&w, qos)
   }
 
   /// Create DDS Topic
@@ -347,19 +328,18 @@ impl DomainParticipant {
     type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Result<Topic> {
+  ) -> CreateResult<Topic> {
     // println!("Create topic outer");
     let w = self.weak_clone();
     self
       .dpi
-      .lock()
-      .unwrap()
+      .lock()?
       .create_topic(&w, name, type_desc, qos, topic_kind)
   }
 
-  pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
+  pub fn find_topic(&self, name: &str, timeout: Duration) -> CreateResult<Option<Topic>> {
     let w = self.weak_clone();
-    self.dpi.lock().unwrap().find_topic(&w, name, timeout)
+    self.dpi.lock()?.find_topic(&w, name, timeout)
   }
 
   /// # Examples
@@ -415,8 +395,8 @@ impl DomainParticipant {
   /// let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
   /// domain_participant.assert_liveliness();
   /// ```
-  pub fn assert_liveliness(self) -> Result<()> {
-    self.dpi.lock().unwrap().assert_liveliness()
+  pub fn assert_liveliness(self) -> WriteResult<(), ()> {
+    self.dpi.lock()?.assert_liveliness()
   }
 
   pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
@@ -471,20 +451,24 @@ impl DomainParticipantWeak {
     }
   }
 
-  pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
+  pub fn create_publisher(&self, qos: &QosPolicies) -> CreateResult<Publisher> {
     self
       .dpi
       .upgrade()
-      .ok_or(Error::OutOfResources)
-      .and_then(|dpi| dpi.lock().unwrap().create_publisher(self, qos))
+      .ok_or(CreateError::ResourceDropped {
+        reason: "DomainParticipant".to_string(),
+      })
+      .and_then(|dpi| dpi.lock()?.create_publisher(self, qos))
   }
 
-  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  pub fn create_subscriber(&self, qos: &QosPolicies) -> CreateResult<Subscriber> {
     self
       .dpi
       .upgrade()
-      .ok_or(Error::OutOfResources)
-      .and_then(|dpi| dpi.lock().unwrap().create_subscriber(self, qos))
+      .ok_or(CreateError::ResourceDropped {
+        reason: "DomainParticipant".to_string(),
+      })
+      .and_then(|dpi| dpi.lock()?.create_subscriber(self, qos))
   }
 
   pub fn create_topic(
@@ -493,15 +477,16 @@ impl DomainParticipantWeak {
     type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Result<Topic> {
+  ) -> CreateResult<Topic> {
     self
       .dpi
       .upgrade()
-      .ok_or(Error::LockPoisoned)
+      .ok_or(CreateError::ResourceDropped {
+        reason: "DomainParticipant".to_string(),
+      })
       .and_then(|dpi| {
         dpi
-          .lock()
-          .unwrap()
+          .lock()?
           .create_topic(self, name, type_desc, qos, topic_kind)
       })
   }
@@ -572,7 +557,7 @@ impl DomainParticipantDisc {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> Result<Self> {
+  ) -> CreateResult<Self> {
     let dpi = DomainParticipantInner::new(
       domain_id,
       participant_guid,
@@ -602,11 +587,10 @@ impl DomainParticipantDisc {
     &self,
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
-  ) -> Result<Publisher> {
+  ) -> CreateResult<Publisher> {
     self
       .dpi
-      .lock()
-      .unwrap()
+      .lock()?
       .create_publisher(dp, qos, self.discovery_command_sender.clone())
   }
 
@@ -614,11 +598,10 @@ impl DomainParticipantDisc {
     &self,
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
-  ) -> Result<Subscriber> {
+  ) -> CreateResult<Subscriber> {
     self
       .dpi
-      .lock()
-      .unwrap()
+      .lock()?
       .create_subscriber(dp, qos, self.discovery_command_sender.clone())
   }
 
@@ -629,12 +612,11 @@ impl DomainParticipantDisc {
     type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Result<Topic> {
+  ) -> CreateResult<Topic> {
     // println!("Create topic disc");
     self
       .dpi
-      .lock()
-      .unwrap()
+      .lock()?
       .create_topic(dp, name, type_desc, qos, topic_kind)
   }
 
@@ -643,8 +625,8 @@ impl DomainParticipantDisc {
     dp: &DomainParticipantWeak,
     name: &str,
     timeout: Duration,
-  ) -> Result<Option<Topic>> {
-    self.dpi.lock().unwrap().find_topic(dp, name, timeout)
+  ) -> CreateResult<Option<Topic>> {
+    self.dpi.lock()?.find_topic(dp, name, timeout)
   }
 
   pub fn domain_id(&self) -> u16 {
@@ -667,16 +649,15 @@ impl DomainParticipantDisc {
   //   self.dpi.lock().unwrap().discovery_db.clone()
   // }
 
-  pub(crate) fn assert_liveliness(&self) -> Result<()> {
+  pub(crate) fn assert_liveliness(&self) -> WriteResult<(), ()> {
     // No point in checking for the LIVELINESS QoS of MANUAL_BY_PARTICIPANT,
     // the discovery command mutates a field which is only read
     // by writers with that particular QoS.
     self
       .discovery_command_sender
       .send(DiscoveryCommand::ManualAssertLiveliness)
-      .or_else(|e| {
-        log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {e:?}")
-      })
+      //TODO: Are there more severe reasons than channel full? Is WouldBlock correct?
+      .map_err(|_e| WriteError::WouldBlock { data: () })
   }
 
   pub(crate) fn self_locators(&self) -> HashMap<Token, Vec<Locator>> {
@@ -777,7 +758,7 @@ impl DomainParticipantInner {
     participant_guid: GUID,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> Result<Self> {
+  ) -> CreateResult<Self> {
     let mut listeners = HashMap::new();
 
     match UDPListener::new_multicast(
@@ -813,7 +794,7 @@ impl DomainParticipantInner {
     // here discovery_listener is redefined (shadowed)
     let discovery_listener = match discovery_listener {
       Some(dl) => dl,
-      None => return log_and_err_internal!("Could not find free ParticipantId"),
+      None => return create_error_out_of_resources!("Could not find free ParticipantId"),
     };
     listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
 
@@ -839,13 +820,13 @@ impl DomainParticipantInner {
         // If we do not get the preferred listening port,
         // try again, with "any" port number.
         UDPListener::new_unicast("0.0.0.0", 0).or_else(|e| {
-          log_and_err_internal!(
+          create_error_out_of_resources!(
             "Could not open unicast user traffic listener, any port number: {:?}",
             e
           )
         })
       } else {
-        log_and_err_internal!("Could not open unicast user traffic listener: {e:?}")
+        create_error_out_of_resources!("Could not open unicast user traffic listener: {e:?}")
       }
     })?;
 
@@ -960,7 +941,7 @@ impl DomainParticipantInner {
     domain_participant: &DomainParticipantWeak,
     qos: &QosPolicies,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> Result<Publisher> {
+  ) -> CreateResult<Publisher> {
     Ok(Publisher::new(
       domain_participant.clone(),
       self.discovery_db.clone(),
@@ -977,7 +958,7 @@ impl DomainParticipantInner {
     domain_participant: &DomainParticipantWeak,
     qos: &QosPolicies,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> Result<Subscriber> {
+  ) -> CreateResult<Subscriber> {
     Ok(Subscriber::new(
       domain_participant.clone(),
       self.discovery_db.clone(),
@@ -1001,7 +982,7 @@ impl DomainParticipantInner {
     type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Result<Topic> {
+  ) -> CreateResult<Topic> {
     let topic = Topic::new(
       domain_participant_weak,
       name,
@@ -1021,7 +1002,7 @@ impl DomainParticipantInner {
     domain_participant_weak: &DomainParticipantWeak,
     name: &str,
     timeout: Duration,
-  ) -> Result<Option<Topic>> {
+  ) -> CreateResult<Option<Topic>> {
     use mio_06 as mio;
 
     let poll = mio::Poll::new()?;
@@ -1061,8 +1042,13 @@ impl DomainParticipantInner {
     &self,
     domain_participant_weak: &DomainParticipantWeak,
     name: &str,
-  ) -> Result<Option<Topic>> {
-    let db = self.discovery_db.read().map_err(|_| Error::LockPoisoned)?;
+  ) -> CreateResult<Option<Topic>> {
+    let db = self
+      .discovery_db
+      .read()
+      .map_err(|_| CreateError::Poisoned {
+        reason: "discovery db".to_string(),
+      })?;
 
     let build_topic_fn = |d: &DiscoveredTopicData| {
       let qos = d.topic_data.qos();

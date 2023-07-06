@@ -1,3 +1,5 @@
+use std::fmt;
+
 use speedy::{Readable, Writable};
 
 /// Type for DDS Topic (With Key or No key)
@@ -6,6 +8,19 @@ use speedy::{Readable, Writable};
 pub enum TopicKind {
   NoKey = 1,
   WithKey = 2,
+}
+
+impl fmt::Display for TopicKind {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(
+      f,
+      "{}",
+      match self {
+        TopicKind::NoKey => "NoKey",
+        TopicKind::WithKey => "WithKey",
+      }
+    )
+  }
 }
 
 #[cfg(test)]
