@@ -10,8 +10,7 @@ use mio_06::{Event, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{qos::policy, typedesc::TypeDesc},
-  dds::participant::{SecurityPluginsHandle},
+  dds::{participant::SecurityPluginsHandle, qos::policy, typedesc::TypeDesc},
   discovery::{
     builtin_endpoint::BuiltinEndpointSet,
     discovery::Discovery,
@@ -865,6 +864,7 @@ mod tests {
         stop_poll_receiver,
         discovery_update_notification_receiver,
         spdp_liveness_sender,
+        None,
       );
       dp_event_loop
         .poll

@@ -17,12 +17,12 @@ use super::*;
 /// Ok-variant. When a function returns a boolean according to the
 /// specification, the Ok-variant is interpreted as true and Err-variant as
 /// false.
-pub trait AccessControl : Send  {
+pub trait AccessControl: Send {
   /// validate_local_permissions: section 8.4.2.9.1 of the Security
   /// specification
   fn validate_local_permissions(
     &self,
-    auth_plugin: &Box<dyn Authentication>,
+    auth_plugin: &dyn Authentication,
     identity: IdentityHandle,
     domain_id: u16,
     participant_qos: &QosPolicies,
@@ -32,7 +32,7 @@ pub trait AccessControl : Send  {
   /// specification
   fn validate_remote_permissions(
     &self,
-    auth_plugin: &Box<dyn Authentication>,
+    auth_plugin: &dyn Authentication,
     local_identity_handle: IdentityHandle,
     remote_identity_handle: IdentityHandle,
     remote_permissions_token: PermissionsToken,

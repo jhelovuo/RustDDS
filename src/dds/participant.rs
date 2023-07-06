@@ -50,20 +50,22 @@ pub(crate) struct SecurityPluginsHandle {
 
 impl SecurityPluginsHandle {
   pub(crate) fn new(s: SecurityPlugins) -> Self {
-    Self{ inner: Arc::new(Mutex::new(s)) }
+    Self {
+      inner: Arc::new(Mutex::new(s)),
+    }
   }
 }
 
 impl fmt::Debug for SecurityPluginsHandle {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str("SecurityPluginsHandle")
+    f.write_str("SecurityPluginsHandle")
   }
 }
 
 impl std::ops::Deref for SecurityPluginsHandle {
   type Target = Mutex<SecurityPlugins>;
   fn deref(&self) -> &Self::Target {
-    &*self.inner
+    &self.inner
   }
 }
 
@@ -87,12 +89,12 @@ impl DomainParticipantBuilder {
   }
 
   #[allow(dead_code)] // TODO: Remove when have a test case
-  pub fn security<'a>(
-    &'a mut self,
+  pub fn security(
+    &mut self,
     auth: Box<impl Authentication + 'static>,
     access: Box<impl AccessControl + 'static>,
     crypto: Box<impl Cryptographic + 'static>,
-  ) -> &'a mut DomainParticipantBuilder {
+  ) -> &mut DomainParticipantBuilder {
     self.security_plugins = Some(SecurityPlugins {
       auth,
       access,
@@ -129,7 +131,7 @@ impl DomainParticipantBuilder {
         let permissions_handle = security_plugins
           .access
           .validate_local_permissions(
-            &security_plugins.auth,
+            &*security_plugins.auth,
             identity_handle,
             self.domain_id,
             &participant_qos,

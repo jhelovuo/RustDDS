@@ -3,16 +3,14 @@ use std::collections::HashMap;
 use speedy::Writable;
 
 use crate::{
-  messages::submessages::elements::{
-    crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
-    serialized_payload::SerializedPayload,
-  },
-  messages::submessages::submessages::{
-    ReaderSubmessage, WriterSubmessage,
-  },
   messages::submessages::{
-    secure_prefix::SecurePrefix,
+    elements::{
+      crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
+      serialized_payload::SerializedPayload,
+    },
     secure_postfix::SecurePostfix,
+    secure_prefix::SecurePrefix,
+    submessages::{ReaderSubmessage, WriterSubmessage},
   },
   rtps::{Message, Submessage, SubmessageBody},
   security::{

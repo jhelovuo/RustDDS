@@ -1,14 +1,12 @@
 use crate::{
-  messages::submessages::elements::{
-    crypto_content::CryptoContent, parameter_list::ParameterList,
-    serialized_payload::SerializedPayload,
-  },
-  messages::submessages::submessages::{
-    ReaderSubmessage, WriterSubmessage,
-  },
   messages::submessages::{
-    secure_prefix::SecurePrefix,
+    elements::{
+      crypto_content::CryptoContent, parameter_list::ParameterList,
+      serialized_payload::SerializedPayload,
+    },
     secure_postfix::SecurePostfix,
+    secure_prefix::SecurePrefix,
+    submessages::{ReaderSubmessage, WriterSubmessage},
   },
   rtps::{Message, Submessage},
   security::{
@@ -20,7 +18,7 @@ use crate::{
 use crate::{messages::submessages::submessage::SecuritySubmessage, rtps::SubmessageBody};
 
 /// CryptoKeyFactory: section 8.5.1.7 of the Security specification (v. 1.1)
-pub trait CryptoKeyFactory : Send {
+pub trait CryptoKeyFactory: Send {
   /// register_local_participant: section 8.5.1.7.1 of the Security
   /// specification (v. 1.1)
   fn register_local_participant(
@@ -169,7 +167,7 @@ pub trait CryptoKeyExchange {
 ///
 /// Differs from the specification by returning the results instead of writing
 /// them to provided buffers.
-pub trait CryptoTransform : Send  {
+pub trait CryptoTransform: Send {
   /// encode_serialized_payload: section 8.5.1.9.1 of the Security specification
   /// (v. 1.1)
   ///
@@ -277,7 +275,6 @@ pub trait CryptoTransform : Send  {
   ///
   /// Return the writer submessage that would be written in
   /// `plain_rtps_submessage`.
-  ///
   fn decode_datawriter_submessage(
     &mut self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
@@ -290,7 +287,6 @@ pub trait CryptoTransform : Send  {
   ///
   /// Return the reader submessage that would be written in
   /// `plain_rtps_submessage`.
-  ///
   fn decode_datareader_submessage(
     &mut self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),

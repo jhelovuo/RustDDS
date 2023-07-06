@@ -17,7 +17,7 @@ use super::*;
 /// When a function returns a boolean according to the
 /// specification, the Ok-variant is interpreted as true and Err-variant as
 /// false.
-pub trait Authentication : Send  {
+pub trait Authentication: Send {
   /// validate_local_identity: section 8.3.2.11.2 of the Security
   /// specification
   ///
