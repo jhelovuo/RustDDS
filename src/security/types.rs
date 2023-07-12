@@ -346,6 +346,16 @@ pub struct SecurityError {
   pub(crate) msg: String,
 }
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! security_error {
+  ($($arg:tt)*) => (
+      { log::error!($($arg)*);
+        SecurityError{ msg: format!($($arg)*) }
+      }
+    )
+}
+
 // DDS Security spec v1.1 Section 7.2.7 ParticipantSecurityInfo
 // This is communicated over Discovery
 

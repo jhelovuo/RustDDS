@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use speedy::Writable;
 
@@ -10,6 +10,7 @@ use crate::{
     },
     secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
+    submessage::SecuritySubmessage,
     submessages::{ReaderSubmessage, WriterSubmessage},
   },
   rtps::{Message, Submessage, SubmessageBody},
@@ -19,6 +20,7 @@ use crate::{
     cryptographic::{builtin_types::*, cryptographic_plugin::*, types::*},
     types::*,
   },
+  security_error,
 };
 
 // A struct implementing the built-in Cryptographic plugin
@@ -26,9 +28,17 @@ use crate::{
 pub struct CryptographicBuiltIn {
   keys_: HashMap<CryptoHandle, Vec<KeyMaterial_AES_GCM_GMAC>>,
   encrypt_options_: HashMap<CryptoHandle, EndpointSecurityAttributes>,
-  participant_to_entity_: HashMap<ParticipantCryptoHandle, Vec<EntityInfo>>,
+  participant_to_entity_info_: HashMap<ParticipantCryptoHandle, HashSet<EntityInfo>>,
+  // For reverse lookups
+  entity_to_participant_: HashMap<CryptoHandle, ParticipantCryptoHandle>,
+
   // sessions_ ?
-  derived_key_handles_: HashMap<(ParticipantCryptoHandle, CryptoHandle), CryptoHandle>,
+  /// For each (local datawriter (/datareader), remote participant) pair, stores
+  /// the matched remote datareader (/datawriter)
+  matched_remote_entity_: HashMap<CryptoHandle, HashMap<ParticipantCryptoHandle, CryptoHandle>>,
+  ///For reverse lookups,  for each remote datawriter (/datareader), stores the
+  /// matched local datareader (/datawriter)
+  matched_local_entity_: HashMap<CryptoHandle, CryptoHandle>,
 
   handle_counter_: u32,
 }
@@ -40,8 +50,10 @@ impl CryptographicBuiltIn {
     CryptographicBuiltIn {
       keys_: HashMap::new(),
       encrypt_options_: HashMap::new(),
-      participant_to_entity_: HashMap::new(),
-      derived_key_handles_: HashMap::new(),
+      participant_to_entity_info_: HashMap::new(),
+      entity_to_participant_: HashMap::new(),
+      matched_remote_entity_: HashMap::new(),
+      matched_local_entity_: HashMap::new(),
       handle_counter_: 0,
     }
   }
@@ -49,6 +61,48 @@ impl CryptographicBuiltIn {
   fn generate_handle_(&mut self) -> CryptoHandle {
     self.handle_counter_ += 1;
     self.handle_counter_
+  }
+
+  fn get_or_generate_matched_remote_entity_handle_(
+    &mut self,
+    remote_participant_handle: ParticipantCryptoHandle,
+    local_entity_handle: CryptoHandle,
+  ) -> CryptoHandle {
+    // If a corresponding handle exists, get and return
+    if let Some(remote_entity_handle) = self
+      .matched_remote_entity_
+      .get(&local_entity_handle)
+      .and_then(|remote_participant_to_remote_entity| {
+        remote_participant_to_remote_entity.get(&remote_participant_handle)
+      })
+    {
+      *remote_entity_handle
+    } else {
+      // Otherwise generate a new handle
+      let remote_entity_handle = self.generate_handle_();
+      // Associate it with the remote participant
+      self
+        .entity_to_participant_
+        .insert(remote_entity_handle, remote_participant_handle);
+      // Associate it with the local entity
+      self
+        .matched_local_entity_
+        .insert(remote_entity_handle, local_entity_handle);
+      // Insert it to the HashMap corresponding to the local entity
+      if let Some(remote_participant_to_remote_entity) =
+        self.matched_remote_entity_.get_mut(&local_entity_handle)
+      {
+        remote_participant_to_remote_entity.insert(remote_participant_handle, remote_entity_handle);
+      } else {
+        // Create a new HashMap if one does not yet exist
+        self.matched_remote_entity_.insert(
+          local_entity_handle,
+          HashMap::from([(remote_participant_handle, remote_entity_handle)]),
+        );
+      }
+      // Return the generated handle
+      remote_entity_handle
+    }
   }
 
   fn is_volatile_(properties: Vec<Property>) -> bool {
@@ -89,14 +143,32 @@ impl CryptographicBuiltIn {
       None => SecurityResult::Ok(()),
       Some(old_key_materials) => {
         self.keys_.insert(handle, old_key_materials);
-        SecurityResult::Err(SecurityError {
-          msg: format!(
-            "The handle {} was already associated with key material",
-            handle
-          ),
-        })
+        SecurityResult::Err(security_error!(
+          "The handle {} was already associated with key material",
+          handle
+        ))
       }
     }
+  }
+
+  fn insert_entity_info_(
+    &mut self,
+    participant_handle: ParticipantCryptoHandle,
+    entity_info: EntityInfo,
+  ) {
+    match self
+      .participant_to_entity_info_
+      .get_mut(&participant_handle)
+    {
+      Some(entity_set) => {
+        entity_set.insert(entity_info);
+      }
+      None => {
+        self
+          .participant_to_entity_info_
+          .insert(participant_handle, HashSet::from([entity_info]));
+      }
+    };
   }
 
   fn insert_attributes_(
@@ -108,12 +180,47 @@ impl CryptographicBuiltIn {
       None => SecurityResult::Ok(()),
       Some(old_attributes) => {
         self.encrypt_options_.insert(handle, old_attributes);
-        SecurityResult::Err(SecurityError {
-          msg: format!(
-            "The handle {} was already associated with security attributes",
-            handle
-          ),
-        })
+        SecurityResult::Err(security_error!(
+          "The handle {} was already associated with security attributes",
+          handle
+        ))
+      }
+    }
+  }
+
+  fn unregister_entity_(&mut self, entity_info: EntityInfo) {
+    let entity_handle = entity_info.handle;
+    self.keys_.remove(&entity_handle);
+    self.encrypt_options_.remove(&entity_handle);
+    if let Some(participant_handle) = self.entity_to_participant_.remove(&entity_handle) {
+      if let Some(entity_info_set) = self
+        .participant_to_entity_info_
+        .get_mut(&participant_handle)
+      {
+        entity_info_set.remove(&entity_info);
+      }
+
+      // If the entity is remote remove the association to the corresponding local
+      // entity
+      if let Some(matched_local_entity_handle) = self.matched_local_entity_.remove(&entity_handle) {
+        if let Some(remote_participant_to_remote_entity) = self
+          .matched_remote_entity_
+          .get_mut(&matched_local_entity_handle)
+        {
+          remote_participant_to_remote_entity.remove(&participant_handle);
+        }
+      }
+      // If the entity is local, unregister all associated remote entities as they serve no purpose
+      // on their own. TODO: should we do this or just sever the association?
+      else if let Some(remote_participant_to_remote_entity) =
+        self.matched_remote_entity_.remove(&entity_handle)
+      {
+        for remote_entity in remote_participant_to_remote_entity.values() {
+          self.unregister_entity_(EntityInfo {
+            handle: *remote_entity,
+            category: entity_info.category.opposite(),
+          });
+        }
       }
     }
   }
@@ -155,7 +262,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     datawriter_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<DatawriterCryptoHandle> {
     //TODO: this is only a mock implementation
-    let handle = self.generate_handle_();
+    let local_datawriter_handle = self.generate_handle_();
     let mut keys = Vec::<KeyMaterial_AES_GCM_GMAC>::new();
     if Self::is_volatile_(datawriter_properties) {
       todo!()
@@ -163,34 +270,31 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
       if false
       /* datawriter_security_attributes.is_submessage_protected */
       {
-        keys.push(Self::generate_mock_key_(handle));
+        keys.push(Self::generate_mock_key_(local_datawriter_handle));
       }
       if false
       /* datawriter_security_attributes.is_payload_protected */
       {
         if keys.is_empty() {
-          keys.push(Self::generate_mock_key_(handle));
+          keys.push(Self::generate_mock_key_(local_datawriter_handle));
         } else {
           keys.push(Self::generate_mock_key_(self.generate_handle_()));
         }
       }
-      self.insert_keys_(handle, keys)?;
-      self.insert_attributes_(handle, datawriter_security_attributes)?;
-      if participant_crypto != 0 {
-        let entity_info = EntityInfo {
-          handle,
+      self.insert_keys_(local_datawriter_handle, keys)?;
+      self.insert_attributes_(local_datawriter_handle, datawriter_security_attributes)?;
+      self.insert_entity_info_(
+        participant_crypto,
+        EntityInfo {
+          handle: local_datawriter_handle,
           category: EntityCategory::DataWriter,
-        };
-        match self.participant_to_entity_.get_mut(&participant_crypto) {
-          Some(v) => v.push(entity_info),
-          None => {
-            self
-              .participant_to_entity_
-              .insert(participant_crypto, vec![entity_info]);
-          }
-        };
-      }
-      SecurityResult::Ok(handle)
+        },
+      );
+
+      self
+        .entity_to_participant_
+        .insert(local_datawriter_handle, participant_crypto);
+      SecurityResult::Ok(local_datawriter_handle)
     }
   }
 
@@ -205,20 +309,17 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     let keys = self
       .keys_
       .get(&local_datawriter_crypto_handle)
-      .ok_or_else(|| SecurityError {
-        msg: format!(
-          "No keys found for local_datawriter_crypto_handle {}",
-          local_datawriter_crypto_handle
-        ),
-      })?;
+      .ok_or(security_error!(
+        "No keys found for local_datawriter_crypto_handle {}",
+        local_datawriter_crypto_handle
+      ))?;
 
     // Find a handle for the remote datareader corresponding to the (remote
     // participant, local datawriter) pair, or generate a new one
-    let handle = self
-      .derived_key_handles_
-      .get(&(remote_participant_crypto, local_datawriter_crypto_handle))
-      .copied()
-      .unwrap_or(self.generate_handle_());
+    let remote_datareader_handle = self.get_or_generate_matched_remote_entity_handle_(
+      remote_participant_crypto,
+      local_datawriter_crypto_handle,
+    );
 
     if false
     /* use derived key */
@@ -227,23 +328,13 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     }
 
     // Add entity info
-    if remote_participant_crypto != 0 {
-      let entity_info = EntityInfo {
-        handle,
+    self.insert_entity_info_(
+      remote_participant_crypto,
+      EntityInfo {
+        handle: remote_datareader_handle,
         category: EntityCategory::DataReader,
-      };
-      match self
-        .participant_to_entity_
-        .get_mut(&remote_participant_crypto)
-      {
-        Some(v) => v.push(entity_info),
-        None => {
-          self
-            .participant_to_entity_
-            .insert(remote_participant_crypto, vec![entity_info]);
-        }
-      };
-    }
+      },
+    );
 
     // Copy the attributes
     if let Some(attributes) = self
@@ -251,10 +342,12 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
       .get(&local_datawriter_crypto_handle)
       .copied()
     {
-      self.encrypt_options_.insert(handle, attributes);
+      self
+        .encrypt_options_
+        .insert(remote_datareader_handle, attributes);
     }
 
-    SecurityResult::Ok(handle)
+    SecurityResult::Ok(remote_datareader_handle)
   }
 
   fn register_local_datareader(
@@ -264,43 +357,40 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     datareader_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<DatareaderCryptoHandle> {
     //TODO: this is only a mock implementation
-    let handle = self.generate_handle_();
+    let local_datareader_handle = self.generate_handle_();
     let mut keys = Vec::<KeyMaterial_AES_GCM_GMAC>::new();
     if Self::is_volatile_(datareader_properties) {
       // By 8.8.8.3
-      SecurityResult::Err(SecurityError { msg: String::from("register_local_datareader should not be called for BuiltinParticipantVolatileMessageSecureReader") })
+      SecurityResult::Err(security_error!("register_local_datareader should not be called for BuiltinParticipantVolatileMessageSecureReader") )
     } else {
       if false
       /* datareader_security_attributes.is_submessage_protected */
       {
-        keys.push(Self::generate_mock_key_(handle));
+        keys.push(Self::generate_mock_key_(local_datareader_handle));
       }
       if false
       /* datareader_security_attributes.is_payload_protected */
       {
         if keys.is_empty() {
-          keys.push(Self::generate_mock_key_(handle));
+          keys.push(Self::generate_mock_key_(local_datareader_handle));
         } else {
           keys.push(Self::generate_mock_key_(self.generate_handle_()));
         }
       }
-      self.insert_keys_(handle, keys)?;
-      self.insert_attributes_(handle, datareader_security_attributes)?;
-      if participant_crypto != 0 {
-        let entity_info = EntityInfo {
-          handle,
+      self.insert_keys_(local_datareader_handle, keys)?;
+      self.insert_attributes_(local_datareader_handle, datareader_security_attributes)?;
+      self.insert_entity_info_(
+        participant_crypto,
+        EntityInfo {
+          handle: local_datareader_handle,
           category: EntityCategory::DataReader,
-        };
-        match self.participant_to_entity_.get_mut(&participant_crypto) {
-          Some(v) => v.push(entity_info),
-          None => {
-            self
-              .participant_to_entity_
-              .insert(participant_crypto, vec![entity_info]);
-          }
-        };
-      }
-      SecurityResult::Ok(handle)
+        },
+      );
+
+      self
+        .entity_to_participant_
+        .insert(local_datareader_handle, participant_crypto);
+      SecurityResult::Ok(local_datareader_handle)
     }
   }
 
@@ -314,20 +404,18 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     let keys = self
       .keys_
       .get(&local_datareader_crypto_handle)
-      .ok_or_else(|| SecurityError {
-        msg: format!(
-          "No keys found for local_datareader_crypto_handle {}",
-          local_datareader_crypto_handle
-        ),
-      })?;
+      .ok_or(security_error!(
+        "No keys found for local_datareader_crypto_handle {}",
+        local_datareader_crypto_handle
+      ))?;
 
     // Find a handle for the remote datawriter corresponding to the (remote
     // participant, local datareader) pair, or generate a new one
-    let handle: DatareaderCryptoHandle = self
-      .derived_key_handles_
-      .get(&(remote_participant_crypto, local_datareader_crypto_handle))
-      .copied()
-      .unwrap_or(self.generate_handle_());
+    let remote_entity_handle: DatareaderCryptoHandle = self
+      .get_or_generate_matched_remote_entity_handle_(
+        remote_participant_crypto,
+        local_datareader_crypto_handle,
+      );
 
     if false
     /* use derived key */
@@ -336,23 +424,13 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     }
 
     // Add entity info
-    if remote_participant_crypto != 0 {
-      let entity_info = EntityInfo {
-        handle,
+    self.insert_entity_info_(
+      remote_participant_crypto,
+      EntityInfo {
+        handle: remote_entity_handle,
         category: EntityCategory::DataWriter,
-      };
-      match self
-        .participant_to_entity_
-        .get_mut(&remote_participant_crypto)
-      {
-        Some(v) => v.push(entity_info),
-        None => {
-          self
-            .participant_to_entity_
-            .insert(remote_participant_crypto, vec![entity_info]);
-        }
-      };
-    }
+      },
+    );
 
     // Copy the attributes
     if let Some(attributes) = self
@@ -360,10 +438,12 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
       .get(&local_datareader_crypto_handle)
       .copied()
     {
-      self.encrypt_options_.insert(handle, attributes);
+      self
+        .encrypt_options_
+        .insert(remote_entity_handle, attributes);
     }
 
-    SecurityResult::Ok(handle)
+    SecurityResult::Ok(remote_entity_handle)
   }
 
   fn unregister_participant(
@@ -371,6 +451,14 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
+    if let Some(entity_info_set) = self
+      .participant_to_entity_info_
+      .remove(&participant_crypto_handle)
+    {
+      for entity_info in entity_info_set {
+        self.unregister_entity_(entity_info);
+      }
+    }
     Ok(())
   }
 
@@ -379,6 +467,10 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
+    self.unregister_entity_(EntityInfo {
+      handle: datawriter_crypto_handle,
+      category: EntityCategory::DataWriter,
+    });
     Ok(())
   }
 
@@ -387,6 +479,10 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     datareader_crypto_handle: DatareaderCryptoHandle,
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
+    self.unregister_entity_(EntityInfo {
+      handle: datareader_crypto_handle,
+      category: EntityCategory::DataReader,
+    });
     Ok(())
   }
 }
@@ -401,12 +497,10 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     self
       .keys_
       .get(&local_participant_crypto)
-      .ok_or(SecurityError {
-        msg: format!(
-          "Could not find keys for the handle {}",
-          local_participant_crypto
-        ),
-      })
+      .ok_or(security_error!(
+        "Could not find keys for the handle {}",
+        local_participant_crypto
+      ))
       .cloned()
       // Convert to CryptoTokens
       .and_then(|keys| Vec::<DatawriterCryptoToken>::try_from(KeyMaterial_AES_GCM_GMAC_seq(keys)))
@@ -436,12 +530,10 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     self
       .keys_
       .get(&local_datawriter_crypto)
-      .ok_or(SecurityError {
-        msg: format!(
-          "Could not find keys for the handle {}",
-          local_datawriter_crypto
-        ),
-      })
+      .ok_or(security_error!(
+        "Could not find keys for the handle {}",
+        local_datawriter_crypto
+      ))
       .cloned()
       // Convert to CryptoTokens
       .and_then(|keys| Vec::<DatawriterCryptoToken>::try_from(KeyMaterial_AES_GCM_GMAC_seq(keys)))
@@ -471,12 +563,10 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     self
       .keys_
       .get(&local_datareader_crypto)
-      .ok_or(SecurityError {
-        msg: format!(
-          "Could not find keys for the handle {}",
-          local_datareader_crypto
-        ),
-      })
+      .ok_or(security_error!(
+        "Could not find keys for the handle {}",
+        local_datareader_crypto
+      ))
       .cloned()
       // Convert to CryptoTokens
       .and_then(|keys| Vec::<DatawriterCryptoToken>::try_from(KeyMaterial_AES_GCM_GMAC_seq(keys)))
@@ -509,18 +599,16 @@ impl CryptoTransform for CryptographicBuiltIn {
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<(CryptoContent, ParameterList)> {
     //TODO: this is only a mock implementation
-    let plaintext = plain_buffer.write_to_vec().map_err(|err| SecurityError {
-      msg: format!("Error converting SerializedPayload to byte vector: {}", err),
+    let plaintext = plain_buffer.write_to_vec().map_err(|err| {
+      security_error!("Error converting SerializedPayload to byte vector: {}", err)
     })?;
     let keymat_seq = self
       .keys_
       .get(&sending_datawriter_crypto)
-      .ok_or(SecurityError {
-        msg: format!(
-          "Could not find keys for the handle {}",
-          sending_datawriter_crypto
-        ),
-      })
+      .ok_or(security_error!(
+        "Could not find keys for the handle {}",
+        sending_datawriter_crypto
+      ))
       .cloned()?;
 
     match keymat_seq.as_slice() {
@@ -540,12 +628,9 @@ impl CryptoTransform for CryptographicBuiltIn {
               receiver_specific_macs: Vec::new(),
             };
 
-            let header_vec =
-              CryptoHeader::from(header)
-                .write_to_vec()
-                .map_err(|err| SecurityError {
-                  msg: format!("Error converting CryptoHeader to byte vector: {}", err),
-                })?;
+            let header_vec = CryptoHeader::from(header).write_to_vec().map_err(|err| {
+              security_error!("Error converting CryptoHeader to byte vector: {}", err)
+            })?;
             let footer_vec = Vec::<u8>::try_from(footer)?;
             Ok((
               CryptoContent::from([header_vec, plaintext, footer_vec].concat()),
@@ -570,12 +655,10 @@ impl CryptoTransform for CryptographicBuiltIn {
     let keymat_seq = self
       .keys_
       .get(&sending_datawriter_crypto)
-      .ok_or(SecurityError {
-        msg: format!(
-          "Could not find keys for the handle {}",
-          sending_datawriter_crypto
-        ),
-      })
+      .ok_or(security_error!(
+        "Could not find keys for the handle {}",
+        sending_datawriter_crypto
+      ))
       .cloned()?;
 
     match keymat_seq.as_slice() {
@@ -600,20 +683,16 @@ impl CryptoTransform for CryptographicBuiltIn {
     let keymat_seq = self
       .keys_
       .get(&sending_datareader_crypto)
-      .ok_or(SecurityError {
-        msg: format!(
-          "Could not find keys for the handle {}",
-          sending_datareader_crypto
-        ),
-      })?;
+      .ok_or(security_error!(
+        "Could not find keys for the handle {}",
+        sending_datareader_crypto
+      ))?;
     let keymat = keymat_seq
       .first()
-      .ok_or(SecurityError {
-        msg: format!(
-          "Could not find keys for the handle {}",
-          sending_datareader_crypto
-        ),
-      })
+      .ok_or(security_error!(
+        "Could not find keys for the handle {}",
+        sending_datareader_crypto
+      ))
       .cloned()?;
 
     match keymat.transformation_kind {
@@ -635,20 +714,16 @@ impl CryptoTransform for CryptographicBuiltIn {
     let keymat_seq = self
       .keys_
       .get(&sending_participant_crypto)
-      .ok_or(SecurityError {
-        msg: format!(
-          "Could not find keys for the handle {}",
-          sending_participant_crypto
-        ),
-      })?;
+      .ok_or(security_error!(
+        "Could not find keys for the handle {}",
+        sending_participant_crypto
+      ))?;
     let keymat = keymat_seq
       .first()
-      .ok_or(SecurityError {
-        msg: format!(
-          "Could not find keys for the handle {}",
-          sending_participant_crypto
-        ),
-      })
+      .ok_or(security_error!(
+        "Could not find keys for the handle {}",
+        sending_participant_crypto
+      ))
       .cloned()?;
 
     match keymat.transformation_kind {
@@ -682,7 +757,84 @@ impl CryptoTransform for CryptographicBuiltIn {
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<SecureSubmessageCategory> {
-    todo!(); // 9.5.3.3.5  Compare key ID to figure out which is which?
+    // 9.5.3.3.5
+    if let Submessage {
+      body:
+        SubmessageBody::Security(SecuritySubmessage::SecurePrefix(
+          SecurePrefix {
+            crypto_header:
+              CryptoHeader {
+                transformation_id:
+                  CryptoTransformIdentifier {
+                    transformation_kind,
+                    transformation_key_id,
+                  },
+                ..
+              },
+            ..
+          },
+          _,
+        )),
+      ..
+    } = *encoded_rtps_submessage
+    {
+      // Check the validity of transformation_kind
+      let submessage_transformation_kind =
+        BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
+
+      // Search for matching keys over entities registered to the sender
+      let sending_participant_entities = self
+        .participant_to_entity_info_
+        .get(&sending_participant_crypto)
+        .ok_or(security_error!(
+          "Could not find registered entities for the sending_participant_crypto {}",
+          sending_participant_crypto
+        ))?;
+      for EntityInfo { handle, category } in sending_participant_entities {
+        // Iterate over the keys associated with the entity
+        if let Some(keys) = self.keys_.get(handle) {
+          for KeyMaterial_AES_GCM_GMAC {
+            transformation_kind,
+            sender_key_id,
+            ..
+          } in keys
+          {
+            // Compare keys to the crypto transform identifier
+            if *transformation_kind == submessage_transformation_kind
+              && *sender_key_id == transformation_key_id
+            {
+              let remote_entity_handle = *handle;
+              let matched_local_entity_handle = *self
+                .matched_local_entity_
+                .get(&remote_entity_handle)
+                .ok_or(security_error!(
+                  "The local entity matched to the remote entity handle {} is missing.",
+                  remote_entity_handle
+                ))?;
+              return Ok(match category {
+                EntityCategory::DataReader => SecureSubmessageCategory::DatareaderSubmessage(
+                  remote_entity_handle,
+                  matched_local_entity_handle,
+                ),
+                EntityCategory::DataWriter => SecureSubmessageCategory::DatawriterSubmessage(
+                  remote_entity_handle,
+                  matched_local_entity_handle,
+                ),
+              });
+            }
+          }
+        }
+      }
+      // No matching keys were found for any entity registered to the sender
+      Err( security_error!(
+          "Could not find matching keys for any registered entity for the sending_participant_crypto {}.",
+          sending_participant_crypto
+        )
+
+      )
+    } else {
+      Err(security_error!("preprocess_secure_submsg expects encoded_rtps_submessage to be a SEC_PREFIX. Received {:?}.",encoded_rtps_submessage.header.kind ) )
+    }
   }
 
   fn decode_datawriter_submessage(

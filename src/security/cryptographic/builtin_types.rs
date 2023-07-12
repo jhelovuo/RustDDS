@@ -291,7 +291,7 @@ impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
 /// Valid values for CryptoTransformKind from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the names from the spec
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub enum BuiltinCryptoTransformationKind {
   CRYPTO_TRANSFORMATION_KIND_NONE,
   CRYPTO_TRANSFORMATION_KIND_AES128_GMAC,
@@ -474,11 +474,21 @@ pub struct ReceiverSpecificMAC {
   pub receiver_mac: [u8; 16],
 }
 
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub(super) enum EntityCategory {
   DataReader,
   DataWriter,
 }
+impl EntityCategory {
+  pub(crate) fn opposite(self) -> EntityCategory {
+    match self {
+      EntityCategory::DataReader => EntityCategory::DataWriter,
+      EntityCategory::DataWriter => EntityCategory::DataReader,
+    }
+  }
+}
 
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub(super) struct EntityInfo {
   pub handle: CryptoHandle,
   pub category: EntityCategory,
