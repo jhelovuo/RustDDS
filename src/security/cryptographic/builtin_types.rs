@@ -7,6 +7,7 @@ use crate::{
     crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
   },
   security::{BinaryProperty, DataHolder, SecurityError},
+  security_error,
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
 };
@@ -153,10 +154,76 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoToken {
 }
 
 /// We need to refer to a sequence of key material structures for example in
-/// register_local_datawriter.
-// Create a wrapper to avoid error E0117
+/// register_local_datawriter. Usually the sequence has one key, but it can have
+/// two if a different key is used for submessage and payload
 #[allow(non_camel_case_types)] // We use the name from the spec
-pub struct KeyMaterial_AES_GCM_GMAC_seq(pub Vec<KeyMaterial_AES_GCM_GMAC>);
+#[derive(Clone)]
+pub enum KeyMaterial_AES_GCM_GMAC_seq {
+  One(KeyMaterial_AES_GCM_GMAC),
+  Two(KeyMaterial_AES_GCM_GMAC, KeyMaterial_AES_GCM_GMAC),
+}
+
+impl KeyMaterial_AES_GCM_GMAC_seq {
+  pub fn key(self) -> KeyMaterial_AES_GCM_GMAC {
+    match self {
+      Self::One(key) => key,
+      Self::Two(key, _) => key,
+    }
+  }
+
+  pub fn payload_key(self) -> KeyMaterial_AES_GCM_GMAC {
+    match self {
+      Self::One(key) => key,
+      Self::Two(_, payload_key) => payload_key,
+    }
+  }
+
+  pub fn modify_key<F>(self, f: F) -> KeyMaterial_AES_GCM_GMAC_seq
+  where
+    F: FnOnce(KeyMaterial_AES_GCM_GMAC) -> KeyMaterial_AES_GCM_GMAC,
+  {
+    match self {
+      Self::One(key) => Self::One(f(key)),
+      Self::Two(key, payload_key) => Self::Two(f(key), payload_key),
+    }
+  }
+}
+
+impl TryFrom<Vec<KeyMaterial_AES_GCM_GMAC>> for KeyMaterial_AES_GCM_GMAC_seq {
+  type Error = SecurityError;
+  fn try_from(value: Vec<KeyMaterial_AES_GCM_GMAC>) -> Result<Self, Self::Error> {
+    match value.as_slice() {
+      [key] => Ok(KeyMaterial_AES_GCM_GMAC_seq::One(key.clone())),
+      [key, payload_key] => Ok(KeyMaterial_AES_GCM_GMAC_seq::Two(
+        key.clone(),
+        payload_key.clone(),
+      )),
+      [] => Ok(KeyMaterial_AES_GCM_GMAC_seq::One(
+        KeyMaterial_AES_GCM_GMAC {
+          transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+          master_salt: Vec::new(),
+          sender_key_id: 0,
+          master_sender_key: Vec::new(),
+          receiver_specific_key_id: 0,
+          master_receiver_specific_key: Vec::new(),
+        },
+      )),
+      _ => Err(security_error!(
+        "Expected 1 or 2 key materials in KeyMaterial_AES_GCM_GMAC_seq, received {}",
+        value.len()
+      )),
+    }
+  }
+}
+impl From<KeyMaterial_AES_GCM_GMAC_seq> for Vec<KeyMaterial_AES_GCM_GMAC> {
+  fn from(value: KeyMaterial_AES_GCM_GMAC_seq) -> Self {
+    match value {
+      KeyMaterial_AES_GCM_GMAC_seq::One(key) => vec![key],
+      KeyMaterial_AES_GCM_GMAC_seq::Two(key, payload_key) => vec![key, payload_key],
+    }
+  }
+}
+
 // Conversions from and into Bytes for KeyMaterial_AES_GCM_GMAC_seq
 impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC_seq {
   type Error = SecurityError;
@@ -182,18 +249,16 @@ impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC_seq {
       .map(|serializable_keymat| KeyMaterial_AES_GCM_GMAC::try_from(serializable_keymat.clone()))
       // Convert to Vec and dig out the Result
       .collect::<Result<Vec<KeyMaterial_AES_GCM_GMAC>, Self::Error>>()
-      // Wrap the Vec
-      .map(Self)
+      // Convert the Vec
+      .and_then(KeyMaterial_AES_GCM_GMAC_seq::try_from)
   }
 }
 
 impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Bytes {
   type Error = SecurityError;
-  fn try_from(
-    KeyMaterial_AES_GCM_GMAC_seq(keymat_seq): KeyMaterial_AES_GCM_GMAC_seq,
-  ) -> Result<Self, Self::Error> {
+  fn try_from(keymat_seq: KeyMaterial_AES_GCM_GMAC_seq) -> Result<Self, Self::Error> {
     // Convert the key material to the serializable structure
-    let serializable_keymat_seq = keymat_seq
+    let serializable_keymat_seq = Vec::from(keymat_seq)
       .iter()
       .map(|keymat| Serializable_KeyMaterial_AES_GCM_GMAC::from(keymat.clone()))
       .collect();
@@ -215,15 +280,14 @@ impl TryFrom<Vec<CryptoToken>> for KeyMaterial_AES_GCM_GMAC_seq {
       .iter()
       .map(|token| KeyMaterial_AES_GCM_GMAC::try_from(token.clone()))
       .collect::<Result<Vec<KeyMaterial_AES_GCM_GMAC>, Self::Error>>()
-      .map(Self)
+      // Convert the Vec
+      .and_then(KeyMaterial_AES_GCM_GMAC_seq::try_from)
   }
 }
 impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Vec<CryptoToken> {
   type Error = SecurityError;
-  fn try_from(
-    KeyMaterial_AES_GCM_GMAC_seq(keymat_seq): KeyMaterial_AES_GCM_GMAC_seq,
-  ) -> Result<Self, Self::Error> {
-    keymat_seq
+  fn try_from(keymat_seq: KeyMaterial_AES_GCM_GMAC_seq) -> Result<Self, Self::Error> {
+    Vec::from(keymat_seq)
       .iter()
       .map(|keymat| CryptoToken::try_from(keymat.clone()))
       .collect()
@@ -480,7 +544,7 @@ pub(super) enum EntityCategory {
   DataWriter,
 }
 impl EntityCategory {
-  pub(crate) fn opposite(self) -> EntityCategory {
+  pub(super) fn opposite(self) -> EntityCategory {
     match self {
       EntityCategory::DataReader => EntityCategory::DataWriter,
       EntityCategory::DataWriter => EntityCategory::DataReader,

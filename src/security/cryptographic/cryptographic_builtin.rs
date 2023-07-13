@@ -26,8 +26,8 @@ use crate::{
 // A struct implementing the built-in Cryptographic plugin
 // See sections 8.5 and 9.5 of the Security specification (v. 1.1)
 pub struct CryptographicBuiltIn {
-  encode_keys_: HashMap<CryptoHandle, Vec<KeyMaterial_AES_GCM_GMAC>>,
-  decode_keys_: HashMap<CryptoHandle, Vec<KeyMaterial_AES_GCM_GMAC>>,
+  encode_keys_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
+  decode_keys_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
   encrypt_options_: HashMap<CryptoHandle, EndpointSecurityAttributes>,
   participant_to_entity_info_: HashMap<ParticipantCryptoHandle, HashSet<EntityInfo>>,
   // For reverse lookups
@@ -139,7 +139,7 @@ impl CryptographicBuiltIn {
   fn insert_encode_keys_(
     &mut self,
     handle: CryptoHandle,
-    keys: Vec<KeyMaterial_AES_GCM_GMAC>,
+    keys: KeyMaterial_AES_GCM_GMAC_seq,
   ) -> SecurityResult<()> {
     match self.encode_keys_.insert(handle, keys) {
       None => SecurityResult::Ok(()),
@@ -155,7 +155,7 @@ impl CryptographicBuiltIn {
   fn insert_decode_keys_(
     &mut self,
     handle: CryptoHandle,
-    keys: Vec<KeyMaterial_AES_GCM_GMAC>,
+    keys: KeyMaterial_AES_GCM_GMAC_seq,
   ) -> SecurityResult<()> {
     match self.decode_keys_.insert(handle, keys) {
       None => SecurityResult::Ok(()),
@@ -259,8 +259,8 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     let handle = self.generate_handle_();
     let key_material = Self::generate_mock_key_(handle);
     self
-      .insert_encode_keys_(handle, vec![key_material])
-      .map(|_| handle)
+      .insert_encode_keys_(handle, KeyMaterial_AES_GCM_GMAC_seq::One(key_material))
+      .and(Ok(handle))
   }
 
   fn register_matched_remote_participant(
@@ -281,16 +281,14 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
       self
         .insert_encode_keys_(
           remote_participant_handle,
-          local_participant_keys
-            .iter()
-            .map(|key| {
-              let KeyMaterial_AES_GCM_GMAC {
-                transformation_kind,
-                master_salt,
-                master_sender_key,
-                sender_key_id,
-                ..
-              } = key.clone();
+          local_participant_keys.modify_key(
+            |KeyMaterial_AES_GCM_GMAC {
+               transformation_kind,
+               master_salt,
+               master_sender_key,
+               sender_key_id,
+               ..
+             }| {
               let receiver_specific_key_id;
               let master_receiver_specific_key;
               // TODO check RTPS Protection Kind 9.5.3.1
@@ -310,8 +308,8 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
                 receiver_specific_key_id,
                 master_receiver_specific_key,
               }
-            })
-            .collect(),
+            },
+          ),
         )
         .and(Ok(remote_participant_handle))
     } else {
@@ -330,25 +328,18 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   ) -> SecurityResult<DatawriterCryptoHandle> {
     //TODO: this is only a mock implementation
     let local_datawriter_handle = self.generate_handle_();
-    let mut keys = Vec::<KeyMaterial_AES_GCM_GMAC>::new();
+    let keys = Vec::<KeyMaterial_AES_GCM_GMAC>::new();
     if Self::is_volatile_(datawriter_properties) {
       todo!()
     } else {
-      if false
-      /* datawriter_security_attributes.is_submessage_protected */
-      {
-        keys.push(Self::generate_mock_key_(local_datawriter_handle));
-      }
-      if false
-      /* datawriter_security_attributes.is_payload_protected */
-      {
-        if keys.is_empty() {
-          keys.push(Self::generate_mock_key_(local_datawriter_handle));
-        } else {
-          keys.push(Self::generate_mock_key_(self.generate_handle_()));
-        }
-      }
+      // TODO check datawriter_security_attributes.is_submessage_protected and
+      // datawriter_security_attributes.is_payload_protected
+      let keys = KeyMaterial_AES_GCM_GMAC_seq::Two(
+        Self::generate_mock_key_(local_datawriter_handle),
+        Self::generate_mock_key_(self.generate_handle_()),
+      );
       self.insert_encode_keys_(local_datawriter_handle, keys)?;
+
       self.insert_attributes_(local_datawriter_handle, datawriter_security_attributes)?;
       self.insert_entity_info_(
         participant_crypto,
@@ -373,7 +364,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     relay_only: bool,
   ) -> SecurityResult<DatareaderCryptoHandle> {
     //TODO: this is only a mock implementation
-    let mut keys = self
+    let keys = self
       .encode_keys_
       .get(&local_datawriter_crypto_handle)
       .ok_or(security_error!(
@@ -416,21 +407,20 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     }
 
     // Copy the keys
-    // TODO check RTPS Protection Kind 9.5.3.1
-    if true {
-      self.insert_encode_keys_(remote_datareader_handle, keys)?;
-    } else {
-      if let Some(KeyMaterial_AES_GCM_GMAC {
-        transformation_kind,
-        master_salt,
-        master_sender_key,
-        sender_key_id,
-        ..
-      }) = keys.first().cloned()
-      {
-        keys.insert(
-          0,
-          KeyMaterial_AES_GCM_GMAC {
+    self.insert_encode_keys_(
+      remote_datareader_handle,
+      // TODO check RTPS Protection Kind 9.5.3.1
+      if true {
+        keys
+      } else {
+        keys.modify_key(
+          |KeyMaterial_AES_GCM_GMAC {
+             transformation_kind,
+             master_salt,
+             master_sender_key,
+             sender_key_id,
+             ..
+           }| KeyMaterial_AES_GCM_GMAC {
             transformation_kind,
             master_salt,
             master_sender_key,
@@ -438,10 +428,9 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
             receiver_specific_key_id: 0,
             master_receiver_specific_key: Vec::new(),
           },
-        );
-      }
-      self.insert_encode_keys_(remote_datareader_handle, keys)?;
-    }
+        )
+      },
+    )?;
 
     SecurityResult::Ok(remote_datareader_handle)
   }
@@ -454,26 +443,16 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   ) -> SecurityResult<DatareaderCryptoHandle> {
     //TODO: this is only a mock implementation
     let local_datareader_handle = self.generate_handle_();
-    let mut keys = Vec::<KeyMaterial_AES_GCM_GMAC>::new();
+    let keys = Vec::<KeyMaterial_AES_GCM_GMAC>::new();
     if Self::is_volatile_(datareader_properties) {
       // By 8.8.8.3
       SecurityResult::Err(security_error!("register_local_datareader should not be called for BuiltinParticipantVolatileMessageSecureReader") )
     } else {
-      if false
-      /* datareader_security_attributes.is_submessage_protected */
-      {
-        keys.push(Self::generate_mock_key_(local_datareader_handle));
-      }
-      if false
-      /* datareader_security_attributes.is_payload_protected */
-      {
-        if keys.is_empty() {
-          keys.push(Self::generate_mock_key_(local_datareader_handle));
-        } else {
-          keys.push(Self::generate_mock_key_(self.generate_handle_()));
-        }
-      }
-      self.insert_encode_keys_(local_datareader_handle, keys)?;
+      // TODO check datareader_security_attributes.is_submessage_protected
+      self.insert_encode_keys_(
+        local_datareader_handle,
+        KeyMaterial_AES_GCM_GMAC_seq::One(Self::generate_mock_key_(local_datareader_handle)),
+      )?;
       self.insert_attributes_(local_datareader_handle, datareader_security_attributes)?;
       self.insert_entity_info_(
         participant_crypto,
@@ -497,7 +476,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     shared_secret: SharedSecretHandle,
   ) -> SecurityResult<DatawriterCryptoHandle> {
     //TODO: this is only a mock implementation
-    let mut keys = self
+    let keys = self
       .encode_keys_
       .get(&local_datareader_crypto_handle)
       .ok_or(security_error!(
@@ -541,21 +520,20 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     }
 
     // Copy the keys
-    // TODO check RTPS Protection Kind 9.5.3.1
-    if true {
-      self.insert_encode_keys_(remote_datawriter_handle, keys)?;
-    } else {
-      if let Some(KeyMaterial_AES_GCM_GMAC {
-        transformation_kind,
-        master_salt,
-        master_sender_key,
-        sender_key_id,
-        ..
-      }) = keys.first().cloned()
-      {
-        keys.insert(
-          0,
-          KeyMaterial_AES_GCM_GMAC {
+    self.insert_encode_keys_(
+      remote_datawriter_handle,
+      // TODO check RTPS Protection Kind 9.5.3.1
+      if true {
+        keys
+      } else {
+        keys.modify_key(
+          |KeyMaterial_AES_GCM_GMAC {
+             transformation_kind,
+             master_salt,
+             master_sender_key,
+             sender_key_id,
+             ..
+           }| KeyMaterial_AES_GCM_GMAC {
             transformation_kind,
             master_salt,
             master_sender_key,
@@ -563,11 +541,10 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
             receiver_specific_key_id: 0,
             master_receiver_specific_key: Vec::new(),
           },
-        );
-      }
-      self.insert_encode_keys_(remote_datawriter_handle, keys)?;
-    }
-    SecurityResult::Ok(remote_datawriter_handle)
+        )
+      },
+    )?;
+    Ok(remote_datawriter_handle)
   }
 
   fn unregister_participant(
@@ -627,7 +604,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
       ))
       .cloned()
       // Convert to CryptoTokens
-      .and_then(|keys| Vec::<DatawriterCryptoToken>::try_from(KeyMaterial_AES_GCM_GMAC_seq(keys)))
+      .and_then(Vec::<DatawriterCryptoToken>::try_from)
   }
 
   fn set_remote_participant_crypto_tokens(
@@ -637,11 +614,8 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     remote_participant_tokens: Vec<ParticipantCryptoToken>,
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation (or is it?)
-    KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_participant_tokens).and_then(
-      |KeyMaterial_AES_GCM_GMAC_seq(keymat_seq)| {
-        self.insert_decode_keys_(remote_participant_crypto, keymat_seq)
-      },
-    )
+    KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_participant_tokens)
+      .and_then(|keymat_seq| self.insert_decode_keys_(remote_participant_crypto, keymat_seq))
   }
 
   fn create_local_datawriter_crypto_tokens(
@@ -660,7 +634,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
       ))
       .cloned()
       // Convert to CryptoTokens
-      .and_then(|keys| Vec::<DatawriterCryptoToken>::try_from(KeyMaterial_AES_GCM_GMAC_seq(keys)))
+      .and_then(Vec::<DatawriterCryptoToken>::try_from)
   }
 
   fn set_remote_datawriter_crypto_tokens(
@@ -670,11 +644,8 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     remote_datawriter_tokens: Vec<DatawriterCryptoToken>,
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
-    KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_datawriter_tokens).and_then(
-      |KeyMaterial_AES_GCM_GMAC_seq(keymat_seq)| {
-        self.insert_decode_keys_(remote_datawriter_crypto, keymat_seq)
-      },
-    )
+    KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_datawriter_tokens)
+      .and_then(|keymat_seq| self.insert_decode_keys_(remote_datawriter_crypto, keymat_seq))
   }
 
   fn create_local_datareader_crypto_tokens(
@@ -693,7 +664,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
       ))
       .cloned()
       // Convert to CryptoTokens
-      .and_then(|keys| Vec::<DatawriterCryptoToken>::try_from(KeyMaterial_AES_GCM_GMAC_seq(keys)))
+      .and_then(Vec::<DatawriterCryptoToken>::try_from)
   }
 
   fn set_remote_datareader_crypto_tokens(
@@ -703,11 +674,8 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     remote_datareader_tokens: Vec<DatareaderCryptoToken>,
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
-    KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_datareader_tokens).and_then(
-      |KeyMaterial_AES_GCM_GMAC_seq(keymat_seq)| {
-        self.insert_decode_keys_(remote_datareader_crypto, keymat_seq)
-      },
-    )
+    KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_datareader_tokens)
+      .and_then(|keymat_seq| self.insert_decode_keys_(remote_datareader_crypto, keymat_seq))
   }
 
   fn return_crypto_tokens(&mut self, crypto_tokens: Vec<CryptoToken>) -> SecurityResult<()> {
@@ -726,43 +694,40 @@ impl CryptoTransform for CryptographicBuiltIn {
     let plaintext = plain_buffer.write_to_vec().map_err(|err| {
       security_error!("Error converting SerializedPayload to byte vector: {}", err)
     })?;
-    let keymat_seq = self
+
+    let payload_key = self
       .encode_keys_
       .get(&sending_datawriter_crypto)
       .ok_or(security_error!(
         "Could not find keys for the handle {}",
         sending_datawriter_crypto
       ))
-      .cloned()?;
+      .cloned()?
+      .payload_key();
 
-    match keymat_seq.as_slice() {
-      [keymat_0] => {
-        let header = BuiltinCryptoHeader {
-          transform_identifier: BuiltinCryptoTransformIdentifier {
-            transformation_kind: keymat_0.transformation_kind,
-            transformation_key_id: 0,
-          },
-          session_id: [0, 0, 0, 0],
-          initialization_vector_suffix: [0; 8],
+    let header = BuiltinCryptoHeader {
+      transform_identifier: BuiltinCryptoTransformIdentifier {
+        transformation_kind: payload_key.transformation_kind,
+        transformation_key_id: 0,
+      },
+      session_id: [0, 0, 0, 0],
+      initialization_vector_suffix: [0; 8],
+    };
+    match payload_key.transformation_kind {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+        let footer = BuiltinCryptoFooter {
+          common_mac: [0; 16],
+          receiver_specific_macs: Vec::new(),
         };
-        match keymat_0.transformation_kind {
-          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-            let footer = BuiltinCryptoFooter {
-              common_mac: [0; 16],
-              receiver_specific_macs: Vec::new(),
-            };
 
-            let header_vec = CryptoHeader::from(header).write_to_vec().map_err(|err| {
-              security_error!("Error converting CryptoHeader to byte vector: {}", err)
-            })?;
-            let footer_vec = Vec::<u8>::try_from(footer)?;
-            Ok((
-              CryptoContent::from([header_vec, plaintext, footer_vec].concat()),
-              ParameterList::new(),
-            ))
-          }
-          _ => todo!(),
-        }
+        let header_vec = CryptoHeader::from(header).write_to_vec().map_err(|err| {
+          security_error!("Error converting CryptoHeader to byte vector: {}", err)
+        })?;
+        let footer_vec = Vec::<u8>::try_from(footer)?;
+        Ok((
+          CryptoContent::from([header_vec, plaintext, footer_vec].concat()),
+          ParameterList::new(),
+        ))
       }
       _ => todo!(),
     }
@@ -775,23 +740,20 @@ impl CryptoTransform for CryptographicBuiltIn {
     receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
   ) -> SecurityResult<EncodeResult<EncodedSubmessage>> {
     //TODO: this is only a mock implementation
-
-    let keymat_seq = self
+    let key = self
       .encode_keys_
       .get(&sending_datawriter_crypto)
       .ok_or(security_error!(
         "Could not find keys for the handle {}",
         sending_datawriter_crypto
       ))
-      .cloned()?;
+      .cloned()?
+      .key();
 
-    match keymat_seq.as_slice() {
-      [keymat_0] => match keymat_0.transformation_kind {
-        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Ok(EncodeResult::One(
-          EncodedSubmessage::Unencoded(plain_rtps_submessage),
-        )),
-        _ => todo!(),
-      },
+    match key.transformation_kind {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Ok(EncodeResult::One(
+        EncodedSubmessage::Unencoded(plain_rtps_submessage),
+      )),
       _ => todo!(),
     }
   }
@@ -804,17 +766,16 @@ impl CryptoTransform for CryptographicBuiltIn {
   ) -> SecurityResult<EncodeResult<EncodedSubmessage>> {
     //TODO: this is only a mock implementation
 
-    let keymat = self
+    let key = self
       .encode_keys_
       .get(&sending_datareader_crypto)
-      .and_then(|v| v.first())
       .ok_or(security_error!(
         "Could not find keys for the handle {}",
         sending_datareader_crypto
       ))
-      .cloned()?;
-
-    match keymat.transformation_kind {
+      .cloned()?
+      .key();
+    match key.transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Ok(EncodeResult::One(
         EncodedSubmessage::Unencoded(plain_rtps_submessage),
       )),
@@ -830,17 +791,17 @@ impl CryptoTransform for CryptographicBuiltIn {
   ) -> SecurityResult<EncodeResult<Message>> {
     //TODO: this is only a mock implementation
 
-    let keymat = self
+    let key = self
       .encode_keys_
       .get(&sending_participant_crypto)
-      .and_then(|v| v.first())
       .ok_or(security_error!(
         "Could not find keys for the handle {}",
         sending_participant_crypto
       ))
-      .cloned()?;
+      .cloned()?
+      .key();
 
-    match keymat.transformation_kind {
+    match key.transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         Ok(EncodeResult::One(plain_rtps_message))
       }
@@ -906,36 +867,38 @@ impl CryptoTransform for CryptographicBuiltIn {
         ))?;
       for EntityInfo { handle, category } in sending_participant_entities {
         // Iterate over the keys associated with the entity
-        if let Some(keys) = self.decode_keys_.get(handle) {
-          for KeyMaterial_AES_GCM_GMAC {
-            transformation_kind,
-            sender_key_id,
-            ..
-          } in keys
+        if let Some(KeyMaterial_AES_GCM_GMAC {
+          transformation_kind,
+          sender_key_id,
+          ..
+        }) = self
+          .decode_keys_
+          .get(handle)
+          .cloned()
+          .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+        {
+          // Compare keys to the crypto transform identifier
+          if transformation_kind == submessage_transformation_kind
+            && sender_key_id == transformation_key_id
           {
-            // Compare keys to the crypto transform identifier
-            if *transformation_kind == submessage_transformation_kind
-              && *sender_key_id == transformation_key_id
-            {
-              let remote_entity_handle = *handle;
-              let matched_local_entity_handle = *self
-                .matched_local_entity_
-                .get(&remote_entity_handle)
-                .ok_or(security_error!(
-                  "The local entity matched to the remote entity handle {} is missing.",
-                  remote_entity_handle
-                ))?;
-              return Ok(match category {
-                EntityCategory::DataReader => SecureSubmessageCategory::DatareaderSubmessage(
-                  remote_entity_handle,
-                  matched_local_entity_handle,
-                ),
-                EntityCategory::DataWriter => SecureSubmessageCategory::DatawriterSubmessage(
-                  remote_entity_handle,
-                  matched_local_entity_handle,
-                ),
-              });
-            }
+            let remote_entity_handle = *handle;
+            let matched_local_entity_handle = *self
+              .matched_local_entity_
+              .get(&remote_entity_handle)
+              .ok_or(security_error!(
+                "The local entity matched to the remote entity handle {} is missing.",
+                remote_entity_handle
+              ))?;
+            return Ok(match category {
+              EntityCategory::DataReader => SecureSubmessageCategory::DatareaderSubmessage(
+                remote_entity_handle,
+                matched_local_entity_handle,
+              ),
+              EntityCategory::DataWriter => SecureSubmessageCategory::DatawriterSubmessage(
+                remote_entity_handle,
+                matched_local_entity_handle,
+              ),
+            });
           }
         }
       }
@@ -956,6 +919,8 @@ impl CryptoTransform for CryptographicBuiltIn {
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<WriterSubmessage> {
+    //if let Some()=self.decode_keys_.get(k)
+
     todo!();
   }
 
