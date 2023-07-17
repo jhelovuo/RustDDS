@@ -405,14 +405,23 @@ impl MessageReceiver {
       }
       InterpreterSubmessage::InfoReply(info_reply, flags) => {
         self.unicast_reply_locator_list = info_reply.unicast_locator_list;
-        if flags.contains(INFOREPLY_Flags::Multicast) {
-          self.multicast_reply_locator_list = info_reply
-            .multicast_locator_list
-            .expect("InfoReply flag indicates multicast locator is present but none found.");
-        // TODO: Convert the above error to warning only.
-        } else {
-          self.multicast_reply_locator_list.clear();
-        }
+        self.multicast_reply_locator_list = match (
+          flags.contains(INFOREPLY_Flags::Multicast),
+          info_reply.multicast_locator_list,
+        ) {
+          (true, Some(ll)) => ll, // expected case
+          (true, None) => {
+            warn!(
+              "InfoReply submessage flag indicates multicast_reply_locator_list, but none found."
+            );
+            vec![]
+          }
+          (false, None) => vec![], // This one is normal again
+          (false, Some(_)) => {
+            warn!("InfoReply submessage has unexpected multicast_reply_locator_list, ignoring.");
+            vec![]
+          }
+        };
       }
       InterpreterSubmessage::InfoDestination(info_dest, _flags) => {
         if info_dest.guid_prefix == GUID::GUID_UNKNOWN.prefix {
