@@ -1,6 +1,4 @@
-use std::{
-  net::{SocketAddrV4, SocketAddrV6},
-};
+use std::net::{SocketAddrV4, SocketAddrV6};
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use speedy::{Context, Readable, Reader, Writable, Writer};
@@ -155,12 +153,10 @@ pub(crate) mod repr {
 mod tests {
   use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
-  use speedy;
-  use speedy::{Endianness, Writable, Readable};
+  use speedy::{self, Endianness, Readable, Writable};
   use test_case::test_case;
 
-  use super::Locator;
-  use super::repr;
+  use super::{repr, Locator};
 
   #[test_case(
     &[
@@ -173,7 +169,7 @@ mod tests {
     ]
     =>  Locator::from(SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080))
     ; "IPv4 deserialize"
-  )]  
+  )]
   #[test_case(
     &[
       0x01, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
@@ -185,15 +181,13 @@ mod tests {
     ]
     =>  Locator::from(SocketAddr::new(Ipv4Addr::new(0x0A, 0, 0, 0x0F).into(), 0x1cf2))
     ; "IPv4 fuzz"
-  )]  
+  )]
   // test body
-  fn deserialize_le(little_endian: &[u8]) -> Locator
-  {
-    repr::Locator::read_from_buffer_with_ctx(Endianness::LittleEndian , little_endian)
+  fn deserialize_le(little_endian: &[u8]) -> Locator {
+    repr::Locator::read_from_buffer_with_ctx(Endianness::LittleEndian, little_endian)
       .unwrap()
       .into() // repr::Locator -> Locator
   }
-
 
   #[test_case(SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 0) => Locator::Invalid ; "unspecified IPv6")]
   fn from_socket_address(socket_addr: impl Into<Locator>) -> Locator {
