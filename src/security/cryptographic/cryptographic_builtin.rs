@@ -446,7 +446,10 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     let keys = Vec::<KeyMaterial_AES_GCM_GMAC>::new();
     if Self::is_volatile_(datareader_properties) {
       // By 8.8.8.3
-      SecurityResult::Err(security_error!("register_local_datareader should not be called for BuiltinParticipantVolatileMessageSecureReader") )
+      SecurityResult::Err(security_error!(
+        "register_local_datareader should not be called 
+      for BuiltinParticipantVolatileMessageSecureReader"
+      ))
     } else {
       // TODO check datareader_security_attributes.is_submessage_protected
       self.insert_encode_keys_(
@@ -903,13 +906,17 @@ impl CryptoTransform for CryptographicBuiltIn {
         }
       }
       // No matching keys were found for any entity registered to the sender
-      Err( security_error!(
-          "Could not find matching keys for any registered entity for the sending_participant_crypto {}.",
-          sending_participant_crypto
-        )
-      )
+      Err(security_error!(
+        "Could not find matching keys for any registered entity for the \
+         sending_participant_crypto {}.",
+        sending_participant_crypto
+      ))
     } else {
-      Err(security_error!("preprocess_secure_submsg expects encoded_rtps_submessage to be a SEC_PREFIX. Received {:?}.",encoded_rtps_submessage.header.kind ) )
+      Err(security_error!(
+        "preprocess_secure_submsg expects encoded_rtps_submessage to be a SEC_PREFIX. Received \
+         {:?}.",
+        encoded_rtps_submessage.header.kind
+      ))
     }
   }
 
@@ -919,9 +926,30 @@ impl CryptoTransform for CryptographicBuiltIn {
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<WriterSubmessage> {
-    //if let Some()=self.decode_keys_.get(k)
+    match self
+      .decode_keys_
+      .get(&sending_datawriter_crypto)
+      .cloned()
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+    {
+      Some(KeyMaterial_AES_GCM_GMAC {
+        transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+        ..
+      }) => match encoded_rtps_submessage.1.body {
+        SubmessageBody::Writer(writer_submessage) => Ok(writer_submessage),
+        other => Err(security_error!(
+          "When transformation kind is CRYPTO_TRANSFORMATION_KIND_NONE, \
+           decode_datawriter_submessage expects a WriterSubmessage, received {:?}",
+          other
+        )),
+      },
 
-    todo!();
+      None => Err(security_error!(
+        "No decode keys found for the remote datawriter {}",
+        sending_datawriter_crypto
+      )),
+      _ => todo!(),
+    }
   }
 
   fn decode_datareader_submessage(
@@ -930,7 +958,29 @@ impl CryptoTransform for CryptographicBuiltIn {
     receiving_datawriter_crypto: DatawriterCryptoHandle,
     sending_datareader_crypto: DatareaderCryptoHandle,
   ) -> SecurityResult<ReaderSubmessage> {
-    todo!();
+    match self
+      .decode_keys_
+      .get(&sending_datareader_crypto)
+      .cloned()
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+    {
+      Some(KeyMaterial_AES_GCM_GMAC {
+        transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+        ..
+      }) => match encoded_rtps_submessage.1.body {
+        SubmessageBody::Reader(reader_submessage) => Ok(reader_submessage),
+        other => Err(security_error!(
+          "When transformation kind is CRYPTO_TRANSFORMATION_KIND_NONE, \
+           decode_datareader_submessage expects a ReaderSubmessage, received {:?}",
+          other
+        )),
+      },
+      None => Err(security_error!(
+        "No decode keys found for the remote datawriter {}",
+        sending_datareader_crypto
+      )),
+      _ => todo!(),
+    }
   }
 
   fn decode_serialized_payload(
