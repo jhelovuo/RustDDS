@@ -72,10 +72,15 @@ impl AssemblyBuffer {
     let start_frag_from_0 = fragment_starting_num - 1; // number of first fragment in this DataFrag, indexing from 0
 
     debug!(
-      "insert_frags: datafrag.writer_sn = {:?}, frag_size = {:?}, datafrag.fragment_size = {:?}, datafrag.fragment_starting_num = {:?}, \
-      datafrag.fragments_in_submessage = {:?}, datafrag.data_size = {:?}",
-      datafrag.writer_sn, frag_size, datafrag.fragment_size, datafrag.fragment_starting_num,
-      datafrag.fragments_in_submessage, datafrag.data_size
+      "insert_frags: datafrag.writer_sn = {:?}, frag_size = {:?}, datafrag.fragment_size = {:?}, \
+       datafrag.fragment_starting_num = {:?}, datafrag.fragments_in_submessage = {:?}, \
+       datafrag.data_size = {:?}",
+      datafrag.writer_sn,
+      frag_size,
+      datafrag.fragment_size,
+      datafrag.fragment_starting_num,
+      datafrag.fragments_in_submessage,
+      datafrag.data_size
     );
 
     // unwrap: u32 should fit into usize
@@ -96,8 +101,15 @@ impl AssemblyBuffer {
     if fragment_starting_num < self.fragment_count
       && datafrag.serialized_payload.len() < frags_in_subm * frag_size
     {
-      error!("Received DATAFRAG too small. fragment_starting_num={} out of fragment_count={}, frags_in_subm={}, frag_size={} but payload length ={}",
-        fragment_starting_num, self.fragment_count, frags_in_subm, frag_size, datafrag.serialized_payload.len(), );
+      error!(
+        "Received DATAFRAG too small. fragment_starting_num={} out of fragment_count={}, \
+         frags_in_subm={}, frag_size={} but payload length ={}",
+        fragment_starting_num,
+        self.fragment_count,
+        frags_in_subm,
+        frag_size,
+        datafrag.serialized_payload.len(),
+      );
     }
 
     debug!(

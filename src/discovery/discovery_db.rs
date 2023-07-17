@@ -169,7 +169,11 @@ impl DiscoveryDB {
       }
       *ts = now;
     } else {
-      info!("Participant alive update for unknown {:?}. This is normal, if the message does not repeat.", guid_prefix);
+      info!(
+        "Participant alive update for unknown {:?}. This is normal, if the message does not \
+         repeat.",
+        guid_prefix
+      );
     }
   }
 
@@ -261,8 +265,11 @@ impl DiscoveryDB {
           if elapsed <= lease_duration + PARTICIPANT_LEASE_DURATION_TOLERANCE {
             // No timeout yet, we keep this, so do nothing.
           } else {
-            info!("participant cleanup - deleting participant proxy {:?}. lease_duration = {:?} elapsed = {:?}",
-                  guid, lease_duration, elapsed);
+            info!(
+              "participant cleanup - deleting participant proxy {:?}. lease_duration = {:?} \
+               elapsed = {:?}",
+              guid, lease_duration, elapsed
+            );
             to_remove.push(guid);
           }
         }

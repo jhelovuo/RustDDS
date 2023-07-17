@@ -387,8 +387,11 @@ where
           // RTPS v2.5 spec Section "8.3.5.5 SequenceNumberSet":
           // maximum(SequenceNumberSet) - minimum(SequenceNumberSet) < 256
           let truncated_end = base + N::from(255);
-          error!("from_base_and_set : max size (256) exceeded, base = {:?}, start = {:?} end = {:?}. Truncating end to {:?}",
-              base, start, end, truncated_end );
+          error!(
+            "from_base_and_set : max size (256) exceeded, base = {:?}, start = {:?} end = {:?}. \
+             Truncating end to {:?}",
+            base, start, end, truncated_end
+          );
           truncated_end
         } else {
           end

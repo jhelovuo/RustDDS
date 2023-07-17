@@ -255,8 +255,12 @@ impl MessageReceiver {
             if self.dest_guid_prefix != self.own_guid_prefix
               && self.dest_guid_prefix != GuidPrefix::UNKNOWN
             {
-              trace!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
-                self.dest_guid_prefix, self.own_guid_prefix);
+              trace!(
+                "Message is not for this participant. Dropping. dest_guid_prefix={:?} participant \
+                 guid={:?}",
+                self.dest_guid_prefix,
+                self.own_guid_prefix
+              );
             } else {
               match m {
                 SecuritySubmessage::SecureBody(_sec_body, _sec_body_flags) => {
@@ -274,8 +278,11 @@ impl MessageReceiver {
                   // DDS Security spec Section "7.3.6.6.3 Validity" requires that this is the
                   // first submessage in a message.
                   if self.submessage_count > 0 {
-                    warn!("SecureRTPSPrefix is only allowed at submessage count=0, now received at count={}.", 
-                      self.submessage_count);
+                    warn!(
+                      "SecureRTPSPrefix is only allowed at submessage count=0, now received at \
+                       count={}.",
+                      self.submessage_count
+                    );
                     // But we accept the message anyway. A stricter message
                     // receiver would discard at this point.
                   }
@@ -322,7 +329,10 @@ impl MessageReceiver {
             );
           }
           other => {
-            warn!("Expected SecurePostfix submessage after SecurePrefix and payload submsg. Discarding.");
+            warn!(
+              "Expected SecurePostfix submessage after SecurePrefix and payload submsg. \
+               Discarding."
+            );
             debug!("Unexpected submessage instead: {other:?}");
           }
         }
@@ -377,8 +387,11 @@ impl MessageReceiver {
   fn handle_writer_submessage(&mut self, submessage: WriterSubmessage) {
     if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
     {
-      debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
-        self.dest_guid_prefix, self.own_guid_prefix);
+      debug!(
+        "Message is not for this participant. Dropping. dest_guid_prefix={:?} participant \
+         guid={:?}",
+        self.dest_guid_prefix, self.own_guid_prefix
+      );
       return;
     }
 
@@ -507,8 +520,11 @@ impl MessageReceiver {
   fn handle_reader_submessage(&mut self, submessage: ReaderSubmessage) {
     if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
     {
-      debug!("Message is not for this participant. Dropping. dest_guid_prefix={:?} participant guid={:?}", 
-        self.dest_guid_prefix, self.own_guid_prefix);
+      debug!(
+        "Message is not for this participant. Dropping. dest_guid_prefix={:?} participant \
+         guid={:?}",
+        self.dest_guid_prefix, self.own_guid_prefix
+      );
       return;
     }
 

@@ -211,8 +211,11 @@ impl DataFrag {
     if fragment_size < 1 || (fragment_size as u32) > data_size {
       return Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("Invalid DataFrag. fragment_size={} data_size={}  Expected 1 <= fragment_size <= data_size.",
-          fragment_size, data_size),
+        format!(
+          "Invalid DataFrag. fragment_size={} data_size={}  Expected 1 <= fragment_size <= \
+           data_size.",
+          fragment_size, data_size
+        ),
       ));
     }
 
@@ -238,8 +241,11 @@ impl DataFrag {
     if fragment_starting_num < FragmentNumber::new(1) || fragment_starting_num > expected_total {
       return Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("DataFrag fragmentStartingNum={:?} expected_total={:?}.  Expected 1 <= fragmentStartingNum <= expected_total.  Discarding as invalid.",
-          fragment_starting_num,expected_total)
+        format!(
+          "DataFrag fragmentStartingNum={:?} expected_total={:?}.  Expected 1 <= \
+           fragmentStartingNum <= expected_total.  Discarding as invalid.",
+          fragment_starting_num, expected_total
+        ),
       ));
     }
 
@@ -248,8 +254,13 @@ impl DataFrag {
     {
       return Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("Invalid DataFrag. serializedData length={} should be less than or equal to (fragments_in_submessage={}) x (fragment_size={})",
-          datafrag.serialized_payload.len(), fragments_in_submessage, fragment_size)
+        format!(
+          "Invalid DataFrag. serializedData length={} should be less than or equal to \
+           (fragments_in_submessage={}) x (fragment_size={})",
+          datafrag.serialized_payload.len(),
+          fragments_in_submessage,
+          fragment_size
+        ),
       ));
     }
 

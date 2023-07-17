@@ -942,8 +942,12 @@ impl Reader {
       }
       if gap.gap_list.base() <= SequenceNumber::new(0) {
         debug!(
-          "Invalid GAP from {:?}: minimum of gap_list (={:?}) is zero or negative. topic={:?} reader={:?}",
-          writer_guid, gap.gap_list.base(), self.topic_name, self.my_guid
+          "Invalid GAP from {:?}: minimum of gap_list (={:?}) is zero or negative. topic={:?} \
+           reader={:?}",
+          writer_guid,
+          gap.gap_list.base(),
+          self.topic_name,
+          self.my_guid
         );
         return;
       }

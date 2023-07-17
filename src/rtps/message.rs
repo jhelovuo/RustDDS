@@ -92,14 +92,19 @@ impl Message {
         sub_header.content_length as usize
       };
       // check if the declared content length makes sense
-      let sub_content_length = if sub_header_length + proposed_sub_content_length
-        <= submessages_left.len()
-      {
-        proposed_sub_content_length
-      } else {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput,
-            format!("Submessage header declares length larger than remaining message size: {sub_header_length} + {proposed_sub_content_length} <= {}", submessages_left.len())));
-      };
+      let sub_content_length =
+        if sub_header_length + proposed_sub_content_length <= submessages_left.len() {
+          proposed_sub_content_length
+        } else {
+          return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!(
+              "Submessage header declares length larger than remaining message size: \
+               {sub_header_length} + {proposed_sub_content_length} <= {}",
+              submessages_left.len()
+            ),
+          ));
+        };
 
       // split first submessage to new buffer
       let mut sub_buffer = submessages_left.split_to(sub_header_length + sub_content_length);
