@@ -8,5 +8,5 @@ use super::elements::crypto_header::CryptoHeader;
 pub struct SecureRTPSPrefix {
   submessage_length: u16, // ushort
 
-  crypto_header: CryptoHeader,
+  pub(crate) crypto_header: CryptoHeader,
 }

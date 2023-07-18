@@ -3,15 +3,21 @@ use std::collections::{HashMap, HashSet};
 use speedy::Writable;
 
 use crate::{
-  messages::submessages::{
-    elements::{
-      crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
-      serialized_payload::SerializedPayload,
+  messages::{
+    header::Header,
+    protocol_id::ProtocolId,
+    submessages::{
+      elements::{
+        crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
+        serialized_payload::SerializedPayload,
+      },
+      info_source::InfoSource,
+      secure_postfix::SecurePostfix,
+      secure_prefix::SecurePrefix,
+      secure_rtps_prefix::SecureRTPSPrefix,
+      submessage::{InterpreterSubmessage, SecuritySubmessage},
+      submessages::{ReaderSubmessage, WriterSubmessage},
     },
-    secure_postfix::SecurePostfix,
-    secure_prefix::SecurePrefix,
-    submessage::SecuritySubmessage,
-    submessages::{ReaderSubmessage, WriterSubmessage},
   },
   rtps::{Message, Submessage, SubmessageBody},
   security::{
@@ -819,13 +825,140 @@ impl CryptoTransform for CryptographicBuiltIn {
     sending_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<Message> {
     //TODO: this is only a mock implementation
-    match encoded_buffer
-      .submessages
-      .first()
-      .map(|submessage| submessage.body.clone())
+
+    // Check that the first submessage is SecureRTPSPrefix
+    if let Some((
+      Submessage {
+        body:
+          SubmessageBody::Security(SecuritySubmessage::SecureRTPSPrefix(
+            SecureRTPSPrefix {
+              crypto_header:
+                CryptoHeader {
+                  transformation_id:
+                    CryptoTransformIdentifier {
+                      transformation_kind,
+                      transformation_key_id,
+                    },
+                  ..
+                },
+              ..
+            },
+            _,
+          )),
+        ..
+      },
+      submessages,
+    )) = encoded_buffer.submessages.split_first()
     {
-      Some(SubmessageBody::Security(_)) => todo!(),
-      _ => Ok(encoded_buffer),
+      // Check that the last submessage is a SecureRTPSPostfix
+      if let Some((
+        Submessage {
+          body: SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(_, _)),
+          ..
+        },
+        submessages,
+      )) = submessages.split_last()
+      {
+        // Check the validity of transformation_kind
+        let message_transformation_kind =
+          BuiltinCryptoTransformationKind::try_from(*transformation_kind)?;
+
+        match message_transformation_kind {
+          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+            // In this case we expect the encoded message to be of the following form:
+            // SecureRTPSPrefix, (InfoSource containing the RTPS-header of
+            // the original message), the original submessages, SecureRTPSPostfix,
+            // where the InfoSource is optional
+            if let Some((
+              Submessage {
+                body:
+                  SubmessageBody::Interpreter(InterpreterSubmessage::InfoSource(
+                    InfoSource {
+                      protocol_version,
+                      vendor_id,
+                      guid_prefix,
+                    },
+                    _,
+                  )),
+                ..
+              },
+              submessages,
+            )) = submessages.split_first()
+            {
+              Ok(Message {
+                header: Header {
+                  // Copy header information from InfoSource
+                  protocol_id: ProtocolId::PROTOCOL_RTPS,
+                  protocol_version: *protocol_version,
+                  vendor_id: *vendor_id,
+                  guid_prefix: *guid_prefix,
+                },
+                submessages: Vec::from(submessages),
+              })
+            } else {
+              Ok(Message {
+                // Use the same header information as the input
+                header: encoded_buffer.header,
+                submessages: Vec::from(submessages),
+              })
+            }
+          }
+          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => {
+            // In this case we expect the encoded message to be of the following form:
+            // SecureRTPSPrefix, InfoSource containing the RTPS-header of
+            // the original message, the original submessages, SecureRTPSPostfix
+            if let Some((
+              Submessage {
+                body:
+                  SubmessageBody::Interpreter(InterpreterSubmessage::InfoSource(
+                    InfoSource {
+                      protocol_version,
+                      vendor_id,
+                      guid_prefix,
+                    },
+                    _,
+                  )),
+                ..
+              },
+              submessages,
+            )) = submessages.split_first()
+            {
+              // TODO: Check the MACs
+
+              Ok(Message {
+                header: Header {
+                  // Copy header information from InfoSource
+                  protocol_id: ProtocolId::PROTOCOL_RTPS,
+                  protocol_version: *protocol_version,
+                  vendor_id: *vendor_id,
+                  guid_prefix: *guid_prefix,
+                },
+                submessages: Vec::from(submessages),
+              })
+            } else {
+              Err(security_error!(
+                "Expected an InfoSource submessage after SecureRTPSPrefix."
+              ))
+            }
+          }
+          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => {
+            // In this case we expect the encoded message to be of the following form:
+            // SecureRTPSPrefix, SecureBody containing the encrypted message,
+            // SecureRTPSPostfix
+            todo!()
+          }
+          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => todo!(),
+          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => todo!(),
+        }
+      } else {
+        Err(security_error!(
+          "When a message starts with a SecureRTPSPrefix, it is expected to end with a \
+           SecureRTPSPostfix."
+        ))
+      }
+    } else {
+      // The first submessage is not a SecureRTPSPrefix, pass through
+      Ok(encoded_buffer)
     }
   }
 
