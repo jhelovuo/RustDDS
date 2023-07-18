@@ -7,7 +7,6 @@ use std::net::Ipv4Addr;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio_06;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 #[cfg(windows)]
 use local_ip_address::list_afinet_netifas;
@@ -18,8 +17,8 @@ use crate::{network::util::get_local_multicast_ip_addrs, structure::locator::Loc
 
 #[derive(Debug)]
 pub struct UDPSender {
-  unicast_socket: mio_06::net::UdpSocket,
-  multicast_sockets: Vec<mio_06::net::UdpSocket>,
+  unicast_socket: mio_08::net::UdpSocket,
+  multicast_sockets: Vec<mio_08::net::UdpSocket>,
 }
 
 impl UDPSender {
@@ -27,7 +26,7 @@ impl UDPSender {
     #[cfg(not(windows))]
     let unicast_socket = {
       let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
-      mio_06::net::UdpSocket::bind(&saddr)?
+      mio_08::net::UdpSocket::bind(&saddr)?
     };
 
     #[cfg(windows)]
@@ -48,7 +47,7 @@ impl UDPSender {
             )
           });
       }
-      mio_06::net::UdpSocket::from_socket(std::net::UdpSocket::from(raw_socket))?
+      mio_08::net::UdpSocket::from_std(std::net::UdpSocket::from(raw_socket))
     };
 
     // We set multicasting loop on so that we can hear other DomainParticipant
@@ -82,7 +81,7 @@ impl UDPSender {
       mc_socket.set_multicast_loop_v4(true).unwrap_or_else(|e| {
         error!("Cannot set multicast loop on: {e:?}");
       });
-      multicast_sockets.push(mio_06::net::UdpSocket::from_socket(mc_socket)?);
+      multicast_sockets.push(mio_08::net::UdpSocket::from_std(mc_socket));
     } // end for
 
     let sender = Self {
@@ -104,8 +103,8 @@ impl UDPSender {
     }
   }
 
-  fn send_to_udp_socket(&self, buffer: &[u8], socket: &mio_06::net::UdpSocket, addr: &SocketAddr) {
-    match socket.send_to(buffer, addr) {
+  fn send_to_udp_socket(&self, buffer: &[u8], socket: &mio_08::net::UdpSocket, addr: &SocketAddr) {
+    match socket.send_to(buffer, *addr) {
       Ok(bytes_sent) => {
         if bytes_sent == buffer.len() { // ok
         } else {
@@ -159,7 +158,7 @@ impl UDPSender {
   #[cfg(test)]
   pub fn send_to_all(&self, buffer: &[u8], addresses: &[SocketAddr]) {
     for address in addresses.iter() {
-      if self.unicast_socket.send_to(buffer, address).is_err() {
+      if self.unicast_socket.send_to(buffer, *address).is_err() {
         debug!("Unable to send to {}", address);
       };
     }
@@ -171,7 +170,7 @@ impl UDPSender {
       let address = SocketAddr::new(IpAddr::V4(address), port);
       let mut size = 0;
       for s in self.multicast_sockets {
-        size = s.send_to(buffer, &address)?;
+        size = s.send_to(buffer, address)?;
       }
       Ok(size)
     } else {
