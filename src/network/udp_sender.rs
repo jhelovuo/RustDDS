@@ -26,7 +26,7 @@ impl UDPSender {
     #[cfg(not(windows))]
     let unicast_socket = {
       let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
-      mio_08::net::UdpSocket::bind(&saddr)?
+      mio_08::net::UdpSocket::bind(saddr)?
     };
 
     #[cfg(windows)]
