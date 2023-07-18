@@ -1,7 +1,4 @@
-use std::{
-  convert::TryInto,
-  net::{SocketAddrV4, SocketAddrV6},
-};
+use std::net::{SocketAddrV4, SocketAddrV6};
 pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use speedy::{Context, Readable, Reader, Writable, Writer};
@@ -88,13 +85,14 @@ impl From<repr::Locator> for Locator {
           repr.address[14],
           repr.address[15],
         );
-        let socket_address = SocketAddrV4::new(ip, repr.port.try_into().unwrap());
+        // repr.port is 32 bits, but we just truncate it to u16
+        let socket_address = SocketAddrV4::new(ip, repr.port as u16);
 
         Self::UdpV4(socket_address)
       }
       kind::UDP_V6 => {
         let ip = Ipv6Addr::from(repr.address);
-        let socket_address = SocketAddrV6::new(ip, repr.port.try_into().unwrap(), 0, 0);
+        let socket_address = SocketAddrV6::new(ip, repr.port as u16, 0, 0);
 
         Self::UdpV6(socket_address)
       }
@@ -155,10 +153,41 @@ pub(crate) mod repr {
 mod tests {
   use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
-  use speedy::{Endianness, Writable};
+  use speedy::{self, Endianness, Readable, Writable};
   use test_case::test_case;
 
-  use super::Locator;
+  use super::{repr, Locator};
+
+  #[test_case(
+    &[
+      0x01, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
+      0x90, 0x1F, 0x00, 0x00,  // Locator_t::port(8080),
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x7F, 0x00, 0x00, 0x01   // Locator_t::address[12:15]
+    ]
+    =>  Locator::from(SocketAddr::new(Ipv4Addr::new(127, 0, 0, 1).into(), 8080))
+    ; "IPv4 deserialize"
+  )]
+  #[test_case(
+    &[
+      0x01, 0x00, 0x00, 0x00,  // LocatorKind_t::LOCATOR_KIND_UDP_V4
+      0xf2, 0x1c, 0x00, 0x01,  // not representable
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[0:3]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[4:7]
+      0x00, 0x00, 0x00, 0x00,  // Locator_t::address[8:11]
+      0x0A, 0x00, 0x00, 0x0F   // Locator_t::address[12:15]
+    ]
+    =>  Locator::from(SocketAddr::new(Ipv4Addr::new(0x0A, 0, 0, 0x0F).into(), 0x1cf2))
+    ; "IPv4 fuzz"
+  )]
+  // test body
+  fn deserialize_le(little_endian: &[u8]) -> Locator {
+    repr::Locator::read_from_buffer_with_ctx(Endianness::LittleEndian, little_endian)
+      .unwrap()
+      .into() // repr::Locator -> Locator
+  }
 
   #[test_case(SocketAddr::new(Ipv6Addr::UNSPECIFIED.into(), 0) => Locator::Invalid ; "unspecified IPv6")]
   fn from_socket_address(socket_addr: impl Into<Locator>) -> Locator {

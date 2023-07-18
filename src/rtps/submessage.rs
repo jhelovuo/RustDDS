@@ -41,6 +41,7 @@ mod tests {
   use enumflags2::BitFlags;
   use log::info;
   use speedy::{Readable, Writable};
+  use hex_literal::hex;
 
   use super::Submessage;
   use crate::{messages::submessages::submessages::*, rtps::submessage::*};
@@ -118,6 +119,49 @@ mod tests {
     let message_buffer = sub.write_to_vec().expect("serialization failed");
 
     assert_eq!(serialized_info_dst_message, message_buffer);
+  }
+
+  #[test]
+
+  fn submessage_acknack_fuzz_deserialization() {
+    // We have received an ACKNACK submessage with too large
+    // SequenceNumberSet. Please see
+    // https://github.com/jhelovuo/RustDDS/issues/287
+    // for details.
+    let serialized_info_submessage: Vec<u8> = hex!(
+      "
+      06 05 00 00 ff ff ff ff ff ff ff ff ff ff ff ff
+      ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+      ff ff ff ff ff ff ff e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 ff ff ff ff ff ff ff ff ff ff ff ff ff ff ff
+      ff ff ff ff ff e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 cf 13 ff ff ff
+      ff ff ff ff ff ff ff ff ff ff 00 00 00 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      cf 13 ff ff ff ff ff ff ff ff ff ff ff ff ff 00
+      00 00 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1 e1
+      e1 e1 e1 e1 e1 ff ff ff ff ff ff ff ff ff f7 ff
+      ff ff ff 00 00 00 1e ff ff ff ff ff ff ff ff ff
+      ff ff ff ff ff ff ff ff ff ff ff"
+    )
+    .to_vec();
+
+    let header = SubmessageHeader::read_from_buffer(&serialized_info_submessage[0..4])
+      .expect("could not create submessage header");
+    let e = endianness_flag(header.flags);
+
+    // This is a malformed submessage. We expect the decoder to report that, but not
+    // panic.
+    assert!(AckNack::read_from_buffer_with_ctx(e, &serialized_info_submessage[4..]).is_err());
   }
 
   // #[test]

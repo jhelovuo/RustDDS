@@ -433,16 +433,24 @@ where
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let bitmap_base: N = reader.read_value()?;
     let num_bits: u32 = reader.read_value()?;
-    let word_count = (num_bits + 31) / 32;
-    let mut bitmap: Vec<u32> = Vec::with_capacity(word_count as usize);
-    for _ in 0..word_count {
-      bitmap.push(reader.read_value()?);
+    if num_bits > 256 {
+      // Set size check accoring to RTPS spec v2.5 Section "8.3.5.5 SequenceNumberSet"
+      // and "8.3.5.7 FragmentNumberSet"
+      //
+      // Without this chek the addition operation below could overflow.
+      Err(speedy::Error::custom(format!("NumberSet size too large: {} > 256.", num_bits)).into())
+    } else {
+      let word_count = (num_bits + 31) / 32;
+      let mut bitmap: Vec<u32> = Vec::with_capacity(word_count as usize);
+      for _ in 0..word_count {
+        bitmap.push(reader.read_value()?);
+      }
+      Ok(Self {
+        bitmap_base,
+        num_bits,
+        bitmap,
+      })
     }
-    Ok(Self {
-      bitmap_base,
-      num_bits,
-      bitmap,
-    })
   }
 
   #[inline]
