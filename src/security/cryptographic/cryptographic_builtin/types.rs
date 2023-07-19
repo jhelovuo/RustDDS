@@ -11,7 +11,7 @@ use crate::{
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
 };
-use super::types::{
+use super::{
   CryptoHandle, CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind,
 };
 
@@ -20,7 +20,7 @@ const CRYPTO_TOKEN_KEYMAT_NAME: &str = "dds.cryp.keymat";
 
 /// DDS:Crypto:AES-GCM-GMAC CryptoToken type from section 9.5.2.1 of the
 /// Security specification (v. 1.1)
-pub struct BuiltinCryptoToken {
+pub(super) struct BuiltinCryptoToken {
   pub key_material: KeyMaterial_AES_GCM_GMAC,
 }
 impl TryFrom<CryptoToken> for BuiltinCryptoToken {
@@ -98,7 +98,7 @@ impl From<BuiltinCryptoToken> for KeyMaterial_AES_GCM_GMAC {
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the name from the spec
 #[derive(Clone)]
-pub struct KeyMaterial_AES_GCM_GMAC {
+pub(super) struct KeyMaterial_AES_GCM_GMAC {
   pub transformation_kind: BuiltinCryptoTransformationKind,
   pub master_salt: Vec<u8>,
   pub sender_key_id: CryptoTransformKeyId,
@@ -158,7 +158,7 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoToken {
 /// two if a different key is used for submessage and payload
 #[allow(non_camel_case_types)] // We use the name from the spec
 #[derive(Clone)]
-pub enum KeyMaterial_AES_GCM_GMAC_seq {
+pub(super) enum KeyMaterial_AES_GCM_GMAC_seq {
   One(KeyMaterial_AES_GCM_GMAC),
   Two(KeyMaterial_AES_GCM_GMAC, KeyMaterial_AES_GCM_GMAC),
 }
@@ -356,7 +356,7 @@ impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the names from the spec
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum BuiltinCryptoTransformationKind {
+pub(super) enum BuiltinCryptoTransformationKind {
   CRYPTO_TRANSFORMATION_KIND_NONE,
   CRYPTO_TRANSFORMATION_KIND_AES128_GMAC,
   CRYPTO_TRANSFORMATION_KIND_AES128_GCM,
@@ -392,7 +392,7 @@ impl From<BuiltinCryptoTransformationKind> for CryptoTransformKind {
 
 /// CryptoTransformIdentifier type from section 9.5.2.2 of the Security
 /// specification (v. 1.1)
-pub struct BuiltinCryptoTransformIdentifier {
+pub(super) struct BuiltinCryptoTransformIdentifier {
   pub transformation_kind: BuiltinCryptoTransformationKind,
   pub transformation_key_id: CryptoTransformKeyId,
 }
@@ -424,7 +424,7 @@ impl From<BuiltinCryptoTransformIdentifier> for CryptoTransformIdentifier {
 
 /// CryptoHeader type from section 9.5.2.3 of the Security specification (v.
 /// 1.1)
-pub struct BuiltinCryptoHeader {
+pub(super) struct BuiltinCryptoHeader {
   pub transform_identifier: BuiltinCryptoTransformIdentifier,
   pub session_id: [u8; 4],
   pub initialization_vector_suffix: [u8; 8],
@@ -483,14 +483,14 @@ impl From<BuiltinCryptoHeader> for CryptoHeader {
 
 /// CryptoContent type from section 9.5.2.4 of the Security specification (v.
 /// 1.1)
-pub type BuiltinCryptoContent = CryptoContent;
+pub(super) type BuiltinCryptoContent = CryptoContent;
 
-pub const MAC_LENGTH: usize = 16;
+pub(super) const MAC_LENGTH: usize = 16;
 
 /// CryptoFooter type from section 9.5.2.5 of the Security specification (v.
 /// 1.1)
 #[derive(Deserialize, Serialize, PartialEq)]
-pub struct BuiltinCryptoFooter {
+pub(super) struct BuiltinCryptoFooter {
   pub common_mac: [u8; MAC_LENGTH],
   pub receiver_specific_macs: Vec<ReceiverSpecificMAC>,
 }
@@ -535,7 +535,7 @@ impl TryFrom<BuiltinCryptoFooter> for CryptoFooter {
 /// ReceiverSpecificMAC type from section 9.5.2.5 of the Security specification
 /// (v. 1.1)
 #[derive(Deserialize, Serialize, PartialEq)]
-pub struct ReceiverSpecificMAC {
+pub(super) struct ReceiverSpecificMAC {
   pub receiver_mac_key_id: CryptoTransformKeyId,
   pub receiver_mac: [u8; MAC_LENGTH],
 }
@@ -546,7 +546,7 @@ pub(super) enum EntityCategory {
   DataWriter,
 }
 impl EntityCategory {
-  pub(super) fn opposite(self) -> EntityCategory {
+  pub fn opposite(self) -> EntityCategory {
     match self {
       EntityCategory::DataReader => EntityCategory::DataWriter,
       EntityCategory::DataWriter => EntityCategory::DataReader,
@@ -558,4 +558,10 @@ impl EntityCategory {
 pub(super) struct EntityInfo {
   pub handle: CryptoHandle,
   pub category: EntityCategory,
+}
+
+pub(super) enum KeyLength {
+  None,
+  AES128,
+  AES256,
 }

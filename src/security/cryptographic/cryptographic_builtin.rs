@@ -1,10 +1,17 @@
+mod crypto_key_exchange;
+mod crypto_key_factory;
+mod crypto_transform;
+mod decode;
+mod encode;
+mod types;
+
 use std::collections::{HashMap, HashSet};
 
 use crate::{
   security::{
     access_control::types::*,
     authentication::types::*,
-    cryptographic::{builtin_types::*, cryptographic_plugin::*, types::*},
+    cryptographic::{cryptographic_builtin::types::*, cryptographic_plugin::*, types::*},
     types::*,
   },
   security_error,
@@ -31,6 +38,7 @@ pub struct CryptographicBuiltIn {
   handle_counter_: u32,
 }
 
+// Combine the trait implementations from the submodules
 impl super::Cryptographic for CryptographicBuiltIn {}
 
 impl CryptographicBuiltIn {
@@ -117,7 +125,3 @@ impl CryptographicBuiltIn {
     }
   }
 }
-
-pub mod crypto_key_exchange;
-pub mod crypto_key_factory;
-pub mod crypto_transform;
