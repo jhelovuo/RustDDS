@@ -1,4 +1,5 @@
-use speedy::Writable;
+use bytes::Bytes;
+use speedy::{Readable, Writable};
 
 use crate::{
   messages::{
@@ -6,8 +7,8 @@ use crate::{
     protocol_id::ProtocolId,
     submessages::{
       elements::{
-        crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
-        serialized_payload::SerializedPayload,
+        crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
+        parameter_list::ParameterList, serialized_payload::SerializedPayload,
       },
       info_source::InfoSource,
       secure_postfix::SecurePostfix,
@@ -452,6 +453,88 @@ impl CryptoTransform for CryptographicBuiltIn {
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<SerializedPayload> {
-    todo!();
+    //TODO: this is only a mock implementation
+
+    let data = Vec::<u8>::from(encoded_buffer);
+    // Deserialize crypto header
+    let (read_result, bytes_consumed) = CryptoHeader::read_with_length_from_buffer(&data);
+    let data = data.split_at(bytes_consumed).1;
+    let BuiltinCryptoHeader {
+      transform_identifier:
+        BuiltinCryptoTransformIdentifier {
+          transformation_kind,
+          transformation_key_id,
+        },
+      ..
+    } = BuiltinCryptoHeader::try_from(
+      read_result.map_err(|e| security_error!("Error while deserializing CryptoHeader: {}", e))?,
+    )?;
+
+    // Get the payload decode key
+    let decode_key = self
+      .decode_keys_
+      .get(&sending_datawriter_crypto)
+      .cloned()
+      .ok_or(security_error!(
+        "No decode key found for the datawriter {}",
+        sending_datawriter_crypto
+      ))?
+      .payload_key();
+
+    // Check that the key IDs match
+    if decode_key.sender_key_id != transformation_key_id {
+      return Err(security_error!(
+        "Mismatched decode key IDs: the decoded CryptoHeader has {}, but the key associated with \
+         the sending datawriter {} has {}.",
+        transformation_key_id,
+        sending_datawriter_crypto,
+        decode_key.sender_key_id
+      ));
+    }
+
+    // Check that the transformation kind stays consistent
+    if decode_key.transformation_kind != transformation_kind {
+      return Err(security_error!(
+        "Mismatched transformation kinds: the decoded CryptoHeader has {:?}, but the key \
+         associated with the sending datawriter {} has {:?}.",
+        transformation_kind,
+        sending_datawriter_crypto,
+        decode_key.transformation_kind
+      ));
+    }
+
+    match transformation_kind {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+        // The next submessage element should be the plaintext SerializedPayload,
+        // followed by a CryptoFooter. However, serialized SerializedPayload
+        // does not know its own length, but we know by 9.5.3.3.1 that the CryptoFooter
+        // cannot have receiver-specific MACs in the case of encode_serialized_payload,
+        // so the length of the footer is constant.
+        // By 9.5.3.3.4.3 the footer consists of the common_mac, which is 16 bytes long,
+        // and the length (0) of the reader-specific MAC sequence, which itself is a
+        // 4-byte number, so the CDR-serialized length is
+        let footer_length = MAC_LENGTH + 4;
+        let serialized_payload_length =
+          data
+            .len()
+            .checked_sub(footer_length)
+            .ok_or(security_error!(
+              "Bad data: the encoded buffer was too short to include a CryptoFooter."
+            ))?;
+        let (serialized_payload_data, crypto_footer_data) =
+          data.split_at(serialized_payload_length);
+        // Deserialize the footer to check its validity
+        CryptoFooter::read_from_buffer(crypto_footer_data)
+          .map_err(|e| security_error!("Failed to deserialize the CryptoFooter: {}", e))
+          .and(
+            SerializedPayload::from_bytes(&Bytes::copy_from_slice(serialized_payload_data))
+              .map_err(|e| security_error!("Failed to deserialize the SerializedPayload: {}", e)),
+          )
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => todo!(),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => todo!(),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => todo!(),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => todo!(),
+    }
   }
 }

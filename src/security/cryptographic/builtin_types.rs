@@ -355,7 +355,7 @@ impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
 /// Valid values for CryptoTransformKind from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the names from the spec
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum BuiltinCryptoTransformationKind {
   CRYPTO_TRANSFORMATION_KIND_NONE,
   CRYPTO_TRANSFORMATION_KIND_AES128_GMAC,
@@ -485,11 +485,13 @@ impl From<BuiltinCryptoHeader> for CryptoHeader {
 /// 1.1)
 pub type BuiltinCryptoContent = CryptoContent;
 
+pub const MAC_LENGTH: usize = 16;
+
 /// CryptoFooter type from section 9.5.2.5 of the Security specification (v.
 /// 1.1)
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct BuiltinCryptoFooter {
-  pub common_mac: [u8; 16],
+  pub common_mac: [u8; MAC_LENGTH],
   pub receiver_specific_macs: Vec<ReceiverSpecificMAC>,
 }
 impl TryFrom<Vec<u8>> for BuiltinCryptoFooter {
@@ -535,7 +537,7 @@ impl TryFrom<BuiltinCryptoFooter> for CryptoFooter {
 #[derive(Deserialize, Serialize, PartialEq)]
 pub struct ReceiverSpecificMAC {
   pub receiver_mac_key_id: CryptoTransformKeyId,
-  pub receiver_mac: [u8; 16],
+  pub receiver_mac: [u8; MAC_LENGTH],
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
