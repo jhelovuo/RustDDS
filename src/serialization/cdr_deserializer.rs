@@ -99,9 +99,9 @@ impl de::Error for Error {
 ///
 /// Input is from &[u8], since we expect to have the data in contiguous memory
 /// buffers.
-pub struct CdrDeserializer<'de, BO> {
+pub struct CdrDeserializer<'i, BO> {
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
-  input: &'de [u8],         /* We borrow the input data, therefore we carry lifetime 'de all
+  input: &'i [u8],          /* We borrow the input data, therefore we carry lifetime 'i all
                              * around. */
   serialized_data_count: usize, // This is to keep track of CDR data alignment requirements.
 }
@@ -223,7 +223,7 @@ macro_rules! deserialize_multibyte_number {
   };
 }
 
-impl<'de, 'a, BO> de::Deserializer<'de> for &'a mut CdrDeserializer<'de, BO>
+impl<'de, 'a, 'c, BO> de::Deserializer<'de> for &'a mut CdrDeserializer<'c, BO>
 where
   BO: ByteOrder,
 {
@@ -490,20 +490,20 @@ where
 
 // ----------------------------------------------------------
 
-struct EnumerationHelper<'a, 'de: 'a, BO> {
-  de: &'a mut CdrDeserializer<'de, BO>,
+struct EnumerationHelper<'a, 'i: 'a, BO> {
+  de: &'a mut CdrDeserializer<'i, BO>,
 }
 
-impl<'a, 'de, BO> EnumerationHelper<'a, 'de, BO>
+impl<'a, 'i, BO> EnumerationHelper<'a, 'i, BO>
 where
   BO: ByteOrder,
 {
-  fn new(de: &'a mut CdrDeserializer<'de, BO>) -> Self {
+  fn new(de: &'a mut CdrDeserializer<'i, BO>) -> Self {
     EnumerationHelper::<BO> { de }
   }
 }
 
-impl<'de, 'a, BO> EnumAccess<'de> for EnumerationHelper<'a, 'de, BO>
+impl<'de, 'a, BO> EnumAccess<'de> for EnumerationHelper<'a, '_, BO>
 where
   BO: ByteOrder,
 {
@@ -523,7 +523,7 @@ where
 
 // ----------------------------------------------------------
 
-impl<'de, 'a, BO> VariantAccess<'de> for EnumerationHelper<'a, 'de, BO>
+impl<'de, 'a, BO> VariantAccess<'de> for EnumerationHelper<'a, '_, BO>
 where
   BO: ByteOrder,
 {
@@ -557,14 +557,14 @@ where
 
 // ----------------------------------------------------------
 
-struct SequenceHelper<'a, 'de: 'a, BO> {
-  de: &'a mut CdrDeserializer<'de, BO>,
+struct SequenceHelper<'a, 'i: 'a, BO> {
+  de: &'a mut CdrDeserializer<'i, BO>,
   element_counter: usize,
   expected_count: usize,
 }
 
-impl<'a, 'de, BO> SequenceHelper<'a, 'de, BO> {
-  fn new(de: &'a mut CdrDeserializer<'de, BO>, expected_count: usize) -> Self {
+impl<'a, 'i, BO> SequenceHelper<'a, 'i, BO> {
+  fn new(de: &'a mut CdrDeserializer<'i, BO>, expected_count: usize) -> Self {
     SequenceHelper {
       de,
       element_counter: 0,
@@ -575,7 +575,7 @@ impl<'a, 'de, BO> SequenceHelper<'a, 'de, BO> {
 
 // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
 // through elements of the sequence.
-impl<'a, 'de, BO> SeqAccess<'de> for SequenceHelper<'a, 'de, BO>
+impl<'a, 'de, BO> SeqAccess<'de> for SequenceHelper<'a, '_, BO>
 where
   BO: ByteOrder,
 {
@@ -596,7 +596,7 @@ where
 
 // `MapAccess` is provided to the `Visitor` to give it the ability to iterate
 // through entries of the map.
-impl<'de, 'a, BO> MapAccess<'de> for SequenceHelper<'a, 'de, BO>
+impl<'de, 'a, BO> MapAccess<'de> for SequenceHelper<'a, '_, BO>
 where
   BO: ByteOrder,
 {
