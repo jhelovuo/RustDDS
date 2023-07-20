@@ -48,8 +48,7 @@ impl CryptoTransform for CryptographicBuiltIn {
         transformation_kind: payload_key.transformation_kind,
         transformation_key_id: 0,
       },
-      session_id: [0, 0, 0, 0],
-      initialization_vector_suffix: [0; 8],
+      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra::from(([0, 0, 0, 0], [0; 8])),
     };
     match payload_key.transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
@@ -464,7 +463,7 @@ impl CryptoTransform for CryptographicBuiltIn {
           transformation_kind,
           transformation_key_id,
         },
-      ..
+      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
     } = BuiltinCryptoHeader::try_from(
       read_result.map_err(|e| security_error!("Error while deserializing CryptoHeader: {}", e))?,
     )?;
@@ -502,20 +501,53 @@ impl CryptoTransform for CryptographicBuiltIn {
       ));
     }
 
+    let decode_key = decode_key.master_sender_key;
+
     match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        decode::decode_serialized_payload_gmac(data, &KeyLength::None)
+        decode::decode_serialized_payload_gmac(
+          &decode_key,
+          &KeyLength::None,
+          initialization_vector,
+          data,
+        )
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => {
         // TODO: implement MAC check
-        decode::decode_serialized_payload_gmac(data, &KeyLength::AES128)
+        decode::decode_serialized_payload_gmac(
+          &decode_key,
+          &KeyLength::AES128,
+          initialization_vector,
+          data,
+        )
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => todo!(),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => {
+        // TODO: implement decryption
+        decode::decode_serialized_payload_gcm(
+          &decode_key,
+          &KeyLength::AES128,
+          initialization_vector,
+          data,
+        )
+      }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
         // TODO: implement MAC check
-        decode::decode_serialized_payload_gmac(data, &KeyLength::AES256)
+        decode::decode_serialized_payload_gmac(
+          &decode_key,
+          &KeyLength::AES256,
+          initialization_vector,
+          data,
+        )
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => todo!(),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+        // TODO: implement decryption
+        decode::decode_serialized_payload_gcm(
+          &decode_key,
+          &KeyLength::AES256,
+          initialization_vector,
+          data,
+        )
+      }
     }
   }
 }

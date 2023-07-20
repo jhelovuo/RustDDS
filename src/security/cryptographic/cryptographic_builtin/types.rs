@@ -4,7 +4,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
   messages::submessages::elements::{
-    crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
+    crypto_content::CryptoContent,
+    crypto_footer::CryptoFooter,
+    crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
   security::{BinaryProperty, DataHolder, SecurityError},
   security_error,
@@ -422,12 +424,71 @@ impl From<BuiltinCryptoTransformIdentifier> for CryptoTransformIdentifier {
   }
 }
 
+/// 9.5.2.3 The plugin_crypto_header_extra contains the initialization vector,
+/// which consists of the session_id and initialization_vector_suffix.
+pub(super) const INITIALIZATION_VECTOR_LENGTH: usize = 12;
+pub(super) type BuiltinInitializationVector = [u8; INITIALIZATION_VECTOR_LENGTH];
+pub(super) struct BuiltinCryptoHeaderExtra(pub(super) BuiltinInitializationVector);
+
+impl BuiltinCryptoHeaderExtra {
+  fn initialization_vector(self) -> BuiltinInitializationVector {
+    self.0
+  }
+  fn session_id(self) -> [u8; 4] {
+    <[u8; 4]>::try_from(&self.0[..4]).unwrap()
+  }
+  fn initialization_vector_suffix(self) -> [u8; 8] {
+    <[u8; 8]>::try_from(&self.0[4..]).unwrap()
+  }
+}
+
+impl From<BuiltinInitializationVector> for BuiltinCryptoHeaderExtra {
+  fn from(value: BuiltinInitializationVector) -> Self {
+    Self(value)
+  }
+}
+impl From<([u8; 4], [u8; 8])> for BuiltinCryptoHeaderExtra {
+  fn from((session_id, initialization_vector_suffix): ([u8; 4], [u8; 8])) -> Self {
+    Self::from(
+      BuiltinInitializationVector::try_from(
+        [
+          Vec::from(session_id),
+          Vec::from(initialization_vector_suffix),
+        ]
+        .concat(),
+      )
+      .unwrap(),
+    )
+  }
+}
+impl From<BuiltinCryptoHeaderExtra> for PluginCryptoHeaderExtra {
+  fn from(value: BuiltinCryptoHeaderExtra) -> Self {
+    Self::from(Vec::from(value.initialization_vector()))
+  }
+}
+impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
+  type Error = SecurityError;
+  fn try_from(
+    PluginCryptoHeaderExtra { data }: PluginCryptoHeaderExtra,
+  ) -> Result<Self, Self::Error> {
+    let plugin_crypto_header_length = data.len();
+    BuiltinInitializationVector::try_from(data)
+      .map_err(|_| {
+        security_error!(
+          "plugin_crypto_header_extra was of length {}. Expected {}.",
+          plugin_crypto_header_length,
+          INITIALIZATION_VECTOR_LENGTH
+        )
+      })
+      .map(Self::from)
+  }
+}
+
 /// CryptoHeader type from section 9.5.2.3 of the Security specification (v.
 /// 1.1)
 pub(super) struct BuiltinCryptoHeader {
   pub transform_identifier: BuiltinCryptoTransformIdentifier,
-  pub session_id: [u8; 4],
-  pub initialization_vector_suffix: [u8; 8],
+  pub builtin_crypto_header_extra: BuiltinCryptoHeaderExtra,
 }
 impl TryFrom<CryptoHeader> for BuiltinCryptoHeader {
   type Error = SecurityError;
@@ -437,46 +498,28 @@ impl TryFrom<CryptoHeader> for BuiltinCryptoHeader {
       plugin_crypto_header_extra,
     }: CryptoHeader,
   ) -> Result<Self, Self::Error> {
-    let crypto_header_extra = plugin_crypto_header_extra.data;
     // Try to cast [CryptoTransformIdentifier] to [BuiltinCryptoTransformIdentifier]
-    // and read 'session_id' and 'initialization_vector_suffix' from
-    // 'crypto_header_extra'
-    match (
-      BuiltinCryptoTransformIdentifier::try_from(transformation_id),
-      <[u8; 4]>::try_from(&crypto_header_extra[..4]),
-      <[u8; 8]>::try_from(&crypto_header_extra[4..]),
-    ) {
-      (Ok(transform_identifier), Ok(session_id), Ok(initialization_vector_suffix)) => Ok(Self {
-        transform_identifier,
-        session_id,
-        initialization_vector_suffix,
-      }),
-      (Err(e), _, _) => Err(e),
-      _ => Err(Self::Error {
-        msg: format!(
-          "plugin_crypto_header_extra was of length {}. Expected 12.",
-          crypto_header_extra.len()
-        ),
-      }),
-    }
+    // and read the initialization vector from 'crypto_header_extra'
+    BuiltinCryptoTransformIdentifier::try_from(transformation_id).and_then(|transform_identifier| {
+      BuiltinCryptoHeaderExtra::try_from(plugin_crypto_header_extra).map(
+        |builtin_crypto_header_extra| Self {
+          transform_identifier,
+          builtin_crypto_header_extra,
+        },
+      )
+    })
   }
 }
 impl From<BuiltinCryptoHeader> for CryptoHeader {
   fn from(
     BuiltinCryptoHeader {
       transform_identifier,
-      session_id,
-      initialization_vector_suffix,
+      builtin_crypto_header_extra,
     }: BuiltinCryptoHeader,
   ) -> Self {
     CryptoHeader {
       transformation_id: transform_identifier.into(),
-      plugin_crypto_header_extra: [
-        Vec::from(session_id),
-        Vec::from(initialization_vector_suffix),
-      ]
-      .concat()
-      .into(),
+      plugin_crypto_header_extra: builtin_crypto_header_extra.into(),
     }
   }
 }
@@ -486,12 +529,13 @@ impl From<BuiltinCryptoHeader> for CryptoHeader {
 pub(super) type BuiltinCryptoContent = CryptoContent;
 
 pub(super) const MAC_LENGTH: usize = 16;
+pub(super) type BuiltinMAC = [u8; MAC_LENGTH];
 
 /// CryptoFooter type from section 9.5.2.5 of the Security specification (v.
 /// 1.1)
 #[derive(Deserialize, Serialize, PartialEq)]
 pub(super) struct BuiltinCryptoFooter {
-  pub common_mac: [u8; MAC_LENGTH],
+  pub common_mac: BuiltinMAC,
   pub receiver_specific_macs: Vec<ReceiverSpecificMAC>,
 }
 impl TryFrom<Vec<u8>> for BuiltinCryptoFooter {
@@ -537,7 +581,7 @@ impl TryFrom<BuiltinCryptoFooter> for CryptoFooter {
 #[derive(Deserialize, Serialize, PartialEq)]
 pub(super) struct ReceiverSpecificMAC {
   pub receiver_mac_key_id: CryptoTransformKeyId,
-  pub receiver_mac: [u8; MAC_LENGTH],
+  pub receiver_mac: BuiltinMAC,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
@@ -560,8 +604,14 @@ pub(super) struct EntityInfo {
   pub category: EntityCategory,
 }
 
+pub(super) const AES128_KEY_LENGTH: usize = 16;
+pub(super) type AES128Key = [u8; AES128_KEY_LENGTH];
+pub(super) const AES256_KEY_LENGTH: usize = 32;
+pub(super) type AES256Key = [u8; AES256_KEY_LENGTH];
+
+#[derive(Debug, Clone, Copy)]
 pub(super) enum KeyLength {
-  None,
-  AES128,
-  AES256,
+  None = 0,
+  AES128 = AES128_KEY_LENGTH as isize,
+  AES256 = AES256_KEY_LENGTH as isize,
 }

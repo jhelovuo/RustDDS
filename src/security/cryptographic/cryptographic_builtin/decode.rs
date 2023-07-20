@@ -8,11 +8,18 @@ use crate::{
   security::{SecurityError, SecurityResult},
   security_error,
 };
-use super::types::{KeyLength, MAC_LENGTH};
+use super::{
+  aes_gcm_gmac::{decrypt, validate_mac},
+  types::{
+    BuiltinCryptoContent, BuiltinCryptoFooter, BuiltinInitializationVector, KeyLength, MAC_LENGTH,
+  },
+};
 
 pub(super) fn decode_serialized_payload_gmac(
-  data: &[u8],
+  key: &Vec<u8>,
   key_length: &KeyLength,
+  initialization_vector: BuiltinInitializationVector,
+  data: &[u8],
 ) -> SecurityResult<SerializedPayload> {
   // The next submessage element should be the plaintext SerializedPayload,
   // followed by a CryptoFooter. However, serialized SerializedPayload
@@ -31,19 +38,48 @@ pub(super) fn decode_serialized_payload_gmac(
     ))?;
   let (serialized_payload_data, crypto_footer_data) = data.split_at(serialized_payload_length);
   // Deserialize the footer to check its validity
-  let crypto_footer = CryptoFooter::read_from_buffer(crypto_footer_data)
-    .map_err(|e| security_error!("Failed to deserialize the CryptoFooter: {}", e))?;
+  let BuiltinCryptoFooter { common_mac, .. } = CryptoFooter::read_from_buffer(crypto_footer_data)
+    .map_err(|e| security_error!("Failed to deserialize the CryptoFooter: {}", e))
+    .and_then(BuiltinCryptoFooter::try_from)?;
 
-  match key_length {
-    KeyLength::None => {
-      SerializedPayload::from_bytes(&Bytes::copy_from_slice(serialized_payload_data))
-        .map_err(|e| security_error!("Failed to deserialize the SerializedPayload: {}", e))
-    }
-    KeyLength::AES128 => {
-      todo!() // TODO check MACs
-    }
-    KeyLength::AES256 => {
-      todo!() // TODO check MACs
-    }
-  }
+  // Validate MAC and deserialize serialized payload
+  validate_mac(
+    key,
+    *key_length,
+    initialization_vector,
+    serialized_payload_data,
+    common_mac,
+  )
+  .and(
+    SerializedPayload::from_bytes(&Bytes::copy_from_slice(serialized_payload_data))
+      .map_err(|e| security_error!("Failed to deserialize the SerializedPayload: {}", e)),
+  )
+}
+
+pub(super) fn decode_serialized_payload_gcm(
+  key: &Vec<u8>,
+  key_length: &KeyLength,
+  initialization_vector: BuiltinInitializationVector,
+  data: &[u8],
+) -> SecurityResult<SerializedPayload> {
+  // The next submessage element should be the CryptoContent containing the
+  // encrypted SerializedPayload, followed by a CryptoFooter.
+
+  // Deserialize crypto header
+  let (read_result, bytes_consumed) = BuiltinCryptoContent::read_with_length_from_buffer(data);
+  let footer_data = data.split_at(bytes_consumed).1;
+
+  let BuiltinCryptoContent { data } =
+    read_result.map_err(|e| security_error!("Error while deserializing CryptoContent: {}", e))?;
+
+  // Deserialize CryptoFooter
+  let BuiltinCryptoFooter { common_mac, .. } = CryptoFooter::read_from_buffer(footer_data)
+    .map_err(|e| security_error!("Error while deserializing CryptoFooter: {}", e))
+    .and_then(BuiltinCryptoFooter::try_from)?;
+
+  // Decrypt and deserialize serialized payload
+  decrypt(key, *key_length, initialization_vector, data, common_mac).and_then(|plaintext| {
+    SerializedPayload::from_bytes(&Bytes::copy_from_slice(&plaintext))
+      .map_err(|e| security_error!("Failed to deserialize the SerializedPayload: {}", e))
+  })
 }

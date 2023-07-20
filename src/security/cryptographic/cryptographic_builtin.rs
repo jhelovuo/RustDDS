@@ -1,3 +1,4 @@
+mod aes_gcm_gmac;
 mod crypto_key_exchange;
 mod crypto_key_factory;
 mod crypto_transform;
