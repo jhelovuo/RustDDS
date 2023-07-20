@@ -21,7 +21,6 @@ use crate::{
     dds_entity::DDSEntity,
     ddsdata::DDSData,
     helpers::*,
-    key,
     pubsub::Publisher,
     qos::{
       policy::{Liveliness, Reliability},
@@ -39,7 +38,7 @@ use crate::{
     cache_change::ChangeKind, duration, entity::RTPSEntity, guid::GUID, rpc::SampleIdentity,
     sequence_number::SequenceNumber, time::Timestamp,
   },
-  Key, Keyed, TopicDescription,
+  Keyed, TopicDescription,
 };
 
 // TODO: Move the write options and the builder type to some lower-level module
@@ -189,7 +188,6 @@ where
 impl<D, SA> DataWriter<D, SA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
   #[allow(clippy::too_many_arguments)]
@@ -991,7 +989,6 @@ where
 pub struct AsyncWrite<'a, D, SA>
 where
   D: Keyed,
-  <D as key::Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
   writer: &'a DataWriter<D, SA>,
@@ -1007,7 +1004,6 @@ where
 impl<'a, D, SA> Unpin for AsyncWrite<'a, D, SA>
 where
   D: Keyed,
-  <D as key::Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
 }
@@ -1015,7 +1011,6 @@ where
 impl<'a, D, SA> Future for AsyncWrite<'a, D, SA>
 where
   D: Keyed,
-  <D as key::Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
   type Output = WriteResult<SampleIdentity, D>;
@@ -1095,7 +1090,6 @@ where
 impl<'a, D, SA> Future for AsyncWaitForAcknowledgments<'a, D, SA>
 where
   D: Keyed,
-  <D as key::Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
   type Output = WriteResult<bool, ()>;
@@ -1181,7 +1175,6 @@ where
 impl<D, SA> DataWriter<D, SA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   SA: SerializerAdapter<D>,
 {
   pub async fn async_write(
@@ -1274,7 +1267,10 @@ mod tests {
 
   use super::*;
   use crate::{
-    dds::{key::Keyed, participant::DomainParticipant},
+    dds::{
+      key::{Key, Keyed},
+      participant::DomainParticipant,
+    },
     serialization::cdr_serializer::CDRSerializerAdapter,
     structure::topic_kind::TopicKind,
     test::random_data::*,

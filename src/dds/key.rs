@@ -31,10 +31,7 @@ use crate::serialization::pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializ
 /// [`Key`]: trait.Key.html
 
 pub trait Keyed {
-  // type K: Key;  // This does not work yet is stable Rust, 2020-08-11
-  // Instead, where D:Keyed we do anything with D::K, we must specify bound:
-  // where <D as Keyed>::K : Key,
-  type K;
+  type K: Key;
 
   fn key(&self) -> Self::K;
 }
