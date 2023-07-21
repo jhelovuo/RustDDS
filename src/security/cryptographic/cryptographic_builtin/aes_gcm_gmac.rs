@@ -72,22 +72,22 @@ pub(super) fn encrypt(
   key: &Vec<u8>,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
-  plaintext: Vec<u8>,
+  plaintext: &[u8],
 ) -> SecurityResult<(Vec<u8>, BuiltinMAC)> {
   // Compute the ciphertext
   let ciphertext = match key_length {
     // If no encryption is done, return the plaintext
-    KeyLength::None => plaintext,
+    KeyLength::None => Vec::from(plaintext),
 
     KeyLength::AES128 => {
       convert_to_AES128_key!(key, key_length, key);
       // TODO: this is a mock implementation
-      [plaintext, Vec::from(key)].concat()
+      [Vec::from(plaintext), Vec::from(key)].concat()
     }
     KeyLength::AES256 => {
       convert_to_AES256_key!(key, key_length, key);
       // TODO: this is a mock implementation
-      [plaintext, Vec::from(key)].concat()
+      [Vec::from(plaintext), Vec::from(key)].concat()
     }
   };
   // compute the MAC for the ciphertext and return the pair
@@ -116,13 +116,13 @@ pub(super) fn decrypt(
   key: &Vec<u8>,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
-  ciphertext: Vec<u8>,
+  ciphertext: &[u8],
   mac: BuiltinMAC,
 ) -> SecurityResult<Vec<u8>> {
-  validate_mac(key, key_length, initialization_vector, &ciphertext, mac)?;
+  validate_mac(key, key_length, initialization_vector, ciphertext, mac)?;
   match key_length {
     // If no encryption was done, the ciphertext is the plaintext
-    KeyLength::None => Ok(ciphertext),
+    KeyLength::None => Ok(Vec::from(ciphertext)),
 
     KeyLength::AES128 => {
       convert_to_AES128_key!(key, key_length, key);

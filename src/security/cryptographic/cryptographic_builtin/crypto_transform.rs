@@ -21,6 +21,7 @@ use crate::{
   security::cryptographic::cryptographic_builtin::*,
   security_error,
 };
+use super::encode::{encode_serialized_payload_gcm, encode_serialized_payload_gmac};
 
 impl CryptoTransform for CryptographicBuiltIn {
   fn encode_serialized_payload(
@@ -29,10 +30,13 @@ impl CryptoTransform for CryptographicBuiltIn {
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<(CryptoContent, ParameterList)> {
     //TODO: this is only a mock implementation
+    // Serialize SerializedPayload
     let plaintext = plain_buffer.write_to_vec().map_err(|err| {
       security_error!("Error converting SerializedPayload to byte vector: {}", err)
     })?;
+    let plaintext = plaintext.as_slice();
 
+    // Get the key for encrypting serialized payloads
     let payload_key = self
       .encode_keys_
       .get(&sending_datawriter_crypto)
@@ -43,31 +47,78 @@ impl CryptoTransform for CryptographicBuiltIn {
       .cloned()?
       .payload_key();
 
+    // TODO proper session_id
+    let builtin_crypto_header_extra =
+      BuiltinCryptoHeaderExtra::from(([0, 0, 0, 0], rand::random()));
+
+    let initialization_vector = builtin_crypto_header_extra.initialization_vector();
+
     let header = BuiltinCryptoHeader {
       transform_identifier: BuiltinCryptoTransformIdentifier {
         transformation_kind: payload_key.transformation_kind,
-        transformation_key_id: 0,
+        transformation_key_id: payload_key.sender_key_id,
       },
-      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra::from(([0, 0, 0, 0], [0; 8])),
+      builtin_crypto_header_extra,
     };
-    match payload_key.transformation_kind {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        let footer = BuiltinCryptoFooter {
-          common_mac: [0; 16],
-          receiver_specific_macs: Vec::new(),
-        };
 
-        let header_vec = CryptoHeader::from(header).write_to_vec().map_err(|err| {
-          security_error!("Error converting CryptoHeader to byte vector: {}", err)
-        })?;
-        let footer_vec = Vec::<u8>::try_from(footer)?;
-        Ok((
-          CryptoContent::from([header_vec, plaintext, footer_vec].concat()),
-          ParameterList::new(),
-        ))
+    // TODO use session key?
+    let encode_key = payload_key.master_sender_key;
+
+    let (encoded_data, footer) = match payload_key.transformation_kind {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+        encode_serialized_payload_gmac(
+          &encode_key,
+          KeyLength::None,
+          initialization_vector,
+          plaintext,
+        )?
       }
-      _ => todo!(),
-    }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => {
+        // TODO: implement MAC generation
+        encode_serialized_payload_gmac(
+          &encode_key,
+          KeyLength::AES128,
+          initialization_vector,
+          plaintext,
+        )?
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => {
+        // TODO: implement encryption
+        encode_serialized_payload_gcm(
+          &encode_key,
+          KeyLength::AES128,
+          initialization_vector,
+          plaintext,
+        )?
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+        // TODO: implement MAC generation
+        encode_serialized_payload_gmac(
+          &encode_key,
+          KeyLength::AES256,
+          initialization_vector,
+          plaintext,
+        )?
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+        // TODO: implement encryption
+        encode_serialized_payload_gcm(
+          &encode_key,
+          KeyLength::AES256,
+          initialization_vector,
+          plaintext,
+        )?
+      }
+    };
+
+    let header_vec = CryptoHeader::from(header)
+      .write_to_vec()
+      .map_err(|err| security_error!("Error converting CryptoHeader to byte vector: {}", err))?;
+    let footer_vec = Vec::<u8>::try_from(footer)?;
+    Ok((
+      CryptoContent::from([header_vec, encoded_data, footer_vec].concat()),
+      ParameterList::new(),
+    ))
   }
 
   fn encode_datawriter_submessage(
@@ -501,6 +552,7 @@ impl CryptoTransform for CryptographicBuiltIn {
       ));
     }
 
+    // TODO use session key?
     let decode_key = decode_key.master_sender_key;
 
     match transformation_kind {

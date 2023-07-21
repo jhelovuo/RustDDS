@@ -79,7 +79,7 @@ pub(super) fn decode_serialized_payload_gcm(
     .and_then(BuiltinCryptoFooter::try_from)?;
 
   // Decrypt and deserialize serialized payload
-  decrypt(key, key_length, initialization_vector, data, common_mac).and_then(|plaintext| {
+  decrypt(key, key_length, initialization_vector, &data, common_mac).and_then(|plaintext| {
     SerializedPayload::from_bytes(&Bytes::copy_from_slice(&plaintext))
       .map_err(|e| security_error!("Failed to deserialize the SerializedPayload: {}", e))
   })
