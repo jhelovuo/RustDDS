@@ -6,7 +6,5 @@ use super::elements::crypto_footer::CryptoFooter;
 /// See section 7.3.7.7
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct SecurePostfix {
-  submessage_length: u16, // ushort
-
   crypto_footer: CryptoFooter,
 }

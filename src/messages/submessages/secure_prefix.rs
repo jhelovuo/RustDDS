@@ -6,7 +6,5 @@ use super::elements::crypto_header::CryptoHeader;
 /// See sections 7.3.7.3 and 7.3.7.6.1
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct SecurePrefix {
-  submessage_length: u16, // ushort
-
   pub(crate) crypto_header: CryptoHeader,
 }
