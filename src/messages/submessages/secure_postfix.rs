@@ -6,5 +6,5 @@ use super::elements::crypto_footer::CryptoFooter;
 /// See section 7.3.7.7
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct SecurePostfix {
-  crypto_footer: CryptoFooter,
+  pub crypto_footer: CryptoFooter,
 }

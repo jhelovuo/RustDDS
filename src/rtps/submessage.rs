@@ -1,15 +1,260 @@
-use speedy::{Context, Writable, Writer};
+use std::io;
 
-use crate::messages::submessages::{
-  submessage::{ReaderSubmessage, SecuritySubmessage, WriterSubmessage},
-  submessage_header::SubmessageHeader,
-  submessages::InterpreterSubmessage,
+use bytes::Bytes;
+use enumflags2::BitFlags;
+use log::{debug, error, trace};
+use speedy::{Context, Readable, Writable, Writer};
+
+use crate::{
+  messages::submessages::{
+    ack_nack::AckNack,
+    heartbeat::Heartbeat,
+    info_destination::InfoDestination,
+    info_source::InfoSource,
+    info_timestamp::InfoTimestamp,
+    nack_frag::NackFrag,
+    secure_body::SecureBody,
+    secure_postfix::SecurePostfix,
+    secure_prefix::SecurePrefix,
+    secure_rtps_postfix::SecureRTPSPostfix,
+    secure_rtps_prefix::SecureRTPSPrefix,
+    submessage::{ReaderSubmessage, SecuritySubmessage, WriterSubmessage},
+    submessage_flag::{
+      endianness_flag, ACKNACK_Flags, DATAFRAG_Flags, DATA_Flags, GAP_Flags, HEARTBEAT_Flags,
+      INFODESTINATION_Flags, INFOREPLY_Flags, INFOSOURCE_Flags, INFOTIMESTAMP_Flags,
+      NACKFRAG_Flags, SECUREBODY_Flags, SECUREPOSTFIX_Flags, SECUREPREFIX_Flags,
+      SECURERTPSPOSTFIX_Flags, SECURERTPSPREFIX_Flags,
+    },
+    submessage_header::SubmessageHeader,
+    submessage_kind::SubmessageKind,
+    submessages::{Data, DataFrag, Gap, InfoReply, InterpreterSubmessage},
+  },
+  Timestamp,
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Submessage {
   pub header: SubmessageHeader,
   pub body: SubmessageBody,
+}
+
+// We implement this instead of Speedy trait Readable, because
+// we need to run-time decide which endianness we input. Speedy requires the
+// top level to fix that. And there seems to be no reasonable way to change
+// endianness. TODO: The error type should be something better
+impl Submessage {
+  pub fn read_from_buffer(buffer: &mut Bytes) -> io::Result<Option<Self>> {
+    let sub_header = SubmessageHeader::read_from_buffer(buffer)
+      .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    // Try to figure out how large this submessage is.
+    let sub_header_length = 4; // 4 bytes
+    let proposed_sub_content_length = if sub_header.content_length == 0 {
+      // RTPS spec 2.3, section 9.4.5.1.3:
+      //           In case octetsToNextHeader==0 and the kind of Submessage is
+      // NOT PAD or INFO_TS, the Submessage is the last Submessage in the Message
+      // and extends up to the end of the Message. This makes it possible to send
+      // Submessages larger than 64k (the size that can be stored in the
+      // octetsToNextHeader field), provided they are the last Submessage in the
+      // Message. In case the octetsToNextHeader==0 and the kind of Submessage is
+      // PAD or INFO_TS, the next Submessage header starts immediately after the
+      // current Submessage header OR the PAD or INFO_TS is the last Submessage
+      // in the Message.
+      match sub_header.kind {
+        SubmessageKind::PAD | SubmessageKind::INFO_TS => 0,
+        _not_pad_or_info_ts => buffer.len() - sub_header_length,
+      }
+    } else {
+      sub_header.content_length as usize
+    };
+    // check if the declared content length makes sense
+    let sub_content_length = if sub_header_length + proposed_sub_content_length <= buffer.len() {
+      proposed_sub_content_length
+    } else {
+      return Err(io::Error::new(
+        io::ErrorKind::InvalidInput,
+        format!(
+          "Submessage header declares length larger than remaining message size: \
+           {sub_header_length} + {proposed_sub_content_length} <= {}",
+          buffer.len()
+        ),
+      ));
+    };
+
+    // split first submessage to new buffer
+    let mut sub_buffer = buffer.split_to(sub_header_length + sub_content_length);
+    // split tail part (content) to new buffer
+    let sub_content_buffer = sub_buffer.split_off(sub_header_length);
+
+    let e = endianness_flag(sub_header.flags);
+    let mk_w_subm = move |s: WriterSubmessage| {
+      io::Result::<Option<Self>>::Ok(Some(Submessage {
+        header: sub_header,
+        body: SubmessageBody::Writer(s),
+      }))
+    };
+    let mk_r_subm = move |s: ReaderSubmessage| {
+      io::Result::<Option<Self>>::Ok(Some(Submessage {
+        header: sub_header,
+        body: SubmessageBody::Reader(s),
+      }))
+    };
+    let mk_s_subm = move |s: SecuritySubmessage| {
+      io::Result::<Option<Self>>::Ok(Some(Submessage {
+        header: sub_header,
+        body: SubmessageBody::Security(s),
+      }))
+    };
+    let mk_i_subm = move |s: InterpreterSubmessage| {
+      io::Result::<Option<Self>>::Ok(Some(Submessage {
+        header: sub_header,
+        body: SubmessageBody::Interpreter(s),
+      }))
+    };
+
+    match sub_header.kind {
+      SubmessageKind::DATA => {
+        // Manually implemented deserialization for DATA. Speedy does not quite cut it.
+        let f = BitFlags::<DATA_Flags>::from_bits_truncate(sub_header.flags);
+        mk_w_subm(WriterSubmessage::Data(
+          Data::deserialize_data(&sub_content_buffer, f)?,
+          f,
+        ))
+      }
+
+      SubmessageKind::DATA_FRAG => {
+        // Manually implemented deserialization for DATA. Speedy does not quite cut it.
+        let f = BitFlags::<DATAFRAG_Flags>::from_bits_truncate(sub_header.flags);
+        mk_w_subm(WriterSubmessage::DataFrag(
+          DataFrag::deserialize(&sub_content_buffer, f)?,
+          f,
+        ))
+      }
+
+      SubmessageKind::GAP => {
+        let f = BitFlags::<GAP_Flags>::from_bits_truncate(sub_header.flags);
+        mk_w_subm(WriterSubmessage::Gap(
+          Gap::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+
+      SubmessageKind::ACKNACK => {
+        let f = BitFlags::<ACKNACK_Flags>::from_bits_truncate(sub_header.flags);
+        mk_r_subm(ReaderSubmessage::AckNack(
+          AckNack::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+
+      SubmessageKind::NACK_FRAG => {
+        let f = BitFlags::<NACKFRAG_Flags>::from_bits_truncate(sub_header.flags);
+        mk_r_subm(ReaderSubmessage::NackFrag(
+          NackFrag::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+
+      SubmessageKind::HEARTBEAT => {
+        let f = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
+        mk_w_subm(WriterSubmessage::Heartbeat(
+          Heartbeat::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+
+      // interpreter submessages
+      SubmessageKind::INFO_DST => {
+        let f = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);
+        mk_i_subm(InterpreterSubmessage::InfoDestination(
+          InfoDestination::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+      SubmessageKind::INFO_SRC => {
+        let f = BitFlags::<INFOSOURCE_Flags>::from_bits_truncate(sub_header.flags);
+        mk_i_subm(InterpreterSubmessage::InfoSource(
+          InfoSource::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+      SubmessageKind::INFO_TS => {
+        let f = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
+        let tso = if f.contains(INFOTIMESTAMP_Flags::Invalidate) {
+          None
+        } else {
+          Some(Timestamp::read_from_buffer_with_ctx(
+            e,
+            &sub_content_buffer,
+          )?)
+        };
+        mk_i_subm(InterpreterSubmessage::InfoTimestamp(
+          InfoTimestamp { timestamp: tso },
+          f,
+        ))
+      }
+      SubmessageKind::INFO_REPLY => {
+        let f = BitFlags::<INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
+        mk_i_subm(InterpreterSubmessage::InfoReply(
+          InfoReply::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+      SubmessageKind::PAD => {
+        Ok(None) // nothing to do here
+      }
+      SubmessageKind::SEC_BODY => {
+        let f = BitFlags::<SECUREBODY_Flags>::from_bits_truncate(sub_header.flags);
+        mk_s_subm(SecuritySubmessage::SecureBody(
+          SecureBody::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+      SubmessageKind::SEC_PREFIX => {
+        let f = BitFlags::<SECUREPREFIX_Flags>::from_bits_truncate(sub_header.flags);
+        mk_s_subm(SecuritySubmessage::SecurePrefix(
+          SecurePrefix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+      SubmessageKind::SEC_POSTFIX => {
+        let f = BitFlags::<SECUREPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
+        mk_s_subm(SecuritySubmessage::SecurePostfix(
+          SecurePostfix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+      SubmessageKind::SRTPS_PREFIX => {
+        let f = BitFlags::<SECURERTPSPREFIX_Flags>::from_bits_truncate(sub_header.flags);
+        mk_s_subm(SecuritySubmessage::SecureRTPSPrefix(
+          SecureRTPSPrefix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+      SubmessageKind::SRTPS_POSTFIX => {
+        let f = BitFlags::<SECURERTPSPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
+        mk_s_subm(SecuritySubmessage::SecureRTPSPostfix(
+          SecureRTPSPostfix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+      unknown_kind => {
+        let kind = u8::from(unknown_kind);
+        if kind >= 0x80 {
+          // Kinds 0x80 - 0xFF are vendor-specific.
+          trace!(
+            "Received vendor-specific submessage kind {:?}",
+            unknown_kind
+          );
+          trace!("Submessage was {:?}", &sub_buffer);
+        } else {
+          // Kind is 0x00 - 0x7F, it should be in the standard.
+          error!("Received unknown submessage kind {:?}", unknown_kind);
+          debug!("Submessage was {:?}", &sub_buffer);
+        }
+        Ok(None)
+      }
+    } // match
+  }
 }
 
 /// See section 7.3.1 of the Security specification (v. 1.1)
