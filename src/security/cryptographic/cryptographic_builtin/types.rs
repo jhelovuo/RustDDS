@@ -424,20 +424,23 @@ impl From<BuiltinCryptoTransformIdentifier> for CryptoTransformIdentifier {
   }
 }
 
-/// 9.5.2.3 The plugin_crypto_header_extra contains the initialization vector,
-/// which consists of the session_id and initialization_vector_suffix.
+/// The plugin_crypto_header_extra contains the initialization vector, which
+/// consists of the session_id and initialization_vector_suffix. 9.5.2.3
 pub(super) const INITIALIZATION_VECTOR_LENGTH: usize = 12;
 pub(super) type BuiltinInitializationVector = [u8; INITIALIZATION_VECTOR_LENGTH];
 pub(super) struct BuiltinCryptoHeaderExtra(pub(super) BuiltinInitializationVector);
 
+/// Methods for getting the contained data
 impl BuiltinCryptoHeaderExtra {
-  fn initialization_vector(self) -> BuiltinInitializationVector {
+  pub(super) fn initialization_vector(&self) -> BuiltinInitializationVector {
     self.0
   }
-  fn session_id(self) -> [u8; 4] {
+  pub(super) fn session_id(&self) -> [u8; 4] {
+    // Succeeds as the slice length is 4
     <[u8; 4]>::try_from(&self.0[..4]).unwrap()
   }
-  fn initialization_vector_suffix(self) -> [u8; 8] {
+  pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
+    // Succeeds as the slice length is 12-4=8
     <[u8; 8]>::try_from(&self.0[4..]).unwrap()
   }
 }
@@ -447,9 +450,11 @@ impl From<BuiltinInitializationVector> for BuiltinCryptoHeaderExtra {
     Self(value)
   }
 }
+// Conversion from session_id and initialization_vector_suffix
 impl From<([u8; 4], [u8; 8])> for BuiltinCryptoHeaderExtra {
   fn from((session_id, initialization_vector_suffix): ([u8; 4], [u8; 8])) -> Self {
     Self::from(
+      // Succeeds as the vector length is 4+8=12
       BuiltinInitializationVector::try_from(
         [
           Vec::from(session_id),
@@ -471,7 +476,9 @@ impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
   fn try_from(
     PluginCryptoHeaderExtra { data }: PluginCryptoHeaderExtra,
   ) -> Result<Self, Self::Error> {
+    // Save the length for the error message
     let plugin_crypto_header_length = data.len();
+    // Convert to fixed-length array
     BuiltinInitializationVector::try_from(data)
       .map_err(|_| {
         security_error!(
@@ -480,6 +487,7 @@ impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
           INITIALIZATION_VECTOR_LENGTH
         )
       })
+      // Wrap the initialization vector
       .map(Self::from)
   }
 }
@@ -500,13 +508,9 @@ impl TryFrom<CryptoHeader> for BuiltinCryptoHeader {
   ) -> Result<Self, Self::Error> {
     // Try to cast [CryptoTransformIdentifier] to [BuiltinCryptoTransformIdentifier]
     // and read the initialization vector from 'crypto_header_extra'
-    BuiltinCryptoTransformIdentifier::try_from(transformation_id).and_then(|transform_identifier| {
-      BuiltinCryptoHeaderExtra::try_from(plugin_crypto_header_extra).map(
-        |builtin_crypto_header_extra| Self {
-          transform_identifier,
-          builtin_crypto_header_extra,
-        },
-      )
+    Ok(Self {
+      transform_identifier: BuiltinCryptoTransformIdentifier::try_from(transformation_id)?,
+      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra::try_from(plugin_crypto_header_extra)?,
     })
   }
 }
@@ -611,7 +615,7 @@ pub(super) type AES256Key = [u8; AES256_KEY_LENGTH];
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum KeyLength {
-  None = 0,
+  None = 0, // Mostly for testing and debugging
   AES128 = AES128_KEY_LENGTH as isize,
   AES256 = AES256_KEY_LENGTH as isize,
 }

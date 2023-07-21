@@ -507,7 +507,7 @@ impl CryptoTransform for CryptographicBuiltIn {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         decode::decode_serialized_payload_gmac(
           &decode_key,
-          &KeyLength::None,
+          KeyLength::None,
           initialization_vector,
           data,
         )
@@ -516,7 +516,7 @@ impl CryptoTransform for CryptographicBuiltIn {
         // TODO: implement MAC check
         decode::decode_serialized_payload_gmac(
           &decode_key,
-          &KeyLength::AES128,
+          KeyLength::AES128,
           initialization_vector,
           data,
         )
@@ -525,7 +525,7 @@ impl CryptoTransform for CryptographicBuiltIn {
         // TODO: implement decryption
         decode::decode_serialized_payload_gcm(
           &decode_key,
-          &KeyLength::AES128,
+          KeyLength::AES128,
           initialization_vector,
           data,
         )
@@ -534,7 +534,7 @@ impl CryptoTransform for CryptographicBuiltIn {
         // TODO: implement MAC check
         decode::decode_serialized_payload_gmac(
           &decode_key,
-          &KeyLength::AES256,
+          KeyLength::AES256,
           initialization_vector,
           data,
         )
@@ -543,7 +543,7 @@ impl CryptoTransform for CryptographicBuiltIn {
         // TODO: implement decryption
         decode::decode_serialized_payload_gcm(
           &decode_key,
-          &KeyLength::AES256,
+          KeyLength::AES256,
           initialization_vector,
           data,
         )

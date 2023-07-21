@@ -17,7 +17,7 @@ use super::{
 
 pub(super) fn decode_serialized_payload_gmac(
   key: &Vec<u8>,
-  key_length: &KeyLength,
+  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
 ) -> SecurityResult<SerializedPayload> {
@@ -45,7 +45,7 @@ pub(super) fn decode_serialized_payload_gmac(
   // Validate MAC and deserialize serialized payload
   validate_mac(
     key,
-    *key_length,
+    key_length,
     initialization_vector,
     serialized_payload_data,
     common_mac,
@@ -58,7 +58,7 @@ pub(super) fn decode_serialized_payload_gmac(
 
 pub(super) fn decode_serialized_payload_gcm(
   key: &Vec<u8>,
-  key_length: &KeyLength,
+  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
 ) -> SecurityResult<SerializedPayload> {
@@ -69,6 +69,7 @@ pub(super) fn decode_serialized_payload_gcm(
   let (read_result, bytes_consumed) = BuiltinCryptoContent::read_with_length_from_buffer(data);
   let footer_data = data.split_at(bytes_consumed).1;
 
+  // Deserialize CryptoContent
   let BuiltinCryptoContent { data } =
     read_result.map_err(|e| security_error!("Error while deserializing CryptoContent: {}", e))?;
 
@@ -78,7 +79,7 @@ pub(super) fn decode_serialized_payload_gcm(
     .and_then(BuiltinCryptoFooter::try_from)?;
 
   // Decrypt and deserialize serialized payload
-  decrypt(key, *key_length, initialization_vector, data, common_mac).and_then(|plaintext| {
+  decrypt(key, key_length, initialization_vector, data, common_mac).and_then(|plaintext| {
     SerializedPayload::from_bytes(&Bytes::copy_from_slice(&plaintext))
       .map_err(|e| security_error!("Failed to deserialize the SerializedPayload: {}", e))
   })
