@@ -69,10 +69,7 @@ impl<K: Key> ReadState<K> {
 
 /// SimpleDataReaders can only do "take" semantics and does not have
 /// any deduplication or other DataSampleCache functionality.
-pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>>
-where
-  <D as Keyed>::K: Key,
-{
+pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
   // any subscriber-wide QoS policies, such as ordered or coherent access.
   // Remove this attribute when/if such things are implemented.
@@ -107,7 +104,6 @@ where
 impl<D, DA> Drop for SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn drop(&mut self) {
@@ -134,7 +130,6 @@ where
 impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   #[allow(clippy::too_many_arguments)]
@@ -381,7 +376,6 @@ where
 impl<D, DA> Evented for SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it
@@ -418,7 +412,6 @@ where
 impl<D, DA> mio_08::event::Source for SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn register(
@@ -447,7 +440,6 @@ where
 impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -466,7 +458,6 @@ where
 impl<D, DA> RTPSEntity for SimpleDataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
@@ -483,9 +474,7 @@ pub struct SimpleDataReaderStream<
   'a,
   D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where
-  <D as Keyed>::K: Key,
-{
+> {
   simple_datareader: &'a SimpleDataReader<D, DA>,
 }
 
@@ -496,7 +485,6 @@ pub struct SimpleDataReaderStream<
 impl<'a, D, DA> Unpin for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
 }
@@ -504,7 +492,6 @@ where
 impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   type Item = ReadResult<DeserializedCacheChange<D>>;
@@ -549,7 +536,6 @@ where
 impl<'a, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {
@@ -564,16 +550,13 @@ pub struct SimpleDataReaderEventStream<
   'a,
   D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where
-  <D as Keyed>::K: Key,
-{
+> {
   simple_datareader: &'a SimpleDataReader<D, DA>,
 }
 
 impl<'a, D, DA> Stream for SimpleDataReaderEventStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   type Item = ReadResult<DataReaderStatus>;

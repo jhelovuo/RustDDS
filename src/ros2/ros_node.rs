@@ -10,7 +10,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use crate::{
   dds::{
     adapters::{no_key, with_key},
-    key::{Key, Keyed},
+    key::Keyed,
     pubsub::{Publisher, Subscriber},
     qos::QosPolicies,
     result::CreateError,
@@ -554,7 +554,6 @@ impl RosNode {
   ) -> Result<KeyedRosSubscriber<D, DA>, CreateError>
   where
     D: Keyed + DeserializeOwned + 'static,
-    D::K: Key,
   {
     let sub = self
       .ros_participant
@@ -600,7 +599,6 @@ impl RosNode {
   ) -> Result<KeyedRosPublisher<D, SA>, CreateError>
   where
     D: Keyed + Serialize,
-    D::K: Key,
   {
     let p = self
       .ros_participant

@@ -15,7 +15,7 @@ use crate::{
   create_error_dropped, create_error_poisoned,
   dds::{
     adapters,
-    key::{Key, Keyed},
+    key::Keyed,
     no_key,
     no_key::{
       datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter,
@@ -156,7 +156,6 @@ impl Publisher {
   ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::SerializerAdapter<D>,
   {
     self.inner_lock().create_datawriter(self, None, topic, qos)
@@ -171,7 +170,6 @@ impl Publisher {
   ) -> CreateResult<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
     D: Keyed + serde::Serialize,
-    <D as Keyed>::K: Key,
     <D as Keyed>::K: Serialize,
   {
     self.create_datawriter::<D, CDRSerializerAdapter<D, LittleEndian>>(topic, qos)
@@ -187,7 +185,6 @@ impl Publisher {
   ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::SerializerAdapter<D>,
   {
     self
@@ -203,7 +200,6 @@ impl Publisher {
   ) -> CreateResult<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
     D: Keyed + serde::Serialize,
-    <D as Keyed>::K: Key,
     <D as Keyed>::K: Serialize,
   {
     self.create_datawriter_with_entity_id::<D, CDRSerializerAdapter<D, LittleEndian>>(
@@ -468,7 +464,6 @@ impl InnerPublisher {
   ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::SerializerAdapter<D>,
   {
     // Data samples from DataWriter to HistoryCache
@@ -705,7 +700,6 @@ impl Subscriber {
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     self.inner.create_datareader(self, topic, None, qos)
@@ -718,7 +712,6 @@ impl Subscriber {
   ) -> CreateResult<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
     D: serde::de::DeserializeOwned + Keyed,
-    <D as Keyed>::K: Key,
     for<'de> <D as Keyed>::K: Deserialize<'de>,
   {
     self.create_datareader::<D, CDRDeserializerAdapter<D>>(topic, qos)
@@ -734,7 +727,6 @@ impl Subscriber {
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     self
@@ -750,7 +742,6 @@ impl Subscriber {
   ) -> CreateResult<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
     D: serde::de::DeserializeOwned + Keyed,
-    <D as Keyed>::K: Key,
     for<'de> <D as Keyed>::K: Deserialize<'de>,
   {
     self.create_datareader_with_entity_id::<D, CDRDeserializerAdapter<D>>(topic, entity_id, qos)
@@ -931,7 +922,6 @@ impl InnerSubscriber {
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     let simple_dr =
@@ -950,7 +940,6 @@ impl InnerSubscriber {
   ) -> CreateResult<with_key::SimpleDataReader<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     // incoming data notification channel from Reader to DataReader
@@ -1050,7 +1039,6 @@ impl InnerSubscriber {
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::WithKey {
