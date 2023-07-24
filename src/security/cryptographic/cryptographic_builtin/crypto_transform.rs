@@ -23,6 +23,7 @@ use crate::{
 };
 use super::{
   decode::{
+    decode_datareader_submessage_gcm, decode_datareader_submessage_gmac,
     decode_datawriter_submessage_gcm, decode_datawriter_submessage_gmac,
     decode_serialized_payload_gcm, decode_serialized_payload_gmac, find_receiver_specific_mac,
   },
@@ -579,28 +580,130 @@ impl CryptoTransform for CryptographicBuiltIn {
     sending_datareader_crypto: DatareaderCryptoHandle,
   ) -> SecurityResult<ReaderSubmessage> {
     //TODO: this is only a mock implementation
-    match self
+
+    // Destructure header and footer
+    let (SecurePrefix { crypto_header }, encoded_submessage, SecurePostfix { crypto_footer }) =
+      encoded_rtps_submessage;
+
+    let BuiltinCryptoHeader {
+      transform_identifier:
+        BuiltinCryptoTransformIdentifier {
+          transformation_kind: header_transformation_kind,
+          transformation_key_id,
+        },
+      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
+    } = BuiltinCryptoHeader::try_from(crypto_header)?;
+
+    let BuiltinCryptoFooter {
+      common_mac,
+      receiver_specific_macs,
+    } = BuiltinCryptoFooter::try_from(crypto_footer)?;
+
+    // Get decode key
+    let KeyMaterial_AES_GCM_GMAC {
+      transformation_kind: key_transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id,
+      master_receiver_specific_key,
+    } = self
       .decode_keys_
       .get(&sending_datareader_crypto)
       .cloned()
+      // Get the one for submessages (not only payload)
       .map(KeyMaterial_AES_GCM_GMAC_seq::key)
-    {
-      Some(KeyMaterial_AES_GCM_GMAC {
-        transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
-        ..
-      }) => match encoded_rtps_submessage.1.body {
-        SubmessageBody::Reader(reader_submessage) => Ok(reader_submessage),
-        other => Err(security_error!(
-          "When transformation kind is CRYPTO_TRANSFORMATION_KIND_NONE, \
-           decode_datareader_submessage expects a ReaderSubmessage, received {:?}",
-          other
-        )),
-      },
-      None => Err(security_error!(
-        "No decode keys found for the remote datawriter {}",
+      .ok_or(security_error!(
+        "No decode keys found for the remote datareader {}",
         sending_datareader_crypto
-      )),
-      _ => todo!(),
+      ))?;
+
+    // Check that the key matches the header. This should be redundant if the method
+    // is called after preprocess_secure_submsg
+    if sender_key_id != transformation_key_id {
+      Err(security_error!(
+        "The key IDs don't match. The key has sender_key_id {}, while the header has \
+         transformation_key_id {}",
+        sender_key_id,
+        transformation_key_id
+      ))?;
+    } else if key_transformation_kind.eq(&header_transformation_kind) {
+      Err(security_error!(
+        "The transformation_kind don't match. The key has {:?}, while the header has {:?}",
+        key_transformation_kind,
+        header_transformation_kind
+      ))?;
+    }
+
+    // Get the receiver-specific MAC if one is expected
+    let receiver_specific_mac =
+      find_receiver_specific_mac(receiver_specific_key_id, &receiver_specific_macs)?;
+
+    // TODO use session key?
+    let decode_key = master_sender_key;
+    // TODO use session key?
+    let receiver_specific_key = master_receiver_specific_key;
+
+    match key_transformation_kind {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+        decode_datareader_submessage_gmac(
+          &decode_key,
+          &receiver_specific_key,
+          KeyLength::None,
+          initialization_vector,
+          encoded_submessage,
+          common_mac,
+          receiver_specific_mac,
+        )
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => {
+        // TODO: implement MAC check
+        decode_datareader_submessage_gmac(
+          &decode_key,
+          &receiver_specific_key,
+          KeyLength::AES128,
+          initialization_vector,
+          encoded_submessage,
+          common_mac,
+          receiver_specific_mac,
+        )
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => {
+        // TODO: implement decryption
+        decode_datareader_submessage_gcm(
+          &decode_key,
+          &receiver_specific_key,
+          KeyLength::AES128,
+          initialization_vector,
+          encoded_submessage,
+          common_mac,
+          receiver_specific_mac,
+        )
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+        // TODO: implement MAC check
+        decode_datareader_submessage_gmac(
+          &decode_key,
+          &receiver_specific_key,
+          KeyLength::AES256,
+          initialization_vector,
+          encoded_submessage,
+          common_mac,
+          receiver_specific_mac,
+        )
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+        // TODO: implement decryption
+        decode_datareader_submessage_gcm(
+          &decode_key,
+          &receiver_specific_key,
+          KeyLength::AES256,
+          initialization_vector,
+          encoded_submessage,
+          common_mac,
+          receiver_specific_mac,
+        )
+      }
     }
   }
 
