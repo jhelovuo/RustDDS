@@ -3,7 +3,6 @@ use std::{
   net::{IpAddr, Ipv4Addr, SocketAddr},
 };
 
-use mio_06;
 use log::{debug, error, info, trace, warn};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use bytes::{Bytes, BytesMut};
