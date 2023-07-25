@@ -15,7 +15,7 @@ use crate::{
   create_error_dropped, create_error_poisoned,
   dds::{
     adapters,
-    key::{Key, Keyed},
+    key::Keyed,
     no_key,
     no_key::{
       datareader::DataReader as NoKeyDataReader, datawriter::DataWriter as NoKeyDataWriter,
@@ -157,7 +157,6 @@ impl Publisher {
   ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::SerializerAdapter<D>,
   {
     self.inner_lock().create_datawriter(self, None, topic, qos)
@@ -172,29 +171,11 @@ impl Publisher {
   ) -> CreateResult<WithKeyDataWriter<D, CDRSerializerAdapter<D, LittleEndian>>>
   where
     D: Keyed + serde::Serialize,
-    <D as Keyed>::K: Key,
     <D as Keyed>::K: Serialize,
   {
     self.create_datawriter::<D, CDRSerializerAdapter<D, LittleEndian>>(topic, qos)
   }
 
-  // versions with callee-specified EntityId. These are for Discovery use only.
-
-  pub(crate) fn create_datawriter_with_entity_id_with_key<D, SA>(
-    &self,
-    entity_id: EntityId,
-    topic: &Topic,
-    qos: Option<QosPolicies>,
-  ) -> CreateResult<WithKeyDataWriter<D, SA>>
-  where
-    D: Keyed,
-    <D as Keyed>::K: Key,
-    SA: adapters::with_key::SerializerAdapter<D>,
-  {
-    self
-      .inner_lock()
-      .create_datawriter(self, Some(entity_id), topic, qos)
-  }
 
   /// Creates DDS [DataWriter](struct.DataWriter.html) for Nokey Topic
   ///
@@ -247,6 +228,21 @@ impl Publisher {
   }
 
   // Versions with callee-specified EntityId. These are for Discovery use only.
+
+  pub(crate) fn create_datawriter_with_entity_id_with_key<D, SA>(
+    &self,
+    entity_id: EntityId,
+    topic: &Topic,
+    qos: Option<QosPolicies>,
+  ) -> CreateResult<WithKeyDataWriter<D, SA>>
+  where
+    D: Keyed,
+    SA: adapters::with_key::SerializerAdapter<D>,
+  {
+    self
+      .inner_lock()
+      .create_datawriter(self, Some(entity_id), topic, qos)
+  }
 
   pub(crate) fn create_datawriter_with_entity_id_no_key<D, SA>(
     &self,
@@ -437,7 +433,6 @@ impl InnerPublisher {
   ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::SerializerAdapter<D>,
   {
     // Data samples from DataWriter to HistoryCache
@@ -672,7 +667,6 @@ impl Subscriber {
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     self.inner.create_datareader(self, topic, None, qos)
@@ -685,43 +679,11 @@ impl Subscriber {
   ) -> CreateResult<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
     D: serde::de::DeserializeOwned + Keyed,
-    <D as Keyed>::K: Key,
     for<'de> <D as Keyed>::K: Deserialize<'de>,
   {
     self.create_datareader::<D, CDRDeserializerAdapter<D>>(topic, qos)
   }
 
-  // versions with callee-specified EntityId. These are for Discovery use only.
-
-  pub(crate) fn create_datareader_with_entity_id_with_key<D: 'static, SA>(
-    &self,
-    topic: &Topic,
-    entity_id: EntityId,
-    qos: Option<QosPolicies>,
-  ) -> CreateResult<WithKeyDataReader<D, SA>>
-  where
-    D: Keyed,
-    <D as Keyed>::K: Key,
-    SA: adapters::with_key::DeserializerAdapter<D>,
-  {
-    self
-      .inner
-      .create_datareader(self, topic, Some(entity_id), qos)
-  }
-
-  // pub(crate) fn create_datareader_cdr_with_entity_id<D: 'static>(
-  //   &self,
-  //   topic: &Topic,
-  //   entity_id: EntityId,
-  //   qos: Option<QosPolicies>,
-  // ) -> Result<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
-  // where
-  //   D: serde::de::DeserializeOwned + Keyed,
-  //   <D as Keyed>::K: Key,
-  //   for<'de> <D as Keyed>::K: Deserialize<'de>,
-  // {
-  //   self.create_datareader_with_entity_id::<D,
-  // CDRDeserializerAdapter<D>>(topic, entity_id, qos) }
 
   /// Create DDS DataReader for non keyed Topics
   ///
@@ -785,6 +747,23 @@ impl Subscriber {
     D: serde::de::DeserializeOwned,
   {
     self.create_datareader_no_key::<D, CDRDeserializerAdapter<D>>(topic, qos)
+  }
+
+  // versions with callee-specified EntityId. These are for Discovery use only.
+
+  pub(crate) fn create_datareader_with_entity_id_with_key<D: 'static, SA>(
+    &self,
+    topic: &Topic,
+    entity_id: EntityId,
+    qos: Option<QosPolicies>,
+  ) -> CreateResult<WithKeyDataReader<D, SA>>
+  where
+    D: Keyed,
+    SA: adapters::with_key::DeserializerAdapter<D>,
+  {
+    self
+      .inner
+      .create_datareader(self, topic, Some(entity_id), qos)
   }
 
   pub(crate) fn create_datareader_with_entity_id_no_key<D: 'static, SA>(
@@ -880,7 +859,6 @@ impl InnerSubscriber {
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     let simple_dr =
@@ -899,7 +877,6 @@ impl InnerSubscriber {
   ) -> CreateResult<with_key::SimpleDataReader<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     // incoming data notification channel from Reader to DataReader
@@ -999,7 +976,6 @@ impl InnerSubscriber {
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
-    <D as Keyed>::K: Key,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::WithKey {

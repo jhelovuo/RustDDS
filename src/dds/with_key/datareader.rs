@@ -70,10 +70,7 @@ pub enum SelectByKey {
 /// *Note:* Many DataReader methods require mutable access to `self`, because
 /// they need to mutate the datasample cache, which is an essential content of
 /// this struct.
-pub struct DataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>>
-where
-  <D as Keyed>::K: Key,
-{
+pub struct DataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
   simple_data_reader: SimpleDataReader<D, DA>,
   datasample_cache: DataSampleCache<D>, // DataReader-local cache of deserialized samples
 }
@@ -81,7 +78,6 @@ where
 impl<D: 'static, DA> DataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   pub(crate) fn from_simple_data_reader(simple_data_reader: SimpleDataReader<D, DA>) -> Self {
@@ -743,7 +739,6 @@ where
 impl<D, DA> Evented for DataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it
@@ -780,7 +775,6 @@ where
 impl<D, DA> mio_08::event::Source for DataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn register(
@@ -824,7 +818,6 @@ where
 impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -844,7 +837,6 @@ impl<D, DA> HasQoSPolicy for DataReader<D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  <D as Keyed>::K: Key,
 {
   fn qos(&self) -> QosPolicies {
     self.simple_data_reader.qos().clone()
@@ -854,7 +846,6 @@ where
 impl<D, DA> RTPSEntity for DataReader<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
@@ -870,16 +861,13 @@ where
 pub struct DataReaderStream<
   D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where
-  <D as Keyed>::K: Key,
-{
+> {
   datareader: Arc<Mutex<DataReader<D, DA>>>,
 }
 
 impl<D, DA> DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   /// Get a stream of status events
@@ -894,7 +882,6 @@ where
 impl<D, DA> Unpin for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
 }
@@ -902,7 +889,6 @@ where
 impl<D, DA> Stream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   type Item = ReadResult<Sample<D, D::K>>;
@@ -946,7 +932,6 @@ where
 impl<D, DA> FusedStream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {
@@ -960,16 +945,13 @@ where
 pub struct DataReaderEventStream<
   D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where
-  <D as Keyed>::K: Key,
-{
+> {
   datareader: Arc<Mutex<DataReader<D, DA>>>,
 }
 
 impl<D, DA> Stream for DataReaderEventStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   type Item = ReadResult<DataReaderStatus>;
@@ -988,7 +970,6 @@ where
 impl<D, DA> FusedStream for DataReaderEventStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {
