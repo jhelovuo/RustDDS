@@ -3,18 +3,15 @@ use std::{
   io::{Read, Write},
   sync::Mutex,
 };
-
 #[cfg(not(target_os = "windows"))]
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 #[cfg(target_os = "windows")]
-use mio_08::net::{TcpListener, TcpStream};
-#[cfg(target_os = "windows")]
 use std::{thread::sleep, time::Duration};
 
-
+#[cfg(target_os = "windows")]
+use mio_08::net::{TcpListener, TcpStream};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-
 #[cfg(not(target_os = "windows"))]
 use socketpair::*;
 use mio_08::{self, *};
@@ -36,7 +33,6 @@ pub struct PollEventSource {
   rec_sps: SocketpairStream, // we are storing this just to keep the socket alive
   rec_mio_socket: Mutex<mio_08::net::TcpStream>,
 }
-
 
 // TODO: How to store the socket so that it is correctly tracked and dropped
 // when these PolEventSource /-Sender are dropped. Can we do that without
@@ -63,7 +59,6 @@ fn set_non_blocking(s: SocketpairStream) -> io::Result<SocketpairStream> {
   Ok(SocketpairStream::from(OwnedFd::from(std_socket)))
 }
 
-
 #[cfg(not(target_os = "windows"))]
 pub fn make_poll_channel() -> io::Result<(PollEventSource, PollEventSender)> {
   let (rec_sps, send_sps) = socketpair_stream()?;
@@ -87,17 +82,26 @@ pub fn make_poll_channel() -> io::Result<(PollEventSource, PollEventSender)> {
 pub fn make_poll_channel() -> io::Result<(PollEventSource, PollEventSender)> {
   let listener = match TcpListener::bind("127.0.0.1:0".parse().unwrap()) {
     Ok(listener) => listener,
-    Err(err) => {error!("Failed to make listener!: {err}"); return Err(err);},
+    Err(err) => {
+      error!("Failed to make listener!: {err}");
+      return Err(err);
+    }
   };
 
   let addr = match listener.local_addr() {
     Ok(listener) => listener,
-    Err(err) => {error!("Failed to retrieve local address: {err}"); return Err(err);},
+    Err(err) => {
+      error!("Failed to retrieve local address: {err}");
+      return Err(err);
+    }
   };
 
   let rec_mio_socket = match TcpStream::connect(addr) {
     Ok(tcp_stream) => tcp_stream,
-    Err(err) => {error!("Failed to connect tcp stream: {err}"); return Err(err);},
+    Err(err) => {
+      error!("Failed to connect tcp stream: {err}");
+      return Err(err);
+    }
   };
 
   let mut send_mio_socket = listener.accept();
@@ -116,7 +120,6 @@ pub fn make_poll_channel() -> io::Result<(PollEventSource, PollEventSender)> {
     },
   ))
 }
-
 
 impl PollEventSender {
   pub fn send(&self) {
