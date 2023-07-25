@@ -3,7 +3,8 @@ use crate::{
   security_error,
 };
 use super::types::{
-  AES128Key, AES256Key, BuiltinInitializationVector, BuiltinMAC, KeyLength, MAC_LENGTH,
+  AES128Key, AES256Key, BuiltinInitializationVector, BuiltinKey, BuiltinMAC, KeyLength,
+  AES128_KEY_LENGTH, AES256_KEY_LENGTH, MAC_LENGTH,
 };
 
 #[doc(hidden)]
@@ -43,9 +44,18 @@ macro_rules! convert_to_AES256_key {
   };
 }
 
+// Generate a key of the given length
+pub(super) fn keygen(key_length: KeyLength) -> BuiltinKey {
+  match key_length {
+    KeyLength::None => Vec::new(),
+    KeyLength::AES128 => Vec::from(rand::random::<[u8; AES128_KEY_LENGTH]>()),
+    KeyLength::AES256 => Vec::from(rand::random::<[u8; AES256_KEY_LENGTH]>()),
+  }
+}
+
 // Computes the message authentication code (MAC) for the given data
 pub(super) fn compute_mac(
-  key: &Vec<u8>,
+  key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
@@ -69,7 +79,7 @@ pub(super) fn compute_mac(
 
 // Authenticated encryption: computes the ciphertext and and a MAC for it
 pub(super) fn encrypt(
-  key: &Vec<u8>,
+  key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   plaintext: &[u8],
@@ -96,7 +106,7 @@ pub(super) fn encrypt(
 
 // Computes the MAC for the data and compares it with the one provided
 pub(super) fn validate_mac(
-  key: &Vec<u8>,
+  key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
@@ -113,7 +123,7 @@ pub(super) fn validate_mac(
 
 // Authenticated decryption: validates the MAC and decrypts the ciphertext
 pub(super) fn decrypt(
-  key: &Vec<u8>,
+  key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   ciphertext: &[u8],

@@ -72,6 +72,16 @@ impl CryptographicBuiltIn {
       }
     }
   }
+  fn get_encode_keys_(
+    &mut self,
+    handle: &CryptoHandle,
+  ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
+    self.encode_keys_.get(handle).ok_or(security_error!(
+      "Could not find encode keys for the handle {}",
+      handle
+    ))
+  }
+
   fn insert_decode_keys_(
     &mut self,
     handle: CryptoHandle,
@@ -87,6 +97,16 @@ impl CryptographicBuiltIn {
         ))
       }
     }
+  }
+
+  fn get_decode_keys_(
+    &mut self,
+    handle: &CryptoHandle,
+  ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
+    self.decode_keys_.get(handle).ok_or(security_error!(
+      "Could not find decode keys for the handle {}",
+      handle
+    ))
   }
 
   fn insert_entity_info_(

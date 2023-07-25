@@ -8,7 +8,7 @@ use crate::{
     crypto_footer::CryptoFooter,
     crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
-  security::{BinaryProperty, DataHolder, SecurityError},
+  security::{BinaryProperty, DataHolder, SecurityError, SecurityResult},
   security_error,
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
@@ -104,9 +104,9 @@ pub(super) struct KeyMaterial_AES_GCM_GMAC {
   pub transformation_kind: BuiltinCryptoTransformationKind,
   pub master_salt: Vec<u8>,
   pub sender_key_id: CryptoTransformKeyId,
-  pub master_sender_key: Vec<u8>,
+  pub master_sender_key: BuiltinKey,
   pub receiver_specific_key_id: CryptoTransformKeyId,
-  pub master_receiver_specific_key: Vec<u8>,
+  pub master_receiver_specific_key: BuiltinKey,
 }
 
 // Conversions from and into Bytes
@@ -166,14 +166,14 @@ pub(super) enum KeyMaterial_AES_GCM_GMAC_seq {
 }
 
 impl KeyMaterial_AES_GCM_GMAC_seq {
-  pub fn key(self) -> KeyMaterial_AES_GCM_GMAC {
+  pub fn key(&self) -> &KeyMaterial_AES_GCM_GMAC {
     match self {
       Self::One(key) => key,
       Self::Two(key, _) => key,
     }
   }
 
-  pub fn payload_key(self) -> KeyMaterial_AES_GCM_GMAC {
+  pub fn payload_key(&self) -> &KeyMaterial_AES_GCM_GMAC {
     match self {
       Self::One(key) => key,
       Self::Two(_, payload_key) => payload_key,
@@ -188,6 +188,29 @@ impl KeyMaterial_AES_GCM_GMAC_seq {
       Self::One(key) => Self::One(f(key)),
       Self::Two(key, payload_key) => Self::Two(f(key), payload_key),
     }
+  }
+
+  pub fn add_receiver_specific_key(
+    self,
+    receiver_specific_key_id: CryptoTransformKeyId,
+    master_receiver_specific_key: BuiltinKey,
+  ) -> KeyMaterial_AES_GCM_GMAC_seq {
+    self.modify_key(
+      |KeyMaterial_AES_GCM_GMAC {
+         transformation_kind,
+         master_salt,
+         master_sender_key,
+         sender_key_id,
+         ..
+       }| KeyMaterial_AES_GCM_GMAC {
+        transformation_kind,
+        master_salt,
+        master_sender_key,
+        sender_key_id,
+        receiver_specific_key_id,
+        master_receiver_specific_key,
+      },
+    )
   }
 }
 
@@ -274,6 +297,57 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Bytes {
   }
 }
 
+impl KeyMaterial_AES_GCM_GMAC {
+  /// Checks that the key material matches the given common key material and
+  /// returns the receiver-specific material
+  pub fn receiver_key_for(
+    &self,
+    KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      ..
+    }: &KeyMaterial_AES_GCM_GMAC,
+  ) -> SecurityResult<ReceiverKeyMaterial> {
+    if !self.sender_key_id.eq(sender_key_id) {
+      Err(security_error!(
+        "The receiver-specific key has a wrong sender_key_id: expected {:?}, received {:?}.",
+        sender_key_id,
+        self.sender_key_id
+      ))
+    } else if !self.transformation_kind.eq(transformation_kind) {
+      Err(security_error!(
+        "The receiver-specific key has a wrong transformation_kind: expected {:?}, received {:?}.",
+        transformation_kind,
+        self.transformation_kind
+      ))
+    } else if !self.master_sender_key.eq(master_sender_key) {
+      Err(security_error!(
+        "The receiver-specific key has a wrong master_sender_key: expected {:?}, received {:?}.",
+        master_sender_key,
+        self.master_sender_key
+      ))
+    } else if !self.master_salt.eq(master_salt) {
+      Err(security_error!(
+        "The receiver-specific key has a wrong master_salt: expected {:?}, received {:?}.",
+        master_salt,
+        self.master_salt
+      ))
+    } else {
+      Ok(ReceiverKeyMaterial {
+        receiver_specific_key_id: self.receiver_specific_key_id,
+        master_receiver_specific_key: self.master_receiver_specific_key.clone(),
+      })
+    }
+  }
+}
+
+pub(super) struct ReceiverKeyMaterial {
+  pub receiver_specific_key_id: CryptoTransformKeyId,
+  pub master_receiver_specific_key: BuiltinKey,
+}
+
 // Conversions from and into Vec<CryptoToken> for KeyMaterial_AES_GCM_GMAC_seq
 impl TryFrom<Vec<CryptoToken>> for KeyMaterial_AES_GCM_GMAC_seq {
   type Error = SecurityError;
@@ -302,9 +376,9 @@ struct Serializable_KeyMaterial_AES_GCM_GMAC {
   transformation_kind: CryptoTransformKind,
   master_salt: Vec<u8>,
   sender_key_id: CryptoTransformKeyId,
-  master_sender_key: Vec<u8>,
+  master_sender_key: BuiltinKey,
   receiver_specific_key_id: CryptoTransformKeyId,
-  master_receiver_specific_key: Vec<u8>,
+  master_receiver_specific_key: BuiltinKey,
 }
 impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
@@ -619,3 +693,18 @@ pub(super) enum KeyLength {
   AES128 = AES128_KEY_LENGTH as isize,
   AES256 = AES256_KEY_LENGTH as isize,
 }
+
+impl From<BuiltinCryptoTransformationKind> for KeyLength {
+  fn from(value: BuiltinCryptoTransformationKind) -> Self {
+    match value {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Self::None,
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => Self::AES128,
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => Self::AES128,
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => Self::AES256,
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => Self::AES256,
+    }
+  }
+}
+
+// The keys are given as byte sequences that can be empty or of length 16 or 32
+pub(super) type BuiltinKey = Vec<u8>;

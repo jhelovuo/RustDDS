@@ -1,4 +1,4 @@
-use crate::{security::cryptographic::cryptographic_builtin::*, security_error};
+use crate::security::cryptographic::cryptographic_builtin::*;
 
 impl CryptoKeyExchange for CryptographicBuiltIn {
   fn create_local_participant_crypto_tokens(
@@ -8,12 +8,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
   ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
     //TODO: this is only a mock implementation (or is it?)
     self
-      .encode_keys_
-      .get(&remote_participant_crypto)
-      .ok_or(security_error!(
-        "Could not find encode keys for the handle {}",
-        remote_participant_crypto
-      ))
+      .get_encode_keys_(&remote_participant_crypto)
       .cloned()
       // Convert to CryptoTokens
       .and_then(Vec::<DatawriterCryptoToken>::try_from)
@@ -38,12 +33,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     //TODO: this is only a mock implementation (or is it?)
 
     self
-      .encode_keys_
-      .get(&remote_datareader_crypto)
-      .ok_or(security_error!(
-        "Could not find encode keys for the handle {}",
-        remote_datareader_crypto
-      ))
+      .get_encode_keys_(&remote_datareader_crypto)
       .cloned()
       // Convert to CryptoTokens
       .and_then(Vec::<DatawriterCryptoToken>::try_from)
@@ -68,12 +58,7 @@ impl CryptoKeyExchange for CryptographicBuiltIn {
     //TODO: this is only a mock implementation (or is it?)
 
     self
-      .encode_keys_
-      .get(&remote_datawriter_crypto)
-      .ok_or(security_error!(
-        "Could not find encode keys for the handle {}",
-        remote_datawriter_crypto
-      ))
+      .get_encode_keys_(&remote_datawriter_crypto)
       .cloned()
       // Convert to CryptoTokens
       .and_then(Vec::<DatawriterCryptoToken>::try_from)

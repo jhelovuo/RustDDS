@@ -2,6 +2,7 @@ use crate::{
   security::{access_control::types::*, cryptographic::cryptographic_builtin::*},
   security_error,
 };
+use super::aes_gcm_gmac::keygen;
 
 impl CryptographicBuiltIn {
   fn generate_handle_(&mut self) -> CryptoHandle {
@@ -69,14 +70,40 @@ impl CryptographicBuiltIn {
   }
 
   //TODO replace with proper functionality
-  fn generate_mock_key_(handle: CryptoHandle) -> KeyMaterial_AES_GCM_GMAC {
+  fn generate_key_(
+    handle: CryptoHandle,
+    transformation_kind: BuiltinCryptoTransformationKind,
+  ) -> KeyMaterial_AES_GCM_GMAC {
     KeyMaterial_AES_GCM_GMAC {
-      transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+      transformation_kind,
+      // TODO
       master_salt: Vec::new(),
+
       sender_key_id: handle,
-      master_sender_key: Vec::new(),
+      master_sender_key: keygen(transformation_kind.into()),
+      // Leave receiver-specific key empty initially
       receiver_specific_key_id: 0,
-      master_receiver_specific_key: Vec::new(),
+      master_receiver_specific_key: BuiltinKey::new(),
+    }
+  }
+
+  fn generate_mock_key_(handle: CryptoHandle) -> KeyMaterial_AES_GCM_GMAC {
+    Self::generate_key_(
+      handle,
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+    )
+  }
+
+  fn generate_receiver_specific_key_(
+    &mut self,
+    keymat: KeyMaterial_AES_GCM_GMAC_seq,
+    origin_authentication: bool,
+  ) -> KeyMaterial_AES_GCM_GMAC_seq {
+    if origin_authentication {
+      let master_receiver_specific_key = keygen(keymat.key().transformation_kind.into());
+      keymat.add_receiver_specific_key(self.generate_handle_(), master_receiver_specific_key)
+    } else {
+      keymat.add_receiver_specific_key(0, BuiltinKey::new())
     }
   }
 
@@ -146,52 +173,20 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   ) -> SecurityResult<ParticipantCryptoHandle> {
     //TODO: this is only a mock implementation
 
-    if let Some(local_participant_keys) = self
-      .encode_keys_
-      .get(&local_participant_crypto_handle)
-      .cloned()
-    {
-      let remote_participant_handle = self.generate_handle_();
-      self
-        .insert_encode_keys_(
-          remote_participant_handle,
-          local_participant_keys.modify_key(
-            |KeyMaterial_AES_GCM_GMAC {
-               transformation_kind,
-               master_salt,
-               master_sender_key,
-               sender_key_id,
-               ..
-             }| {
-              let receiver_specific_key_id;
-              let master_receiver_specific_key;
-              // TODO check RTPS Protection Kind 9.5.3.1
-              if true {
-                receiver_specific_key_id = 0;
-                master_receiver_specific_key = Vec::new();
-              } else {
-                // TODO create a receiver specific key
-                receiver_specific_key_id = 0;
-                master_receiver_specific_key = vec![0; 32];
-              }
-              KeyMaterial_AES_GCM_GMAC {
-                transformation_kind,
-                master_salt,
-                master_sender_key,
-                sender_key_id,
-                receiver_specific_key_id,
-                master_receiver_specific_key,
-              }
-            },
-          ),
-        )
-        .and(Ok(remote_participant_handle))
-    } else {
-      Err(security_error!(
-        "Could not find encode keys for the local participant {}",
-        local_participant_crypto_handle
-      ))
-    }
+    let local_participant_keys = self
+      .get_encode_keys_(&local_participant_crypto_handle)
+      .cloned()?;
+
+    let remote_participant_handle = self.generate_handle_();
+
+    // TODO check Metadata Protection Kind 9.5.3.1 for origin authentication
+    let origin_authentication = true;
+    let keys = self.generate_receiver_specific_key_(local_participant_keys, origin_authentication);
+
+    // Copy the keys
+    self.insert_encode_keys_(remote_participant_handle, keys)?;
+
+    Ok(remote_participant_handle)
   }
 
   fn register_local_datawriter(
@@ -239,12 +234,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   ) -> SecurityResult<DatareaderCryptoHandle> {
     //TODO: this is only a mock implementation
     let keys = self
-      .encode_keys_
-      .get(&local_datawriter_crypto_handle)
-      .ok_or(security_error!(
-        "No encode keys found for local_datawriter_crypto_handle {}",
-        local_datawriter_crypto_handle
-      ))
+      .get_encode_keys_(&local_datawriter_crypto_handle)
       .cloned()?;
 
     // Find a handle for the remote datareader corresponding to the (remote
@@ -280,33 +270,14 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
         .insert(remote_datareader_handle, attributes);
     }
 
-    // Copy the keys
-    self.insert_encode_keys_(
-      remote_datareader_handle,
-      // TODO check RTPS Protection Kind 9.5.3.1
-      if true {
-        keys
-      } else {
-        keys.modify_key(
-          |KeyMaterial_AES_GCM_GMAC {
-             transformation_kind,
-             master_salt,
-             master_sender_key,
-             sender_key_id,
-             ..
-           }| KeyMaterial_AES_GCM_GMAC {
-            transformation_kind,
-            master_salt,
-            master_sender_key,
-            sender_key_id,
-            receiver_specific_key_id: 0,
-            master_receiver_specific_key: Vec::new(),
-          },
-        )
-      },
-    )?;
+    // TODO check Metadata Protection Kind 9.5.3.1 for origin authentication
+    let origin_authentication = true;
+    let keys = self.generate_receiver_specific_key_(keys, origin_authentication);
 
-    SecurityResult::Ok(remote_datareader_handle)
+    // Copy the keys
+    self.insert_encode_keys_(remote_datareader_handle, keys)?;
+
+    Ok(remote_datareader_handle)
   }
 
   fn register_local_datareader(
@@ -354,12 +325,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
   ) -> SecurityResult<DatawriterCryptoHandle> {
     //TODO: this is only a mock implementation
     let keys = self
-      .encode_keys_
-      .get(&local_datareader_crypto_handle)
-      .ok_or(security_error!(
-        "No encode keys found for local_datareader_crypto_handle {}",
-        local_datareader_crypto_handle
-      ))
+      .get_encode_keys_(&local_datareader_crypto_handle)
       .cloned()?;
 
     // Find a handle for the remote datawriter corresponding to the (remote
@@ -396,31 +362,13 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
         .insert(remote_datawriter_handle, attributes);
     }
 
+    // TODO check Metadata Protection Kind 9.5.3.1 for origin authentication
+    let origin_authentication = true;
+    let keys = self.generate_receiver_specific_key_(keys, origin_authentication);
+
     // Copy the keys
-    self.insert_encode_keys_(
-      remote_datawriter_handle,
-      // TODO check RTPS Protection Kind 9.5.3.1
-      if true {
-        keys
-      } else {
-        keys.modify_key(
-          |KeyMaterial_AES_GCM_GMAC {
-             transformation_kind,
-             master_salt,
-             master_sender_key,
-             sender_key_id,
-             ..
-           }| KeyMaterial_AES_GCM_GMAC {
-            transformation_kind,
-            master_salt,
-            master_sender_key,
-            sender_key_id,
-            receiver_specific_key_id: 0,
-            master_receiver_specific_key: Vec::new(),
-          },
-        )
-      },
-    )?;
+    self.insert_encode_keys_(remote_datawriter_handle, keys)?;
+
     Ok(remote_datawriter_handle)
   }
 

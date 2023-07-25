@@ -17,8 +17,8 @@ use crate::{
 use super::{
   aes_gcm_gmac::{decrypt, validate_mac},
   types::{
-    BuiltinCryptoContent, BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinMAC, KeyLength,
-    ReceiverSpecificMAC, MAC_LENGTH,
+    BuiltinCryptoContent, BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinKey, BuiltinMAC,
+    KeyLength, ReceiverSpecificMAC, MAC_LENGTH,
   },
 };
 
@@ -57,7 +57,7 @@ pub(super) fn find_receiver_specific_mac(
 }
 
 pub(super) fn decode_serialized_payload_gmac(
-  key: &Vec<u8>,
+  key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
@@ -98,7 +98,7 @@ pub(super) fn decode_serialized_payload_gmac(
 }
 
 pub(super) fn decode_serialized_payload_gcm(
-  key: &Vec<u8>,
+  key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
@@ -127,8 +127,8 @@ pub(super) fn decode_serialized_payload_gcm(
 }
 
 pub(super) fn decode_datawriter_submessage_gmac(
-  key: &Vec<u8>,
-  receiver_specific_key: &Vec<u8>,
+  key: &BuiltinKey,
+  receiver_specific_key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: Submessage,
@@ -165,8 +165,8 @@ pub(super) fn decode_datawriter_submessage_gmac(
 }
 
 pub(super) fn decode_datawriter_submessage_gcm(
-  key: &Vec<u8>,
-  receiver_specific_key: &Vec<u8>,
+  key: &BuiltinKey,
+  receiver_specific_key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: Submessage,
@@ -231,8 +231,8 @@ pub(super) fn decode_datawriter_submessage_gcm(
 }
 
 pub(super) fn decode_datareader_submessage_gmac(
-  key: &Vec<u8>,
-  receiver_specific_key: &Vec<u8>,
+  key: &BuiltinKey,
+  receiver_specific_key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: Submessage,
@@ -269,8 +269,8 @@ pub(super) fn decode_datareader_submessage_gmac(
 }
 
 pub(super) fn decode_datareader_submessage_gcm(
-  key: &Vec<u8>,
-  receiver_specific_key: &Vec<u8>,
+  key: &BuiltinKey,
+  receiver_specific_key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: Submessage,
