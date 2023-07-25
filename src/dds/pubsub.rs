@@ -176,7 +176,6 @@ impl Publisher {
     self.create_datawriter::<D, CDRSerializerAdapter<D, LittleEndian>>(topic, qos)
   }
 
-
   /// Creates DDS [DataWriter](struct.DataWriter.html) for Nokey Topic
   ///
   /// # Arguments
@@ -683,7 +682,6 @@ impl Subscriber {
   {
     self.create_datareader::<D, CDRDeserializerAdapter<D>>(topic, qos)
   }
-
 
   /// Create DDS DataReader for non keyed Topics
   ///
