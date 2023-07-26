@@ -1,9 +1,9 @@
+use enumflags2::BitFlags;
 use speedy::{Readable, Writable};
 
 use crate::{
   messages::{
     header::Header,
-    protocol_id::ProtocolId,
     submessages::{
       elements::{
         crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
@@ -14,6 +14,7 @@ use crate::{
       secure_prefix::SecurePrefix,
       secure_rtps_prefix::SecureRTPSPrefix,
       submessage::{InterpreterSubmessage, SecuritySubmessage},
+      submessage_flag::FromEndianness,
       submessages::{ReaderSubmessage, WriterSubmessage},
     },
   },
@@ -28,8 +29,7 @@ use super::{
     decode_serialized_payload_gcm, decode_serialized_payload_gmac, find_receiver_specific_mac,
   },
   encode::{
-    encode_serialized_payload_gcm, encode_serialized_payload_gmac, encode_submessage_gcm,
-    encode_submessage_gmac,
+    encode_gcm, encode_gmac, encode_serialized_payload_gcm, encode_serialized_payload_gmac,
   },
 };
 
@@ -94,14 +94,14 @@ impl CryptographicBuiltIn {
     // TODO use session keys
     let encode_key = &master_sender_key;
 
-    // Compute submessage and footer
+    // Compute encoded submessage and footer
 
     let (encoded_submessage, crypto_footer) = match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         // TODO this is mainly for testing and debugging
         (
           plain_rtps_submessage,
-          encode_submessage_gmac(
+          encode_gmac(
             encode_key,
             KeyLength::None,
             initialization_vector,
@@ -118,7 +118,7 @@ impl CryptographicBuiltIn {
         // TODO: implement MAC generation
         (
           plain_rtps_submessage,
-          encode_submessage_gmac(
+          encode_gmac(
             encode_key,
             KeyLength::AES128,
             initialization_vector,
@@ -129,7 +129,7 @@ impl CryptographicBuiltIn {
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => {
         // TODO: implement encryption
-        encode_submessage_gcm(
+        encode_gcm(
           encode_key,
           KeyLength::AES128,
           initialization_vector,
@@ -141,7 +141,7 @@ impl CryptographicBuiltIn {
         // TODO: implement MAC generation
         (
           plain_rtps_submessage,
-          encode_submessage_gmac(
+          encode_gmac(
             encode_key,
             KeyLength::AES256,
             initialization_vector,
@@ -152,7 +152,7 @@ impl CryptographicBuiltIn {
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
         // TODO: implement encryption
-        encode_submessage_gcm(
+        encode_gcm(
           encode_key,
           KeyLength::AES256,
           initialization_vector,
@@ -315,16 +315,176 @@ impl CryptoTransform for CryptographicBuiltIn {
   ) -> SecurityResult<EncodeResult<Message>> {
     //TODO: this is only a mock implementation
 
-    let key = self
-      .get_encode_keys_(&sending_participant_crypto)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::key)?;
+    // Destructure
+    let Message {
+      header,
+      submessages,
+    } = plain_rtps_message;
 
-    match key.transformation_kind {
+    // Convert the header into an InfoSource submessage
+    let info_source = InfoSource::from(header)
+      .create_submessage(BitFlags::from_endianness(speedy::Endianness::BigEndian));
+
+    // Add info_source in front of the other submessages
+    let submessages_with_info_source = [vec![info_source], submessages].concat();
+
+    // Serialize plaintext
+    let plaintext = SecurityResult::<Vec<Vec<u8>>>::from_iter(
+      submessages_with_info_source
+        // Serialize submessages
+        .iter()
+        .map(|submessage| {
+          submessage
+            .write_to_vec()
+            .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))
+        }),
+    )? // Deal with errors
+    // Combine the serialized submessages
+    .concat();
+
+    // Get the key for encoding
+    let sender_key = self
+      .get_encode_keys_(&sending_participant_crypto)
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+      .cloned()?;
+
+    // Get the keys for computing receiver-specific MACs
+    let receiver_specific_keys = SecurityResult::<Vec<ReceiverKeyMaterial>>::from_iter(
+      // Iterate over receiver handles
+      receiving_participant_crypto_list
+        .iter()
+        .map(|receiver_handle| {
+          // Get the encode key
+          self
+            .get_encode_keys_(receiver_handle)
+            .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+            // Compare to the common key and get the receiver specific key
+            .and_then(|receiver_key| receiver_key.receiver_key_for(&sender_key))
+            // TODO use session keys
+            .map(
+              |ReceiverKeyMaterial {
+                 receiver_specific_key_id,
+                 master_receiver_specific_key,
+               }| ReceiverKeyMaterial {
+                receiver_specific_key_id,
+                master_receiver_specific_key,
+              },
+            )
+        }),
+    )?;
+
+    // Destructure the common key material
+    let KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      ..
+    } = sender_key;
+
+    // TODO proper session_id
+    let builtin_crypto_header_extra =
+      BuiltinCryptoHeaderExtra::from(([0, 0, 0, 0], rand::random()));
+
+    let initialization_vector = builtin_crypto_header_extra.initialization_vector();
+
+    // TODO use session keys
+    let encode_key = &master_sender_key;
+
+    // Compute encoded submessages and footer
+    let (encoded_submessages, crypto_footer) = match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        Ok(EncodeResult::One(plain_rtps_message))
+        // TODO this is mainly for testing and debugging
+        (
+          submessages_with_info_source,
+          encode_gmac(
+            encode_key,
+            KeyLength::None,
+            initialization_vector,
+            &plaintext,
+            &receiver_specific_keys,
+          )?,
+        )
+        /*  // TODO? switch to the following to avoid unnecessary pre/postfixes
+        return Ok(EncodeResult::One(plain_rtps_message)); */
       }
-      _ => todo!(),
-    }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => {
+        // TODO: implement MAC generation
+        (
+          submessages_with_info_source,
+          encode_gmac(
+            encode_key,
+            KeyLength::AES128,
+            initialization_vector,
+            &plaintext,
+            &receiver_specific_keys,
+          )?,
+        )
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => {
+        // TODO: implement encryption
+        encode_gcm(
+          encode_key,
+          KeyLength::AES128,
+          initialization_vector,
+          &plaintext,
+          &receiver_specific_keys,
+        )
+        // Wrap the submessage in Vec
+        .map(|(secure_body_submessage, footer)| (vec![secure_body_submessage], footer))?
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+        // TODO: implement MAC generation
+        (
+          submessages_with_info_source,
+          encode_gmac(
+            encode_key,
+            KeyLength::AES256,
+            initialization_vector,
+            &plaintext,
+            &receiver_specific_keys,
+          )?,
+        )
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+        // TODO: implement encryption
+        encode_gcm(
+          encode_key,
+          KeyLength::AES256,
+          initialization_vector,
+          &plaintext,
+          &receiver_specific_keys,
+        ) // Wrap the submessage in Vec
+        .map(|(secure_body_submessage, footer)| (vec![secure_body_submessage], footer))?
+      }
+    };
+
+    // Build crypto header and security prefix
+    let prefix = SecurePrefix {
+      crypto_header: CryptoHeader::from(BuiltinCryptoHeader {
+        transform_identifier: BuiltinCryptoTransformIdentifier {
+          transformation_kind,
+          transformation_key_id: sender_key_id,
+        },
+        builtin_crypto_header_extra,
+      }),
+    };
+
+    // Build security postfix
+    let postfix = SecurePostfix {
+      crypto_footer: CryptoFooter::try_from(crypto_footer)?,
+    };
+
+    Ok(EncodeResult::One(Message {
+      header,
+      submessages: [
+        vec![prefix.create_submessage(speedy::Endianness::BigEndian)?], // 9.5.2.3 use BigEndian
+        encoded_submessages,
+        vec![postfix.create_submessage(speedy::Endianness::BigEndian)?], // 9.5.2.5 use BigEndian
+      ]
+      .concat()
+      .to_vec(),
+    }))
   }
 
   fn decode_rtps_message(
@@ -380,28 +540,14 @@ impl CryptoTransform for CryptographicBuiltIn {
             // where the InfoSource is optional
             if let Some((
               Submessage {
-                body:
-                  SubmessageBody::Interpreter(InterpreterSubmessage::InfoSource(
-                    InfoSource {
-                      protocol_version,
-                      vendor_id,
-                      guid_prefix,
-                    },
-                    _,
-                  )),
+                body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoSource(info_source, _)),
                 ..
               },
               submessages,
             )) = submessages.split_first()
             {
               Ok(Message {
-                header: Header {
-                  // Copy header information from InfoSource
-                  protocol_id: ProtocolId::PROTOCOL_RTPS,
-                  protocol_version: *protocol_version,
-                  vendor_id: *vendor_id,
-                  guid_prefix: *guid_prefix,
-                },
+                header: Header::from(*info_source),
                 submessages: Vec::from(submessages),
               })
             } else {
@@ -418,15 +564,7 @@ impl CryptoTransform for CryptographicBuiltIn {
             // the original message, the original submessages, SecureRTPSPostfix
             if let Some((
               Submessage {
-                body:
-                  SubmessageBody::Interpreter(InterpreterSubmessage::InfoSource(
-                    InfoSource {
-                      protocol_version,
-                      vendor_id,
-                      guid_prefix,
-                    },
-                    _,
-                  )),
+                body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoSource(info_source, _)),
                 ..
               },
               submessages,
@@ -435,13 +573,7 @@ impl CryptoTransform for CryptographicBuiltIn {
               // TODO: Check the MACs
 
               Ok(Message {
-                header: Header {
-                  // Copy header information from InfoSource
-                  protocol_id: ProtocolId::PROTOCOL_RTPS,
-                  protocol_version: *protocol_version,
-                  vendor_id: *vendor_id,
-                  guid_prefix: *guid_prefix,
-                },
+                header: Header::from(*info_source),
                 submessages: Vec::from(submessages),
               })
             } else {

@@ -82,7 +82,7 @@ fn compute_receiver_specific_macs(
   })
 }
 
-pub(super) fn encode_submessage_gmac(
+pub(super) fn encode_gmac(
   key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
@@ -103,7 +103,7 @@ pub(super) fn encode_submessage_gmac(
     })
 }
 
-pub(super) fn encode_submessage_gcm(
+pub(super) fn encode_gcm(
   key: &BuiltinKey,
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
