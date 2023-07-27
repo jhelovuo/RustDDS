@@ -4,7 +4,7 @@ use log::debug;
 use crate::security::DataHolderBuilder;
 use super::{
   types::{IdentityStatusToken, IdentityToken},
-  AuthRequestMessageToken,
+  AuthRequestMessageToken, AuthenticatedPeerCredentialToken, HandshakeMessageToken,
 };
 
 const IDENTITY_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
@@ -264,5 +264,200 @@ impl From<BuiltinAuthRequestMessageToken> for AuthRequestMessageToken {
     );
 
     AuthRequestMessageToken::from(dh_builder.build())
+  }
+}
+
+const HANDSHAKE_REQUEST_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Req";
+const HANDSHAKE_REPLY_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Reply";
+const HANDSHAKE_FINAL_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Final";
+
+/// DDS:Auth:PKI-DH HandshakeMessageToken type from section 9.3.2.5 of the
+/// Security specification (v. 1.1)
+/// Works as all three token formats: HandshakeRequestMessageToken,
+/// HandshakeReplyMessageToken and HandshakeFinalMessageToken
+pub struct BuiltinHandshakeMessageToken {
+  class_id: String,
+  c_id: Option<Bytes>,
+  c_perm: Option<Bytes>,
+  c_pdata: Option<Bytes>,
+  c_dsign_algo: Option<Bytes>,
+  c_kagree_algo: Option<Bytes>,
+  ocsp_status: Option<Bytes>,
+  hash_c1: Option<Bytes>,
+  dh1: Option<Bytes>,
+  hash_c2: Option<Bytes>,
+  dh2: Option<Bytes>,
+  challenge1: Option<Bytes>,
+  challenge2: Option<Bytes>,
+  signature: Option<Bytes>,
+}
+
+impl TryFrom<HandshakeMessageToken> for BuiltinHandshakeMessageToken {
+  type Error = String;
+
+  fn try_from(token: HandshakeMessageToken) -> Result<Self, Self::Error> {
+    let dh = token.data_holder;
+
+    // Verify class id is one of expected
+    if !([
+      HANDSHAKE_REQUEST_CLASS_ID,
+      HANDSHAKE_REPLY_CLASS_ID,
+      HANDSHAKE_FINAL_CLASS_ID,
+    ]
+    .contains(&dh.class_id.as_str()))
+    {
+      return Err(format!("Invalid class ID '{}'", dh.class_id));
+    }
+
+    // Extract binary properties
+    let bin_properties_map = dh.binary_properties_as_map();
+
+    let c_id = bin_properties_map.get("c.id").map(|val| val.value());
+    let c_perm = bin_properties_map.get("c.perm").map(|val| val.value());
+    let c_pdata = bin_properties_map.get("c.pdata").map(|val| val.value());
+    let c_dsign_algo = bin_properties_map
+      .get("c.dsign_algo")
+      .map(|val| val.value());
+    let c_kagree_algo = bin_properties_map
+      .get("c.kagree_algo")
+      .map(|val| val.value());
+    let ocsp_status = bin_properties_map.get("ocsp_status").map(|val| val.value());
+    let hash_c1 = bin_properties_map.get("hash_c1").map(|val| val.value());
+    let dh1 = bin_properties_map.get("dh1").map(|val| val.value());
+    let hash_c2 = bin_properties_map.get("hash_c2").map(|val| val.value());
+    let dh2 = bin_properties_map.get("dh2").map(|val| val.value());
+    let challenge1 = bin_properties_map.get("challenge1").map(|val| val.value());
+    let challenge2 = bin_properties_map.get("challenge2").map(|val| val.value());
+    let signature = bin_properties_map.get("signature").map(|val| val.value());
+
+    let builtin_token = Self {
+      class_id: dh.class_id,
+      c_id,
+      c_perm,
+      c_pdata,
+      c_dsign_algo,
+      c_kagree_algo,
+      ocsp_status,
+      hash_c1,
+      dh1,
+      hash_c2,
+      dh2,
+      challenge1,
+      challenge2,
+      signature,
+    };
+    Ok(builtin_token)
+  }
+}
+
+impl From<BuiltinHandshakeMessageToken> for HandshakeMessageToken {
+  fn from(builtin_token: BuiltinHandshakeMessageToken) -> Self {
+    // First create the DataHolder
+    let mut dh_builder = DataHolderBuilder::new();
+
+    // Set class id
+    dh_builder.set_class_id(&builtin_token.class_id);
+
+    // Add the various binary properties if present
+
+    if let Some(val) = builtin_token.c_id {
+      dh_builder.add_binary_property("c.id", val, true);
+    }
+    if let Some(val) = builtin_token.c_perm {
+      dh_builder.add_binary_property("c.perm", val, true);
+    }
+    if let Some(val) = builtin_token.c_pdata {
+      dh_builder.add_binary_property("c.pdata", val, true);
+    }
+    if let Some(val) = builtin_token.c_dsign_algo {
+      dh_builder.add_binary_property("c.dsign_algo", val, true);
+    }
+    if let Some(val) = builtin_token.c_kagree_algo {
+      dh_builder.add_binary_property("c.kagree_algo", val, true);
+    }
+    if let Some(val) = builtin_token.ocsp_status {
+      dh_builder.add_binary_property("ocsp_status", val, true);
+    }
+    if let Some(val) = builtin_token.hash_c1 {
+      dh_builder.add_binary_property("hash_c1", val, true);
+    }
+    if let Some(val) = builtin_token.dh1 {
+      dh_builder.add_binary_property("dh1", val, true);
+    }
+    if let Some(val) = builtin_token.hash_c2 {
+      dh_builder.add_binary_property("hash_c2", val, true);
+    }
+    if let Some(val) = builtin_token.dh2 {
+      dh_builder.add_binary_property("dh2", val, true);
+    }
+    if let Some(val) = builtin_token.challenge1 {
+      dh_builder.add_binary_property("challenge1", val, true);
+    }
+    if let Some(val) = builtin_token.challenge2 {
+      dh_builder.add_binary_property("challenge2", val, true);
+    }
+    if let Some(val) = builtin_token.signature {
+      dh_builder.add_binary_property("signature", val, true);
+    }
+
+    HandshakeMessageToken::from(dh_builder.build())
+  }
+}
+
+const AUTHENTICATED_PEER_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
+
+/// DDS:Auth:PKI-DH AuthenticatedPeerCredentialToken type from section 9.3.2.3
+/// of the Security specification (v. 1.1)
+pub struct BuiltinAuthenticatedPeerCredentialToken {
+  c_id: String,
+  c_perm: String,
+}
+
+impl TryFrom<AuthenticatedPeerCredentialToken> for BuiltinAuthenticatedPeerCredentialToken {
+  type Error = String;
+
+  fn try_from(token: AuthenticatedPeerCredentialToken) -> Result<Self, Self::Error> {
+    let dh = token.data_holder;
+    // Verify class id
+    if dh.class_id != AUTHENTICATED_PEER_TOKEN_CLASS_ID {
+      return Err(format!(
+        "Invalid class ID. Got {}, expected {}",
+        dh.class_id, AUTHENTICATED_PEER_TOKEN_CLASS_ID
+      ));
+    }
+
+    // Extract properties
+    let properties_map = dh.properties_as_map();
+
+    let c_id = if let Some(prop) = properties_map.get("c.id") {
+      prop.value()
+    } else {
+      return Err("No required c.id property".to_string());
+    };
+
+    let c_perm = if let Some(prop) = properties_map.get("c.perm") {
+      prop.value()
+    } else {
+      return Err("No required c.perm property".to_string());
+    };
+
+    let builtin_token = Self { c_id, c_perm };
+    Ok(builtin_token)
+  }
+}
+
+impl From<BuiltinAuthenticatedPeerCredentialToken> for AuthenticatedPeerCredentialToken {
+  fn from(builtin_token: BuiltinAuthenticatedPeerCredentialToken) -> Self {
+    // First create the DataHolder
+    let mut dh_builder = DataHolderBuilder::new();
+
+    // Set class id
+    dh_builder.set_class_id(AUTHENTICATED_PEER_TOKEN_CLASS_ID);
+
+    // Add properties
+    dh_builder.add_property("c.id", builtin_token.c_id, true);
+    dh_builder.add_property("c.perm", builtin_token.c_perm, true);
+
+    AuthenticatedPeerCredentialToken::from(dh_builder.build())
   }
 }

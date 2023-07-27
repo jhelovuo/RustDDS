@@ -23,7 +23,7 @@ impl Authentication for AuthenticationBuiltIn {
 
     Ok((
       ValidationOutcome::Ok,
-      IdentityHandle::MOCK,
+      IdentityHandle::default(),
       candidate_participant_guid,
     ))
   }
@@ -69,7 +69,7 @@ impl Authentication for AuthenticationBuiltIn {
 
     Ok((
       ValidationOutcome::Ok,
-      IdentityHandle::MOCK,
+      IdentityHandle::default(),
       AuthRequestMessageToken::dummy(),
     ))
   }
@@ -108,7 +108,7 @@ impl Authentication for AuthenticationBuiltIn {
   ) -> SecurityResult<SharedSecretHandle> {
     // TODO: actual implementation
 
-    Ok(SharedSecretHandle::MOCK)
+    Ok(SharedSecretHandle::default())
   }
 
   // Currently only mocked
@@ -118,7 +118,7 @@ impl Authentication for AuthenticationBuiltIn {
   ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
     // TODO: actual implementation
 
-    Ok(AuthenticatedPeerCredentialToken::MOCK)
+    Ok(AuthenticatedPeerCredentialToken::dummy())
   }
 
   fn set_listener(&self) -> SecurityResult<()> {

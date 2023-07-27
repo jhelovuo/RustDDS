@@ -15,7 +15,14 @@ pub enum ValidationOutcome {
   OkFinalMessage,
 }
 
-// TODO: IdentityToken: section 8.3.2.1 of the Security specification (v. 1.1)
+// Handles used by the authentication plugin: opaque local references to
+// internal state within the AuthenticationPlugin (sec. 8.3.2 of the Security
+// specification)
+pub type IdentityHandle = u32;
+pub type HandshakeHandle = u32;
+pub type SharedSecretHandle = u32;
+
+// IdentityToken: section 8.3.2.1 of the Security specification (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
 pub struct IdentityToken {
   // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
@@ -39,7 +46,7 @@ impl IdentityToken {
   }
 }
 
-// TODO: IdentityStatusToken: section 8.3.2.2 of the Security specification (v.
+// IdentityStatusToken: section 8.3.2.2 of the Security specification (v.
 // 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Readable, Writable)]
 pub struct IdentityStatusToken {
@@ -63,25 +70,7 @@ impl IdentityStatusToken {
   }
 }
 
-// TODO: IdentityHandle: section 8.3.2.3 of the Security specification (v. 1.1)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IdentityHandle {}
-
-impl IdentityHandle {
-  // Mock value used for development
-  pub const MOCK: Self = Self {};
-}
-
-// TODO: HandshakeHandle: section 8.3.2.4 of the Security specification (v. 1.1)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HandshakeHandle {}
-
-impl HandshakeHandle {
-  // Mock value used for development
-  pub const MOCK: Self = Self {};
-}
-
-// TODO: AuthRequestMessageToken: section 8.3.2.5 of the Security specification
+// AuthRequestMessageToken: section 8.3.2.5 of the Security specification
 // (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthRequestMessageToken {
@@ -106,32 +95,46 @@ impl AuthRequestMessageToken {
   }
 }
 
-// TODO: HandshakeMessageToken: section 8.3.2.6 of the Security specification
+// HandshakeMessageToken: section 8.3.2.6 of the Security specification
 // (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HandshakeMessageToken {}
+pub struct HandshakeMessageToken {
+  pub data_holder: DataHolder,
+}
+
+impl From<DataHolder> for HandshakeMessageToken {
+  fn from(value: DataHolder) -> Self {
+    Self { data_holder: value }
+  }
+}
 
 impl HandshakeMessageToken {
   // Mock value used for development
-  pub const MOCK: Self = Self {};
+  pub fn dummy() -> Self {
+    Self {
+      data_holder: DataHolder::dummy(),
+    }
+  }
 }
 
-// TODO: AuthenticatedPeerCredentialToken: section 8.3.2.7 of the Security
+// AuthenticatedPeerCredentialToken: section 8.3.2.7 of the Security
 // specification (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AuthenticatedPeerCredentialToken {}
+pub struct AuthenticatedPeerCredentialToken {
+  pub data_holder: DataHolder,
+}
+
+impl From<DataHolder> for AuthenticatedPeerCredentialToken {
+  fn from(value: DataHolder) -> Self {
+    Self { data_holder: value }
+  }
+}
 
 impl AuthenticatedPeerCredentialToken {
   // Mock value used for development
-  pub const MOCK: Self = Self {};
-}
-
-// TODO: SharedSecretHandle: section 8.3.2.8 of the Security specification (v.
-// 1.1)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SharedSecretHandle {}
-
-impl SharedSecretHandle {
-  // Mock value used for development
-  pub const MOCK: Self = Self {};
+  pub fn dummy() -> Self {
+    Self {
+      data_holder: DataHolder::dummy(),
+    }
+  }
 }
