@@ -33,8 +33,10 @@ use crate::{
   rtps::{
     dp_event_loop::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION},
     rtps_reader_proxy::RtpsReaderProxy,
-    Message, MessageBuilder,
+    Message, MessageBuilder, Submessage,
   },
+  security::{security_plugins::SecurityPluginsHandle, SecurityError, SecurityResult},
+  security_error,
   structure::{
     cache_change::CacheChange,
     dds_cache::TopicCache,
@@ -72,6 +74,8 @@ pub(crate) struct WriterIngredients {
                                                           * cache */
   pub qos_policies: QosPolicies,
   pub status_sender: StatusChannelSender<DataWriterStatus>,
+
+  pub security_plugins: Option<SecurityPluginsHandle>,
 }
 
 impl WriterIngredients {
@@ -215,6 +219,8 @@ pub(crate) struct Writer {
   status_sender: StatusChannelSender<DataWriterStatus>,
   // offered_deadline_status: OfferedDeadlineMissedStatus,
   ack_waiter: Option<AckWaiter>,
+
+  security_plugins: Option<SecurityPluginsHandle>,
 }
 //#[derive(Clone)]
 pub enum WriterCommand {
@@ -280,6 +286,8 @@ impl Writer {
       TimedEvent::CacheCleaning,
     );
 
+    // TODO: call register_local_datawriter
+
     Self {
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,
@@ -311,6 +319,8 @@ impl Writer {
       status_sender: i.status_sender,
       // offered_deadline_status: OfferedDeadlineMissedStatus::new(),
       ack_waiter: None,
+
+      security_plugins: i.security_plugins,
     }
   }
 
@@ -519,7 +529,7 @@ impl Writer {
               .add_header_and_build(self.my_guid.prefix);
             self.send_message_to_readers(
               DeliveryMode::Multicast,
-              &data_hb_message,
+              data_hb_message,
               &mut self.readers.values(),
             );
           } else {
@@ -553,7 +563,7 @@ impl Writer {
                   // TODO: some sort of queuing is needed
                   self.send_message_to_readers(
                     DeliveryMode::Multicast,
-                    &message_builder.add_header_and_build(self.my_guid.prefix),
+                    message_builder.add_header_and_build(self.my_guid.prefix),
                     &mut self.readers.values(),
                   );
                 } // end for
@@ -566,7 +576,7 @@ impl Writer {
                 .add_header_and_build(self.my_guid.prefix);
               self.send_message_to_readers(
                 DeliveryMode::Multicast,
-                &hb_message,
+                hb_message,
                 &mut self.readers.values(),
               );
             } else {
@@ -714,7 +724,7 @@ impl Writer {
       );
       self.send_message_to_readers(
         DeliveryMode::Multicast,
-        &hb_message,
+        hb_message,
         &mut self.readers.values(),
       );
     }
@@ -961,7 +971,7 @@ impl Writer {
       let data_gap_msg = partial_message.add_header_and_build(self.my_guid.prefix);
       self.send_message_to_readers(
         DeliveryMode::Unicast,
-        &data_gap_msg,
+        data_gap_msg,
         &mut std::iter::once(&*reader_proxy),
       );
     }
@@ -1022,7 +1032,7 @@ impl Writer {
           // TODO: some sort of queuing is needed
           self.send_message_to_readers(
             DeliveryMode::Unicast,
-            &message_builder.add_header_and_build(self.my_guid.prefix),
+            message_builder.add_header_and_build(self.my_guid.prefix),
             &mut self.readers.values(),
           );
         } else {
@@ -1093,59 +1103,116 @@ impl Writer {
     self.heartbeat_message_counter += 1;
   }
 
+  fn security_encode(
+    &self,
+    message: Message,
+    readers: &mut dyn Iterator<Item = &RtpsReaderProxy>,
+  ) -> SecurityResult<Message> {
+    // If we have security plugins, use them, otherwise pass through
+    if let Some(security_plugins_handle) = &self.security_plugins {
+      // Get a MutexGuard for the security plugins
+      let security_plugins = security_plugins_handle.lock().map_err(|e| {
+        security_error!("SecurityPluginHandle poisoned! {e:?}")
+        // TODO: Send signal to exit RTPS thread, as there is no way to recover.
+      })?;
+      // Get the source and destination GUIDs
+      let source_guid = self.guid();
+      let destination_guid_list: Vec<GUID> = readers
+        .map(|reader_proxy| reader_proxy.remote_reader_guid)
+        .collect();
+      // Destructure
+      let Message {
+        header,
+        submessages,
+      } = message;
+
+      // Encode submessages
+      SecurityResult::<Vec<Vec<Submessage>>>::from_iter(submessages.iter().map(|submessage| {
+        security_plugins
+          .encode_datawriter_submessage(submessage.clone(), &source_guid, &destination_guid_list)
+          // Convert each encoding output to a Vec of 1 or 3 submessages
+          .map(Vec::from)
+      }))
+      // Flatten and convert back to Message
+      .map(|encoded_submessages| Message {
+        header,
+        submessages: encoded_submessages.concat(),
+      })
+      // Encode message
+      .and_then(|message| {
+        // Convert GUIDs to GuidPrefixes
+        let source_guid_prefix = source_guid.prefix;
+        let destination_guid_prefix_list: Vec<GuidPrefix> = destination_guid_list
+          .iter()
+          .map(|guid| guid.prefix)
+          .collect();
+        // Encode message
+        security_plugins.encode_message(message, &source_guid_prefix, &destination_guid_prefix_list)
+      })
+    } else {
+      Ok(message)
+    }
+  }
+
   fn send_message_to_readers(
     &self,
     preferred_mode: DeliveryMode,
-    message: &Message,
+    message: Message,
     readers: &mut dyn Iterator<Item = &RtpsReaderProxy>,
   ) {
     // TODO: This is a stupid transmit algorithm. We should compute a preferred
     // unicast and multicast locators for each reader only on every reader update,
     // and not find it dynamically on every message.
-    let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
-    let mut already_sent_to = BTreeSet::new();
 
-    macro_rules! send_unless_sent_and_mark {
-      ($locs:expr) => {
-        for loc in $locs.iter() {
-          if already_sent_to.contains(loc) {
-            trace!("Already sent to {:?}", loc);
-          } else {
-            self.udp_sender.send_to_locator(&buffer, loc);
-            already_sent_to.insert(loc.clone());
-          }
-        }
-      };
-    }
+    match self.security_encode(message, readers) {
+      Ok(message) => {
+        let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
+        let mut already_sent_to = BTreeSet::new();
 
-    for reader in readers {
-      match (
-        preferred_mode,
-        reader
-          .unicast_locator_list
-          .iter()
-          .find(|l| Locator::is_udp(l)),
-        reader
-          .multicast_locator_list
-          .iter()
-          .find(|l| Locator::is_udp(l)),
-      ) {
-        (DeliveryMode::Multicast, _, Some(_mc_locator)) => {
-          send_unless_sent_and_mark!(reader.multicast_locator_list);
+        macro_rules! send_unless_sent_and_mark {
+          ($locs:expr) => {
+            for loc in $locs.iter() {
+              if already_sent_to.contains(loc) {
+                trace!("Already sent to {:?}", loc);
+              } else {
+                self.udp_sender.send_to_locator(&buffer, loc);
+                already_sent_to.insert(loc.clone());
+              }
+            }
+          };
         }
-        (DeliveryMode::Unicast, Some(_uc_locator), _) => {
-          send_unless_sent_and_mark!(reader.unicast_locator_list)
+
+        for reader in readers {
+          match (
+            preferred_mode,
+            reader
+              .unicast_locator_list
+              .iter()
+              .find(|l| Locator::is_udp(l)),
+            reader
+              .multicast_locator_list
+              .iter()
+              .find(|l| Locator::is_udp(l)),
+          ) {
+            (DeliveryMode::Multicast, _, Some(_mc_locator)) => {
+              send_unless_sent_and_mark!(reader.multicast_locator_list);
+            }
+            (DeliveryMode::Unicast, Some(_uc_locator), _) => {
+              send_unless_sent_and_mark!(reader.unicast_locator_list)
+            }
+            (_delivery_mode, _, Some(_mc_locator)) => {
+              send_unless_sent_and_mark!(reader.multicast_locator_list);
+            }
+            (_delivery_mode, Some(_uc_locator), _) => {
+              send_unless_sent_and_mark!(reader.unicast_locator_list)
+            }
+            (_delivery_mode, None, None) => {
+              warn!("send_message_to_readers: No locators for {:?}", reader);
+            }
+          } // match
         }
-        (_delivery_mode, _, Some(_mc_locator)) => {
-          send_unless_sent_and_mark!(reader.multicast_locator_list);
-        }
-        (_delivery_mode, Some(_uc_locator), _) => {
-          send_unless_sent_and_mark!(reader.unicast_locator_list)
-        }
-        (_delivery_mode, None, None) => {
-          warn!("send_message_to_readers: No locators for {:?}", reader);
-        }
-      } // match
+      }
+      Err(e) => error!("Failed to send message to readers. Encoding failed: {e:?}"),
     }
   }
 

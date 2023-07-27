@@ -475,6 +475,7 @@ impl InnerPublisher {
       topic_cache_handle,
       qos_policies: writer_qos.clone(),
       status_sender,
+      security_plugins: None, // TODO pass security plugins
     };
 
     self

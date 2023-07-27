@@ -75,3 +75,12 @@ pub enum EncodedSubmessage {
   Unencoded(Submessage),
   Encoded(Submessage, Submessage, Submessage),
 }
+
+impl From<EncodedSubmessage> for Vec<Submessage> {
+  fn from(value: EncodedSubmessage) -> Self {
+    match value {
+      EncodedSubmessage::Unencoded(submessage) => vec![submessage],
+      EncodedSubmessage::Encoded(prefix, submessage, postfix) => vec![prefix, submessage, postfix],
+    }
+  }
+}
