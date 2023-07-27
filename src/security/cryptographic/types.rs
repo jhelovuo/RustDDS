@@ -66,15 +66,6 @@ pub enum SecureSubmessageCategory {
 }
 
 /// [super::cryptographic_plugin::CryptoTransform::encode_datawriter_submessage]
-/// and [super::cryptographic_plugin::CryptoTransform::encode_rtps_message] may
-/// return different results for each receiver, or one result to be used for all
-/// receivers.
-pub enum EncodeResult<T> {
-  One(T),
-  Many(Vec<T>),
-}
-
-/// [super::cryptographic_plugin::CryptoTransform::encode_datawriter_submessage]
 /// and [super::cryptographic_plugin::CryptoTransform::encode_datareader_submessage]
 /// may return the unencoded input or an encoded message between a
 /// `SecurePrefix` and `SecurePostfix`. See 7.3.6.4.4 and 8.5.1.9.2 in DDS

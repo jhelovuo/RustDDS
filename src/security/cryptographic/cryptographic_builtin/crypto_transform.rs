@@ -39,7 +39,7 @@ impl CryptographicBuiltIn {
     plain_rtps_submessage: Submessage,
     sending_entity_handle: EntityCryptoHandle,
     receiving_entity_handle_list: &[EntityCryptoHandle],
-  ) -> SecurityResult<EncodeResult<EncodedSubmessage>> {
+  ) -> SecurityResult<EncodedSubmessage> {
     //TODO: this is only a mock implementation
 
     // Serialize plaintext
@@ -178,11 +178,11 @@ impl CryptographicBuiltIn {
       crypto_footer: CryptoFooter::try_from(crypto_footer)?,
     };
 
-    Ok(EncodeResult::One(EncodedSubmessage::Encoded(
+    Ok(EncodedSubmessage::Encoded(
       prefix.create_submessage(speedy::Endianness::BigEndian)?, // 9.5.2.3 use BigEndian
       encoded_submessage,
       postfix.create_submessage(speedy::Endianness::BigEndian)?, // 9.5.2.5 use BigEndian
-    )))
+    ))
   }
 }
 
@@ -282,7 +282,7 @@ impl CryptoTransform for CryptographicBuiltIn {
     plain_rtps_submessage: Submessage,
     sending_datawriter_crypto: DatawriterCryptoHandle,
     receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
-  ) -> SecurityResult<EncodeResult<EncodedSubmessage>> {
+  ) -> SecurityResult<EncodedSubmessage> {
     //TODO: this is only a mock implementation
 
     self.encode_submessage(
@@ -297,7 +297,7 @@ impl CryptoTransform for CryptographicBuiltIn {
     plain_rtps_submessage: Submessage,
     sending_datareader_crypto: DatareaderCryptoHandle,
     receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
-  ) -> SecurityResult<EncodeResult<EncodedSubmessage>> {
+  ) -> SecurityResult<EncodedSubmessage> {
     //TODO: this is only a mock implementation
 
     self.encode_submessage(
@@ -312,7 +312,7 @@ impl CryptoTransform for CryptographicBuiltIn {
     plain_rtps_message: Message,
     sending_participant_crypto: ParticipantCryptoHandle,
     receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
-  ) -> SecurityResult<EncodeResult<Message>> {
+  ) -> SecurityResult<Message> {
     //TODO: this is only a mock implementation
 
     // Destructure
@@ -475,7 +475,7 @@ impl CryptoTransform for CryptographicBuiltIn {
       crypto_footer: CryptoFooter::try_from(crypto_footer)?,
     };
 
-    Ok(EncodeResult::One(Message {
+    Ok(Message {
       header,
       submessages: [
         vec![prefix.create_submessage(speedy::Endianness::BigEndian)?], // 9.5.2.3 use BigEndian
@@ -484,7 +484,7 @@ impl CryptoTransform for CryptographicBuiltIn {
       ]
       .concat()
       .to_vec(),
-    }))
+    })
   }
 
   fn decode_rtps_message(

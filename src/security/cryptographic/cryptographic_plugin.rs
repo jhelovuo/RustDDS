@@ -197,7 +197,7 @@ pub trait CryptoTransform: Send {
     plain_rtps_submessage: Submessage,
     sending_datawriter_crypto: DatawriterCryptoHandle,
     receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
-  ) -> SecurityResult<EncodeResult<EncodedSubmessage>>;
+  ) -> SecurityResult<EncodedSubmessage>;
 
   /// encode_datareader_submessage: section 8.5.1.9.3 of the Security
   /// specification (v. 1.1)
@@ -216,7 +216,7 @@ pub trait CryptoTransform: Send {
     plain_rtps_submessage: Submessage,
     sending_datareader_crypto: DatareaderCryptoHandle,
     receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
-  ) -> SecurityResult<EncodeResult<EncodedSubmessage>>;
+  ) -> SecurityResult<EncodedSubmessage>;
 
   /// encode_rtps_message: section 8.5.1.9.4 of the Security specification (v.
   /// 1.1)
@@ -235,7 +235,7 @@ pub trait CryptoTransform: Send {
     plain_rtps_message: Message,
     sending_participant_crypto: ParticipantCryptoHandle,
     receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
-  ) -> SecurityResult<EncodeResult<Message>>;
+  ) -> SecurityResult<Message>;
 
   /// decode_rtps_message: section 8.5.1.9.5 of the Security specification (v.
   /// 1.1)
