@@ -5,7 +5,6 @@ use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
 
 use crate::{
-  dds::participant::SecurityPluginsHandle,
   messages::{
     protocol_version::ProtocolVersion,
     submessages::{
@@ -16,7 +15,9 @@ use crate::{
     vendor_id::VendorId,
   },
   rtps::{reader::Reader, Message, Submessage, SubmessageBody},
-  security::cryptographic::types::SecureSubmessageCategory,
+  security::{
+    cryptographic::types::SecureSubmessageCategory, security_plugins::SecurityPluginsHandle,
+  },
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
@@ -231,7 +232,7 @@ impl MessageReceiver {
       // If the first submessage is SecureRTPSPrefix, it has to be decoded first using
       // the cryptographic plugin
       warn!("Secure message processing not implemented");
-      let mut sec_plugins = match self.security_plugins {
+      let sec_plugins = match self.security_plugins {
         None => {
           warn!("Cannot handle secure message: No security plugins configured.");
           return;
@@ -246,14 +247,11 @@ impl MessageReceiver {
         },
       };
 
-      let receiving_participant_crypto_handle = 0; // TODO: get real value
-      let sending_participant_crypto_handle = 0; // TODO: get real value
-
       // Decode and handle the decoded message
-      match sec_plugins.crypto.decode_rtps_message(
+      match sec_plugins.decode_rtps_message(
         rtps_message,
-        receiving_participant_crypto_handle,
-        sending_participant_crypto_handle,
+        &self.source_guid_prefix,
+        &self.dest_guid_prefix,
       ) {
         Err(_e) => {
           // TODO
@@ -524,7 +522,7 @@ impl MessageReceiver {
     sec_postfix: SecurePostfix,
   ) {
     warn!("Secure submessage processing not implemented");
-    let mut sec_plugins = match self.security_plugins {
+    let sec_plugins = match self.security_plugins {
       None => {
         warn!("Cannot handle secure submessage: No security plugins configured.");
         return;
@@ -542,13 +540,10 @@ impl MessageReceiver {
     // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
     // the submessage contains and then proceed to decode and process accordingly.
 
-    let receiving_participant_crypto_handle = 0; // TODO: get real value
-    let sending_participant_crypto_handle = 0; // TODO: get real value
-
-    match sec_plugins.crypto.preprocess_secure_submsg(
-      &encoded_submessage,
-      receiving_participant_crypto_handle,
-      sending_participant_crypto_handle,
+    match sec_plugins.preprocess_secure_submessage(
+      &sec_prefix,
+      &self.source_guid_prefix,
+      &self.dest_guid_prefix,
     ) {
       Err(_e) => {
         // TODO
@@ -565,7 +560,7 @@ impl MessageReceiver {
         sending_datawriter_crypto,
         receiving_datareader_crypto,
       )) => {
-        match sec_plugins.crypto.decode_datawriter_submessage(
+        match sec_plugins.decode_datawriter_submessage(
           (sec_prefix, encoded_submessage, sec_postfix),
           receiving_datareader_crypto,
           sending_datawriter_crypto,
@@ -584,7 +579,7 @@ impl MessageReceiver {
         sending_datareader_crypto,
         receiving_datawriter_crypto,
       )) => {
-        match sec_plugins.crypto.decode_datareader_submessage(
+        match sec_plugins.decode_datareader_submessage(
           (sec_prefix, encoded_submessage, sec_postfix),
           receiving_datawriter_crypto,
           sending_datareader_crypto,

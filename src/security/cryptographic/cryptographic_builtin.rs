@@ -26,15 +26,16 @@ pub struct CryptographicBuiltIn {
   encrypt_options_: HashMap<CryptoHandle, EndpointSecurityAttributes>,
   participant_to_entity_info_: HashMap<ParticipantCryptoHandle, HashSet<EntityInfo>>,
   // For reverse lookups
-  entity_to_participant_: HashMap<CryptoHandle, ParticipantCryptoHandle>,
+  entity_to_participant_: HashMap<EntityCryptoHandle, ParticipantCryptoHandle>,
 
   // sessions_ ?
   /// For each (local datawriter (/datareader), remote participant) pair, stores
   /// the matched remote datareader (/datawriter)
-  matched_remote_entity_: HashMap<CryptoHandle, HashMap<ParticipantCryptoHandle, CryptoHandle>>,
+  matched_remote_entity_:
+    HashMap<EntityCryptoHandle, HashMap<ParticipantCryptoHandle, EntityCryptoHandle>>,
   ///For reverse lookups,  for each remote datawriter (/datareader), stores the
   /// matched local datareader (/datawriter)
-  matched_local_entity_: HashMap<CryptoHandle, CryptoHandle>,
+  matched_local_entity_: HashMap<EntityCryptoHandle, EntityCryptoHandle>,
 
   handle_counter_: u32,
 }
@@ -73,7 +74,7 @@ impl CryptographicBuiltIn {
     }
   }
   fn get_encode_keys_(
-    &mut self,
+    &self,
     handle: &CryptoHandle,
   ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
     self.encode_keys_.get(handle).ok_or(security_error!(
@@ -100,7 +101,7 @@ impl CryptographicBuiltIn {
   }
 
   fn get_decode_keys_(
-    &mut self,
+    &self,
     handle: &CryptoHandle,
   ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
     self.decode_keys_.get(handle).ok_or(security_error!(
@@ -131,7 +132,7 @@ impl CryptographicBuiltIn {
 
   fn insert_attributes_(
     &mut self,
-    handle: CryptoHandle,
+    handle: EntityCryptoHandle,
     attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<()> {
     match self.encrypt_options_.insert(handle, attributes) {

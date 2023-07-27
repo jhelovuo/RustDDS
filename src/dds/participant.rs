@@ -1,7 +1,6 @@
 // use mio::Token;
 use std::{
   collections::HashMap,
-  fmt,
   io::ErrorKind,
   net::Ipv4Addr,
   sync::{atomic, Arc, Mutex, RwLock, Weak},
@@ -32,42 +31,11 @@ use crate::{
   security::{
     access_control::PermissionsToken,
     authentication::{IdentityStatusToken, IdentityToken},
+    security_plugins::{SecurityPlugins, SecurityPluginsHandle},
     AccessControl, Authentication, Cryptographic,
   },
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::*, locator::Locator},
 };
-
-pub(crate) struct SecurityPlugins {
-  pub auth: Box<dyn Authentication>,
-  pub access: Box<dyn AccessControl>,
-  pub crypto: Box<dyn Cryptographic>,
-}
-
-#[derive(Clone)]
-pub(crate) struct SecurityPluginsHandle {
-  inner: Arc<Mutex<SecurityPlugins>>,
-}
-
-impl SecurityPluginsHandle {
-  pub(crate) fn new(s: SecurityPlugins) -> Self {
-    Self {
-      inner: Arc::new(Mutex::new(s)),
-    }
-  }
-}
-
-impl fmt::Debug for SecurityPluginsHandle {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    f.write_str("SecurityPluginsHandle")
-  }
-}
-
-impl std::ops::Deref for SecurityPluginsHandle {
-  type Target = Mutex<SecurityPlugins>;
-  fn deref(&self) -> &Self::Target {
-    &self.inner
-  }
-}
 
 pub struct DomainParticipantBuilder {
   domain_id: u16,
@@ -95,11 +63,7 @@ impl DomainParticipantBuilder {
     access: Box<impl AccessControl + 'static>,
     crypto: Box<impl Cryptographic + 'static>,
   ) -> &mut DomainParticipantBuilder {
-    self.security_plugins = Some(SecurityPlugins {
-      auth,
-      access,
-      crypto,
-    });
+    self.security_plugins = Some(SecurityPlugins::new(auth, access, crypto));
     self
   }
 

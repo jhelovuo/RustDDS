@@ -174,7 +174,7 @@ pub trait CryptoTransform: Send {
   /// In a tuple, return the results that would be written in `encoded_buffer`
   /// and `extra_inline_qos`.
   fn encode_serialized_payload(
-    &mut self,
+    &self,
     plain_buffer: SerializedPayload,
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<(CryptoContent, ParameterList)>;
@@ -190,10 +190,10 @@ pub trait CryptoTransform: Send {
   /// `receiving_datareader_crypto_list_index` is dropped.
   ///
   /// # Panics
-  /// The function will panic if `plain_rtps_submessage.body` is not
+  /// The function may panic if `plain_rtps_submessage.body` is not
   /// [SubmessageBody::Writer].
   fn encode_datawriter_submessage(
-    &mut self,
+    &self,
     plain_rtps_submessage: Submessage,
     sending_datawriter_crypto: DatawriterCryptoHandle,
     receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
@@ -209,10 +209,10 @@ pub trait CryptoTransform: Send {
   /// receiving datawriter in `receiving_datawriter_crypto_list`.
   ///
   /// # Panics
-  /// The function will panic if `plain_rtps_submessage.body` is not
+  /// The function may panic if `plain_rtps_submessage.body` is not
   /// [SubmessageBody::Reader].
   fn encode_datareader_submessage(
-    &mut self,
+    &self,
     plain_rtps_submessage: Submessage,
     sending_datareader_crypto: DatareaderCryptoHandle,
     receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
@@ -231,7 +231,7 @@ pub trait CryptoTransform: Send {
   /// [EncodeResult::One] (instead of returning false, see the spec).
   /// `receiving_participant_crypto_list_index` is dropped.
   fn encode_rtps_message(
-    &mut self,
+    &self,
     plain_rtps_message: Message,
     sending_participant_crypto: ParticipantCryptoHandle,
     receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
@@ -242,7 +242,7 @@ pub trait CryptoTransform: Send {
   ///
   /// Return the message that would be written in `plain_buffer`.
   fn decode_rtps_message(
-    &mut self,
+    &self,
     encoded_buffer: Message,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
@@ -259,13 +259,9 @@ pub trait CryptoTransform: Send {
   /// [SecureSubmessageCategory::DatareaderSubmessage] in the order
   /// (sender,receiver). In the case `INFO_SUBMESSAGE`,
   /// [SecureSubmessageCategory::InfoSubmessage] is returned instead of `false`.
-  ///
-  /// # Panics
-  /// The function will panic if `encoded_rtps_submessage.body` is not
-  /// [SubmessageBody::Security] wrapping [SecuritySubmessage::SecurePrefix].
   fn preprocess_secure_submsg(
-    &mut self,
-    encoded_rtps_submessage: &Submessage,
+    &self,
+    encoded_rtps_submessage: &SecurePrefix,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<SecureSubmessageCategory>;
@@ -276,7 +272,7 @@ pub trait CryptoTransform: Send {
   /// Return the writer submessage that would be written in
   /// `plain_rtps_submessage`.
   fn decode_datawriter_submessage(
-    &mut self,
+    &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
@@ -288,7 +284,7 @@ pub trait CryptoTransform: Send {
   /// Return the reader submessage that would be written in
   /// `plain_rtps_submessage`.
   fn decode_datareader_submessage(
-    &mut self,
+    &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datawriter_crypto: DatawriterCryptoHandle,
     sending_datareader_crypto: DatareaderCryptoHandle,
@@ -299,7 +295,7 @@ pub trait CryptoTransform: Send {
   ///
   /// Return the serialized payload that would be written in `plain_buffer`
   fn decode_serialized_payload(
-    &mut self,
+    &self,
     encoded_buffer: CryptoContent,
     inline_qos: ParameterList,
     receiving_datareader_crypto: DatareaderCryptoHandle,

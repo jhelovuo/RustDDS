@@ -13,8 +13,8 @@ impl CryptographicBuiltIn {
   fn get_or_generate_matched_remote_entity_handle_(
     &mut self,
     remote_participant_handle: ParticipantCryptoHandle,
-    local_entity_handle: CryptoHandle,
-  ) -> CryptoHandle {
+    local_entity_handle: EntityCryptoHandle,
+  ) -> EntityCryptoHandle {
     // If a corresponding handle exists, get and return
     if let Some(remote_entity_handle) = self
       .matched_remote_entity_

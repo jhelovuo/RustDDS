@@ -26,13 +26,15 @@ pub type CryptoHandle = u32;
 /// (v. 1.1)
 pub type ParticipantCryptoHandle = CryptoHandle;
 
+pub type EntityCryptoHandle = CryptoHandle;
+
 /// DatawriterCryptoHandle: section 8.5.1.3 of the Security specification
 /// (v. 1.1)
-pub type DatawriterCryptoHandle = CryptoHandle;
+pub type DatawriterCryptoHandle = EntityCryptoHandle;
 
 /// DatareaderCryptoHandle: section 8.5.1.4 of the Security specification
 /// (v. 1.1)
-pub type DatareaderCryptoHandle = CryptoHandle;
+pub type DatareaderCryptoHandle = EntityCryptoHandle;
 
 /// CryptoTransformIdentifier: section 8.5.1.5 of the Security specification (v.
 /// 1.1)

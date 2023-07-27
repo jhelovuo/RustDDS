@@ -35,10 +35,10 @@ use super::{
 
 impl CryptographicBuiltIn {
   fn encode_submessage(
-    &mut self,
+    &self,
     plain_rtps_submessage: Submessage,
-    sending_entity_handle: CryptoHandle,
-    receiving_entity_handle_list: &[CryptoHandle],
+    sending_entity_handle: EntityCryptoHandle,
+    receiving_entity_handle_list: &[EntityCryptoHandle],
   ) -> SecurityResult<EncodeResult<EncodedSubmessage>> {
     //TODO: this is only a mock implementation
 
@@ -188,7 +188,7 @@ impl CryptographicBuiltIn {
 
 impl CryptoTransform for CryptographicBuiltIn {
   fn encode_serialized_payload(
-    &mut self,
+    &self,
     plain_buffer: SerializedPayload,
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<(CryptoContent, ParameterList)> {
@@ -278,7 +278,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn encode_datawriter_submessage(
-    &mut self,
+    &self,
     plain_rtps_submessage: Submessage,
     sending_datawriter_crypto: DatawriterCryptoHandle,
     receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
@@ -293,7 +293,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn encode_datareader_submessage(
-    &mut self,
+    &self,
     plain_rtps_submessage: Submessage,
     sending_datareader_crypto: DatareaderCryptoHandle,
     receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
@@ -308,7 +308,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn encode_rtps_message(
-    &mut self,
+    &self,
     plain_rtps_message: Message,
     sending_participant_crypto: ParticipantCryptoHandle,
     receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
@@ -488,7 +488,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn decode_rtps_message(
-    &mut self,
+    &self,
     encoded_buffer: Message,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
@@ -604,97 +604,83 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn preprocess_secure_submsg(
-    &mut self,
-    encoded_rtps_submessage: &Submessage,
+    &self,
+    encoded_rtps_submessage: &SecurePrefix,
     receiving_participant_crypto: ParticipantCryptoHandle,
     sending_participant_crypto: ParticipantCryptoHandle,
   ) -> SecurityResult<SecureSubmessageCategory> {
     // 9.5.3.3.5
-    if let Submessage {
-      body:
-        SubmessageBody::Security(SecuritySubmessage::SecurePrefix(
-          SecurePrefix {
-            crypto_header:
-              CryptoHeader {
-                transformation_id:
-                  CryptoTransformIdentifier {
-                    transformation_kind,
-                    transformation_key_id,
-                  },
-                ..
-              },
-            ..
-          },
-          _,
-        )),
-      ..
-    } = *encoded_rtps_submessage
-    {
-      // Check the validity of transformation_kind
-      let submessage_transformation_kind =
-        BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
-
-      // Search for matching keys over entities registered to the sender
-      let sending_participant_entities = self
-        .participant_to_entity_info_
-        .get(&sending_participant_crypto)
-        .ok_or(security_error!(
-          "Could not find registered entities for the sending_participant_crypto {}",
-          sending_participant_crypto
-        ))?;
-      for EntityInfo { handle, category } in sending_participant_entities {
-        // Iterate over the keys associated with the entity
-        if let Some(KeyMaterial_AES_GCM_GMAC {
-          transformation_kind,
-          sender_key_id,
+    let SecurePrefix {
+      crypto_header:
+        CryptoHeader {
+          transformation_id:
+            CryptoTransformIdentifier {
+              transformation_kind,
+              transformation_key_id,
+            },
           ..
-        }) = self
-          .decode_keys_
-          .get(handle)
-          .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+        },
+      ..
+    } = *encoded_rtps_submessage;
+
+    // Check the validity of transformation_kind
+    let submessage_transformation_kind =
+      BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
+
+    // Search for matching keys over entities registered to the sender
+    let sending_participant_entities = self
+      .participant_to_entity_info_
+      .get(&sending_participant_crypto)
+      .ok_or(security_error!(
+        "Could not find registered entities for the sending_participant_crypto {}",
+        sending_participant_crypto
+      ))?;
+    for EntityInfo { handle, category } in sending_participant_entities {
+      // Iterate over the keys associated with the entity
+      if let Some(KeyMaterial_AES_GCM_GMAC {
+        transformation_kind,
+        sender_key_id,
+        ..
+      }) = self
+        .decode_keys_
+        .get(handle)
+        .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+      {
+        // Compare keys to the crypto transform identifier
+        if submessage_transformation_kind.eq(transformation_kind)
+          && transformation_key_id.eq(sender_key_id)
         {
-          // Compare keys to the crypto transform identifier
-          if submessage_transformation_kind.eq(transformation_kind)
-            && transformation_key_id.eq(sender_key_id)
-          {
-            let remote_entity_handle = *handle;
-            let matched_local_entity_handle = *self
-              .matched_local_entity_
-              .get(&remote_entity_handle)
-              .ok_or(security_error!(
-                "The local entity matched to the remote entity handle {} is missing.",
-                remote_entity_handle
-              ))?;
-            return Ok(match category {
-              EntityCategory::DataReader => SecureSubmessageCategory::DatareaderSubmessage(
-                remote_entity_handle,
-                matched_local_entity_handle,
-              ),
-              EntityCategory::DataWriter => SecureSubmessageCategory::DatawriterSubmessage(
-                remote_entity_handle,
-                matched_local_entity_handle,
-              ),
-            });
-          }
+          let remote_entity_handle = *handle;
+          let matched_local_entity_handle = *self
+            .matched_local_entity_
+            .get(&remote_entity_handle)
+            .ok_or(security_error!(
+              "The local entity matched to the remote entity handle {} is missing.",
+              remote_entity_handle
+            ))?;
+          return Ok(match category {
+            EntityCategory::DataReader => SecureSubmessageCategory::DatareaderSubmessage(
+              remote_entity_handle,
+              matched_local_entity_handle,
+            ),
+            EntityCategory::DataWriter => SecureSubmessageCategory::DatawriterSubmessage(
+              remote_entity_handle,
+              matched_local_entity_handle,
+            ),
+          });
         }
       }
-      // No matching keys were found for any entity registered to the sender
-      Err(security_error!(
-        "Could not find matching keys for any registered entity for the \
-         sending_participant_crypto {}.",
-        sending_participant_crypto
-      ))
-    } else {
-      Err(security_error!(
-        "preprocess_secure_submsg expects encoded_rtps_submessage to be a SEC_PREFIX. Received \
-         {:?}.",
-        encoded_rtps_submessage.header.kind
-      ))
     }
+    // No matching keys were found for any entity registered to the sender
+    Err(security_error!(
+      "Could not find matching keys for any registered entity for the sending_participant_crypto \
+       {}.",
+      sending_participant_crypto
+    ))
   }
 
   fn decode_datawriter_submessage(
-    &mut self,
+    &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
@@ -822,7 +808,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn decode_datareader_submessage(
-    &mut self,
+    &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_datawriter_crypto: DatawriterCryptoHandle,
     sending_datareader_crypto: DatareaderCryptoHandle,
@@ -950,7 +936,7 @@ impl CryptoTransform for CryptographicBuiltIn {
   }
 
   fn decode_serialized_payload(
-    &mut self,
+    &self,
     encoded_buffer: CryptoContent,
     inline_qos: ParameterList,
     receiving_datareader_crypto: DatareaderCryptoHandle,

@@ -5,6 +5,7 @@
 pub mod access_control;
 pub mod authentication;
 pub mod cryptographic;
+pub mod security_plugins;
 pub mod types;
 
 pub use types::*;

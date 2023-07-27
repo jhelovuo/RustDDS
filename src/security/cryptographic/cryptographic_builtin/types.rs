@@ -8,14 +8,14 @@ use crate::{
     crypto_footer::CryptoFooter,
     crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
-  security::{BinaryProperty, DataHolder, SecurityError, SecurityResult},
+  security::{
+    cryptographic::EntityCryptoHandle, BinaryProperty, DataHolder, SecurityError, SecurityResult,
+  },
   security_error,
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
 };
-use super::{
-  CryptoHandle, CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind,
-};
+use super::{CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind};
 
 const CRYPTO_TOKEN_CLASS_ID: &str = "DDS:Crypto:AES_GCM_GMAC";
 const CRYPTO_TOKEN_KEYMAT_NAME: &str = "dds.cryp.keymat";
@@ -678,7 +678,7 @@ impl EntityCategory {
 
 #[derive(Debug, PartialEq, Eq, Hash, Copy, Clone)]
 pub(super) struct EntityInfo {
-  pub handle: CryptoHandle,
+  pub handle: EntityCryptoHandle,
   pub category: EntityCategory,
 }
 
