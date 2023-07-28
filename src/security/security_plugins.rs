@@ -99,14 +99,21 @@ impl SecurityPlugins {
     source_guid: &GUID,
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
-    self.crypto.encode_datawriter_submessage(
-      plain_submessage,
-      self.get_local_entity_handle(source_guid)?,
+    // Convert the destination GUIDs to handles
+    let mut receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle> =
       SecurityResult::from_iter(
         destination_guid_list
           .iter()
           .map(|destination_guid| self.get_remote_entity_handle((source_guid, destination_guid))),
-      )?,
+      )?;
+    // Remove duplicates
+    receiving_datareader_crypto_list.sort();
+    receiving_datareader_crypto_list.dedup();
+
+    self.crypto.encode_datawriter_submessage(
+      plain_submessage,
+      self.get_local_entity_handle(source_guid)?,
+      receiving_datareader_crypto_list,
     )
   }
 
@@ -116,14 +123,21 @@ impl SecurityPlugins {
     source_guid: &GUID,
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
-    self.crypto.encode_datareader_submessage(
-      plain_submessage,
-      self.get_local_entity_handle(source_guid)?,
+    // Convert the destination GUIDs to handles
+    let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
       SecurityResult::from_iter(
         destination_guid_list
           .iter()
           .map(|destination_guid| self.get_remote_entity_handle((source_guid, destination_guid))),
-      )?,
+      )?;
+    // Remove duplicates
+    receiving_datawriter_crypto_list.sort();
+    receiving_datawriter_crypto_list.dedup();
+
+    self.crypto.encode_datareader_submessage(
+      plain_submessage,
+      self.get_local_entity_handle(source_guid)?,
+      receiving_datawriter_crypto_list,
     )
   }
 
@@ -133,14 +147,21 @@ impl SecurityPlugins {
     source_guid_prefix: &GuidPrefix,
     destination_guid_prefix_list: &[GuidPrefix],
   ) -> SecurityResult<Message> {
-    self.crypto.encode_rtps_message(
-      plain_message,
-      self.get_participant_handle(source_guid_prefix)?,
+    // Convert the destination GUID prefixes to handles
+    let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
       SecurityResult::from_iter(
         destination_guid_prefix_list
           .iter()
-          .map(|destination_guid| self.get_participant_handle(destination_guid)),
-      )?,
+          .map(|destination_guid_prefix| self.get_participant_handle(destination_guid_prefix)),
+      )?;
+    // Remove duplicates
+    receiving_datawriter_crypto_list.sort();
+    receiving_datawriter_crypto_list.dedup();
+
+    self.crypto.encode_rtps_message(
+      plain_message,
+      self.get_participant_handle(source_guid_prefix)?,
+      receiving_datawriter_crypto_list,
     )
   }
 
