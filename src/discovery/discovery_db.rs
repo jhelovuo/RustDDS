@@ -871,6 +871,7 @@ mod tests {
       data_reader_command_receiver: reader_command_receiver1,
       data_reader_waker: data_reader_waker1,
       poll_event_sender: notification_event_sender1,
+      security_plugins: None,
     };
 
     // Add the reader to the database and verify the info is updated
@@ -907,6 +908,7 @@ mod tests {
       data_reader_command_receiver: reader_command_receiver2,
       data_reader_waker: data_reader_waker2,
       poll_event_sender: notification_event_sender2,
+      security_plugins: None,
     };
 
     // Add the second reader to the database and verify the info is updated

@@ -36,6 +36,8 @@ use crate::{
   mio_source,
   network::udp_sender::UDPSender,
   rtps::{message_receiver::MessageReceiverState, rtps_writer_proxy::RtpsWriterProxy, Message},
+  security::{security_plugins::SecurityPluginsHandle, SecurityError, SecurityResult},
+  security_error,
   structure::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::TopicCache,
@@ -46,6 +48,7 @@ use crate::{
     time::Timestamp,
   },
 };
+use super::Submessage;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TimedEvent {
@@ -66,6 +69,8 @@ pub(crate) struct ReaderIngredients {
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
   pub(crate) data_reader_waker: Arc<Mutex<Option<Waker>>>,
   pub(crate) poll_event_sender: mio_source::PollEventSender,
+
+  pub(crate) security_plugins: Option<SecurityPluginsHandle>,
 }
 
 impl ReaderIngredients {
@@ -129,6 +134,8 @@ pub(crate) struct Reader {
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
   data_reader_waker: Arc<Mutex<Option<Waker>>>,
   poll_event_sender: mio_source::PollEventSender,
+
+  security_plugins: Option<SecurityPluginsHandle>,
 }
 
 impl Reader {
@@ -176,6 +183,8 @@ impl Reader {
       data_reader_command_receiver: i.data_reader_command_receiver,
       data_reader_waker: i.data_reader_waker,
       poll_event_sender: i.poll_event_sender,
+
+      security_plugins: i.security_plugins,
     }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
@@ -890,6 +899,7 @@ impl Reader {
             guid_prefix: mr_state.source_guid_prefix,
           },
           &mr_state.unicast_reply_locator_list,
+          writer_guid,
         );
       }
 
@@ -900,6 +910,7 @@ impl Reader {
           guid_prefix: mr_state.source_guid_prefix,
         },
         &mr_state.unicast_reply_locator_list,
+        writer_guid,
       );
 
       return true;
@@ -1063,12 +1074,54 @@ impl Reader {
     }
   }
 
+  fn security_encode(&self, message: Message, destination_guid: GUID) -> SecurityResult<Message> {
+    // If we have security plugins, use them, otherwise pass through
+    if let Some(security_plugins_handle) = &self.security_plugins {
+      // Get a MutexGuard for the security plugins
+      let security_plugins = security_plugins_handle.lock().map_err(|e| {
+        security_error!("SecurityPluginHandle poisoned! {e:?}")
+        // TODO: Send signal to exit RTPS thread, as there is no way to recover.
+      })?;
+      // Get the source GUID
+      let source_guid = self.guid();
+      // Destructure
+      let Message {
+        header,
+        submessages,
+      } = message;
+
+      // Encode submessages
+      SecurityResult::<Vec<Vec<Submessage>>>::from_iter(submessages.iter().map(|submessage| {
+        security_plugins
+          .encode_datareader_submessage(submessage.clone(), &source_guid, &[destination_guid])
+          // Convert each encoding output to a Vec of 1 or 3 submessages
+          .map(Vec::from)
+      }))
+      // Flatten and convert back to Message
+      .map(|encoded_submessages| Message {
+        header,
+        submessages: encoded_submessages.concat(),
+      })
+      // Encode message
+      .and_then(|message| {
+        // Convert GUIDs to GuidPrefixes
+        let source_guid_prefix = source_guid.prefix;
+        let destination_guid_prefix = destination_guid.prefix;
+        // Encode message
+        security_plugins.encode_message(message, &source_guid_prefix, &[destination_guid_prefix])
+      })
+    } else {
+      Ok(message)
+    }
+  }
+
   fn send_acknack_to(
     &self,
     flags: BitFlags<ACKNACK_Flags>,
     acknack: AckNack,
     info_dst: InfoDestination,
     dst_locator_list: &[Locator],
+    destination_guid: GUID,
   ) {
     let infodst_flags =
       BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
@@ -1084,12 +1137,17 @@ impl Reader {
 
     message.add_submessage(acknack.create_submessage(flags));
 
-    let bytes = message
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap();
-    self
-      .udp_sender
-      .send_to_locator_list(&bytes, dst_locator_list);
+    match self.security_encode(message, destination_guid) {
+      Ok(message) => {
+        let bytes = message
+          .write_to_vec_with_ctx(Endianness::LittleEndian)
+          .unwrap();
+        self
+          .udp_sender
+          .send_to_locator_list(&bytes, dst_locator_list);
+      }
+      Err(e) => error!("Failed to send message to writers. Encoding failed: {e:?}"),
+    }
   }
 
   fn send_nackfrags_to(
@@ -1098,6 +1156,7 @@ impl Reader {
     nackfrags: Vec<NackFrag>,
     info_dst: InfoDestination,
     dst_locator_list: &[Locator],
+    destination_guid: GUID,
   ) {
     let infodst_flags =
       BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
@@ -1115,12 +1174,17 @@ impl Reader {
       message.add_submessage(nf.create_submessage(flags));
     }
 
-    let bytes = message
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap();
-    self
-      .udp_sender
-      .send_to_locator_list(&bytes, dst_locator_list);
+    match self.security_encode(message, destination_guid) {
+      Ok(message) => {
+        let bytes = message
+          .write_to_vec_with_ctx(Endianness::LittleEndian)
+          .unwrap();
+        self
+          .udp_sender
+          .send_to_locator_list(&bytes, dst_locator_list);
+      }
+      Err(e) => error!("Failed to send message to writers. Encoding failed: {e:?}"),
+    }
   }
 
   pub fn send_preemptive_acknacks(&mut self) {
@@ -1136,18 +1200,24 @@ impl Reader {
       .filter(|(_, p)| p.no_changes_received())
     {
       let acknack_count = writer_proxy.next_ack_nack_sequence_number();
+      let RtpsWriterProxy {
+        remote_writer_guid,
+        unicast_locator_list,
+        ..
+      } = writer_proxy;
       self.send_acknack_to(
         flags,
         AckNack {
           reader_id,
-          writer_id: writer_proxy.remote_writer_guid.entity_id,
+          writer_id: remote_writer_guid.entity_id,
           reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::new(1)),
           count: acknack_count,
         },
         InfoDestination {
-          guid_prefix: writer_proxy.remote_writer_guid.prefix,
+          guid_prefix: remote_writer_guid.prefix,
         },
-        &writer_proxy.unicast_locator_list,
+        unicast_locator_list,
+        *remote_writer_guid,
       );
     }
     // put writer proxies back
@@ -1271,6 +1341,7 @@ mod tests {
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
     let mut reader = Reader::new(
       reader_ing,
@@ -1355,6 +1426,7 @@ mod tests {
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
     let mut reader = Reader::new(
       reader_ing,
@@ -1460,6 +1532,7 @@ mod tests {
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
     let mut reader = Reader::new(
       reader_ing,
@@ -1568,6 +1641,7 @@ mod tests {
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
     let mut reader = Reader::new(
       reader_ing,

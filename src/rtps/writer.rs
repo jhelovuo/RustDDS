@@ -75,7 +75,7 @@ pub(crate) struct WriterIngredients {
   pub qos_policies: QosPolicies,
   pub status_sender: StatusChannelSender<DataWriterStatus>,
 
-  pub security_plugins: Option<SecurityPluginsHandle>,
+  pub(crate) security_plugins: Option<SecurityPluginsHandle>,
 }
 
 impl WriterIngredients {

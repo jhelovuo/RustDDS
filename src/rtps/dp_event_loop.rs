@@ -919,6 +919,7 @@ mod tests {
         data_reader_command_receiver: reader_command_receiver,
         data_reader_waker: data_reader_waker.clone(),
         poll_event_sender: notification_event_sender,
+        security_plugins: None,
       };
 
       reader_guids.push(new_reader_ing.guid);

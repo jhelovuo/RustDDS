@@ -931,6 +931,7 @@ impl InnerSubscriber {
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
       poll_event_sender,
+      security_plugins: None, // TODO pass security plugins
     };
 
     {
