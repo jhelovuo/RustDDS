@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
 use bytes::{Bytes, BytesMut};
-use enumflags2::bitflags;
+use enumflags2::{bitflags, BitFlags};
+use log::error;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Deserialize, Serialize};
 
@@ -301,7 +302,7 @@ impl<'a, C: Context> Readable<'a, C> for DataHolder {
     let class_id: StringWithNul = reader.read_value()?;
 
     read_pad(reader, class_id.len(), 4)?; // pad according to previous read
-                                          // We can use this Qos reader, becaues it has identical structure.
+                                          // We can use this Qos reader, because it has identical structure.
     let qos::policy::Property {
       value,
       binary_value,
@@ -371,8 +372,8 @@ pub struct ParticipantSecurityInfo {
 #[allow(clippy::enum_variant_names)]
 // Clippy complains, because all variant names have the same prefix "Is",
 // but we blame the DDS Security spec for naming.
-pub enum ParticipantSecurityAttributesMask {
-  IsValid = 0x8000_0000, // (0x1 << 31) -- only this bit is understood outside security plugins
+pub enum ParticipantSecurityAttributesMaskFlags {
+  IsValid = 0x8000_0000, // (0x1 << 31)
 
   // DDS Security specification v1.1
   // Section 8.4.2.5 Definition of the ParticipantSecurityAttributesMask
@@ -382,24 +383,39 @@ pub enum ParticipantSecurityAttributesMask {
   IsLivelinessProtected = 0b000_0100,
 }
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Copy, Readable, Writable)]
-#[bitflags]
-#[repr(u32)]
-#[allow(clippy::enum_variant_names)]
-// Clippy complains, because all variant names have the same prefix.
-pub enum PluginParticipantSecurityAttributesMask {
-  IsValid = 0x8000_0000, // (0x1 << 31)
-
-  // DDS Security specification v1.1
-  // Section 9.4.2.4 Definition of the PluginParticipantSecurityAttributesMask
-  // Table 60
-  IsRTPSEncrypted = 0b0000_0001,
-  IsDiscoveryEncrypted = 0b0000_0010,
-  IsLivelinessEncrypted = 0b0000_0100,
-  IsRTPSOriginAuthenticated = 0b0000_1000,
-  IsDiscoveryOriginAuthenticated = 0b0001_0000,
-  IsLivelinessOriginAuthenticated = 0b0010_0000,
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct ParticipantSecurityAttributesMask(pub BitFlags<ParticipantSecurityAttributesMaskFlags>);
+impl<'a, C: Context> Readable<'a, C> for ParticipantSecurityAttributesMask {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+    let underlying_value: u32 = reader.read_value()?;
+    BitFlags::<ParticipantSecurityAttributesMaskFlags>::try_from(underlying_value)
+      .map(Self)
+      // Convert the error to the correct type
+      .map_err(|e| speedy::Error::custom(e).into())
+  }
 }
+impl<C: Context> Writable<C> for ParticipantSecurityAttributesMask {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    let Self(value) = self;
+    writer.write_value(&value.bits())
+  }
+}
+impl PartialOrd for ParticipantSecurityAttributesMask {
+  fn partial_cmp(&self, Self(value2): &Self) -> Option<std::cmp::Ordering> {
+    let Self(value1) = self;
+    value1.bits().partial_cmp(&value2.bits())
+  }
+}
+impl Ord for ParticipantSecurityAttributesMask {
+  fn cmp(&self, Self(value2): &Self) -> std::cmp::Ordering {
+    let Self(value1) = self;
+    value1.bits().cmp(&value2.bits())
+  }
+}
+
+// 7.2.7 other than the validity bit, the mask is only understood inside the
+// plugin implementations
+pub type PluginParticipantSecurityAttributesMask = PluginSecurityAttributesMask;
 
 // DDS Security spec v1.1 Section 7.2.8 EndpointSecurityInfo
 // This is communicated over Discovery
@@ -416,8 +432,8 @@ pub struct EndpointSecurityInfo {
 #[allow(clippy::enum_variant_names)]
 // Clippy complains, because all variant names have the same prefix "Is",
 // but we blame the DDS Security spec for naming.
-pub enum EndpointSecurityAttributesMask {
-  IsValid = 0x8000_0000, // (0x1 << 31) -- only this bit is understood outside security plugins
+pub enum EndpointSecurityAttributesMaskFlags {
+  IsValid = 0x8000_0000, // (0x1 << 31)
 
   // DDS Security specification v1.1
   // Section 8.4.2.8 Definition of the EndpointSecurityAttributesMask
@@ -430,21 +446,50 @@ pub enum EndpointSecurityAttributesMask {
   IsKeyProtected = 0b0010_0000,
   IsLivelinessProtected = 0b0100_0000,
 }
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub struct EndpointSecurityAttributesMask(pub BitFlags<EndpointSecurityAttributesMaskFlags>);
+impl<'a, C: Context> Readable<'a, C> for EndpointSecurityAttributesMask {
+  fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+    let underlying_value: u32 = reader.read_value()?;
+    BitFlags::<EndpointSecurityAttributesMaskFlags>::try_from(underlying_value)
+      .map(Self)
+      // Convert the error to the correct type
+      .map_err(|e| speedy::Error::custom(e).into())
+  }
+}
+impl<C: Context> Writable<C> for EndpointSecurityAttributesMask {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    let Self(value) = self;
+    writer.write_value(&value.bits())
+  }
+}
+impl PartialOrd for EndpointSecurityAttributesMask {
+  fn partial_cmp(&self, Self(value2): &Self) -> Option<std::cmp::Ordering> {
+    let Self(value1) = self;
+    value1.bits().partial_cmp(&value2.bits())
+  }
+}
+impl Ord for EndpointSecurityAttributesMask {
+  fn cmp(&self, Self(value2): &Self) -> std::cmp::Ordering {
+    let Self(value1) = self;
+    value1.bits().cmp(&value2.bits())
+  }
+}
+
+// 7.2.8 other than the validity bit, the mask is only understood inside the
+// plugin implementations
+pub type PluginEndpointSecurityAttributesMask = PluginSecurityAttributesMask;
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Copy, Readable, Writable)]
-#[bitflags]
-#[repr(u32)]
-#[allow(clippy::enum_variant_names)]
-// Clippy complains, because all variant names have the same prefix.
-pub enum PluginEndpointSecurityAttributesMask {
-  IsValid = 0x8000_0000, // (0x1 << 31)
+// Other than the validity bit, these masks are only understood inside the
+// plugin implementations
+pub struct PluginSecurityAttributesMask(pub u32);
 
-  // DDS Security specification v1.1
-  // Section 9.4.2.6 Definition of the PluginEndpointSecurityAttributesMask
-  // Table 62
-  IsSubmessageEncrypted = 0b0000_0001,
-  IsPayloadEncrypted = 0b0000_0010,
-  IsSubmessageOriginAuthenticated = 0b0000_0100,
+impl PluginSecurityAttributesMask {
+  fn is_valid(self) -> bool {
+    let Self(value) = self;
+    value >= 0x8000_0000 // Check whether the most significant bit is set
+  }
 }
 
 // ParticipantBuiltinTopicDataSecure from section 7.4.1.6 of the Security
@@ -694,7 +739,7 @@ pub struct ParticipantGenericMessage {
   pub message_identity: rpc::SampleIdentity,
   pub related_message_identity: rpc::SampleIdentity,
   // GUIDs here need not be typed Endpoint_GUID or Participant_GUID,
-  // because CDR serialization does not need the distiction, unlike PL_CDR.
+  // because CDR serialization does not need the distinction, unlike PL_CDR.
   pub destination_participant_guid: GUID, //target for the request. Can be GUID_UNKNOWN
   pub destination_endpoint_guid: GUID,
   pub source_endpoint_guid: GUID,

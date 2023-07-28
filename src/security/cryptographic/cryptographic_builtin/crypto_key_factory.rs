@@ -263,7 +263,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     if let Some(attributes) = self
       .encrypt_options_
       .get(&local_datawriter_crypto_handle)
-      .copied()
+      .cloned()
     {
       self
         .encrypt_options_
@@ -355,7 +355,7 @@ impl CryptoKeyFactory for CryptographicBuiltIn {
     if let Some(attributes) = self
       .encrypt_options_
       .get(&local_datareader_crypto_handle)
-      .copied()
+      .cloned()
     {
       self
         .encrypt_options_
