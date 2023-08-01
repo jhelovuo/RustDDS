@@ -33,6 +33,7 @@ impl ROSDiscoveryTopic {
     lifespan: Some(Lifespan {
       duration: Duration::DURATION_INFINITE,
     }),
+    property: None,
   };
 
   const TOPIC_NAME: &'static str = "ros_discovery_info";
@@ -69,6 +70,7 @@ impl ParameterEventsTopic {
     history: Some(History::KeepLast { depth: 1 }),
     resource_limits: None,
     lifespan: None,
+    property: None,
   };
 
   const TOPIC_NAME: &'static str = "rt/parameter_events";
@@ -111,6 +113,7 @@ impl RosOutTopic {
     lifespan: Some(Lifespan {
       duration: Duration::from_secs(10),
     }),
+    property: None,
   };
 
   const TOPIC_NAME: &'static str = "rt/rosout";

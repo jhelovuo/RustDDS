@@ -26,7 +26,7 @@ use crate::{
 pub struct Property {
   pub(crate) name: String,
   pub(crate) value: String,
-  propagate: bool, // NOT SERIALIZED
+  pub(crate) propagate: bool, // NOT SERIALIZED
 }
 
 impl<'a, C: Context> Readable<'a, C> for Property {

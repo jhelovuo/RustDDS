@@ -29,6 +29,7 @@ use crate::{
     writer::WriterIngredients,
   },
   security::{
+    self,
     access_control::PermissionsToken,
     authentication::{IdentityStatusToken, IdentityToken},
     security_plugins::{SecurityPlugins, SecurityPluginsHandle},
@@ -45,6 +46,7 @@ pub struct DomainParticipantBuilder {
   only_networks: Option<Vec<String>>, // if specified, run RTPS only over these interfaces
 
   security_plugins: Option<SecurityPlugins>,
+  sec_properties: Option<policy::Property>, // Properties for configuring security plugins
 }
 
 impl DomainParticipantBuilder {
@@ -53,24 +55,42 @@ impl DomainParticipantBuilder {
       domain_id,
       only_networks: None,
       security_plugins: None,
+      sec_properties: None,
     }
   }
 
-  #[allow(dead_code)] // TODO: Remove when have a test case
   pub fn security(
     &mut self,
     auth: Box<impl Authentication + 'static>,
     access: Box<impl AccessControl + 'static>,
     crypto: Box<impl Cryptographic + 'static>,
+    sec_properties: policy::Property,
   ) -> &mut DomainParticipantBuilder {
     self.security_plugins = Some(SecurityPlugins::new(auth, access, crypto));
+    self.sec_properties = Some(sec_properties);
+    self
+  }
+
+  pub fn add_builtin_security(&mut self) -> &mut DomainParticipantBuilder {
+    let security_test_configs = security::config::test_config();
+
+    if security_test_configs.security_enabled {
+      let auth = Box::new(security::AuthenticationBuiltIn::new());
+      let access = Box::new(security::AccessControlBuiltIn::new());
+      let crypto = Box::new(security::CryptographicBuiltIn::new());
+      self.security(auth, access, crypto, security_test_configs.properties);
+    }
     self
   }
 
   pub fn build(mut self) -> CreateResult<DomainParticipant> {
     let mut participant_guid = GUID::new_participant_guid();
 
-    let participant_qos = QosPolicies::default(); // Maybe something else?
+    // QosPolicies with possible security properties, otherwise default
+    let participant_qos = QosPolicies {
+      property: self.sec_properties,
+      ..Default::default()
+    };
 
     // configure security
     #[allow(unused_variables)] // TODO: actually distribute these to participant, discovery, etc.
@@ -245,7 +265,11 @@ impl DomainParticipant {
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// ```
   pub fn new(domain_id: u16) -> CreateResult<Self> {
-    DomainParticipantBuilder::new(domain_id).build()
+    let mut dp_builder = DomainParticipantBuilder::new(domain_id);
+    // Add security if so configured in security configs
+    // This is meant to be included only in the development phase for convenience
+    dp_builder.add_builtin_security();
+    dp_builder.build()
   }
 
   /// Creates DDS Publisher

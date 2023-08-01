@@ -6,3 +6,11 @@ mod types;
 pub struct AccessControlBuiltIn {
   todo: String,
 }
+
+impl AccessControlBuiltIn {
+  pub fn new() -> Self {
+    Self {
+      todo: "todo".to_string(),
+    }
+  }
+}

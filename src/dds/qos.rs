@@ -60,6 +60,7 @@ pub enum QosPolicyId {
   // TransportPriority, // 20
   Lifespan,
   // DurabilityService, // 22
+  Property, // No Id in the security spec
 }
 
 /// Utility for building [QosPolicies]
@@ -77,6 +78,7 @@ pub struct QosPolicyBuilder {
   history: Option<policy::History>,
   resource_limits: Option<policy::ResourceLimits>,
   lifespan: Option<policy::Lifespan>,
+  property: Option<policy::Property>,
 }
 
 impl QosPolicyBuilder {
@@ -156,7 +158,12 @@ impl QosPolicyBuilder {
     self
   }
 
-  pub const fn build(self) -> QosPolicies {
+  pub fn property(mut self, property: policy::Property) -> Self {
+    self.property = Some(property);
+    self
+  }
+
+  pub fn build(self) -> QosPolicies {
     QosPolicies {
       durability: self.durability,
       presentation: self.presentation,
@@ -170,6 +177,7 @@ impl QosPolicyBuilder {
       history: self.history,
       resource_limits: self.resource_limits,
       lifespan: self.lifespan,
+      property: self.property,
     }
   }
 }
@@ -192,6 +200,7 @@ pub struct QosPolicies {
   pub(crate) history: Option<policy::History>,
   pub(crate) resource_limits: Option<policy::ResourceLimits>,
   pub(crate) lifespan: Option<policy::Lifespan>,
+  pub(crate) property: Option<policy::Property>,
 }
 
 impl QosPolicies {
@@ -261,6 +270,10 @@ impl QosPolicies {
     self.lifespan
   }
 
+  pub fn property(&self) -> Option<policy::Property> {
+    self.property.clone()
+  }
+
   /// Merge two QosPolicies
   ///
   /// Constructs a QosPolicy, where each policy is taken from `self`,
@@ -280,6 +293,7 @@ impl QosPolicies {
       history: other.history.or(self.history),
       resource_limits: other.resource_limits.or(self.resource_limits),
       lifespan: other.lifespan.or(self.lifespan),
+      property: other.property.clone().or(self.property.clone()),
     }
   }
 
@@ -408,6 +422,7 @@ impl QosPolicies {
       history,
       resource_limits,
       lifespan,
+      property: _, // TODO: properties to parameter list?
     } = self;
 
     macro_rules! emit {
@@ -552,6 +567,8 @@ impl QosPolicies {
     let resource_limits: Option<policy::ResourceLimits> = get_option!(PID_RESOURCE_LIMITS);
     let lifespan: Option<policy::Lifespan> = get_option!(PID_LIFESPAN);
 
+    let property: Option<policy::Property> = None; // TODO: Should also properties be read?
+
     // We construct using the struct syntax directly rather than the builder,
     // so we cannot forget any field.
     Ok(QosPolicies {
@@ -567,6 +584,7 @@ impl QosPolicies {
       history,
       resource_limits,
       lifespan,
+      property,
     })
   }
 }

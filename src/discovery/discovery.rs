@@ -239,6 +239,7 @@ impl Discovery {
     history: Some(History::KeepLast { depth: 1 }),
     resource_limits: None,
     lifespan: None,
+    property: None,
   };
 
   pub fn new(

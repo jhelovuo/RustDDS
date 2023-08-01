@@ -125,3 +125,11 @@ impl Authentication for AuthenticationBuiltIn {
     todo!();
   }
 }
+
+impl AuthenticationBuiltIn {
+  pub fn new() -> Self {
+    Self {
+      todo: "todo".to_string(),
+    }
+  }
+}

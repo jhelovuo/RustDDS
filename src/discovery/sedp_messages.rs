@@ -261,6 +261,7 @@ impl SubscriptionBuiltinTopicData {
       history: None, // SubscriptionBuiltinTopicData does not contain History QoS
       resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
+      property: None, // TODO: no property QoS?
     }
   }
 
@@ -671,6 +672,7 @@ impl PublicationBuiltinTopicData {
       history: None,         // PublicationBuiltinTopicData does not contain History QoS
       resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
+      property: None, // TODO: no property Qos?
     }
   }
 
@@ -989,6 +991,7 @@ impl HasQoSPolicy for TopicBuiltinTopicData {
       history: self.history,
       resource_limits: self.resource_limits,
       lifespan: self.lifespan,
+      property: None, // TODO: no property Qos?
     }
   }
 }
