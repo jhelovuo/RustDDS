@@ -16,11 +16,13 @@ use crate::{
   GUID,
 };
 use super::{
+  authentication::*,
   cryptographic::{
     DatareaderCryptoHandle, DatawriterCryptoHandle, EncodedSubmessage, EntityCryptoHandle,
     ParticipantCryptoHandle, SecureSubmessageCategory,
   },
-  AccessControl, Authentication, Cryptographic, SecurityError, SecurityResult,
+  types::*,
+  AccessControl, Cryptographic,
 };
 
 pub(crate) struct SecurityPlugins {
@@ -28,9 +30,9 @@ pub(crate) struct SecurityPlugins {
   pub access: Box<dyn AccessControl>,
   crypto: Box<dyn Cryptographic>,
 
-  participant_handle_cache_: HashMap<GuidPrefix, ParticipantCryptoHandle>,
-  local_entity_handle_cache_: HashMap<GUID, EntityCryptoHandle>,
-  remote_entity_handle_cache_: HashMap<(GUID, GUID), EntityCryptoHandle>,
+  participant_crypto_handle_cache_: HashMap<GuidPrefix, ParticipantCryptoHandle>,
+  local_entity_crypto_handle_cache_: HashMap<GUID, EntityCryptoHandle>,
+  remote_entity_crypto_handle_cache_: HashMap<(GUID, GUID), EntityCryptoHandle>,
 }
 
 impl SecurityPlugins {
@@ -43,18 +45,18 @@ impl SecurityPlugins {
       auth,
       access,
       crypto,
-      participant_handle_cache_: HashMap::new(),
-      local_entity_handle_cache_: HashMap::new(),
-      remote_entity_handle_cache_: HashMap::new(),
+      participant_crypto_handle_cache_: HashMap::new(),
+      local_entity_crypto_handle_cache_: HashMap::new(),
+      remote_entity_crypto_handle_cache_: HashMap::new(),
     }
   }
 
-  fn get_participant_handle(
+  fn get_participant_crypto_handle(
     &self,
     guid_prefix: &GuidPrefix,
   ) -> SecurityResult<ParticipantCryptoHandle> {
     self
-      .participant_handle_cache_
+      .participant_crypto_handle_cache_
       .get(guid_prefix)
       .ok_or(security_error!(
         "Could not find a ParticipantCryptoHandle for the GuidPrefix {:?}",
@@ -63,9 +65,9 @@ impl SecurityPlugins {
       .copied()
   }
 
-  fn get_local_entity_handle(&self, guid: &GUID) -> SecurityResult<ParticipantCryptoHandle> {
+  fn get_local_entity_crypto_handle(&self, guid: &GUID) -> SecurityResult<ParticipantCryptoHandle> {
     self
-      .local_entity_handle_cache_
+      .local_entity_crypto_handle_cache_
       .get(guid)
       .ok_or(security_error!(
         "Could not find a local EntityHandle for the GUID {:?}",
@@ -75,13 +77,13 @@ impl SecurityPlugins {
   }
 
   /// The `local_proxy_guid_pair` should be `&(local_entity_guid, proxy_guid)`.
-  fn get_remote_entity_handle(
+  fn get_remote_entity_crypto_handle(
     &self,
     (local_entity_guid, proxy_guid): (&GUID, &GUID),
   ) -> SecurityResult<ParticipantCryptoHandle> {
     let local_and_proxy_guid_pair = (*local_entity_guid, *proxy_guid);
     self
-      .remote_entity_handle_cache_
+      .remote_entity_crypto_handle_cache_
       .get(&local_and_proxy_guid_pair)
       .ok_or(security_error!(
         "Could not find a remote EntityHandle for the (local_entity_guid, proxy_guid) pair {:?}",
@@ -101,18 +103,16 @@ impl SecurityPlugins {
   ) -> SecurityResult<EncodedSubmessage> {
     // Convert the destination GUIDs to handles
     let mut receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle> =
-      SecurityResult::from_iter(
-        destination_guid_list
-          .iter()
-          .map(|destination_guid| self.get_remote_entity_handle((source_guid, destination_guid))),
-      )?;
+      SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
+        self.get_remote_entity_crypto_handle((source_guid, destination_guid))
+      }))?;
     // Remove duplicates
     receiving_datareader_crypto_list.sort();
     receiving_datareader_crypto_list.dedup();
 
     self.crypto.encode_datawriter_submessage(
       plain_submessage,
-      self.get_local_entity_handle(source_guid)?,
+      self.get_local_entity_crypto_handle(source_guid)?,
       receiving_datareader_crypto_list,
     )
   }
@@ -125,18 +125,16 @@ impl SecurityPlugins {
   ) -> SecurityResult<EncodedSubmessage> {
     // Convert the destination GUIDs to handles
     let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
-      SecurityResult::from_iter(
-        destination_guid_list
-          .iter()
-          .map(|destination_guid| self.get_remote_entity_handle((source_guid, destination_guid))),
-      )?;
+      SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
+        self.get_remote_entity_crypto_handle((source_guid, destination_guid))
+      }))?;
     // Remove duplicates
     receiving_datawriter_crypto_list.sort();
     receiving_datawriter_crypto_list.dedup();
 
     self.crypto.encode_datareader_submessage(
       plain_submessage,
-      self.get_local_entity_handle(source_guid)?,
+      self.get_local_entity_crypto_handle(source_guid)?,
       receiving_datawriter_crypto_list,
     )
   }
@@ -149,18 +147,16 @@ impl SecurityPlugins {
   ) -> SecurityResult<Message> {
     // Convert the destination GUID prefixes to handles
     let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
-      SecurityResult::from_iter(
-        destination_guid_prefix_list
-          .iter()
-          .map(|destination_guid_prefix| self.get_participant_handle(destination_guid_prefix)),
-      )?;
+      SecurityResult::from_iter(destination_guid_prefix_list.iter().map(
+        |destination_guid_prefix| self.get_participant_crypto_handle(destination_guid_prefix),
+      ))?;
     // Remove duplicates
     receiving_datawriter_crypto_list.sort();
     receiving_datawriter_crypto_list.dedup();
 
     self.crypto.encode_rtps_message(
       plain_message,
-      self.get_participant_handle(source_guid_prefix)?,
+      self.get_participant_crypto_handle(source_guid_prefix)?,
       receiving_datawriter_crypto_list,
     )
   }
@@ -173,8 +169,8 @@ impl SecurityPlugins {
   ) -> SecurityResult<Message> {
     self.crypto.decode_rtps_message(
       encoded_message,
-      self.get_participant_handle(destination_guid_prefix)?,
-      self.get_participant_handle(source_guid_prefix)?,
+      self.get_participant_crypto_handle(destination_guid_prefix)?,
+      self.get_participant_crypto_handle(source_guid_prefix)?,
     )
   }
 
@@ -186,8 +182,8 @@ impl SecurityPlugins {
   ) -> SecurityResult<SecureSubmessageCategory> {
     self.crypto.preprocess_secure_submsg(
       secure_prefix,
-      self.get_participant_handle(destination_guid_prefix)?,
-      self.get_participant_handle(source_guid_prefix)?,
+      self.get_participant_crypto_handle(destination_guid_prefix)?,
+      self.get_participant_crypto_handle(source_guid_prefix)?,
     )
   }
 
