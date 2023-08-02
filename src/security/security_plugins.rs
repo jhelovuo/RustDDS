@@ -13,9 +13,10 @@ use crate::{
   rtps::{Message, Submessage},
   security_error,
   structure::guid::GuidPrefix,
-  GUID,
+  QosPolicies, GUID,
 };
 use super::{
+  access_control::*,
   authentication::*,
   cryptographic::{
     DatareaderCryptoHandle, DatawriterCryptoHandle, EncodedSubmessage, EntityCryptoHandle,
@@ -29,6 +30,10 @@ pub(crate) struct SecurityPlugins {
   pub auth: Box<dyn Authentication>,
   pub access: Box<dyn AccessControl>,
   crypto: Box<dyn Cryptographic>,
+
+  identity_handle_cache_: HashMap<GUID, IdentityHandle>,
+
+  permissions_handle_cache_: HashMap<GUID, PermissionsHandle>,
 
   participant_crypto_handle_cache_: HashMap<GuidPrefix, ParticipantCryptoHandle>,
   local_entity_crypto_handle_cache_: HashMap<GUID, EntityCryptoHandle>,
@@ -45,10 +50,34 @@ impl SecurityPlugins {
       auth,
       access,
       crypto,
+      identity_handle_cache_: HashMap::new(),
+      permissions_handle_cache_: HashMap::new(),
       participant_crypto_handle_cache_: HashMap::new(),
       local_entity_crypto_handle_cache_: HashMap::new(),
       remote_entity_crypto_handle_cache_: HashMap::new(),
     }
+  }
+
+  fn get_identity_handle(&self, guid: &GUID) -> SecurityResult<IdentityHandle> {
+    self
+      .identity_handle_cache_
+      .get(guid)
+      .ok_or(security_error!(
+        "Could not find an IdentityHandle for the Guid {:?}",
+        guid
+      ))
+      .copied()
+  }
+
+  fn get_permissions_handle(&self, guid: &GUID) -> SecurityResult<PermissionsHandle> {
+    self
+      .permissions_handle_cache_
+      .get(guid)
+      .ok_or(security_error!(
+        "Could not find a PermissionsHandle for the Guid {:?}",
+        guid
+      ))
+      .copied()
   }
 
   fn get_participant_crypto_handle(
@@ -90,6 +119,115 @@ impl SecurityPlugins {
         local_and_proxy_guid_pair
       ))
       .copied()
+  }
+}
+
+/// Interface for using the Authentication plugin
+impl SecurityPlugins {
+  pub fn validate_local_identity(
+    &mut self,
+    domain_id: u16,
+    participant_qos: &QosPolicies,
+    candidate_participant_guid: GUID,
+  ) -> SecurityResult<GUID> {
+    let (outcome, identity_handle, sec_guid) =
+      self
+        .auth
+        .validate_local_identity(domain_id, participant_qos, candidate_participant_guid)?;
+
+    if let ValidationOutcome::Ok = outcome {
+      // Everything OK, store handle and return GUID
+      self
+        .identity_handle_cache_
+        .insert(sec_guid, identity_handle);
+      Ok(sec_guid)
+    } else {
+      // If the builtin authentication does not fail, it should produce only OK
+      // outcome. If some other outcome was produced, return an error
+      Err(security_error!(
+        "Validating local identity produced an unexpected outcome"
+      ))
+    }
+  }
+
+  pub fn get_identity_token(&self, participant_guid: GUID) -> SecurityResult<IdentityToken> {
+    let identity_handle = self.get_identity_handle(&participant_guid)?;
+    self.auth.get_identity_token(identity_handle)
+  }
+
+  pub fn get_identity_status_token(
+    &self,
+    participant_guid: GUID,
+  ) -> SecurityResult<IdentityStatusToken> {
+    let identity_handle = self.get_identity_handle(&participant_guid)?;
+    self.auth.get_identity_status_token(identity_handle)
+  }
+
+  pub fn set_permissions_credential_and_token(
+    &self,
+    participant_guid: GUID,
+    permissions_credential_token: PermissionsCredentialToken,
+    permissions_token: PermissionsToken,
+  ) -> SecurityResult<()> {
+    let handle = self.get_identity_handle(&participant_guid)?;
+    self.auth.set_permissions_credential_and_token(
+      handle,
+      permissions_credential_token,
+      permissions_token,
+    )
+  }
+}
+
+/// Interface for using the Access control plugin
+impl SecurityPlugins {
+  pub fn validate_local_permissions(
+    &mut self,
+    domain_id: u16,
+    participant_guid: GUID,
+    participant_qos: &QosPolicies,
+  ) -> SecurityResult<()> {
+    let identity_handle = self.get_identity_handle(&participant_guid)?;
+    let permissions_handle = self.access.validate_local_permissions(
+      &*self.auth,
+      identity_handle,
+      domain_id,
+      participant_qos,
+    )?;
+    self
+      .permissions_handle_cache_
+      .insert(participant_guid, permissions_handle);
+    Ok(())
+  }
+
+  pub fn check_create_participant(
+    &self,
+    domain_id: u16,
+    participant_guid: GUID,
+    qos: &QosPolicies,
+  ) -> SecurityResult<()> {
+    let handle = self.get_permissions_handle(&participant_guid)?;
+    self.access.check_create_participant(handle, domain_id, qos)
+  }
+
+  pub fn get_permissions_token(&self, participant_guid: GUID) -> SecurityResult<PermissionsToken> {
+    let handle: PermissionsHandle = self.get_permissions_handle(&participant_guid)?;
+    self.access.get_permissions_token(handle)
+  }
+
+  pub fn get_permissions_credential_token(
+    &self,
+    participant_guid: GUID,
+  ) -> SecurityResult<PermissionsCredentialToken> {
+    let handle: PermissionsHandle = self.get_permissions_handle(&participant_guid)?;
+    self.access.get_permissions_credential_token(handle)
+  }
+
+  pub fn get_participant_sec_attributes(
+    &self,
+    participant_guid: GUID,
+  ) -> SecurityResult<ParticipantSecurityAttributes> {
+    let handle: PermissionsHandle = self.get_permissions_handle(&participant_guid)?;
+    self.access.get_participant_sec_attributes(handle)
   }
 }
 

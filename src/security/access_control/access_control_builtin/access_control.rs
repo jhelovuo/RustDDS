@@ -39,10 +39,10 @@ impl AccessControl for AccessControlBuiltIn {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     qos: &QosPolicies,
-  ) -> SecurityResult<bool> {
+  ) -> SecurityResult<()> {
     // TODO: actual implementation
 
-    Ok(true)
+    Ok(())
   }
 
   // Currently only mocked

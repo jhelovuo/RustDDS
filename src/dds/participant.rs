@@ -15,7 +15,8 @@ use mio_06::Token;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  create_error_not_allowed_by_security, create_error_out_of_resources, create_error_poisoned,
+  create_error_internal, create_error_not_allowed_by_security, create_error_out_of_resources,
+  create_error_poisoned,
   dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
@@ -99,54 +100,97 @@ impl DomainParticipantBuilder {
         trace!("DomainParticipant security construction start");
         // Now we initialize security according to DDS Security spec v1.1
         // Section "8.8.1 Authentication and AccessControl behavior with local
-        // DomainParticipant" TODO: handle errors
+        // DomainParticipant"
 
-        let (_outcome, identity_handle, sec_guid) = security_plugins.auth.validate_local_identity(
+        let sec_guid = match security_plugins.validate_local_identity(
           self.domain_id,
           &participant_qos,
           participant_guid, // this is now candidate
-        )?;
+        ) {
+          Ok(guid) => guid,
+          Err(e) => {
+            return create_error_not_allowed_by_security!(
+              "Validating local identity failed: {}",
+              e.msg
+            );
+          }
+        };
 
         participant_guid = sec_guid; // just overwrite to update
 
-        let permissions_handle = security_plugins.access.validate_local_permissions(
-          &*security_plugins.auth,
-          identity_handle,
+        if let Err(e) = security_plugins.validate_local_permissions(
           self.domain_id,
+          participant_guid,
           &participant_qos,
-        )?;
-
-        if !security_plugins.access.check_create_participant(
-          permissions_handle,
-          self.domain_id,
-          &participant_qos,
-        )? {
-          return create_error_not_allowed_by_security!("Not allowed to create participant.");
+        ) {
+          return create_error_not_allowed_by_security!(
+            "Validating local permissions failed: {}",
+            e.msg
+          );
         }
 
-        let identity_token = security_plugins.auth.get_identity_token(identity_handle)?;
+        if let Err(e) = security_plugins.check_create_participant(
+          self.domain_id,
+          participant_guid,
+          &participant_qos,
+        ) {
+          return create_error_not_allowed_by_security!(
+            "Not allowed to create participant: {}",
+            e.msg
+          );
+        }
 
-        let identity_status_token = security_plugins
-          .auth
-          .get_identity_status_token(identity_handle)?;
+        let identity_token = match security_plugins.get_identity_token(participant_guid) {
+          Ok(token) => token,
+          Err(e) => {
+            return create_error_internal!("Getting identity token failed: {}", e.msg);
+          }
+        };
 
-        let permissions_token = security_plugins
-          .access
-          .get_permissions_token(permissions_handle)?;
+        let identity_status_token =
+          match security_plugins.get_identity_status_token(participant_guid) {
+            Ok(token) => token,
+            Err(e) => {
+              return create_error_internal!("Getting identity status token failed: {}", e.msg);
+            }
+          };
 
-        let permissions_credential_token = security_plugins
-          .access
-          .get_permissions_credential_token(permissions_handle)?;
+        let permissions_token = match security_plugins.get_permissions_token(participant_guid) {
+          Ok(token) => token,
+          Err(e) => {
+            return create_error_internal!("Getting permissions token failed: {}", e.msg);
+          }
+        };
 
-        security_plugins.auth.set_permissions_credential_and_token(
-          identity_handle,
-          permissions_credential_token,
+        let credential_token =
+          match security_plugins.get_permissions_credential_token(participant_guid) {
+            Ok(token) => token,
+            Err(e) => {
+              return create_error_internal!(
+                "Getting permissions credential token failed: {}",
+                e.msg
+              );
+            }
+          };
+
+        if let Err(e) = security_plugins.set_permissions_credential_and_token(
+          participant_guid,
+          credential_token,
           permissions_token.clone(),
-        )?;
+        ) {
+          return create_error_internal!("Failed setting permission tokens: {}", e.msg);
+        };
 
-        let participant_security_attributes = security_plugins
-          .access
-          .get_participant_sec_attributes(permissions_handle)?;
+        let security_attributes: security::access_control::ParticipantSecurityAttributes =
+          match security_plugins.get_participant_sec_attributes(participant_guid) {
+            Ok(attributes) => attributes,
+            Err(e) => {
+              return create_error_internal!(
+                "Failed getting participant security attributes: {}",
+                e.msg
+              );
+            }
+          };
 
         Some((identity_token, identity_status_token, permissions_token))
       } else {

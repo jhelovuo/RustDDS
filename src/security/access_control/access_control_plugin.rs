@@ -46,7 +46,7 @@ pub trait AccessControl: Send {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     qos: &QosPolicies,
-  ) -> SecurityResult<bool>;
+  ) -> SecurityResult<()>;
 
   /// check_create_datawriter: section 8.4.2.9.4 of the Security
   /// specification. The parameters partition and data_tag have been left out,

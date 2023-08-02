@@ -9,7 +9,7 @@ use crate::security::types::DataHolder;
 // SecurityResult
 pub enum ValidationOutcome {
   Ok,
-  PendingRetry,
+  // PendingRetry,  // Not included because builtin plugins never return this
   PendingHandshakeRequest,
   PendingHandshakeMessage,
   OkFinalMessage,
