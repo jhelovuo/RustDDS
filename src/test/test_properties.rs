@@ -1,7 +1,9 @@
+use speedy::Writable;
+
 use crate::{
   messages::submessages::{
     elements::serialized_payload::SerializedPayload,
-    submessages::{Data, RepresentationIdentifier},
+    submessages::{Data, DecodedData, RepresentationIdentifier},
   },
   structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
@@ -30,8 +32,13 @@ impl Default for Data {
       writer_id: EntityId::default(),
       writer_sn: SequenceNumber::default(),
       inline_qos: None,
-      serialized_payload: Some(SerializedPayload::default()),
+      encoded_payload: Some(SerializedPayload::default().write_to_vec().unwrap().into()),
     }
+  }
+}
+impl Default for DecodedData {
+  fn default() -> Self {
+    Data::default().no_crypto_decoded()
   }
 }
 

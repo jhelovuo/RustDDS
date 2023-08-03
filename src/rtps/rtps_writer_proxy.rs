@@ -8,7 +8,7 @@ use log::{debug, error, info, trace, warn};
 use crate::{
   dds::ddsdata::DDSData,
   discovery::sedp_messages::DiscoveredWriterData,
-  messages::submessages::submessages::{DATAFRAG_Flags, DataFrag},
+  messages::submessages::submessages::{DATAFRAG_Flags, DecodedDataFrag},
   rtps::fragment_assembler::FragmentAssembler,
   structure::{
     guid::{EntityId, GUID},
@@ -333,7 +333,7 @@ impl RtpsWriterProxy {
 
   pub fn handle_datafrag(
     &mut self,
-    datafrag: &DataFrag,
+    datafrag: &DecodedDataFrag,
     flags: BitFlags<DATAFRAG_Flags>,
   ) -> Option<DDSData> {
     if let Some(ref mut fa) = self.fragment_assembler {

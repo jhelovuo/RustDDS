@@ -1,5 +1,6 @@
 use std::collections::{btree_map::Entry, BTreeMap};
 
+use enumflags2::BitFlags;
 use mio_extras::{channel as mio_channel, channel::TrySendError};
 use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
@@ -8,6 +9,7 @@ use crate::{
   messages::{
     protocol_version::ProtocolVersion,
     submessages::{
+      elements::serialized_payload::SerializedPayload,
       secure_postfix::SecurePostfix,
       secure_prefix::SecurePrefix,
       submessages::{WriterSubmessage, *},
@@ -365,6 +367,12 @@ impl MessageReceiver {
       WriterSubmessage::Data(data, data_flags) => {
         let writer_entity_id = data.writer_id;
         let source_guid_prefix = mr_state.source_guid_prefix;
+        let source_guid = &GUID {
+          prefix: source_guid_prefix,
+          entity_id: writer_entity_id,
+        };
+        let security_plugins = self.security_plugins.clone();
+
         // If reader_id == UNKNOWN, message should be sent to all matched
         // readers
         if data.reader_id == EntityId::UNKNOWN {
@@ -388,10 +396,25 @@ impl MessageReceiver {
               "handle_entity_submessage DATA from unknown handling in {:?}",
               &reader
             );
-            reader.handle_data_msg(data.clone(), data_flags, &mr_state);
+
+            Self::decode_and_handle_data(
+              security_plugins.as_ref(),
+              source_guid,
+              data.clone(),
+              data_flags,
+              reader,
+              &mr_state,
+            );
           }
         } else if let Some(target_reader) = self.reader_mut(data.reader_id) {
-          target_reader.handle_data_msg(data, data_flags, &mr_state);
+          Self::decode_and_handle_data(
+            security_plugins.as_ref(),
+            source_guid,
+            data,
+            data_flags,
+            target_reader,
+            &mr_state,
+          );
         }
         // bypass lane fro SPDP messages
         if writer_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
@@ -436,6 +459,14 @@ impl MessageReceiver {
       }
 
       WriterSubmessage::DataFrag(datafrag, flags) => {
+        let writer_entity_id = datafrag.writer_id;
+        let source_guid_prefix = mr_state.source_guid_prefix;
+        let source_guid = &GUID {
+          prefix: source_guid_prefix,
+          entity_id: writer_entity_id,
+        };
+        let security_plugins = self.security_plugins.clone();
+
         // If reader_id == UNKNOWN, message should be sent to all matched readers
         if datafrag.reader_id == EntityId::UNKNOWN {
           trace!(
@@ -458,10 +489,25 @@ impl MessageReceiver {
               "handle_entity_submessage DATA from unknown handling in {:?}",
               &reader
             );
-            reader.handle_datafrag_msg(&datafrag, flags, &mr_state);
+
+            Self::decode_and_handle_datafrag(
+              security_plugins.as_ref(),
+              source_guid,
+              datafrag.clone(),
+              flags,
+              reader,
+              &mr_state,
+            );
           }
         } else if let Some(target_reader) = self.reader_mut(datafrag.reader_id) {
-          target_reader.handle_datafrag_msg(&datafrag, flags, &mr_state);
+          Self::decode_and_handle_datafrag(
+            security_plugins.as_ref(),
+            source_guid,
+            datafrag,
+            flags,
+            target_reader,
+            &mr_state,
+          );
         }
       }
       WriterSubmessage::HeartbeatFrag(heartbeatfrag, _flags) => {
@@ -480,6 +526,129 @@ impl MessageReceiver {
         }
       }
     }
+  }
+
+  fn decode_and_handle_data(
+    security_plugins: Option<&SecurityPluginsHandle>,
+    source_guid: &GUID,
+    data: Data,
+    data_flags: BitFlags<DATA_Flags, u8>,
+    reader: &mut Reader,
+    mr_state: &MessageReceiverState,
+  ) {
+    let Data {
+      inline_qos,
+      encoded_payload,
+      ..
+    } = data.clone();
+    encoded_payload
+      // If there is an encoded_payload, decode it
+      .map(|encoded_payload| {
+        // Try to get security plugins
+        SecurityPluginsHandle::get_mutex_guard(security_plugins)
+          .and_then(|security_plugins_option| {
+            security_plugins_option.map_or(
+              // If there are no security plugins, we expect a serialized SerializedPayload as
+              // Bytes
+              Ok(encoded_payload.clone()),
+              // If security plugins exist, use them to decode
+              |security_plugins| {
+                // Decode
+                security_plugins
+                  .decode_serialized_payload(
+                    Vec::from(encoded_payload),
+                    inline_qos.unwrap_or_default(),
+                    source_guid,
+                    &reader.guid(),
+                  )
+                  // Convert to Bytes
+                  .map(Bytes::from)
+              },
+            )
+          })
+          .map_err(|e| error!("{e:?}"))
+          // Deserialize
+          .and_then(|serialized_payload| {
+            SerializedPayload::from_bytes(&serialized_payload).map_err(|e| error!("{e:?}"))
+          })
+      })
+      .transpose()
+      // If there were no errors, give DecodedData to the reader
+      .map_or(
+        // Errors have already been printed
+        (),
+        |decoded_payload| {
+          reader.handle_data_msg(data.decoded(decoded_payload), data_flags, mr_state);
+        },
+      );
+  }
+
+  fn decode_and_handle_datafrag(
+    security_plugins: Option<&SecurityPluginsHandle>,
+    source_guid: &GUID,
+    datafrag: DataFrag,
+    datafrag_flags: BitFlags<DATAFRAG_Flags, u8>,
+    reader: &mut Reader,
+    mr_state: &MessageReceiverState,
+  ) {
+    let DataFrag {
+      inline_qos,
+      encoded_payload,
+      ..
+    } = datafrag.clone();
+
+    // Try to get security plugins
+    SecurityPluginsHandle::get_mutex_guard(security_plugins)
+      .and_then(|security_plugins_option| {
+        security_plugins_option.map_or(
+          // If there are no security plugins, we expect a serialized SerializedPayload as
+          // Bytes
+          Ok(encoded_payload.clone()),
+          // If security plugins exist, use them to decode
+          |security_plugins| {
+            // Decode
+            security_plugins
+              .decode_serialized_payload(
+                Vec::from(encoded_payload),
+                inline_qos.unwrap_or_default(),
+                source_guid,
+                &reader.guid(),
+              )
+              // Convert to Bytes
+              .map(Bytes::from)
+          },
+        )
+      })
+      .map_err(|e| error!("{e:?}"))
+      // Deserialize
+      .and_then(|serialized_payload| {
+        // The check that used to be in DataFrag deserialization
+        if serialized_payload.len()
+          > (datafrag.fragments_in_submessage as usize) * (datafrag.fragment_size as usize)
+        {
+          Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+              "Invalid DataFrag. serializedData length={} should be less than or equal to \
+               (fragments_in_submessage={}) x (fragment_size={})",
+              serialized_payload.len(),
+              datafrag.fragments_in_submessage,
+              datafrag.fragment_size
+            ),
+          ))
+          .map_err(|e| error!("{e:?}"))
+        } else {
+          Ok(serialized_payload)
+        }
+      })
+      // If there were no errors, give DecodedDataFrag to the reader
+      .map_or(
+        // Errors have already been printed
+        (),
+        |decoded_payload| {
+          reader.handle_datafrag_msg(&datafrag.decoded(decoded_payload), datafrag_flags, mr_state);
+        },
+      );
   }
 
   fn handle_reader_submessage(&mut self, submessage: ReaderSubmessage) {

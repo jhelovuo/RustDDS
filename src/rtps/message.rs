@@ -13,13 +13,17 @@ use crate::{
     protocol_id::ProtocolId,
     protocol_version::ProtocolVersion,
     submessages::{
-      elements::{parameter::Parameter, parameter_list::ParameterList},
+      elements::{
+        parameter::Parameter, parameter_list::ParameterList, serialized_payload::SerializedPayload,
+      },
       submessage::WriterSubmessage,
       submessages::{SubmessageKind, *},
     },
     vendor_id::VendorId,
   },
   rtps::{writer::Writer as RtpsWriter, Submessage, SubmessageBody},
+  security::{security_plugins::SecurityPluginsHandle, SecurityError},
+  security_error,
   structure::{
     cache_change::CacheChange,
     entity::RTPSEntity,
@@ -166,10 +170,13 @@ impl MessageBuilder {
   pub fn data_msg(
     mut self,
     cache_change: &CacheChange,
-    reader_entity_id: EntityId,
-    writer_entity_id: EntityId,
+    reader_entity_id: EntityId, // The entity id to be included in the submessage
+    writer_guid: GUID,
     endianness: Endianness,
+    security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
+    let writer_entity_id = writer_guid.entity_id;
+
     let mut param_list = ParameterList::new(); // inline QoS goes here
 
     // Check if we are disposing by key hash
@@ -178,7 +185,7 @@ impl MessageBuilder {
       DDSData::DisposeByKeyHash { key_hash, .. } => {
         // yes, insert to inline QoS
         // insert key hash
-        param_list.parameters.push(Parameter {
+        param_list.push(Parameter {
           parameter_id: ParameterId::PID_KEY_HASH,
           value: key_hash.to_vec(),
         });
@@ -187,18 +194,80 @@ impl MessageBuilder {
         let status_info = Parameter::create_pid_status_info_parameter(
           /* disposed */ true, /* unregistered */ true, /* filtered */ false,
         );
-        param_list.parameters.push(status_info);
+        param_list.push(status_info);
       }
     }
 
     // If we are sending related sample identity, then insert that.
     if let Some(si) = cache_change.write_options.related_sample_identity {
       let related_sample_identity_serialized = si.write_to_vec_with_ctx(endianness).unwrap();
-      param_list.parameters.push(Parameter {
+      param_list.push(Parameter {
         parameter_id: ParameterId::PID_RELATED_SAMPLE_IDENTITY,
         value: related_sample_identity_serialized,
       });
     }
+
+    let serialized_payload = match cache_change.data_value {
+      DDSData::Data {
+        ref serialized_payload,
+      } => Some(serialized_payload.clone()), // contents is Bytes
+      DDSData::DisposeByKey { ref key, .. } => Some(key.clone()),
+      DDSData::DisposeByKeyHash { .. } => None,
+    };
+    // TODO: please explain this logic here:
+    //
+    // Current hypothesis:
+    // If we are writing to a built-in ( = Discovery) topic, then we mark the
+    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
+    // on a little-endian machine.
+    let serialized_payload = serialized_payload.map(|serialized_payload| {
+      if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::PL_CDR_LE,
+          ..serialized_payload
+        }
+      } else {
+        serialized_payload
+      }
+    });
+
+    let encoded_payload = match serialized_payload
+      // Encode payload if it exists
+      .map(|serialized_payload| {
+        serialized_payload
+          // Serialize
+          .write_to_vec()
+          .map_err(|e| security_error!("{e:?}"))
+          .and_then(|serialized_payload| {
+            // Try to get security plugins
+            SecurityPluginsHandle::get_mutex_guard(security_plugins).and_then(
+              |security_plugins_option| {
+                security_plugins_option.map_or(
+                  // If there are no security plugins, use plaintext
+                  Ok(serialized_payload.clone()),
+                  // If security plugins exist, call them to encode payload
+                  |security_plugins| {
+                    security_plugins
+                      .encode_serialized_payload(serialized_payload, &writer_guid)
+                      // Add the extra qos
+                      .map(|(encoded_payload, extra_inline_qos)| {
+                        param_list.concat(extra_inline_qos);
+                        encoded_payload
+                      })
+                  },
+                )
+              },
+            )
+          })
+      })
+      .transpose()
+    {
+      Ok(encoded_payload) => encoded_payload,
+      Err(e) => {
+        error!("{e:?}");
+        return self;
+      }
+    };
 
     let have_inline_qos = !param_list.is_empty(); // we need this later also
     let inline_qos = if have_inline_qos {
@@ -207,31 +276,13 @@ impl MessageBuilder {
       None
     };
 
-    let mut data_message = Data {
+    let data_message = Data {
       reader_id: reader_entity_id,
       writer_id: writer_entity_id,
       writer_sn: cache_change.sequence_number,
       inline_qos,
-      serialized_payload: match cache_change.data_value {
-        DDSData::Data {
-          ref serialized_payload,
-        } => Some(serialized_payload.clone()), // contents is Bytes
-        DDSData::DisposeByKey { ref key, .. } => Some(key.clone()),
-        DDSData::DisposeByKeyHash { .. } => None,
-      },
+      encoded_payload: encoded_payload.map(Bytes::from),
     };
-
-    // TODO: please explain this logic here:
-    //
-    // Current hypothesis:
-    // If we are writing to a built-in ( = Discovery) topic, then we mark the
-    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
-    // on a little-endian machine.
-    if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
-      if let Some(sp) = data_message.serialized_payload.as_mut() {
-        sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE;
-      }
-    }
 
     let flags: BitFlags<DATA_Flags> = BitFlags::<DATA_Flags>::from_endianness(endianness)
       | (match cache_change.data_value {
@@ -265,12 +316,15 @@ impl MessageBuilder {
     mut self,
     cache_change: &CacheChange,
     reader_entity_id: EntityId,
-    writer_entity_id: EntityId,
+    writer_guid: GUID,
     fragment_number: FragmentNumber, // We support only submessages with one fragment
     fragment_size: u16,
     sample_size: u32, // all fragments together
     endianness: Endianness,
+    security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
+    let writer_entity_id = writer_guid.entity_id;
+
     let mut param_list = ParameterList::new(); // inline QoS goes here
 
     // Check if we are disposing by key hash
@@ -306,9 +360,43 @@ impl MessageBuilder {
       sample_size.try_into().unwrap(),
     );
 
-    let serialized_payload = cache_change
-      .data_value
-      .bytes_slice(from_byte, up_to_before_byte);
+    let serialized_payload = Vec::from(
+      cache_change
+        .data_value
+        .bytes_slice(from_byte, up_to_before_byte),
+    );
+
+    let encoded_payload = match serialized_payload
+      // Serialize
+      .write_to_vec()
+      .map_err(|e| security_error!("{e:?}"))
+      .and_then(|serialized_payload| {
+        // Try to get security plugins
+        SecurityPluginsHandle::get_mutex_guard(security_plugins).and_then(
+          |security_plugins_option| {
+            security_plugins_option.map_or(
+              // If there are no security plugins, use plaintext
+              Ok(serialized_payload.clone()),
+              // If security plugins exist, call them to encode payload
+              |security_plugins| {
+                security_plugins
+                  .encode_serialized_payload(serialized_payload, &writer_guid)
+                  // Add the extra qos
+                  .map(|(encoded_payload, extra_inline_qos)| {
+                    param_list.concat(extra_inline_qos);
+                    encoded_payload
+                  })
+              },
+            )
+          },
+        )
+      }) {
+      Ok(encoded_payload) => encoded_payload,
+      Err(e) => {
+        error!("{e:?}");
+        return self;
+      }
+    };
 
     let data_message = DataFrag {
       reader_id: reader_entity_id,
@@ -323,7 +411,7 @@ impl MessageBuilder {
       } else {
         None
       },
-      serialized_payload,
+      encoded_payload: Bytes::from(encoded_payload),
     };
 
     // TODO: please explain this logic here:
@@ -653,7 +741,9 @@ mod tests {
       } => d,
       wtf => panic!("Unexpected message structure {wtf:?}"),
     };
+
     let serialized_payload = data_submessage
+      .no_crypto_decoded()
       .serialized_payload
       .as_ref()
       .unwrap()

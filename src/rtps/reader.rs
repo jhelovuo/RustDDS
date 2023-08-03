@@ -470,7 +470,7 @@ impl Reader {
   // handles regular data message and updates history cache
   pub fn handle_data_msg(
     &mut self,
-    data: Data,
+    data: DecodedData,
     data_flags: BitFlags<DATA_Flags>,
     mr_state: &MessageReceiverState,
   ) {
@@ -511,7 +511,7 @@ impl Reader {
 
   pub fn handle_datafrag_msg(
     &mut self,
-    datafrag: &DataFrag,
+    datafrag: &DecodedDataFrag,
     datafrag_flags: BitFlags<DATAFRAG_Flags>,
     mr_state: &MessageReceiverState,
   ) {
@@ -646,7 +646,7 @@ impl Reader {
 
   fn data_to_ddsdata(
     &self,
-    data: Data,
+    data: DecodedData,
     data_flags: BitFlags<DATA_Flags>,
   ) -> Result<DDSData, String> {
     let representation_identifier = DATA_Flags::cdr_representation_identifier(data_flags);
@@ -1374,7 +1374,7 @@ mod tests {
     let data_flags = BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
 
     // 4. Feed the data for the reader to handle
-    reader.handle_data_msg(data, data_flags, &mr_state);
+    reader.handle_data_msg(data.no_crypto_decoded(), data_flags, &mr_state);
 
     // 5. Verify that the reader sends a notification about the new data
     assert!(
@@ -1462,7 +1462,7 @@ mod tests {
     let sequence_num = data.writer_sn;
 
     // 4. Feed the data for the reader to handle
-    reader.handle_data_msg(data.clone(), data_flags, &mr_state);
+    reader.handle_data_msg(data.no_crypto_decoded(), data_flags, &mr_state);
 
     // 5. Verify that the reader sent the data to the topic cache
     let topic_cache = topic_cache_handle.lock().unwrap();
@@ -1473,7 +1473,7 @@ mod tests {
 
     // 6. Verify that the content of the cache change is as expected
     // Construct a cache change with the expected content
-    let ddsdata = DDSData::new(data.serialized_payload.unwrap());
+    let ddsdata = DDSData::new(data.no_crypto_decoded().serialized_payload.unwrap());
     let cc_locally_built = CacheChange::new(
       writer_guid,
       sequence_num,
@@ -1698,7 +1698,7 @@ mod tests {
     };
     let data_flags = BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
 
-    reader.handle_data_msg(data, data_flags, &mr_state);
+    reader.handle_data_msg(data.no_crypto_decoded(), data_flags, &mr_state);
 
     // 6. Verify that the writer proxy reports seqnums below 5 as ackable
     // This should be the case since reader received data with seqnum 3 and seqnum 4

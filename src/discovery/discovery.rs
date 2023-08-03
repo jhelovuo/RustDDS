@@ -1532,7 +1532,11 @@ mod tests {
         SubmessageBody::Writer(v) => match v {
           WriterSubmessage::Data(d, _) => {
             let mut drd: DiscoveredReaderData = PlCdrDeserializerAdapter::from_bytes(
-              &d.serialized_payload.as_ref().unwrap().value,
+              &d.no_crypto_decoded()
+                .serialized_payload
+                .as_ref()
+                .unwrap()
+                .value,
               RepresentationIdentifier::PL_CDR_LE,
             )
             .unwrap();
@@ -1549,7 +1553,11 @@ mod tests {
             data = drd
               .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
               .unwrap();
-            d.serialized_payload.as_mut().unwrap().value = data.clone();
+            d.no_crypto_decoded()
+              .serialized_payload
+              .as_mut()
+              .unwrap()
+              .value = data.clone();
           }
           _ => continue,
         },

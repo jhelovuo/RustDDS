@@ -504,9 +504,10 @@ impl Writer {
                 }
                 message_builder = message_builder.data_msg(
                   cache_change,
-                  EntityId::UNKNOWN,      // reader
-                  self.my_guid.entity_id, // writer
+                  EntityId::UNKNOWN, // reader
+                  self.my_guid,      // writer
                   self.endianness,
+                  self.security_plugins.as_ref(),
                 );
               } else {
                 // We just did .insert_to_history_cache but nothing was found?
@@ -552,12 +553,13 @@ impl Writer {
 
                   message_builder = message_builder.data_frag_msg(
                     cache_change,
-                    EntityId::UNKNOWN,      // reader
-                    self.my_guid.entity_id, // writer
+                    EntityId::UNKNOWN, // reader
+                    self.my_guid,      // writer
                     frag_num,
                     fragment_size,
                     data_size.try_into().unwrap(),
                     self.endianness,
+                    self.security_plugins.as_ref(),
                   );
 
                   // TODO: some sort of queuing is needed
@@ -910,9 +912,10 @@ impl Writer {
             // construct DATA submessage
             partial_message = partial_message.data_msg(
               cache_change,
-              reader_guid.entity_id,  // reader
-              self.my_guid.entity_id, // writer
+              reader_guid.entity_id, // reader
+              self.my_guid,          // writer
               self.endianness,
+              self.security_plugins.as_ref(),
             );
             // TODO: Here we are cloning the entire payload. We need to rewrite
             // the transmit path to avoid copying.
@@ -1022,11 +1025,12 @@ impl Writer {
           message_builder = message_builder.data_frag_msg(
             cache_change,
             reader_proxy.remote_reader_guid.entity_id, // reader
-            self.my_guid.entity_id,                    // writer
+            self.my_guid,                              // writer
             frag_num,
             fragment_size as u16, // TODO: overflow check
             data_size,
             self.endianness,
+            self.security_plugins.as_ref(),
           );
 
           // TODO: some sort of queuing is needed

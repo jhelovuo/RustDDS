@@ -1,9 +1,6 @@
 use crate::{
   messages::submessages::{
-    elements::{
-      crypto_content::CryptoContent, parameter_list::ParameterList,
-      serialized_payload::SerializedPayload,
-    },
+    elements::parameter_list::ParameterList,
     secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
     submessages::{ReaderSubmessage, WriterSubmessage},
@@ -171,13 +168,14 @@ pub trait CryptoTransform: Send {
   /// encode_serialized_payload: section 8.5.1.9.1 of the Security specification
   /// (v. 1.1)
   ///
-  /// In a tuple, return the results that would be written in `encoded_buffer`
-  /// and `extra_inline_qos`.
+  /// In a tuple, return the results that would be written in `encoded_buffer`,
+  /// which can be `CryptoContent`, or `SerializedPayload` if no encryption is
+  /// performed, and `extra_inline_qos`.
   fn encode_serialized_payload(
     &self,
-    plain_buffer: SerializedPayload,
+    plain_buffer: Vec<u8>, // (a fragment of) serialized `SerializedPayload`
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<(CryptoContent, ParameterList)>;
+  ) -> SecurityResult<(Vec<u8>, ParameterList)>;
 
   /// encode_datawriter_submessage: section 8.5.1.9.2 of the Security
   /// specification (v. 1.1)
@@ -293,12 +291,13 @@ pub trait CryptoTransform: Send {
   /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
   /// (v. 1.1)
   ///
-  /// Return the serialized payload that would be written in `plain_buffer`
+  /// Return the (fragment of) serialized payload that would be written in
+  /// `plain_buffer`
   fn decode_serialized_payload(
     &self,
-    encoded_buffer: CryptoContent,
+    encoded_buffer: Vec<u8>,
     inline_qos: ParameterList,
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<SerializedPayload>;
+  ) -> SecurityResult<Vec<u8>>;
 }

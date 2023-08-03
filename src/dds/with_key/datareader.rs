@@ -1000,7 +1000,7 @@ mod tests {
       topic::{TopicDescription, TopicKind},
     },
     messages::submessages::{
-      data::Data, elements::serialized_payload::SerializedPayload, submessage_flag::*,
+      elements::serialized_payload::SerializedPayload, submessage_flag::*, submessages::DecodedData,
     },
     mio_source,
     network::udp_sender::UDPSender,
@@ -1113,7 +1113,7 @@ mod tests {
       a: 11,
       b: ":)))".to_string(),
     };
-    let data_msg = Data {
+    let data_msg = DecodedData {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(1),
@@ -1122,10 +1122,10 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data).unwrap()),
       }),
-      ..Default::default()
+      ..DecodedData::default()
     };
 
-    let data_msg2 = Data {
+    let data_msg2 = DecodedData {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(2),
@@ -1134,7 +1134,7 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap()),
       }),
-      ..Default::default()
+      ..DecodedData::default()
     };
 
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
@@ -1288,7 +1288,7 @@ mod tests {
 
     // Create data messages from the data items
     // Note that sequence numbering needs to continue as expected
-    let data_msg = Data {
+    let data_msg = DecodedData {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(1),
@@ -1297,9 +1297,9 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
       }),
-      ..Data::default()
+      ..DecodedData::default()
     };
-    let data_msg2 = Data {
+    let data_msg2 = DecodedData {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(2),
@@ -1308,9 +1308,9 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
       }),
-      ..Data::default()
+      ..DecodedData::default()
     };
-    let data_msg3 = Data {
+    let data_msg3 = DecodedData {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(3),
@@ -1319,9 +1319,9 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
       }),
-      ..Data::default()
+      ..DecodedData::default()
     };
-    let data_msg4 = Data {
+    let data_msg4 = DecodedData {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(4),
@@ -1330,7 +1330,7 @@ mod tests {
         representation_options: [0, 0],
         value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
       }),
-      ..Data::default()
+      ..DecodedData::default()
     };
 
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;

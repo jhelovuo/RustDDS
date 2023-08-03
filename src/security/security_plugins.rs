@@ -1,11 +1,12 @@
 use core::fmt;
 use std::{
   collections::HashMap,
-  sync::{Arc, Mutex},
+  sync::{Arc, Mutex, MutexGuard},
 };
 
 use crate::{
   messages::submessages::{
+    elements::parameter_list::ParameterList,
     secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
     submessage::{ReaderSubmessage, WriterSubmessage},
@@ -233,6 +234,17 @@ impl SecurityPlugins {
 
 /// Interface for using the CryptoKeyTransform of the Cryptographic plugin
 impl SecurityPlugins {
+  pub fn encode_serialized_payload(
+    &self,
+    serialized_payload: Vec<u8>,
+    sending_datawriter_guid: &GUID,
+  ) -> SecurityResult<(Vec<u8>, ParameterList)> {
+    self.crypto.encode_serialized_payload(
+      serialized_payload,
+      self.get_local_entity_crypto_handle(sending_datawriter_guid)?,
+    )
+  }
+
   pub fn encode_datawriter_submessage(
     &self,
     plain_submessage: Submessage,
@@ -350,6 +362,21 @@ impl SecurityPlugins {
       sending_datareader_crypto,
     )
   }
+
+  pub fn decode_serialized_payload(
+    &self,
+    encoded_payload: Vec<u8>,
+    inline_qos: ParameterList,
+    source_guid: &GUID,
+    destination_guid: &GUID,
+  ) -> SecurityResult<Vec<u8>> {
+    self.crypto.decode_serialized_payload(
+      encoded_payload,
+      inline_qos,
+      self.get_local_entity_crypto_handle(destination_guid)?,
+      self.get_remote_entity_crypto_handle((destination_guid, source_guid))?,
+    )
+  }
 }
 
 #[derive(Clone)]
@@ -362,6 +389,21 @@ impl SecurityPluginsHandle {
     Self {
       inner: Arc::new(Mutex::new(s)),
     }
+  }
+
+  pub(crate) fn get_mutex_guard(
+    security_plugins: Option<&SecurityPluginsHandle>,
+  ) -> SecurityResult<Option<MutexGuard<SecurityPlugins>>> {
+    security_plugins
+      // Get a mutex guard
+      .map(|security_plugins_handle| security_plugins_handle.lock())
+      // Dig out the error
+      .transpose()
+      .map_err(|e| {
+        security_error!("SecurityPluginHandle poisoned! {e:?}")
+        // TODO: Send signal to exit RTPS thread, as there is no way to
+        // recover.
+      })
   }
 }
 

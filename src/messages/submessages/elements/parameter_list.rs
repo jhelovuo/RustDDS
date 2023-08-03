@@ -38,6 +38,10 @@ impl ParameterList {
     self.parameters.push(p);
   }
 
+  pub fn concat(&mut self, other_parameter_list: ParameterList) {
+    self.parameters = [self.parameters.clone(), other_parameter_list.parameters].concat();
+  }
+
   pub fn serialize_to_bytes(&self, endianness: speedy::Endianness) -> Result<Bytes, speedy::Error> {
     let b = self.write_to_vec_with_ctx(endianness)?;
     Ok(Bytes::from(b))

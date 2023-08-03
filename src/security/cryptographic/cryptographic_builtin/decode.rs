@@ -3,10 +3,7 @@ use speedy::{Readable, Writable};
 
 use crate::{
   messages::submessages::{
-    elements::{
-      crypto_content::CryptoContent, crypto_footer::CryptoFooter,
-      serialized_payload::SerializedPayload,
-    },
+    elements::{crypto_content::CryptoContent, crypto_footer::CryptoFooter},
     secure_body::SecureBody,
     submessage::{ReaderSubmessage, SecuritySubmessage, WriterSubmessage},
   },
@@ -61,7 +58,7 @@ pub(super) fn decode_serialized_payload_gmac(
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
-) -> SecurityResult<SerializedPayload> {
+) -> SecurityResult<Vec<u8>> {
   // The next submessage element should be the plaintext SerializedPayload,
   // followed by a CryptoFooter. However, serialized SerializedPayload
   // does not know its own length, but we know by 9.5.3.3.1 that the CryptoFooter
@@ -91,10 +88,7 @@ pub(super) fn decode_serialized_payload_gmac(
     serialized_payload_data,
     common_mac,
   )
-  .and(
-    SerializedPayload::from_bytes(&Bytes::copy_from_slice(serialized_payload_data))
-      .map_err(|e| security_error!("Failed to deserialize the SerializedPayload: {}", e)),
-  )
+  .and(Ok(Vec::from(serialized_payload_data)))
 }
 
 pub(super) fn decode_serialized_payload_gcm(
@@ -102,7 +96,7 @@ pub(super) fn decode_serialized_payload_gcm(
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
-) -> SecurityResult<SerializedPayload> {
+) -> SecurityResult<Vec<u8>> {
   // The next submessage element should be the CryptoContent containing the
   // encrypted SerializedPayload, followed by a CryptoFooter.
 
@@ -119,11 +113,8 @@ pub(super) fn decode_serialized_payload_gcm(
     .map_err(|e| security_error!("Error while deserializing CryptoFooter: {}", e))
     .and_then(BuiltinCryptoFooter::try_from)?;
 
-  // Decrypt and deserialize serialized payload
-  decrypt(key, key_length, initialization_vector, &data, common_mac).and_then(|plaintext| {
-    SerializedPayload::from_bytes(&Bytes::copy_from_slice(&plaintext))
-      .map_err(|e| security_error!("Failed to deserialize the SerializedPayload: {}", e))
-  })
+  // Decrypt serialized payload
+  decrypt(key, key_length, initialization_vector, &data, common_mac)
 }
 
 pub(super) fn decode_datawriter_submessage_gmac(

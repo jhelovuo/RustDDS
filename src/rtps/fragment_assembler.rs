@@ -10,7 +10,7 @@ use crate::{
   dds::ddsdata::DDSData,
   messages::submessages::{
     elements::serialized_payload::SerializedPayload,
-    submessages::{DATAFRAG_Flags, DataFrag},
+    submessages::{DATAFRAG_Flags, DecodedDataFrag},
   },
   structure::{
     cache_change::ChangeKind,
@@ -32,7 +32,7 @@ struct AssemblyBuffer {
 }
 
 impl AssemblyBuffer {
-  pub fn new(datafrag: &DataFrag) -> Self {
+  pub fn new(datafrag: &DecodedDataFrag) -> Self {
     let data_size: usize = datafrag.data_size.try_into().unwrap();
     // We have unwrap here, but it will succeed as long as usize >= u32.
     let fragment_size: u16 = datafrag.fragment_size;
@@ -62,7 +62,7 @@ impl AssemblyBuffer {
     }
   }
 
-  pub fn insert_frags(&mut self, datafrag: &DataFrag, frag_size: u16) {
+  pub fn insert_frags(&mut self, datafrag: &DecodedDataFrag, frag_size: u16) {
     // TODO: Sanity checks? E.g. datafrag.fragment_size == frag_size
     let frag_size = usize::from(frag_size); // - payload_header;
     let frags_in_subm = usize::from(datafrag.fragments_in_submessage);
@@ -163,7 +163,7 @@ impl FragmentAssembler {
   // Returns completed DDSData, when complete, and disposes the assembly buffer.
   pub fn new_datafrag(
     &mut self,
-    datafrag: &DataFrag,
+    datafrag: &DecodedDataFrag,
     flags: BitFlags<DATAFRAG_Flags>,
   ) -> Option<DDSData> {
     let writer_sn = datafrag.writer_sn;

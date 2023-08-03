@@ -7,7 +7,7 @@ use crate::{
     submessages::{
       elements::{
         crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
-        parameter_list::ParameterList, serialized_payload::SerializedPayload,
+        parameter_list::ParameterList,
       },
       info_source::InfoSource,
       secure_postfix::SecurePostfix,
@@ -189,14 +189,14 @@ impl CryptographicBuiltIn {
 impl CryptoTransform for CryptographicBuiltIn {
   fn encode_serialized_payload(
     &self,
-    plain_buffer: SerializedPayload,
+    plain_buffer: Vec<u8>,
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<(CryptoContent, ParameterList)> {
+  ) -> SecurityResult<(Vec<u8>, ParameterList)> {
     //TODO: this is only a mock implementation
     // Serialize SerializedPayload
-    let plaintext = plain_buffer.write_to_vec().map_err(|err| {
+    /* let plain_buffer = plain_buffer.write_to_vec().map_err(|err| {
       security_error!("Error converting SerializedPayload to byte vector: {}", err)
-    })?;
+    })?; */
 
     // Get the key for encrypting serialized payloads
     let payload_key = self
@@ -222,12 +222,16 @@ impl CryptoTransform for CryptographicBuiltIn {
 
     let (encoded_data, footer) = match payload_key.transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+        // TODO this is mainly for testing and debugging
         encode_serialized_payload_gmac(
           encode_key,
           KeyLength::None,
           initialization_vector,
-          &plaintext,
+          &plain_buffer,
         )?
+        // TODO switch to the following to avoid wrapping the
+        // `SerializedPayload` to `CryptoContent`
+        /* return Ok((plaintext, ParameterList::new())); */
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => {
         // TODO: implement MAC generation
@@ -235,7 +239,7 @@ impl CryptoTransform for CryptographicBuiltIn {
           encode_key,
           KeyLength::AES128,
           initialization_vector,
-          &plaintext,
+          &plain_buffer,
         )?
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => {
@@ -244,7 +248,7 @@ impl CryptoTransform for CryptographicBuiltIn {
           encode_key,
           KeyLength::AES128,
           initialization_vector,
-          &plaintext,
+          &plain_buffer,
         )?
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
@@ -253,7 +257,7 @@ impl CryptoTransform for CryptographicBuiltIn {
           encode_key,
           KeyLength::AES256,
           initialization_vector,
-          &plaintext,
+          &plain_buffer,
         )?
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
@@ -262,7 +266,7 @@ impl CryptoTransform for CryptographicBuiltIn {
           encode_key,
           KeyLength::AES256,
           initialization_vector,
-          &plaintext,
+          &plain_buffer,
         )?
       }
     };
@@ -272,7 +276,9 @@ impl CryptoTransform for CryptographicBuiltIn {
       .map_err(|err| security_error!("Error converting CryptoHeader to byte vector: {}", err))?;
     let footer_vec = Vec::<u8>::try_from(footer)?;
     Ok((
-      CryptoContent::from([header_vec, encoded_data, footer_vec].concat()),
+      CryptoContent::from([header_vec, encoded_data, footer_vec].concat())
+        .write_to_vec()
+        .map_err(|e| security_error!("Error deserializing CryptoContent: {e:?}"))?,
       ParameterList::new(),
     ))
   }
@@ -937,17 +943,16 @@ impl CryptoTransform for CryptographicBuiltIn {
 
   fn decode_serialized_payload(
     &self,
-    encoded_buffer: CryptoContent,
+    encoded_buffer: Vec<u8>,
     inline_qos: ParameterList,
     receiving_datareader_crypto: DatareaderCryptoHandle,
     sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<SerializedPayload> {
+  ) -> SecurityResult<Vec<u8>> {
     //TODO: this is only a mock implementation
 
-    let data = Vec::<u8>::from(encoded_buffer);
     // Deserialize crypto header
-    let (read_result, bytes_consumed) = CryptoHeader::read_with_length_from_buffer(&data);
-    let data = data.split_at(bytes_consumed).1;
+    let (read_result, bytes_consumed) = CryptoHeader::read_with_length_from_buffer(&encoded_buffer);
+    let data = encoded_buffer.split_at(bytes_consumed).1;
     let BuiltinCryptoHeader {
       transform_identifier:
         BuiltinCryptoTransformIdentifier {
