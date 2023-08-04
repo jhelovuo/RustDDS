@@ -63,10 +63,7 @@ impl SecurityPlugins {
     self
       .identity_handle_cache_
       .get(guid)
-      .ok_or(security_error!(
-        "Could not find an IdentityHandle for the Guid {:?}",
-        guid
-      ))
+      .ok_or_else(|| security_error!("Could not find an IdentityHandle for the Guid {:?}", guid))
       .copied()
   }
 
@@ -74,10 +71,7 @@ impl SecurityPlugins {
     self
       .permissions_handle_cache_
       .get(guid)
-      .ok_or(security_error!(
-        "Could not find a PermissionsHandle for the Guid {:?}",
-        guid
-      ))
+      .ok_or_else(|| security_error!("Could not find a PermissionsHandle for the Guid {:?}", guid))
       .copied()
   }
 
@@ -88,10 +82,12 @@ impl SecurityPlugins {
     self
       .participant_crypto_handle_cache_
       .get(guid_prefix)
-      .ok_or(security_error!(
-        "Could not find a ParticipantCryptoHandle for the GuidPrefix {:?}",
-        guid_prefix
-      ))
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find a ParticipantCryptoHandle for the GuidPrefix {:?}",
+          guid_prefix
+        )
+      })
       .copied()
   }
 
@@ -99,10 +95,12 @@ impl SecurityPlugins {
     self
       .local_entity_crypto_handle_cache_
       .get(guid)
-      .ok_or(security_error!(
-        "Could not find a local EntityHandle for the GUID {:?}",
-        guid
-      ))
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find a local EntityHandle for the GUID {:?}",
+          guid
+        )
+      })
       .copied()
   }
 
@@ -115,10 +113,12 @@ impl SecurityPlugins {
     self
       .remote_entity_crypto_handle_cache_
       .get(&local_and_proxy_guid_pair)
-      .ok_or(security_error!(
-        "Could not find a remote EntityHandle for the (local_entity_guid, proxy_guid) pair {:?}",
-        local_and_proxy_guid_pair
-      ))
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find a remote EntityHandle for the (local_entity_guid, proxy_guid) pair {:?}",
+          local_and_proxy_guid_pair
+        )
+      })
       .copied()
   }
 }
