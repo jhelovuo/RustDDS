@@ -193,10 +193,6 @@ impl CryptoTransform for CryptographicBuiltIn {
     sending_datawriter_crypto: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
     //TODO: this is only a mock implementation
-    // Serialize SerializedPayload
-    /* let plain_buffer = plain_buffer.write_to_vec().map_err(|err| {
-      security_error!("Error converting SerializedPayload to byte vector: {}", err)
-    })?; */
 
     // Get the key for encrypting serialized payloads
     let payload_key = self
@@ -278,7 +274,7 @@ impl CryptoTransform for CryptographicBuiltIn {
     Ok((
       CryptoContent::from([header_vec, encoded_data, footer_vec].concat())
         .write_to_vec()
-        .map_err(|e| security_error!("Error deserializing CryptoContent: {e:?}"))?,
+        .map_err(|e| security_error!("Error serializing CryptoContent: {e:?}"))?,
       ParameterList::new(),
     ))
   }
