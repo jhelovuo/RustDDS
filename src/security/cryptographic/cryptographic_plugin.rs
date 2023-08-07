@@ -22,7 +22,7 @@ pub trait CryptoKeyFactory: Send {
     &mut self,
     participant_identity: IdentityHandle,
     participant_permissions: PermissionsHandle,
-    participant_properties: Vec<Property>,
+    participant_properties: &[Property],
     participant_security_attributes: ParticipantSecurityAttributes,
   ) -> SecurityResult<ParticipantCryptoHandle>;
 
@@ -41,7 +41,7 @@ pub trait CryptoKeyFactory: Send {
   fn register_local_datawriter(
     &mut self,
     participant_crypto: ParticipantCryptoHandle,
-    datawriter_properties: Vec<Property>,
+    datawriter_properties: &[Property],
     datawriter_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<DatawriterCryptoHandle>;
 
@@ -60,7 +60,7 @@ pub trait CryptoKeyFactory: Send {
   fn register_local_datareader(
     &mut self,
     participant_crypto: ParticipantCryptoHandle,
-    datareader_properties: Vec<Property>,
+    datareader_properties: &[Property],
     datareader_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<DatareaderCryptoHandle>;
 

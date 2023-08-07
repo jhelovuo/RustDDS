@@ -23,7 +23,8 @@ use crate::{
 pub struct CryptographicBuiltIn {
   encode_keys_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
   decode_keys_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
-  encrypt_options_: HashMap<CryptoHandle, EndpointSecurityAttributes>,
+  participant_encrypt_options_: HashMap<ParticipantCryptoHandle, ParticipantSecurityAttributes>,
+  entity_encrypt_options_: HashMap<EntityCryptoHandle, EndpointSecurityAttributes>,
   participant_to_entity_info_: HashMap<ParticipantCryptoHandle, HashSet<EntityInfo>>,
   // For reverse lookups
   entity_to_participant_: HashMap<EntityCryptoHandle, ParticipantCryptoHandle>,
@@ -48,7 +49,8 @@ impl CryptographicBuiltIn {
     CryptographicBuiltIn {
       encode_keys_: HashMap::new(),
       decode_keys_: HashMap::new(),
-      encrypt_options_: HashMap::new(),
+      participant_encrypt_options_: HashMap::new(),
+      entity_encrypt_options_: HashMap::new(),
       participant_to_entity_info_: HashMap::new(),
       entity_to_participant_: HashMap::new(),
       matched_remote_entity_: HashMap::new(),
@@ -130,15 +132,34 @@ impl CryptographicBuiltIn {
     };
   }
 
-  fn insert_attributes_(
+  fn insert_participant_attributes_(
+    &mut self,
+    handle: ParticipantCryptoHandle,
+    attributes: ParticipantSecurityAttributes,
+  ) -> SecurityResult<()> {
+    match self.participant_encrypt_options_.insert(handle, attributes) {
+      None => SecurityResult::Ok(()),
+      Some(old_attributes) => {
+        self
+          .participant_encrypt_options_
+          .insert(handle, old_attributes);
+        SecurityResult::Err(security_error!(
+          "The handle {} was already associated with security attributes",
+          handle
+        ))
+      }
+    }
+  }
+
+  fn insert_entity_attributes_(
     &mut self,
     handle: EntityCryptoHandle,
     attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<()> {
-    match self.encrypt_options_.insert(handle, attributes) {
+    match self.entity_encrypt_options_.insert(handle, attributes) {
       None => SecurityResult::Ok(()),
       Some(old_attributes) => {
-        self.encrypt_options_.insert(handle, old_attributes);
+        self.entity_encrypt_options_.insert(handle, old_attributes);
         SecurityResult::Err(security_error!(
           "The handle {} was already associated with security attributes",
           handle
