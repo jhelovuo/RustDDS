@@ -15,8 +15,7 @@ use mio_06::Token;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  create_error_internal, create_error_not_allowed_by_security, create_error_out_of_resources,
-  create_error_poisoned,
+  create_error_not_allowed_by_security, create_error_out_of_resources, create_error_poisoned,
   dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
@@ -31,8 +30,6 @@ use crate::{
   },
   security::{
     self,
-    access_control::PermissionsToken,
-    authentication::{IdentityStatusToken, IdentityToken},
     security_plugins::{SecurityPlugins, SecurityPluginsHandle},
     AccessControl, Authentication, Cryptographic,
   },
@@ -93,109 +90,52 @@ impl DomainParticipantBuilder {
       ..Default::default()
     };
 
-    // configure security
-    #[allow(unused_variables)] // TODO: actually distribute these to participant, discovery, etc.
-    let security_tokens_opt: Option<(IdentityToken, IdentityStatusToken, PermissionsToken)> =
-      if let Some(ref mut security_plugins) = self.security_plugins.as_mut() {
-        trace!("DomainParticipant security construction start");
-        // Now we initialize security according to DDS Security spec v1.1
-        // Section "8.8.1 Authentication and AccessControl behavior with local
-        // DomainParticipant"
+    // If security plugins are present, security is enabled
+    if let Some(ref mut security_plugins) = self.security_plugins.as_mut() {
+      trace!("DomainParticipant security construction start");
+      // Do the security checks according to DDS Security spec v1.1
+      // Section "8.8.1 Authentication and AccessControl behavior with local
+      // DomainParticipant". The other steps related to Discovery
+      // (generating tokens etc.) are done when initializing Discovery.
 
-        let sec_guid = match security_plugins.validate_local_identity(
-          self.domain_id,
-          &participant_qos,
-          participant_guid, // this is now candidate
-        ) {
-          Ok(guid) => guid,
-          Err(e) => {
-            return create_error_not_allowed_by_security!(
-              "Validating local identity failed: {}",
-              e.msg
-            );
-          }
-        };
-
-        participant_guid = sec_guid; // just overwrite to update
-
-        if let Err(e) = security_plugins.validate_local_permissions(
-          self.domain_id,
-          participant_guid,
-          &participant_qos,
-        ) {
+      let sec_guid = match security_plugins.validate_local_identity(
+        self.domain_id,
+        &participant_qos,
+        participant_guid, // this is now candidate
+      ) {
+        Ok(guid) => guid,
+        Err(e) => {
           return create_error_not_allowed_by_security!(
-            "Validating local permissions failed: {}",
+            "Validating local identity failed: {}",
             e.msg
           );
         }
-
-        if let Err(e) = security_plugins.check_create_participant(
-          self.domain_id,
-          participant_guid,
-          &participant_qos,
-        ) {
-          return create_error_not_allowed_by_security!(
-            "Not allowed to create participant: {}",
-            e.msg
-          );
-        }
-
-        let identity_token = match security_plugins.get_identity_token(participant_guid) {
-          Ok(token) => token,
-          Err(e) => {
-            return create_error_internal!("Getting identity token failed: {}", e.msg);
-          }
-        };
-
-        let identity_status_token =
-          match security_plugins.get_identity_status_token(participant_guid) {
-            Ok(token) => token,
-            Err(e) => {
-              return create_error_internal!("Getting identity status token failed: {}", e.msg);
-            }
-          };
-
-        let permissions_token = match security_plugins.get_permissions_token(participant_guid) {
-          Ok(token) => token,
-          Err(e) => {
-            return create_error_internal!("Getting permissions token failed: {}", e.msg);
-          }
-        };
-
-        let credential_token =
-          match security_plugins.get_permissions_credential_token(participant_guid) {
-            Ok(token) => token,
-            Err(e) => {
-              return create_error_internal!(
-                "Getting permissions credential token failed: {}",
-                e.msg
-              );
-            }
-          };
-
-        if let Err(e) = security_plugins.set_permissions_credential_and_token(
-          participant_guid,
-          credential_token,
-          permissions_token.clone(),
-        ) {
-          return create_error_internal!("Failed setting permission tokens: {}", e.msg);
-        };
-
-        let security_attributes: security::access_control::ParticipantSecurityAttributes =
-          match security_plugins.get_participant_sec_attributes(participant_guid) {
-            Ok(attributes) => attributes,
-            Err(e) => {
-              return create_error_internal!(
-                "Failed getting participant security attributes: {}",
-                e.msg
-              );
-            }
-          };
-
-        Some((identity_token, identity_status_token, permissions_token))
-      } else {
-        None // no security configured
       };
+
+      participant_guid = sec_guid; // just overwrite to update
+
+      if let Err(e) = security_plugins.validate_local_permissions(
+        self.domain_id,
+        participant_guid,
+        &participant_qos,
+      ) {
+        return create_error_not_allowed_by_security!(
+          "Validating local permissions failed: {}",
+          e.msg
+        );
+      }
+
+      if let Err(e) = security_plugins.check_create_participant(
+        self.domain_id,
+        participant_guid,
+        &participant_qos,
+      ) {
+        return create_error_not_allowed_by_security!(
+          "Not allowed to create participant: {}",
+          e.msg
+        );
+      }
+    };
 
     trace!("DomainParticipant construct start");
 
@@ -229,11 +169,12 @@ impl DomainParticipantBuilder {
     let dp = DomainParticipantDisc::new(
       self.domain_id,
       participant_guid,
+      participant_qos,
       djh_receiver,
       discovery_update_notification_receiver,
       discovery_command_sender,
       spdp_liveness_sender,
-      security_plugins_handle,
+      security_plugins_handle.clone(),
     )?;
     let self_locators = dp.self_locators();
 
@@ -258,6 +199,7 @@ impl DomainParticipantBuilder {
           discovery_command_receiver,
           spdp_liveness_receiver,
           self_locators,
+          security_plugins_handle,
         ) {
           discovery.discovery_event_loop(); // run the event loop
         }
@@ -455,11 +397,15 @@ impl DomainParticipant {
   }
 
   pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
-    DomainParticipantWeak::new(self, self.guid())
+    DomainParticipantWeak::new(self, self.guid(), self.qos())
   }
 
   pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
     self.dpi.lock().unwrap().dds_cache()
+  }
+
+  pub(crate) fn qos(&self) -> QosPolicies {
+    self.dpi.lock().unwrap().qos()
   }
 
   pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
@@ -494,15 +440,17 @@ impl PartialEq for DomainParticipant {
 #[derive(Clone)]
 pub struct DomainParticipantWeak {
   dpi: Weak<Mutex<DomainParticipantDisc>>,
-  // This struct caches the GUID to avoid construction deadlocks
+  // This struct caches the GUID and qos to avoid construction deadlocks
   guid: GUID,
+  qos: QosPolicies,
 }
 
 impl DomainParticipantWeak {
-  pub fn new(dp: &DomainParticipant, guid: GUID) -> Self {
+  pub fn new(dp: &DomainParticipant, guid: GUID, qos: QosPolicies) -> Self {
     Self {
       dpi: Arc::downgrade(&dp.dpi),
       guid,
+      qos,
     }
   }
 
@@ -524,6 +472,10 @@ impl DomainParticipantWeak {
         reason: "DomainParticipant".to_string(),
       })
       .and_then(|dpi| dpi.lock()?.create_subscriber(self, qos))
+  }
+
+  pub fn qos(&self) -> QosPolicies {
+    self.qos.clone()
   }
 
   pub fn create_topic(
@@ -605,9 +557,11 @@ pub(crate) struct DomainParticipantDisc {
 }
 
 impl DomainParticipantDisc {
+  #[allow(clippy::too_many_arguments)]
   pub fn new(
     domain_id: u16,
     participant_guid: GUID,
+    qos_policies: QosPolicies,
     discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
@@ -617,6 +571,7 @@ impl DomainParticipantDisc {
     let dpi = DomainParticipantInner::new(
       domain_id,
       participant_guid,
+      qos_policies,
       discovery_update_notification_receiver,
       spdp_liveness_sender,
       security_plugins_handle,
@@ -702,6 +657,10 @@ impl DomainParticipantDisc {
     self.dpi.lock().unwrap().dds_cache()
   }
 
+  pub(crate) fn qos(&self) -> QosPolicies {
+    self.dpi.lock().unwrap().qos()
+  }
+
   // pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
   //   self.dpi.lock().unwrap().discovery_db.clone()
   // }
@@ -762,6 +721,7 @@ pub(crate) struct DomainParticipantInner {
   participant_id: u16,
 
   my_guid: GUID,
+  my_qos_policies: QosPolicies,
 
   // Adding Readers
   sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
@@ -815,6 +775,7 @@ impl DomainParticipantInner {
   fn new(
     domain_id: u16,
     participant_guid: GUID,
+    qos_policies: QosPolicies,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
@@ -975,6 +936,7 @@ impl DomainParticipantInner {
     Ok(Self {
       domain_id,
       participant_id,
+      my_qos_policies: qos_policies,
       my_guid: participant_guid,
       sender_add_reader,
       sender_remove_reader,
@@ -992,6 +954,10 @@ impl DomainParticipantInner {
 
   pub fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
     self.dds_cache.clone()
+  }
+
+  pub(crate) fn qos(&self) -> QosPolicies {
+    self.my_qos_policies.clone()
   }
 
   // Publisher and subscriber creation
