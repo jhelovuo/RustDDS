@@ -50,14 +50,15 @@ impl<'a, C: Context> Readable<'a, C> for Property {
 // string.
 impl<C: Context> Writable<C> for Property {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    let name = StringWithNul::from(self.name.clone());
-    // nothing yet to pad
-    writer.write_value(&name)?;
+    if self.propagate {
+      let name = StringWithNul::from(self.name.clone());
+      // nothing yet to pad
+      writer.write_value(&name)?;
 
-    write_pad(writer, name.len(), 4)?;
-    let value = StringWithNul::from(self.value.clone());
-    writer.write_value(&value)?;
-
+      write_pad(writer, name.len(), 4)?;
+      let value = StringWithNul::from(self.value.clone());
+      writer.write_value(&value)?;
+    }
     Ok(())
   }
 }
@@ -155,12 +156,13 @@ impl<'a, C: Context> Readable<'a, C> for BinaryProperty {
 // string.
 impl<C: Context> Writable<C> for BinaryProperty {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    let name = StringWithNul::from(self.name.clone());
-    writer.write_value(&name)?;
+    if self.propagate {
+      let name = StringWithNul::from(self.name.clone());
+      writer.write_value(&name)?;
 
-    write_pad(writer, name.len(), 4)?;
-    writer.write_value(&<Vec<u8>>::from(self.value.clone()))?;
-
+      write_pad(writer, name.len(), 4)?;
+      writer.write_value(&<Vec<u8>>::from(self.value.clone()))?;
+    }
     Ok(())
   }
 }

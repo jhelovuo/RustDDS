@@ -878,22 +878,32 @@ pub mod policy {
   // string.
   impl<C: Context> Writable<C> for Property {
     fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-      // value vector length
-      writer.write_u32(self.value.len() as u32)?;
+      // First self.value
+      // Only those properties with propagate=true are written
+      let propagate_value: Vec<&security::Property> =
+        self.value.iter().filter(|p| p.propagate).collect();
+
+      // propagate_value vector length
+      writer.write_u32(propagate_value.len() as u32)?;
 
       let mut prev_len = 0;
-      for prop in &self.value {
+      for prop in propagate_value {
         write_pad(writer, prev_len, 4)?;
         writer.write_value(prop)?;
         prev_len = prop.serialized_len();
       }
 
-      // now the length of "binary.value"
+      // Then self.bin_value
+      // Only those binary properties with propagate=true are written
+      let propagate_bin_value: Vec<&security::BinaryProperty> =
+        self.binary_value.iter().filter(|p| p.propagate).collect();
+
+      // propagate_bin_value vector length
       write_pad(writer, prev_len, 4)?;
-      writer.write_u32(self.binary_value.len() as u32)?;
+      writer.write_u32(propagate_bin_value.len() as u32)?;
       // and the elements
       let mut prev_len = 0;
-      for prop in &self.binary_value {
+      for prop in propagate_bin_value {
         write_pad(writer, prev_len, 4)?;
         writer.write_value(prop)?;
         prev_len = prop.serialized_len();
