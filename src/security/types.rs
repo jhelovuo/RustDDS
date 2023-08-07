@@ -368,6 +368,17 @@ pub struct ParticipantSecurityInfo {
   plugin_participant_security_attributes: PluginParticipantSecurityAttributesMask,
 }
 
+impl From<ParticipantSecurityAttributes> for ParticipantSecurityInfo {
+  fn from(sec_attributes: ParticipantSecurityAttributes) -> Self {
+    Self {
+      participant_security_attributes: ParticipantSecurityAttributesMask::from(
+        sec_attributes.clone(),
+      ),
+      plugin_participant_security_attributes: sec_attributes.plugin_participant_attributes,
+    }
+  }
+}
+
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Copy, Readable, Writable)]
 #[bitflags]
 #[repr(u32)]
@@ -732,6 +743,7 @@ use crate::{
   discovery::{sedp_messages::Endpoint_GUID, spdp_participant_data::Participant_GUID},
   structure::rpc,
 };
+use super::access_control::ParticipantSecurityAttributes;
 
 // This is the transport (message) type for specialized versions above.
 // DDS Security Spec v1.1

@@ -32,7 +32,10 @@ use crate::{
   },
   Key, Keyed, RepresentationIdentifier,
 };
-use super::builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet};
+use super::{
+  builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
+  discovery::DiscoverySecurityItems,
+};
 
 // This type is used by Discovery to communicate the presence and properties
 // of DomainParticipants. It is sent over topic "DCPSParticipant".
@@ -124,9 +127,10 @@ impl SpdpDiscoveredParticipantData {
     proxy
   }
 
-  pub fn from_local_participant(
+  pub(crate) fn from_local_participant(
     participant: &DomainParticipant,
     self_locators: &HashMap<Token, Vec<Locator>>,
+    security_items_opt: &Option<DiscoverySecurityItems>, // If present, security is enabled
     lease_duration: Duration,
   ) -> Self {
     let metatraffic_multicast_locators = self_locators
@@ -149,7 +153,7 @@ impl SpdpDiscoveredParticipantData {
       .cloned()
       .unwrap_or_default();
 
-    let builtin_endpoints = BuiltinEndpointSet::PARTICIPANT_ANNOUNCER
+    let mut builtin_endpoints = BuiltinEndpointSet::PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::PARTICIPANT_DETECTOR
       | BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER
       | BuiltinEndpointSet::PUBLICATIONS_DETECTOR
@@ -159,6 +163,38 @@ impl SpdpDiscoveredParticipantData {
       | BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_READER
       | BuiltinEndpointSet::TOPICS_ANNOUNCER
       | BuiltinEndpointSet::TOPICS_DETECTOR;
+
+    // Security-related items initially None
+    let mut identity_token = None;
+    let mut permissions_token = None;
+    let mut property = None;
+    let mut security_info = None;
+
+    if let Some(sec_items) = security_items_opt {
+      // Security enabled, add needed data
+      // Builtin security endpoints
+      builtin_endpoints = builtin_endpoints
+        | BuiltinEndpointSet::PUBLICATIONS_SECURE_WRITER
+        | BuiltinEndpointSet::PUBLICATIONS_SECURE_READER
+        | BuiltinEndpointSet::SUBSCRIPTIONS_SECURE_WRITER
+        | BuiltinEndpointSet::SUBSCRIPTIONS_SECURE_READER
+        | BuiltinEndpointSet::PARTICIPANT_MESSAGE_SECURE_WRITER
+        | BuiltinEndpointSet::PARTICIPANT_MESSAGE_SECURE_READER
+        | BuiltinEndpointSet::PARTICIPANT_STATELESS_MESSAGE_WRITER
+        | BuiltinEndpointSet::PARTICIPANT_STATELESS_MESSAGE_READER
+        | BuiltinEndpointSet::PARTICIPANT_VOLATILE_MESSAGE_SECURE_WRITER
+        | BuiltinEndpointSet::PARTICIPANT_VOLATILE_MESSAGE_SECURE_READER
+        | BuiltinEndpointSet::PARTICIPANT_SECURE_WRITER
+        | BuiltinEndpointSet::PARTICIPANT_SECURE_READER;
+
+      // Tokens and the rest
+      identity_token = Some(sec_items.local_dp_identity_token.clone());
+      permissions_token = Some(sec_items.local_dp_permissions_token.clone());
+      property = Some(sec_items.local_dp_property_qos.clone());
+      security_info = Some(ParticipantSecurityInfo::from(
+        sec_items.local_dp_sec_attributes.clone(),
+      ));
+    }
 
     Self {
       updated_time: Utc::now(),
@@ -177,10 +213,10 @@ impl SpdpDiscoveredParticipantData {
       entity_name: None,
 
       // DDS Security
-      identity_token: None,    // TODO: Generate(?) one
-      permissions_token: None, // TODO
-      property: None,
-      security_info: None,
+      identity_token,
+      permissions_token,
+      property,
+      security_info,
     }
   }
 }

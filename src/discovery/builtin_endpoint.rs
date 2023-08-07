@@ -21,35 +21,22 @@ impl BuiltinEndpointSet {
   // DDS Security spec v1.1
   // Section 7.4.1.4 Extension to RTPS Standard DCPSParticipants Builtin Topic
   // Table 11
-  // TODO: Remove dead code attributes when these are used.
-  #[allow(dead_code)]
   pub const PUBLICATIONS_SECURE_WRITER: u32 = 1 << 16;
-  #[allow(dead_code)]
   pub const PUBLICATIONS_SECURE_READER: u32 = 1 << 17;
 
-  #[allow(dead_code)]
   pub const SUBSCRIPTIONS_SECURE_WRITER: u32 = 1 << 18;
-  #[allow(dead_code)]
   pub const SUBSCRIPTIONS_SECURE_READER: u32 = 1 << 19;
 
-  #[allow(dead_code)]
   pub const PARTICIPANT_MESSAGE_SECURE_WRITER: u32 = 1 << 20;
-  #[allow(dead_code)]
   pub const PARTICIPANT_MESSAGE_SECURE_READER: u32 = 1 << 21;
 
-  #[allow(dead_code)]
   pub const PARTICIPANT_STATELESS_MESSAGE_WRITER: u32 = 1 << 22;
-  #[allow(dead_code)]
   pub const PARTICIPANT_STATELESS_MESSAGE_READER: u32 = 1 << 23;
 
-  #[allow(dead_code)]
   pub const PARTICIPANT_VOLATILE_MESSAGE_SECURE_WRITER: u32 = 1 << 24;
-  #[allow(dead_code)]
   pub const PARTICIPANT_VOLATILE_MESSAGE_SECURE_READER: u32 = 1 << 25;
 
-  #[allow(dead_code)]
   pub const PARTICIPANT_SECURE_WRITER: u32 = 1 << 26;
-  #[allow(dead_code)]
   pub const PARTICIPANT_SECURE_READER: u32 = 1 << 27;
 
   // non-security again

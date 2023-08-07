@@ -14,6 +14,7 @@ use crate::{
   dds::{
     participant::DomainParticipantWeak,
     qos::{
+      self,
       policy::{
         Deadline, DestinationOrder, Durability, History, Liveliness, Ownership, Presentation,
         PresentationAccessScope, Reliability, TimeBasedFilter,
@@ -33,7 +34,12 @@ use crate::{
     spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
   network::constant::*,
-  security::types::*,
+  security::{
+    access_control::{ParticipantSecurityAttributes, PermissionsToken},
+    authentication::IdentityToken,
+    security_plugins::SecurityPluginsHandle,
+    types::*,
+  },
   serialization::{
     cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter,
     pl_cdr_adapters::*,
@@ -182,6 +188,10 @@ pub(crate) struct Discovery {
   // DCPSParticipantMessage - used by participants to communicate liveness
   dcps_participant_message: with_key::DiscoveryTopicCDR<ParticipantMessageData>,
 
+  // If security is enabled, security_items contains the security plugins
+  // and local security data that discovery needs
+  security_items: Option<DiscoverySecurityItems>,
+
   // Following topics from DDS Security spec v1.1
 
   // DCPSParticipantSecure - 7.4.1.6 New DCPSParticipantSecure Builtin Topic
@@ -242,6 +252,7 @@ impl Discovery {
     property: None,
   };
 
+  #[allow(clippy::too_many_arguments)]
   pub fn new(
     domain_participant: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -250,6 +261,7 @@ impl Discovery {
     discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
     spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
     self_locators: HashMap<Token, Vec<Locator>>,
+    security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> CreateResult<Self> {
     // helper macro to handle initialization failures.
     macro_rules! try_construct {
@@ -460,6 +472,70 @@ impl Discovery {
 
     // DDS Security
 
+    let security_items = if let Some(plugins_handle) = security_plugins_opt {
+      // Plugins is Some so security is enabled
+      // Run the Discovery-related initialization steps of DDS Security spec v1.1
+      // Section "8.8.1 Authentication and AccessControl behavior with local
+      // DomainParticipant"
+      let plugins = plugins_handle.lock().unwrap();
+
+      let participant_guid = domain_participant.guid();
+
+      let property_qos = domain_participant
+        .qos()
+        .property()
+        .expect("No property QoS defined even though security is enabled");
+
+      let identity_token = try_construct!(
+        plugins.get_identity_token(participant_guid),
+        "Could not get identity token. {:?}"
+      );
+
+      let _identity_status_token = try_construct!(
+        plugins.get_identity_status_token(participant_guid),
+        "Could not get identity status token. {:?}"
+      );
+
+      let permissions_token = try_construct!(
+        plugins.get_permissions_token(participant_guid),
+        "Could not get permissions token. {:?}"
+      );
+
+      let credential_token = try_construct!(
+        plugins.get_permissions_credential_token(participant_guid),
+        "Could not get permissions credential token. {:?}"
+      );
+
+      try_construct!(
+        plugins.set_permissions_credential_and_token(
+          participant_guid,
+          credential_token,
+          permissions_token.clone(),
+        ),
+        "Could not set permission tokens. {:?}"
+      );
+
+      let security_attributes = try_construct!(
+        plugins.get_participant_sec_attributes(participant_guid),
+        "Could not get participant security attributes. {:?}"
+      );
+
+      // Construct security items which discovery needs
+      let security_items = DiscoverySecurityItems {
+        security_plugins: plugins_handle.clone(),
+        local_dp_identity_token: identity_token,
+        local_dp_permissions_token: permissions_token,
+        local_dp_property_qos: property_qos,
+        local_dp_sec_attributes: security_attributes,
+      };
+
+      // Return the security items to indicate security is enabled
+      Some(security_items)
+    } else {
+      // Return None to indicate no security
+      None
+    };
+
     // Participant
     let dcps_participant_secure = construct_topic_and_poll!(
       PlCdr,
@@ -571,6 +647,7 @@ impl Discovery {
       topic_cleanup_timer,      // SEDP
       dcps_participant_message, // liveliness messages
 
+      security_items,
       dcps_participant_secure,
       dcps_publications_secure,
       dcps_subscriptions_secure,
@@ -716,6 +793,7 @@ impl Discovery {
             let data = SpdpDiscoveredParticipantData::from_local_participant(
               &strong_dp,
               &self.self_locators,
+              &self.security_items,
               5.0 * Duration::from(Self::SEND_PARTICIPANT_INFO_PERIOD),
             );
 
@@ -817,6 +895,7 @@ impl Discovery {
     let participant_data = SpdpDiscoveredParticipantData::from_local_participant(
       &dp,
       &self.self_locators,
+      &self.security_items,
       Duration::DURATION_INFINITE,
     );
 
@@ -1408,6 +1487,18 @@ impl Discovery {
       Err(e) => error!("Failed to send DiscoveryNotification {e:?}"),
     }
   }
+}
+
+// This struct contains items which discovery needs to do security.
+// Some local tokens etc. which do not change during runtime are stored here
+// so they don't have to be fetched from security plugins every time when needed
+#[allow(dead_code)] // Remove when security_plugins is used
+pub(crate) struct DiscoverySecurityItems {
+  pub security_plugins: SecurityPluginsHandle,
+  pub local_dp_identity_token: IdentityToken,
+  pub local_dp_permissions_token: PermissionsToken,
+  pub local_dp_property_qos: qos::policy::Property,
+  pub local_dp_sec_attributes: ParticipantSecurityAttributes,
 }
 
 // -----------------------------------------------------------------------

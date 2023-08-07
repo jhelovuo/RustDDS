@@ -28,8 +28,8 @@ use super::{
 };
 
 pub(crate) struct SecurityPlugins {
-  pub auth: Box<dyn Authentication>,
-  pub access: Box<dyn AccessControl>,
+  auth: Box<dyn Authentication>,
+  access: Box<dyn AccessControl>,
   crypto: Box<dyn Cryptographic>,
 
   identity_handle_cache_: HashMap<GUID, IdentityHandle>,
