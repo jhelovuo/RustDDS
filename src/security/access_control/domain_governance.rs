@@ -1,42 +1,42 @@
 use serde::{Deserialize, Serialize};
 //use serde_xml_rs::{from_str, to_string};
 
-
 // Define structs to mirror the XML Schema given in
 // DDS Security Spec v1.1 Section
 // "9.4.1.2.3 Domain Governance document format"
 
-// TODO: Allow Boolean literals also in all uppercase, e.g. "TRUE" in addition to "true".
+// TODO: Allow Boolean literals also in all uppercase, e.g. "TRUE" in addition
+// to "true".
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename = "dds")]
 pub struct DomainGovernanceDocument {
-    pub domain_access_rules: DomainAccessRules,
+  pub domain_access_rules: DomainAccessRules,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename = "domain_access_rules")]
 pub struct DomainAccessRules {
-    #[serde(rename = "$value")]
-    pub rule_list: Vec<DomainRule>,
+  #[serde(rename = "$value")]
+  pub rule_list: Vec<DomainRule>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename = "domain_rule")]
 pub struct DomainRule {
-    pub domains: DomainIdSet,
-    pub allow_unauthenticated_participants: bool,
-    pub enable_join_access_control: bool,
-    pub discovery_protection_kind: ProtectionKind,
-    pub liveliness_protection_kind: ProtectionKind,
-    pub rtps_protection_kind: ProtectionKind,
-    pub topic_access_rules: TopicAccessRules,
+  pub domains: DomainIdSet,
+  pub allow_unauthenticated_participants: bool,
+  pub enable_join_access_control: bool,
+  pub discovery_protection_kind: ProtectionKind,
+  pub liveliness_protection_kind: ProtectionKind,
+  pub rtps_protection_kind: ProtectionKind,
+  pub topic_access_rules: TopicAccessRules,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct DomainIdSet {
-    #[serde(rename = "$value")]
-    members: Vec<DomainIdSetMember>,
+  #[serde(rename = "$value")]
+  members: Vec<DomainIdSetMember>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -56,7 +56,7 @@ pub struct DomainId {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct DomainIdRange {
   min: Option<DomainId>, // Both min and max must not be None
-  max: Option<DomainId>, 
+  max: Option<DomainId>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -77,7 +77,6 @@ pub enum BasicProtectionKind {
   None,
 }
 
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct TopicAccessRules {
   #[serde(rename = "$value")]
@@ -86,34 +85,34 @@ pub struct TopicAccessRules {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct TopicRule {
-    pub topic_expression: TopicExpression,
-    pub enable_discovery_protection: bool,
-    pub enable_liveliness_protection: bool,
-    pub enable_read_access_control: bool,
-    pub enable_write_access_control: bool,
-    pub metadata_protection_kind: ProtectionKind,
-    pub data_protection_kind: BasicProtectionKind,
+  pub topic_expression: TopicExpression,
+  pub enable_discovery_protection: bool,
+  pub enable_liveliness_protection: bool,
+  pub enable_read_access_control: bool,
+  pub enable_write_access_control: bool,
+  pub metadata_protection_kind: ProtectionKind,
+  pub data_protection_kind: BasicProtectionKind,
 }
-
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct TopicExpression {
-    #[serde(rename = "$value")]
-    pub expression: String,
+  #[serde(rename = "$value")]
+  pub expression: String,
 }
 
 #[cfg(test)]
 mod tests {
+  use serde_xml_rs::from_str;
+
   use super::*;
-  use serde_xml_rs::{from_str};
 
   #[test]
   pub fn parse_spec_example() {
-
     // Modifications to example in spec:
     // * insert missing "/" in closing id_range
     // * Boolean literals true/false in all lowercase
-    // * field `enable_liveliness_protection` is systematically missing from `topic_rule`s
+    // * field `enable_liveliness_protection` is systematically missing from
+    //   `topic_rule`s
 
     let domain_governance_document = r#"<?xml version="1.0" encoding="utf-8"?>
 <dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -197,7 +196,7 @@ xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg
 </dds>
 "#;
 
-    let dgd : DomainGovernanceDocument = from_str(domain_governance_document).unwrap();
+    let dgd: DomainGovernanceDocument = from_str(domain_governance_document).unwrap();
   }
 
   #[test]
@@ -238,8 +237,6 @@ xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg
 </dds>
 "#;
 
-    let dgd : DomainGovernanceDocument = from_str(domain_governance_document).unwrap();
+    let dgd: DomainGovernanceDocument = from_str(domain_governance_document).unwrap();
   }
-
-
 }

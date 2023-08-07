@@ -17,9 +17,7 @@ use crate::{
     vendor_id::VendorId,
   },
   rtps::{reader::Reader, Message, Submessage, SubmessageBody},
-  security::{
-    cryptographic::types::SecureSubmessageCategory, security_plugins::SecurityPluginsHandle,
-  },
+  security::{cryptographic::types::SecureSubmessageKind, security_plugins::SecurityPluginsHandle},
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
@@ -717,7 +715,7 @@ impl MessageReceiver {
       Err(_e) => {
         // TODO
       }
-      Ok(SecureSubmessageCategory::InfoSubmessage) => {
+      Ok(SecureSubmessageKind::InfoSubmessage) => {
         // DDS Security spec v1.1 Section "8.5.1.9.6 Operation:
         // preprocess_secure_submsg": decoding does not apply to info
         // submessages. (But what if someone fakes them? Or must we secure whole
@@ -725,14 +723,14 @@ impl MessageReceiver {
         drop(sec_plugins);
         self.handle_submessage(encoded_submessage);
       }
-      Ok(SecureSubmessageCategory::DatawriterSubmessage(
-        sending_datawriter_crypto,
-        receiving_datareader_crypto,
+      Ok(SecureSubmessageKind::DatawriterSubmessage(
+        sending_datawriter_crypto_handle,
+        receiving_datareader_crypto_handle,
       )) => {
         match sec_plugins.decode_datawriter_submessage(
           (sec_prefix, encoded_submessage, sec_postfix),
-          receiving_datareader_crypto,
-          sending_datawriter_crypto,
+          receiving_datareader_crypto_handle,
+          sending_datawriter_crypto_handle,
         ) {
           Ok(submessage) => {
             drop(sec_plugins);
@@ -744,7 +742,7 @@ impl MessageReceiver {
           }
         }
       }
-      Ok(SecureSubmessageCategory::DatareaderSubmessage(
+      Ok(SecureSubmessageKind::DatareaderSubmessage(
         sending_datareader_crypto,
         receiving_datawriter_crypto,
       )) => {

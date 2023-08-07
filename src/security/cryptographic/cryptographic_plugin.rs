@@ -40,7 +40,7 @@ pub trait CryptoKeyFactory: Send {
   /// (v. 1.1)
   fn register_local_datawriter(
     &mut self,
-    participant_crypto: ParticipantCryptoHandle,
+    local_participant_crypto_handle: ParticipantCryptoHandle,
     datawriter_properties: &[Property],
     datawriter_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<DatawriterCryptoHandle>;
@@ -50,7 +50,7 @@ pub trait CryptoKeyFactory: Send {
   fn register_matched_remote_datareader(
     &mut self,
     local_datawriter_crypto_handle: DatawriterCryptoHandle,
-    remote_participant_crypto: ParticipantCryptoHandle,
+    remote_participant_crypto_handle: ParticipantCryptoHandle,
     shared_secret: SharedSecretHandle,
     relay_only: bool,
   ) -> SecurityResult<DatareaderCryptoHandle>;
@@ -59,7 +59,7 @@ pub trait CryptoKeyFactory: Send {
   /// (v. 1.1)
   fn register_local_datareader(
     &mut self,
-    participant_crypto: ParticipantCryptoHandle,
+    local_participant_crypto_handle: ParticipantCryptoHandle,
     datareader_properties: &[Property],
     datareader_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<DatareaderCryptoHandle>;
@@ -69,7 +69,7 @@ pub trait CryptoKeyFactory: Send {
   fn register_matched_remote_datawriter(
     &mut self,
     local_datareader_crypto_handle: DatareaderCryptoHandle,
-    remote_participant_crypt: ParticipantCryptoHandle,
+    remote_participant_crypto_handle: ParticipantCryptoHandle,
     shared_secret: SharedSecretHandle,
   ) -> SecurityResult<DatawriterCryptoHandle>;
 
@@ -102,16 +102,16 @@ pub trait CryptoKeyExchange {
   /// `local_participant_crypto_tokens`.
   fn create_local_participant_crypto_tokens(
     &mut self,
-    local_participant_crypto: ParticipantCryptoHandle,
-    remote_participant_crypto: ParticipantCryptoHandle,
+    local_participant_crypto_handle: ParticipantCryptoHandle,
+    remote_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<Vec<ParticipantCryptoToken>>;
 
   /// set_remote_participant_crypto_tokens: section 8.5.1.8.2 of the Security
   /// specification (v. 1.1)
   fn set_remote_participant_crypto_tokens(
     &mut self,
-    local_participant_crypto: ParticipantCryptoHandle,
-    remote_participant_crypto: ParticipantCryptoHandle,
+    local_participant_crypto_handle: ParticipantCryptoHandle,
+    remote_participant_crypto_handle: ParticipantCryptoHandle,
     remote_participant_tokens: Vec<ParticipantCryptoToken>,
   ) -> SecurityResult<()>;
 
@@ -122,16 +122,16 @@ pub trait CryptoKeyExchange {
   /// `local_datawriter_crypto_tokens`.
   fn create_local_datawriter_crypto_tokens(
     &mut self,
-    local_datawriter_crypto: DatawriterCryptoHandle,
-    remote_datareader_crypto: DatareaderCryptoHandle,
+    local_datawriter_crypto_handle: DatawriterCryptoHandle,
+    remote_datareader_crypto_handle: DatareaderCryptoHandle,
   ) -> SecurityResult<Vec<DatawriterCryptoToken>>;
 
   /// set_remote_datawriter_crypto_tokens: section 8.5.1.8.4 of the Security
   /// specification (v. 1.1)
   fn set_remote_datawriter_crypto_tokens(
     &mut self,
-    local_datareader_crypto: DatareaderCryptoHandle,
-    remote_datawriter_crypto: DatawriterCryptoHandle,
+    local_datareader_crypto_handle: DatareaderCryptoHandle,
+    remote_datawriter_crypto_handle: DatawriterCryptoHandle,
     remote_datawriter_tokens: Vec<DatawriterCryptoToken>,
   ) -> SecurityResult<()>;
 
@@ -142,16 +142,16 @@ pub trait CryptoKeyExchange {
   /// `local_datareader_crypto_tokens`.
   fn create_local_datareader_crypto_tokens(
     &mut self,
-    local_datareader_crypto: DatareaderCryptoHandle,
-    remote_datawriter_crypto: DatawriterCryptoHandle,
+    local_datareader_crypto_handle: DatareaderCryptoHandle,
+    remote_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<Vec<DatareaderCryptoToken>>;
 
   /// set_remote_datareader_crypto_tokens: section 8.5.1.8.6 of the Security
   /// specification (v. 1.1)
   fn set_remote_datareader_crypto_tokens(
     &mut self,
-    local_datawriter_crypto: DatawriterCryptoHandle,
-    remote_datareader_crypto: DatareaderCryptoHandle,
+    local_datawriter_crypto_handle: DatawriterCryptoHandle,
+    remote_datareader_crypto_handle: DatareaderCryptoHandle,
     remote_datareader_tokens: Vec<DatareaderCryptoToken>,
   ) -> SecurityResult<()>;
 
@@ -174,7 +174,7 @@ pub trait CryptoTransform: Send {
   fn encode_serialized_payload(
     &self,
     plain_buffer: Vec<u8>, // (a fragment of) serialized `SerializedPayload`
-    sending_datawriter_crypto: DatawriterCryptoHandle,
+    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)>;
 
   /// encode_datawriter_submessage: section 8.5.1.9.2 of the Security
@@ -193,8 +193,8 @@ pub trait CryptoTransform: Send {
   fn encode_datawriter_submessage(
     &self,
     plain_rtps_submessage: Submessage,
-    sending_datawriter_crypto: DatawriterCryptoHandle,
-    receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
+    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
+    receiving_datareader_crypto_handle_list: Vec<DatareaderCryptoHandle>,
   ) -> SecurityResult<EncodedSubmessage>;
 
   /// encode_datareader_submessage: section 8.5.1.9.3 of the Security
@@ -212,8 +212,8 @@ pub trait CryptoTransform: Send {
   fn encode_datareader_submessage(
     &self,
     plain_rtps_submessage: Submessage,
-    sending_datareader_crypto: DatareaderCryptoHandle,
-    receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
+    sending_datareader_crypto_handle: DatareaderCryptoHandle,
+    receiving_datawriter_crypto_handle_list: Vec<DatawriterCryptoHandle>,
   ) -> SecurityResult<EncodedSubmessage>;
 
   /// encode_rtps_message: section 8.5.1.9.4 of the Security specification (v.
@@ -231,8 +231,8 @@ pub trait CryptoTransform: Send {
   fn encode_rtps_message(
     &self,
     plain_rtps_message: Message,
-    sending_participant_crypto: ParticipantCryptoHandle,
-    receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
+    sending_participant_crypto_handle: ParticipantCryptoHandle,
+    receiving_participant_crypto_handle_list: Vec<ParticipantCryptoHandle>,
   ) -> SecurityResult<Message>;
 
   /// decode_rtps_message: section 8.5.1.9.5 of the Security specification (v.
@@ -241,9 +241,9 @@ pub trait CryptoTransform: Send {
   /// Return the message that would be written in `plain_buffer`.
   fn decode_rtps_message(
     &self,
-    encoded_buffer: Message,
-    receiving_participant_crypto: ParticipantCryptoHandle,
-    sending_participant_crypto: ParticipantCryptoHandle,
+    encoded_message: Message,
+    receiving_participant_crypto_handle: ParticipantCryptoHandle,
+    sending_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<Message>;
 
   /// preprocess_secure_submsg: section 8.5.1.9.6 of the Security specification
@@ -257,12 +257,12 @@ pub trait CryptoTransform: Send {
   /// [SecureSubmessageCategory::DatareaderSubmessage] in the order
   /// (sender,receiver). In the case `INFO_SUBMESSAGE`,
   /// [SecureSubmessageCategory::InfoSubmessage] is returned instead of `false`.
-  fn preprocess_secure_submsg(
+  fn preprocess_secure_submessage(
     &self,
-    encoded_rtps_submessage: &SecurePrefix,
-    receiving_participant_crypto: ParticipantCryptoHandle,
-    sending_participant_crypto: ParticipantCryptoHandle,
-  ) -> SecurityResult<SecureSubmessageCategory>;
+    secure_prefix: &SecurePrefix,
+    receiving_participant_crypto_handle: ParticipantCryptoHandle,
+    sending_participant_crypto_handle: ParticipantCryptoHandle,
+  ) -> SecurityResult<SecureSubmessageKind>;
 
   /// decode_datawriter_submessage: section 8.5.1.9.7 of the Security
   /// specification (v. 1.1)
@@ -272,8 +272,8 @@ pub trait CryptoTransform: Send {
   fn decode_datawriter_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datareader_crypto: DatareaderCryptoHandle,
-    sending_datawriter_crypto: DatawriterCryptoHandle,
+    receiving_datareader_crypto_handle: DatareaderCryptoHandle,
+    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<WriterSubmessage>;
 
   /// decode_datareader_submessage: section 8.5.1.9.8 of the Security
@@ -284,8 +284,8 @@ pub trait CryptoTransform: Send {
   fn decode_datareader_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datawriter_crypto: DatawriterCryptoHandle,
-    sending_datareader_crypto: DatareaderCryptoHandle,
+    receiving_datawriter_crypto_handle: DatawriterCryptoHandle,
+    sending_datareader_crypto_handle: DatareaderCryptoHandle,
   ) -> SecurityResult<ReaderSubmessage>;
 
   /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
@@ -297,7 +297,7 @@ pub trait CryptoTransform: Send {
     &self,
     encoded_buffer: Vec<u8>,
     inline_qos: ParameterList,
-    receiving_datareader_crypto: DatareaderCryptoHandle,
-    sending_datawriter_crypto: DatawriterCryptoHandle,
+    receiving_datareader_crypto_handle: DatareaderCryptoHandle,
+    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<Vec<u8>>;
 }

@@ -26,15 +26,15 @@ pub type CryptoHandle = u32;
 /// (v. 1.1)
 pub type ParticipantCryptoHandle = CryptoHandle;
 
-pub type EntityCryptoHandle = CryptoHandle;
+pub type EndpointCryptoHandle = CryptoHandle;
 
 /// DatawriterCryptoHandle: section 8.5.1.3 of the Security specification
 /// (v. 1.1)
-pub type DatawriterCryptoHandle = EntityCryptoHandle;
+pub type DatawriterCryptoHandle = EndpointCryptoHandle;
 
 /// DatareaderCryptoHandle: section 8.5.1.4 of the Security specification
 /// (v. 1.1)
-pub type DatareaderCryptoHandle = EntityCryptoHandle;
+pub type DatareaderCryptoHandle = EndpointCryptoHandle;
 
 /// CryptoTransformIdentifier: section 8.5.1.5 of the Security specification (v.
 /// 1.1)
@@ -54,12 +54,12 @@ pub type CryptoTransformKeyId = u32;
 /// (v. 1.1)
 ///
 /// Used as a return type by
-/// [super::cryptographic_plugin::CryptoTransform::preprocess_secure_submsg],
+/// [super::cryptographic_plugin::CryptoTransform::preprocess_secure_submessage],
 /// and therefore includes the crypto handles that would be returned in the
 /// latter two cases.
 
 #[allow(clippy::enum_variant_names)] // We are using variant names from the spec
-pub enum SecureSubmessageCategory {
+pub enum SecureSubmessageKind {
   InfoSubmessage,
   DatawriterSubmessage(DatawriterCryptoHandle, DatareaderCryptoHandle),
   DatareaderSubmessage(DatareaderCryptoHandle, DatawriterCryptoHandle),

@@ -51,11 +51,11 @@ fn compute_receiver_specific_macs(
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
-  receiver_specific_keys: &[ReceiverKeyMaterial],
+  receiver_specific_key_materials: &[ReceiverKeyMaterial],
   common_mac: BuiltinMAC,
 ) -> SecurityResult<BuiltinCryptoFooter> {
   // Iterate over receiver_specific_keys to compute receiver_specific_macs
-  SecurityResult::from_iter(receiver_specific_keys.iter().map(
+  SecurityResult::from_iter(receiver_specific_key_materials.iter().map(
     // Destructure
     |ReceiverKeyMaterial {
        receiver_specific_key_id,
@@ -87,7 +87,7 @@ pub(super) fn encode_gmac(
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
-  receiver_specific_keys: &[ReceiverKeyMaterial],
+  receiver_specific_key_materials: &[ReceiverKeyMaterial],
 ) -> SecurityResult<BuiltinCryptoFooter> {
   // Compute the common_mac
   compute_mac(key, key_length, initialization_vector, data)
@@ -97,7 +97,7 @@ pub(super) fn encode_gmac(
         key_length,
         initialization_vector,
         data,
-        receiver_specific_keys,
+        receiver_specific_key_materials,
         common_mac,
       )
     })
@@ -108,7 +108,7 @@ pub(super) fn encode_gcm(
   key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
-  receiver_specific_keys: &[ReceiverKeyMaterial],
+  receiver_specific_key_materials: &[ReceiverKeyMaterial],
 ) -> SecurityResult<(Submessage, BuiltinCryptoFooter)> {
   // Compute the common_mac
   encrypt(key, key_length, initialization_vector, data).and_then(|(ciphertext, common_mac)| {
@@ -117,7 +117,7 @@ pub(super) fn encode_gcm(
       key_length,
       initialization_vector,
       &ciphertext,
-      receiver_specific_keys,
+      receiver_specific_key_materials,
       common_mac,
     )
     .and_then(|footer| {

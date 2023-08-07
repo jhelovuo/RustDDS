@@ -21,24 +21,24 @@ use crate::{
 // A struct implementing the built-in Cryptographic plugin
 // See sections 8.5 and 9.5 of the Security specification (v. 1.1)
 pub struct CryptographicBuiltIn {
-  encode_keys_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
-  decode_keys_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
+  encode_key_materials_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
+  decode_key_materials_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
   participant_encrypt_options_: HashMap<ParticipantCryptoHandle, ParticipantSecurityAttributes>,
-  entity_encrypt_options_: HashMap<EntityCryptoHandle, EndpointSecurityAttributes>,
-  participant_to_entity_info_: HashMap<ParticipantCryptoHandle, HashSet<EntityInfo>>,
+  endpoint_encrypt_options_: HashMap<EndpointCryptoHandle, EndpointSecurityAttributes>,
+  participant_to_endpoint_info_: HashMap<ParticipantCryptoHandle, HashSet<EndpointInfo>>,
   // For reverse lookups
-  entity_to_participant_: HashMap<EntityCryptoHandle, ParticipantCryptoHandle>,
+  endpoint_to_participant_: HashMap<EndpointCryptoHandle, ParticipantCryptoHandle>,
 
   // sessions_ ?
   /// For each (local datawriter (/datareader), remote participant) pair, stores
   /// the matched remote datareader (/datawriter)
-  matched_remote_entity_:
-    HashMap<EntityCryptoHandle, HashMap<ParticipantCryptoHandle, EntityCryptoHandle>>,
+  matched_remote_endpoint_:
+    HashMap<EndpointCryptoHandle, HashMap<ParticipantCryptoHandle, EndpointCryptoHandle>>,
   ///For reverse lookups,  for each remote datawriter (/datareader), stores the
   /// matched local datareader (/datawriter)
-  matched_local_entity_: HashMap<EntityCryptoHandle, EntityCryptoHandle>,
+  matched_local_endpoint_: HashMap<EndpointCryptoHandle, EndpointCryptoHandle>,
 
-  handle_counter_: u32,
+  crypto_handle_counter_: u32,
 }
 
 // Combine the trait implementations from the submodules
@@ -47,122 +47,146 @@ impl super::Cryptographic for CryptographicBuiltIn {}
 impl CryptographicBuiltIn {
   pub fn new() -> Self {
     CryptographicBuiltIn {
-      encode_keys_: HashMap::new(),
-      decode_keys_: HashMap::new(),
+      encode_key_materials_: HashMap::new(),
+      decode_key_materials_: HashMap::new(),
       participant_encrypt_options_: HashMap::new(),
-      entity_encrypt_options_: HashMap::new(),
-      participant_to_entity_info_: HashMap::new(),
-      entity_to_participant_: HashMap::new(),
-      matched_remote_entity_: HashMap::new(),
-      matched_local_entity_: HashMap::new(),
-      handle_counter_: 0,
+      endpoint_encrypt_options_: HashMap::new(),
+      participant_to_endpoint_info_: HashMap::new(),
+      endpoint_to_participant_: HashMap::new(),
+      matched_remote_endpoint_: HashMap::new(),
+      matched_local_endpoint_: HashMap::new(),
+      crypto_handle_counter_: 0,
     }
   }
 
-  fn insert_encode_keys_(
+  fn insert_encode_key_materials_(
     &mut self,
-    handle: CryptoHandle,
-    keys: KeyMaterial_AES_GCM_GMAC_seq,
+    crypto_handle: CryptoHandle,
+    key_materials: KeyMaterial_AES_GCM_GMAC_seq,
   ) -> SecurityResult<()> {
-    match self.encode_keys_.insert(handle, keys) {
+    match self
+      .encode_key_materials_
+      .insert(crypto_handle, key_materials)
+    {
       None => SecurityResult::Ok(()),
       Some(old_key_materials) => {
-        self.encode_keys_.insert(handle, old_key_materials);
+        self
+          .encode_key_materials_
+          .insert(crypto_handle, old_key_materials);
         SecurityResult::Err(security_error!(
-          "The handle {} was already associated with encode key material",
-          handle
+          "The CryptoHandle {} was already associated with encode key material",
+          crypto_handle
         ))
       }
     }
   }
-  fn get_encode_keys_(
+  fn get_encode_key_materials_(
     &self,
-    handle: &CryptoHandle,
+    crypto_handle: &CryptoHandle,
   ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
-    self.encode_keys_.get(handle).ok_or(security_error!(
-      "Could not find encode keys for the handle {}",
-      handle
-    ))
+    self
+      .encode_key_materials_
+      .get(crypto_handle)
+      .ok_or(security_error!(
+        "Could not find encode key materials for the CryptoHandle {}",
+        crypto_handle
+      ))
   }
 
-  fn insert_decode_keys_(
+  fn insert_decode_key_materials_(
     &mut self,
-    handle: CryptoHandle,
-    keys: KeyMaterial_AES_GCM_GMAC_seq,
+    crypto_handle: CryptoHandle,
+    key_materials: KeyMaterial_AES_GCM_GMAC_seq,
   ) -> SecurityResult<()> {
-    match self.decode_keys_.insert(handle, keys) {
+    match self
+      .decode_key_materials_
+      .insert(crypto_handle, key_materials)
+    {
       None => SecurityResult::Ok(()),
       Some(old_key_materials) => {
-        self.decode_keys_.insert(handle, old_key_materials);
+        self
+          .decode_key_materials_
+          .insert(crypto_handle, old_key_materials);
         SecurityResult::Err(security_error!(
-          "The handle {} was already associated with decode key material",
-          handle
+          "The CryptoHandle {} was already associated with decode key material",
+          crypto_handle
         ))
       }
     }
   }
 
-  fn get_decode_keys_(
+  fn get_decode_key_materials_(
     &self,
-    handle: &CryptoHandle,
+    crypto_handle: &CryptoHandle,
   ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
-    self.decode_keys_.get(handle).ok_or(security_error!(
-      "Could not find decode keys for the handle {}",
-      handle
-    ))
+    self
+      .decode_key_materials_
+      .get(crypto_handle)
+      .ok_or(security_error!(
+        "Could not find decode key materials for the CryptoHandle {}",
+        crypto_handle
+      ))
   }
 
-  fn insert_entity_info_(
+  fn insert_endpoint_info_(
     &mut self,
-    participant_handle: ParticipantCryptoHandle,
-    entity_info: EntityInfo,
+    participant_crypto_handle: ParticipantCryptoHandle,
+    endpoint_info: EndpointInfo,
   ) {
     match self
-      .participant_to_entity_info_
-      .get_mut(&participant_handle)
+      .participant_to_endpoint_info_
+      .get_mut(&participant_crypto_handle)
     {
-      Some(entity_set) => {
-        entity_set.insert(entity_info);
+      Some(endpoint_set) => {
+        endpoint_set.insert(endpoint_info);
       }
       None => {
         self
-          .participant_to_entity_info_
-          .insert(participant_handle, HashSet::from([entity_info]));
+          .participant_to_endpoint_info_
+          .insert(participant_crypto_handle, HashSet::from([endpoint_info]));
       }
     };
   }
 
   fn insert_participant_attributes_(
     &mut self,
-    handle: ParticipantCryptoHandle,
+    participant_crypto_handle: ParticipantCryptoHandle,
     attributes: ParticipantSecurityAttributes,
   ) -> SecurityResult<()> {
-    match self.participant_encrypt_options_.insert(handle, attributes) {
+    match self
+      .participant_encrypt_options_
+      .insert(participant_crypto_handle, attributes)
+    {
       None => SecurityResult::Ok(()),
       Some(old_attributes) => {
         self
           .participant_encrypt_options_
-          .insert(handle, old_attributes);
+          .insert(participant_crypto_handle, old_attributes);
         SecurityResult::Err(security_error!(
-          "The handle {} was already associated with security attributes",
-          handle
+          "The ParticipantCryptoHandle {} was already associated with security attributes",
+          participant_crypto_handle
         ))
       }
     }
   }
 
-  fn insert_entity_attributes_(
+  fn insert_endpoint_attributes_(
     &mut self,
-    handle: EntityCryptoHandle,
+    endpoint_crypto_handle: EndpointCryptoHandle,
     attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<()> {
-    match self.entity_encrypt_options_.insert(handle, attributes) {
+    match self
+      .endpoint_encrypt_options_
+      .insert(endpoint_crypto_handle, attributes)
+    {
       None => SecurityResult::Ok(()),
       Some(old_attributes) => {
-        self.entity_encrypt_options_.insert(handle, old_attributes);
+        self
+          .endpoint_encrypt_options_
+          .insert(endpoint_crypto_handle, old_attributes);
         SecurityResult::Err(security_error!(
-          "The handle {} was already associated with security attributes",
-          handle
+          "The EndpointCryptoHandle {} was already associated with security attributes",
+          endpoint_crypto_handle
         ))
       }
     }

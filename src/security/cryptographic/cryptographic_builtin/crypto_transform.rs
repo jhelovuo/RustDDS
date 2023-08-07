@@ -37,8 +37,8 @@ impl CryptographicBuiltIn {
   fn encode_submessage(
     &self,
     plain_rtps_submessage: Submessage,
-    sending_entity_handle: EntityCryptoHandle,
-    receiving_entity_handle_list: &[EntityCryptoHandle],
+    sending_endpoint_crypto_handle: EndpointCryptoHandle,
+    receiving_endpoint_crypto_handle_list: &[EndpointCryptoHandle],
   ) -> SecurityResult<EncodedSubmessage> {
     //TODO: this is only a mock implementation
 
@@ -47,33 +47,37 @@ impl CryptographicBuiltIn {
       .write_to_vec()
       .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
 
-    // Get the key for encoding
-    let sender_key = self
-      .get_encode_keys_(&sending_entity_handle)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+    // Get the key material for encoding
+    let sender_key_material = self
+      .get_encode_key_materials_(&sending_endpoint_crypto_handle)
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
       .cloned()?;
 
-    // Get the keys for computing receiver-specific MACs
-    let receiver_specific_keys = SecurityResult::<Vec<ReceiverKeyMaterial>>::from_iter(
+    // Get the key materials for computing receiver-specific MACs
+    let receiver_specific_key_materials = SecurityResult::<Vec<ReceiverKeyMaterial>>::from_iter(
       // Iterate over receiver handles
-      receiving_entity_handle_list.iter().map(|receiver_handle| {
-        // Get the encode key
-        self
-          .get_encode_keys_(receiver_handle)
-          .map(KeyMaterial_AES_GCM_GMAC_seq::key)
-          // Compare to the common key and get the receiver specific key
-          .and_then(|receiver_key| receiver_key.receiver_key_for(&sender_key))
-          // TODO use session keys
-          .map(
-            |ReceiverKeyMaterial {
-               receiver_specific_key_id,
-               master_receiver_specific_key,
-             }| ReceiverKeyMaterial {
-              receiver_specific_key_id,
-              master_receiver_specific_key,
-            },
-          )
-      }),
+      receiving_endpoint_crypto_handle_list
+        .iter()
+        .map(|receiver_crypto_handle| {
+          // Get the encode key material
+          self
+            .get_encode_key_materials_(receiver_crypto_handle)
+            .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
+            // Compare to the common key material and get the receiver specific key material
+            .and_then(|receiver_key_material| {
+              receiver_key_material.receiver_key_material_for(&sender_key_material)
+            })
+            // TODO use session keys
+            .map(
+              |ReceiverKeyMaterial {
+                 receiver_specific_key_id,
+                 master_receiver_specific_key,
+               }| ReceiverKeyMaterial {
+                receiver_specific_key_id,
+                master_receiver_specific_key,
+              },
+            )
+        }),
     )?;
 
     // Destructure the common key material
@@ -83,7 +87,7 @@ impl CryptographicBuiltIn {
       sender_key_id,
       master_sender_key,
       ..
-    } = sender_key;
+    } = sender_key_material;
 
     // TODO proper session_id
     let builtin_crypto_header_extra =
@@ -106,7 +110,7 @@ impl CryptographicBuiltIn {
             KeyLength::None,
             initialization_vector,
             &plaintext,
-            &receiver_specific_keys,
+            &receiver_specific_key_materials,
           )?,
         )
         // TODO switch to the following to avoid unnecessary pre/postfixes
@@ -123,7 +127,7 @@ impl CryptographicBuiltIn {
             KeyLength::AES128,
             initialization_vector,
             &plaintext,
-            &receiver_specific_keys,
+            &receiver_specific_key_materials,
           )?,
         )
       }
@@ -134,7 +138,7 @@ impl CryptographicBuiltIn {
           KeyLength::AES128,
           initialization_vector,
           &plaintext,
-          &receiver_specific_keys,
+          &receiver_specific_key_materials,
         )?
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
@@ -146,7 +150,7 @@ impl CryptographicBuiltIn {
             KeyLength::AES256,
             initialization_vector,
             &plaintext,
-            &receiver_specific_keys,
+            &receiver_specific_key_materials,
           )?,
         )
       }
@@ -157,7 +161,7 @@ impl CryptographicBuiltIn {
           KeyLength::AES256,
           initialization_vector,
           &plaintext,
-          &receiver_specific_keys,
+          &receiver_specific_key_materials,
         )?
       }
     };
@@ -190,14 +194,14 @@ impl CryptoTransform for CryptographicBuiltIn {
   fn encode_serialized_payload(
     &self,
     plain_buffer: Vec<u8>,
-    sending_datawriter_crypto: DatawriterCryptoHandle,
+    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
     //TODO: this is only a mock implementation
 
-    // Get the key for encrypting serialized payloads
-    let payload_key = self
-      .get_encode_keys_(&sending_datawriter_crypto)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key)?;
+    // Get the key material for encrypting serialized payloads
+    let payload_key_material = self
+      .get_encode_key_materials_(&sending_datawriter_crypto_handle)
+      .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key_material)?;
 
     // TODO proper session_id
     let builtin_crypto_header_extra =
@@ -207,16 +211,16 @@ impl CryptoTransform for CryptographicBuiltIn {
 
     let header = BuiltinCryptoHeader {
       transform_identifier: BuiltinCryptoTransformIdentifier {
-        transformation_kind: payload_key.transformation_kind,
-        transformation_key_id: payload_key.sender_key_id,
+        transformation_kind: payload_key_material.transformation_kind,
+        transformation_key_id: payload_key_material.sender_key_id,
       },
       builtin_crypto_header_extra,
     };
 
-    // TODO use session key?
-    let encode_key = &payload_key.master_sender_key;
+    // TODO use session key
+    let encode_key = &payload_key_material.master_sender_key;
 
-    let (encoded_data, footer) = match payload_key.transformation_kind {
+    let (encoded_data, footer) = match payload_key_material.transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         // TODO this is mainly for testing and debugging
         encode_serialized_payload_gmac(
@@ -282,38 +286,38 @@ impl CryptoTransform for CryptographicBuiltIn {
   fn encode_datawriter_submessage(
     &self,
     plain_rtps_submessage: Submessage,
-    sending_datawriter_crypto: DatawriterCryptoHandle,
-    receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle>,
+    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
+    receiving_datareader_crypto_handle_list: Vec<DatareaderCryptoHandle>,
   ) -> SecurityResult<EncodedSubmessage> {
     //TODO: this is only a mock implementation
 
     self.encode_submessage(
       plain_rtps_submessage,
-      sending_datawriter_crypto,
-      &receiving_datareader_crypto_list,
+      sending_datawriter_crypto_handle,
+      &receiving_datareader_crypto_handle_list,
     )
   }
 
   fn encode_datareader_submessage(
     &self,
     plain_rtps_submessage: Submessage,
-    sending_datareader_crypto: DatareaderCryptoHandle,
-    receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle>,
+    sending_datareader_crypto_handle: DatareaderCryptoHandle,
+    receiving_datawriter_crypto_handle_list: Vec<DatawriterCryptoHandle>,
   ) -> SecurityResult<EncodedSubmessage> {
     //TODO: this is only a mock implementation
 
     self.encode_submessage(
       plain_rtps_submessage,
-      sending_datareader_crypto,
-      &receiving_datawriter_crypto_list,
+      sending_datareader_crypto_handle,
+      &receiving_datawriter_crypto_handle_list,
     )
   }
 
   fn encode_rtps_message(
     &self,
     plain_rtps_message: Message,
-    sending_participant_crypto: ParticipantCryptoHandle,
-    receiving_participant_crypto_list: Vec<ParticipantCryptoHandle>,
+    sending_participant_crypto_handle: ParticipantCryptoHandle,
+    receiving_participant_crypto_handle_list: Vec<ParticipantCryptoHandle>,
   ) -> SecurityResult<Message> {
     //TODO: this is only a mock implementation
 
@@ -344,24 +348,26 @@ impl CryptoTransform for CryptographicBuiltIn {
     // Combine the serialized submessages
     .concat();
 
-    // Get the key for encoding
-    let sender_key = self
-      .get_encode_keys_(&sending_participant_crypto)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+    // Get the key material for encoding
+    let sender_key_material = self
+      .get_encode_key_materials_(&sending_participant_crypto_handle)
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
       .cloned()?;
 
-    // Get the keys for computing receiver-specific MACs
-    let receiver_specific_keys = SecurityResult::<Vec<ReceiverKeyMaterial>>::from_iter(
+    // Get the keys materials for computing receiver-specific MACs
+    let receiver_specific_key_materials = SecurityResult::<Vec<ReceiverKeyMaterial>>::from_iter(
       // Iterate over receiver handles
-      receiving_participant_crypto_list
+      receiving_participant_crypto_handle_list
         .iter()
         .map(|receiver_handle| {
-          // Get the encode key
+          // Get the encode key material
           self
-            .get_encode_keys_(receiver_handle)
-            .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+            .get_encode_key_materials_(receiver_handle)
+            .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
             // Compare to the common key and get the receiver specific key
-            .and_then(|receiver_key| receiver_key.receiver_key_for(&sender_key))
+            .and_then(|receiver_key_material| {
+              receiver_key_material.receiver_key_material_for(&sender_key_material)
+            })
             // TODO use session keys
             .map(
               |ReceiverKeyMaterial {
@@ -382,7 +388,7 @@ impl CryptoTransform for CryptographicBuiltIn {
       sender_key_id,
       master_sender_key,
       ..
-    } = sender_key;
+    } = sender_key_material;
 
     // TODO proper session_id
     let builtin_crypto_header_extra =
@@ -404,7 +410,7 @@ impl CryptoTransform for CryptographicBuiltIn {
             KeyLength::None,
             initialization_vector,
             &plaintext,
-            &receiver_specific_keys,
+            &receiver_specific_key_materials,
           )?,
         )
         /*  // TODO? switch to the following to avoid unnecessary pre/postfixes
@@ -419,7 +425,7 @@ impl CryptoTransform for CryptographicBuiltIn {
             KeyLength::AES128,
             initialization_vector,
             &plaintext,
-            &receiver_specific_keys,
+            &receiver_specific_key_materials,
           )?,
         )
       }
@@ -430,7 +436,7 @@ impl CryptoTransform for CryptographicBuiltIn {
           KeyLength::AES128,
           initialization_vector,
           &plaintext,
-          &receiver_specific_keys,
+          &receiver_specific_key_materials,
         )
         // Wrap the submessage in Vec
         .map(|(secure_body_submessage, footer)| (vec![secure_body_submessage], footer))?
@@ -444,7 +450,7 @@ impl CryptoTransform for CryptographicBuiltIn {
             KeyLength::AES256,
             initialization_vector,
             &plaintext,
-            &receiver_specific_keys,
+            &receiver_specific_key_materials,
           )?,
         )
       }
@@ -455,7 +461,7 @@ impl CryptoTransform for CryptographicBuiltIn {
           KeyLength::AES256,
           initialization_vector,
           &plaintext,
-          &receiver_specific_keys,
+          &receiver_specific_key_materials,
         ) // Wrap the submessage in Vec
         .map(|(secure_body_submessage, footer)| (vec![secure_body_submessage], footer))?
       }
@@ -491,9 +497,9 @@ impl CryptoTransform for CryptographicBuiltIn {
 
   fn decode_rtps_message(
     &self,
-    encoded_buffer: Message,
-    receiving_participant_crypto: ParticipantCryptoHandle,
-    sending_participant_crypto: ParticipantCryptoHandle,
+    encoded_message: Message,
+    receiving_participant_crypto_handle: ParticipantCryptoHandle,
+    sending_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<Message> {
     //TODO: this is only a mock implementation
 
@@ -519,7 +525,7 @@ impl CryptoTransform for CryptographicBuiltIn {
         ..
       },
       submessages,
-    )) = encoded_buffer.submessages.split_first()
+    )) = encoded_message.submessages.split_first()
     {
       // Check that the last submessage is a SecureRTPSPostfix
       if let Some((
@@ -555,7 +561,7 @@ impl CryptoTransform for CryptographicBuiltIn {
             } else {
               Ok(Message {
                 // Use the same header information as the input
-                header: encoded_buffer.header,
+                header: encoded_message.header,
                 submessages: Vec::from(submessages),
               })
             }
@@ -601,16 +607,16 @@ impl CryptoTransform for CryptographicBuiltIn {
       }
     } else {
       // The first submessage is not a SecureRTPSPrefix, pass through
-      Ok(encoded_buffer)
+      Ok(encoded_message)
     }
   }
 
-  fn preprocess_secure_submsg(
+  fn preprocess_secure_submessage(
     &self,
-    encoded_rtps_submessage: &SecurePrefix,
-    receiving_participant_crypto: ParticipantCryptoHandle,
-    sending_participant_crypto: ParticipantCryptoHandle,
-  ) -> SecurityResult<SecureSubmessageCategory> {
+    secure_prefix: &SecurePrefix,
+    receiving_participant_crypto_handle: ParticipantCryptoHandle,
+    sending_participant_crypto_handle: ParticipantCryptoHandle,
+  ) -> SecurityResult<SecureSubmessageKind> {
     // 9.5.3.3.5
     let SecurePrefix {
       crypto_header:
@@ -623,69 +629,74 @@ impl CryptoTransform for CryptographicBuiltIn {
           ..
         },
       ..
-    } = *encoded_rtps_submessage;
+    } = *secure_prefix;
 
     // Check the validity of transformation_kind
     let submessage_transformation_kind =
       BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
 
-    // Search for matching keys over entities registered to the sender
-    let sending_participant_entities = self
-      .participant_to_entity_info_
-      .get(&sending_participant_crypto)
+    // Search for matching key materials over endpoints registered to the sender
+    let sending_participant_endpoints = self
+      .participant_to_endpoint_info_
+      .get(&sending_participant_crypto_handle)
       .ok_or(security_error!(
-        "Could not find registered entities for the sending_participant_crypto {}",
-        sending_participant_crypto
+        "Could not find registered entities for the sending_participant_crypto_handle {}",
+        sending_participant_crypto_handle
       ))?;
-    for EntityInfo { handle, category } in sending_participant_entities {
-      // Iterate over the keys associated with the entity
+    for EndpointInfo {
+      crypto_handle: handle,
+      kind: category,
+    } in sending_participant_endpoints
+    {
+      // Iterate over the key materials associated with the endpoint
       if let Some(KeyMaterial_AES_GCM_GMAC {
         transformation_kind,
         sender_key_id,
         ..
       }) = self
-        .decode_keys_
+        .decode_key_materials_
         .get(handle)
-        .map(KeyMaterial_AES_GCM_GMAC_seq::key)
+        .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
       {
-        // Compare keys to the crypto transform identifier
+        // Compare key materials to the crypto transform identifier
         if submessage_transformation_kind.eq(transformation_kind)
           && transformation_key_id.eq(sender_key_id)
         {
-          let remote_entity_handle = *handle;
-          let matched_local_entity_handle = *self
-            .matched_local_entity_
-            .get(&remote_entity_handle)
+          let remote_endpoint_crypto_handle = *handle;
+          let matched_local_endpoint_crypto_handle = *self
+            .matched_local_endpoint_
+            .get(&remote_endpoint_crypto_handle)
             .ok_or(security_error!(
-              "The local entity matched to the remote entity handle {} is missing.",
-              remote_entity_handle
+              "The local endpoint matched to the remote endpoint crypto handle {} is missing.",
+              remote_endpoint_crypto_handle
             ))?;
           return Ok(match category {
-            EntityCategory::DataReader => SecureSubmessageCategory::DatareaderSubmessage(
-              remote_entity_handle,
-              matched_local_entity_handle,
+            EndpointKind::DataReader => SecureSubmessageKind::DatareaderSubmessage(
+              remote_endpoint_crypto_handle,
+              matched_local_endpoint_crypto_handle,
             ),
-            EntityCategory::DataWriter => SecureSubmessageCategory::DatawriterSubmessage(
-              remote_entity_handle,
-              matched_local_entity_handle,
+            EndpointKind::DataWriter => SecureSubmessageKind::DatawriterSubmessage(
+              remote_endpoint_crypto_handle,
+              matched_local_endpoint_crypto_handle,
             ),
           });
         }
       }
     }
-    // No matching keys were found for any entity registered to the sender
+    // No matching key materials were found for any endpoint registered to the
+    // sender
     Err(security_error!(
-      "Could not find matching keys for any registered entity for the sending_participant_crypto \
-       {}.",
-      sending_participant_crypto
+      "Could not find matching key materials for any registered endpoint for the \
+       sending_participant_crypto_handle {}.",
+      sending_participant_crypto_handle
     ))
   }
 
   fn decode_datawriter_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datareader_crypto: DatareaderCryptoHandle,
-    sending_datawriter_crypto: DatawriterCryptoHandle,
+    receiving_datareader_crypto_handle: DatareaderCryptoHandle,
+    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<WriterSubmessage> {
     //TODO: this is only a mock implementation
 
@@ -707,32 +718,32 @@ impl CryptoTransform for CryptographicBuiltIn {
       receiver_specific_macs,
     } = BuiltinCryptoFooter::try_from(crypto_footer)?;
 
-    // Get decode key
+    // Get decode key material
     let KeyMaterial_AES_GCM_GMAC {
-      transformation_kind: key_transformation_kind,
+      transformation_kind: key_material_transformation_kind,
       master_salt,
       sender_key_id,
       master_sender_key,
       receiver_specific_key_id,
       master_receiver_specific_key,
     } = self
-      .get_decode_keys_(&sending_datawriter_crypto)
+      .get_decode_key_materials_(&sending_datawriter_crypto_handle)
       // Get the one for submessages (not only payload)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::key)?;
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
 
-    // Check that the key matches the header. This should be redundant if the method
-    // is called after preprocess_secure_submsg
+    // Check that the key id matches the header. This should be redundant if the
+    // method is called after preprocess_secure_submessage
     if !transformation_key_id.eq(sender_key_id) {
       Err(security_error!(
-        "The key IDs don't match. The key has sender_key_id {}, while the header has \
+        "The key IDs don't match. The key material has sender_key_id {}, while the header has \
          transformation_key_id {}",
         sender_key_id,
         transformation_key_id
       ))?;
-    } else if header_transformation_kind.eq(key_transformation_kind) {
+    } else if header_transformation_kind.eq(key_material_transformation_kind) {
       Err(security_error!(
-        "The transformation_kind don't match. The key has {:?}, while the header has {:?}",
-        key_transformation_kind,
+        "The transformation_kind don't match. The key material has {:?}, while the header has {:?}",
+        key_material_transformation_kind,
         header_transformation_kind
       ))?;
     }
@@ -746,7 +757,7 @@ impl CryptoTransform for CryptographicBuiltIn {
     // TODO use session key?
     let receiver_specific_key = master_receiver_specific_key;
 
-    match key_transformation_kind {
+    match key_material_transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         decode_datawriter_submessage_gmac(
           decode_key,
@@ -812,8 +823,8 @@ impl CryptoTransform for CryptographicBuiltIn {
   fn decode_datareader_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datawriter_crypto: DatawriterCryptoHandle,
-    sending_datareader_crypto: DatareaderCryptoHandle,
+    receiving_datawriter_crypto_handle: DatawriterCryptoHandle,
+    sending_datareader_crypto_handle: DatareaderCryptoHandle,
   ) -> SecurityResult<ReaderSubmessage> {
     //TODO: this is only a mock implementation
 
@@ -835,21 +846,21 @@ impl CryptoTransform for CryptographicBuiltIn {
       receiver_specific_macs,
     } = BuiltinCryptoFooter::try_from(crypto_footer)?;
 
-    // Get decode key
+    // Get decode key material
     let KeyMaterial_AES_GCM_GMAC {
-      transformation_kind: key_transformation_kind,
+      transformation_kind: key_material_transformation_kind,
       master_salt,
       sender_key_id,
       master_sender_key,
       receiver_specific_key_id,
       master_receiver_specific_key,
     } = self
-      .get_decode_keys_(&sending_datareader_crypto)
+      .get_decode_key_materials_(&sending_datareader_crypto_handle)
       // Get the one for submessages (not only payload)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::key)?;
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
 
-    // Check that the key matches the header. This should be redundant if the method
-    // is called after preprocess_secure_submsg
+    // Check that the key material matches the header. This should be redundant if
+    // the method is called after preprocess_secure_submessage
     if !transformation_key_id.eq(sender_key_id) {
       Err(security_error!(
         "The key IDs don't match. The key has sender_key_id {}, while the header has \
@@ -857,10 +868,10 @@ impl CryptoTransform for CryptographicBuiltIn {
         sender_key_id,
         transformation_key_id
       ))?;
-    } else if !header_transformation_kind.eq(key_transformation_kind) {
+    } else if !header_transformation_kind.eq(key_material_transformation_kind) {
       Err(security_error!(
-        "The transformation_kind don't match. The key has {:?}, while the header has {:?}",
-        key_transformation_kind,
+        "The transformation_kind don't match. The key material has {:?}, while the header has {:?}",
+        key_material_transformation_kind,
         header_transformation_kind
       ))?;
     }
@@ -874,7 +885,7 @@ impl CryptoTransform for CryptographicBuiltIn {
     // TODO use session key?
     let receiver_specific_key = master_receiver_specific_key;
 
-    match key_transformation_kind {
+    match key_material_transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         decode_datareader_submessage_gmac(
           decode_key,
@@ -941,8 +952,8 @@ impl CryptoTransform for CryptographicBuiltIn {
     &self,
     encoded_buffer: Vec<u8>,
     inline_qos: ParameterList,
-    receiving_datareader_crypto: DatareaderCryptoHandle,
-    sending_datawriter_crypto: DatawriterCryptoHandle,
+    receiving_datareader_crypto_handle: DatareaderCryptoHandle,
+    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<Vec<u8>> {
     //TODO: this is only a mock implementation
 
@@ -960,35 +971,35 @@ impl CryptoTransform for CryptographicBuiltIn {
       .map_err(|e| security_error!("Error while deserializing CryptoHeader: {}", e))
       .and_then(BuiltinCryptoHeader::try_from)?;
 
-    // Get the payload decode key
-    let decode_key = self
-      .get_decode_keys_(&sending_datawriter_crypto)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key)?;
+    // Get the payload decode key material
+    let decode_key_material = self
+      .get_decode_key_materials_(&sending_datawriter_crypto_handle)
+      .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key_material)?;
 
     // Check that the key IDs match
-    if decode_key.sender_key_id != transformation_key_id {
+    if decode_key_material.sender_key_id != transformation_key_id {
       return Err(security_error!(
         "Mismatched decode key IDs: the decoded CryptoHeader has {}, but the key associated with \
          the sending datawriter {} has {}.",
         transformation_key_id,
-        sending_datawriter_crypto,
-        decode_key.sender_key_id
+        sending_datawriter_crypto_handle,
+        decode_key_material.sender_key_id
       ));
     }
 
     // Check that the transformation kind stays consistent
-    if decode_key.transformation_kind != transformation_kind {
+    if decode_key_material.transformation_kind != transformation_kind {
       return Err(security_error!(
-        "Mismatched transformation kinds: the decoded CryptoHeader has {:?}, but the key \
+        "Mismatched transformation kinds: the decoded CryptoHeader has {:?}, but the key material \
          associated with the sending datawriter {} has {:?}.",
         transformation_kind,
-        sending_datawriter_crypto,
-        decode_key.transformation_kind
+        sending_datawriter_crypto_handle,
+        decode_key_material.transformation_kind
       ));
     }
 
     // TODO use session key?
-    let decode_key = &decode_key.master_sender_key;
+    let decode_key = &decode_key_material.master_sender_key;
 
     match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
