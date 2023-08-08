@@ -18,7 +18,7 @@ use crate::{
 /// See section 7.3.7.7
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct SecurePostfix {
-  pub crypto_footer: CryptoFooter,
+  pub(crate) crypto_footer: CryptoFooter,
 }
 impl SecurePostfix {
   pub fn create_submessage(self, endianness: speedy::Endianness) -> SecurityResult<Submessage> {
