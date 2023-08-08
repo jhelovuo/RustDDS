@@ -2,24 +2,25 @@ use enumflags2::BitFlags;
 use speedy::{Readable, Writable};
 
 use crate::{
-  messages::{
-    header::Header,
-    submessages::{
-      elements::{
-        crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
-        parameter_list::ParameterList,
-      },
-      info_source::InfoSource,
-      secure_postfix::SecurePostfix,
-      secure_prefix::SecurePrefix,
-      secure_rtps_prefix::SecureRTPSPrefix,
-      submessage::{InterpreterSubmessage, SecuritySubmessage},
-      submessage_flag::FromEndianness,
-      submessages::{ReaderSubmessage, WriterSubmessage},
+  messages::submessages::{
+    elements::{
+      crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
+      parameter_list::ParameterList,
     },
+    info_source::InfoSource,
+    secure_postfix::SecurePostfix,
+    secure_prefix::SecurePrefix,
+    secure_rtps_postfix::SecureRTPSPostfix,
+    secure_rtps_prefix::SecureRTPSPrefix,
+    submessage::SecuritySubmessage,
+    submessage_flag::FromEndianness,
+    submessages::{ReaderSubmessage, WriterSubmessage},
   },
   rtps::{Message, Submessage, SubmessageBody},
-  security::cryptographic::cryptographic_builtin::*,
+  security::cryptographic::cryptographic_builtin::{
+    decode::{decode_rtps_message_gcm, decode_rtps_message_gmac},
+    *,
+  },
   security_error,
 };
 use super::{
@@ -503,111 +504,159 @@ impl CryptoTransform for CryptographicBuiltIn {
   ) -> SecurityResult<Message> {
     //TODO: this is only a mock implementation
 
-    // Check that the first submessage is SecureRTPSPrefix
-    if let Some((
-      Submessage {
-        body:
-          SubmessageBody::Security(SecuritySubmessage::SecureRTPSPrefix(
-            SecureRTPSPrefix {
-              crypto_header:
-                CryptoHeader {
-                  transformation_id:
-                    CryptoTransformIdentifier {
-                      transformation_kind,
-                      transformation_key_id,
-                    },
-                  ..
-                },
-              ..
-            },
-            _,
-          )),
-        ..
-      },
+    let Message {
+      header,
       submessages,
-    )) = encoded_message.submessages.split_first()
+    } = encoded_message;
+
+    if let [Submessage {
+      body:
+        SubmessageBody::Security(SecuritySubmessage::SecureRTPSPrefix(
+          SecureRTPSPrefix { crypto_header, .. },
+          _,
+        )),
+      ..
+    }, encoded_content @ .., Submessage {
+      body:
+        SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(
+          SecureRTPSPostfix { crypto_footer },
+          _,
+        )),
+      ..
+    }] = submessages.as_slice()
     {
-      // Check that the last submessage is a SecureRTPSPostfix
-      if let Some((
-        Submessage {
-          body: SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(_, _)),
-          ..
-        },
-        submessages,
-      )) = submessages.split_last()
-      {
-        // Check the validity of transformation_kind
-        let message_transformation_kind =
-          BuiltinCryptoTransformationKind::try_from(*transformation_kind)?;
+      let BuiltinCryptoHeader {
+        transform_identifier:
+          BuiltinCryptoTransformIdentifier {
+            transformation_kind: header_transformation_kind,
+            transformation_key_id,
+          },
+        builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
+      } = BuiltinCryptoHeader::try_from(crypto_header.clone())?;
 
-        match message_transformation_kind {
-          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-            // In this case we expect the encoded message to be of the following form:
-            // SecureRTPSPrefix, (InfoSource containing the RTPS-header of
-            // the original message), the original submessages, SecureRTPSPostfix,
-            // where the InfoSource is optional
-            if let Some((
-              Submessage {
-                body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoSource(info_source, _)),
-                ..
-              },
-              submessages,
-            )) = submessages.split_first()
-            {
-              Ok(Message {
-                header: Header::from(*info_source),
-                submessages: Vec::from(submessages),
-              })
-            } else {
-              Ok(Message {
-                // Use the same header information as the input
-                header: encoded_message.header,
-                submessages: Vec::from(submessages),
-              })
-            }
-          }
-          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => {
-            // In this case we expect the encoded message to be of the following form:
-            // SecureRTPSPrefix, InfoSource containing the RTPS-header of
-            // the original message, the original submessages, SecureRTPSPostfix
-            if let Some((
-              Submessage {
-                body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoSource(info_source, _)),
-                ..
-              },
-              submessages,
-            )) = submessages.split_first()
-            {
-              // TODO: Check the MACs
+      let BuiltinCryptoFooter {
+        common_mac,
+        receiver_specific_macs,
+      } = BuiltinCryptoFooter::try_from(crypto_footer.clone())?;
 
-              Ok(Message {
-                header: Header::from(*info_source),
-                submessages: Vec::from(submessages),
-              })
-            } else {
-              Err(security_error!(
-                "Expected an InfoSource submessage after SecureRTPSPrefix."
-              ))
-            }
-          }
-          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => {
-            // In this case we expect the encoded message to be of the following form:
-            // SecureRTPSPrefix, SecureBody containing the encrypted message,
-            // SecureRTPSPostfix
-            todo!()
-          }
-          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => todo!(),
-          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => todo!(),
-        }
-      } else {
+      // Get decode key material
+      let KeyMaterial_AES_GCM_GMAC {
+        transformation_kind: key_material_transformation_kind,
+        master_salt,
+        sender_key_id,
+        master_sender_key,
+        receiver_specific_key_id,
+        master_receiver_specific_key,
+      } = self
+        .get_decode_key_materials_(&sending_participant_crypto_handle)
+        // Get the one for submessages (not only payload)
+        .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
+
+      // Check that the key id matches the header
+      if !transformation_key_id.eq(sender_key_id) {
         Err(security_error!(
-          "When a message starts with a SecureRTPSPrefix, it is expected to end with a \
-           SecureRTPSPostfix."
-        ))
+          "The key IDs don't match. The key material has sender_key_id {}, while the header has \
+           transformation_key_id {}",
+          sender_key_id,
+          transformation_key_id
+        ))?;
+      } else if !header_transformation_kind.eq(key_material_transformation_kind) {
+        Err(security_error!(
+          "The transformation_kind don't match. The key material has {:?}, while the header has \
+           {:?}",
+          key_material_transformation_kind,
+          header_transformation_kind
+        ))?;
       }
+
+      // Get the receiver-specific MAC if one is expected
+      let receiver_specific_mac =
+        find_receiver_specific_mac(*receiver_specific_key_id, &receiver_specific_macs)?;
+
+      // TODO use session key?
+      let decode_key = master_sender_key;
+      // TODO use session key?
+      let receiver_specific_key = master_receiver_specific_key;
+
+      match key_material_transformation_kind {
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+          decode_rtps_message_gmac(
+            decode_key,
+            receiver_specific_key,
+            KeyLength::None,
+            initialization_vector,
+            encoded_content,
+            common_mac,
+            receiver_specific_mac,
+          )
+        }
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => {
+          // TODO: implement MAC check
+          decode_rtps_message_gmac(
+            decode_key,
+            receiver_specific_key,
+            KeyLength::AES128,
+            initialization_vector,
+            encoded_content,
+            common_mac,
+            receiver_specific_mac,
+          )
+        }
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => {
+          // TODO: implement decryption
+          decode_rtps_message_gcm(
+            decode_key,
+            receiver_specific_key,
+            KeyLength::AES128,
+            initialization_vector,
+            encoded_content,
+            common_mac,
+            receiver_specific_mac,
+          )
+        }
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+          // TODO: implement MAC check
+          decode_rtps_message_gmac(
+            decode_key,
+            receiver_specific_key,
+            KeyLength::AES256,
+            initialization_vector,
+            encoded_content,
+            common_mac,
+            receiver_specific_mac,
+          )
+        }
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+          // TODO: implement decryption
+          decode_rtps_message_gcm(
+            decode_key,
+            receiver_specific_key,
+            KeyLength::AES256,
+            initialization_vector,
+            encoded_content,
+            common_mac,
+            receiver_specific_mac,
+          )
+        }
+      }
+      .and_then(|(submessages, info_source)| {
+        if InfoSource::from(header).eq(&info_source) {
+          Ok(Message {
+            header,
+            submessages,
+          })
+        } else {
+          Err(security_error!(
+            "The RTPS header did not match the MACed InfoSource: {:?} expected to match {:?}",
+            info_source,
+            header
+          ))
+        }
+      })
     } else {
-      // The first submessage is not a SecureRTPSPrefix, pass through
-      Ok(encoded_message)
+      Err(security_error!(
+        "Expected the first submessage to be SecureRTPSPrefix and the last SecureRTPSPostfix"
+      ))
     }
   }
 
@@ -740,7 +789,7 @@ impl CryptoTransform for CryptographicBuiltIn {
         sender_key_id,
         transformation_key_id
       ))?;
-    } else if header_transformation_kind.eq(key_material_transformation_kind) {
+    } else if !header_transformation_kind.eq(key_material_transformation_kind) {
       Err(security_error!(
         "The transformation_kind don't match. The key material has {:?}, while the header has {:?}",
         key_material_transformation_kind,
