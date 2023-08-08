@@ -1,36 +1,36 @@
 use serde::{Deserialize, Serialize};
 //use serde_xml_rs::{from_str, to_string};
 
-
 // Define structs to mirror the XML Schema given in
 // DDS Security Spec v1.1 Section
 // "9.4.1.3 DomainParticipant permissions document"
 
-// TODO: Allow Boolean literals also in all uppercase, e.g. "TRUE" in addition to "true".
+// TODO: Allow Boolean literals also in all uppercase, e.g. "TRUE" in addition
+// to "true".
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename = "dds")]
 pub struct DomainParticiapntPermissionsDocument {
-    pub permissions: Permissions,
+  pub permissions: Permissions,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Permissions {
-    #[serde(rename = "$value")]
-    pub grants: Vec<Grant>,
+  #[serde(rename = "$value")]
+  pub grants: Vec<Grant>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename = "grant")]
 pub struct Grant {
   #[serde(rename = "$value")]
-  pub elems: Vec<GrantElement>,   
+  pub elems: Vec<GrantElement>,
   //TODO: This is a hacky way to get serde-xml to read the XML as specified.
-  // We need to manually check that there is (exactly) one of each SubjectName, Validity, and Default
-  // in a Grant.
+  // We need to manually check that there is (exactly) one of each SubjectName, Validity, and
+  // Default in a Grant.
   // There may be an arbitray number of AllowRules and DenyRules, and their order is important.
-  // The AllowRules and DenyRules are to scanned in order until one matches, and that is to be applied.
-  // if there is no match, then use Default.
+  // The AllowRules and DenyRules are to scanned in order until one matches, and that is to be
+  // applied. if there is no match, then use Default.
   //
   // See Section "9.4.1.3.2.3 Rules Section" in DDS Security Spec v1.1
 }
@@ -45,30 +45,28 @@ pub enum GrantElement {
   Default(DefaultAction),
 }
 
-
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Validity {
-    not_before: String, // XsdDateTime,
-    not_after: String, // XsdDateTime,
+  not_before: String, // XsdDateTime,
+  not_after: String,  // XsdDateTime,
 }
-
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Rule {
   #[serde(rename = "$value")]
-  pub elems: Vec<RuleElement>
-  //TODO: This is a hacky way to get serde-xml to read the XML as specified.
-  // We need to manually check that there is (exactly) one of `domain`
-  // in a Rule, breferably at the begining.
+  pub elems: Vec<RuleElement>, /*TODO: This is a hacky way to get serde-xml to read the XML as
+                                * specified. We need to manually
+                                * check that there is (exactly) one of `domain`
+                                * in a Rule, breferably at the begining. */
 }
 
-// The RuleElements should be in order Publish, Subscribe, Relay, witch 0..N occurencences of each.
-// This definition accepts them in any order.
+// The RuleElements should be in order Publish, Subscribe, Relay, witch 0..N
+// occurencences of each. This definition accepts them in any order.
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum RuleElement {
-  Domains(DomainIdSet), 
+  Domains(DomainIdSet),
   Publish(Criteria),
   Subscribe(Criteria),
   Relay(Criteria),
@@ -76,8 +74,8 @@ pub enum RuleElement {
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct DomainIdSet {
-    #[serde(rename = "$value")]
-    pub members: Vec<DomainIdSetMember>,
+  #[serde(rename = "$value")]
+  pub members: Vec<DomainIdSetMember>,
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -97,14 +95,13 @@ pub struct DomainId {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct DomainIdRange {
   pub min: Option<DomainId>, // At least one of these must be defined.
-  pub max: Option<DomainId>, 
+  pub max: Option<DomainId>,
 }
-
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct Criteria {
-    #[serde(rename = "$value")]
-    pub members: Vec<Criterion>, // must not be empty: must have at least 1 topic criterion specified
+  #[serde(rename = "$value")]
+  pub members: Vec<Criterion>, // must not be empty: must have at least 1 topic criterion specified
 }
 
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -155,23 +152,23 @@ pub struct DataTag {
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum DefaultAction {
-  Allow, 
+  Allow,
   Deny,
 }
 
-
 #[cfg(test)]
 mod tests {
+  use serde_xml_rs::from_str;
+
   use super::*;
-  use serde_xml_rs::{from_str};
 
   #[test]
   pub fn parse_spec_example() {
-
     // Modifications to example in spec:
     // * insert missing "/" in closing id_range
     // * Boolean literals true/false in all lowercase
-    // * field `enable_liveliness_protection` is systematically missing from `topic_rule`s
+    // * field `enable_liveliness_protection` is systematically missing from
+    //   `topic_rule`s
 
     let domain_governance_document = r#"<?xml version="1.0" encoding="UTF-8"?>
 <dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -288,8 +285,7 @@ mod tests {
 </dds>
 "#;
 
-    let dgd : DomainParticiapntPermissionsDocument = 
-      from_str(domain_governance_document).unwrap();
+    let dgd: DomainParticiapntPermissionsDocument = from_str(domain_governance_document).unwrap();
   }
 
   #[test]
@@ -316,9 +312,6 @@ mod tests {
 </dds>
 "#;
 
-    let dgd : DomainParticiapntPermissionsDocument = 
-      from_str(domain_governance_document).unwrap();
+    let dgd: DomainParticiapntPermissionsDocument = from_str(domain_governance_document).unwrap();
   }
-
-
 }
