@@ -1,6 +1,6 @@
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 
-type ConfigError = serde_xml_rs::Error;
+pub type ConfigError = serde_xml_rs::Error;
 
 // A list of Grants
 #[derive(Debug, Clone)]
@@ -172,7 +172,7 @@ impl Rule {
   ) -> bool {
     debug_assert!(!self.domains.is_empty());
 
-    if self.domains.iter().any(|d| d.check(domain_id)) {
+    if self.domains.iter().any(|d| d.matches(domain_id)) {
       // Rule applies to this domain
       let verdict = self.verdict;
       let criteria = match action {
@@ -412,7 +412,7 @@ impl DomainIds {
   pub fn from_max(max: u16) -> DomainIds {
     DomainIds::Max(max)
   }
-  pub fn check(&self, i: u16) -> bool {
+  pub fn matches(&self, i: u16) -> bool {
     match self {
       DomainIds::Value(v) => *v == i,
       DomainIds::Range(mi, ma) => *mi <= i && i <= *ma,
@@ -421,7 +421,7 @@ impl DomainIds {
     }
   }
 
-  fn from_xml(xd: &xml::DomainIdSetMember) -> Result<Self, ConfigError> {
+  pub(crate) fn from_xml(xd: &xml::DomainIdSetMember) -> Result<Self, ConfigError> {
     match xd {
       xml::DomainIdSetMember::DomainId(xml::DomainId { id }) => Ok(DomainIds::Value(*id)),
       xml::DomainIdSetMember::DomainIdRange(xml::DomainIdRange { min, max }) => match (min, max) {
@@ -436,7 +436,7 @@ impl DomainIds {
   } // fn
 }
 
-mod xml {
+pub(crate) mod xml {
   use serde::{Deserialize, Serialize};
 
   // Define structs to mirror the XML Schema given in
