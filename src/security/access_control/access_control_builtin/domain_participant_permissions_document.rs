@@ -1,5 +1,5 @@
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
-
+use glob::Pattern;
 pub type ConfigError = serde_xml_rs::Error;
 
 // A list of Grants
@@ -282,10 +282,10 @@ impl From<AllowOrDeny> for bool {
 
 #[derive(Debug, Clone)]
 pub struct Criterion {
-  topics: Vec<Glob>, /* This Vec must not be empty. Match occurs when any Glob matches the topic
-                      * name. */
-
-  partitions: Vec<Glob>, // Match occurs when any Glob matches the partition name.
+  topics: Vec<Pattern>,
+  // This Vec must not be empty. Match occurs when any Glob matches the topic
+  // name.
+  partitions: Vec<Pattern>, // Match occurs when any Glob matches the partition name.
   // If the Vec is empty, then the default "empty string" partition is assumed. This means that
   // only the "empty string" partition will match.
   // DDS Security spec defines two matching behaviors in case of publishing (subscribing)
@@ -308,22 +308,22 @@ impl Criterion {
   ) -> bool {
     debug_assert!(!self.topics.is_empty());
 
-    self.topics.iter().any(|glob| glob.check(topic_name))
-      && partitions.all(|p| self.partitions.iter().any(|glob| glob.check(p)))
+    self.topics.iter().any(|glob| glob.matches(topic_name))
+      && partitions.all(|p| self.partitions.iter().any(|glob| glob.matches(p)))
       && data_tags.all(|(name, value)| self.data_tags.iter().any(|dt| dt.check(name, value)))
   }
 
   fn from_xml(xc: &xml::Criteria) -> Result<Self, ConfigError> {
-    let contents: (Vec<Glob>, Vec<Glob>, Vec<DataTag>) = xc.members.iter().fold(
+    let contents: (Vec<String>, Vec<String>, Vec<DataTag>) = xc.members.iter().fold(
       (Vec::new(), Vec::new(), Vec::new()),
       |mut acc, cr| match cr {
         xml::Criterion::Topics(te_list) => {
-          let topics = te_list.members.iter().map(|te| Glob::new(&te.value));
+          let topics = te_list.members.iter().map(|te| te.value.to_string());
           acc.0.extend(topics);
           acc
         }
         xml::Criterion::Partitions(pe_list) => {
-          let partitions = pe_list.members.iter().map(|pe| Glob::new(&pe.value));
+          let partitions = pe_list.members.iter().map(|pe| pe.value.to_string());
           acc.1.extend(partitions);
           acc
         }
@@ -345,6 +345,16 @@ impl Criterion {
       });
     }
 
+    let topics = topics
+      .iter()
+      .map(|s| Pattern::new(&s).map_err(pattern_err_to_config))
+      .collect::<Result<Vec<Pattern>, ConfigError>>()?;
+
+    let partitions = partitions
+      .iter()
+      .map(|s| Pattern::new(&s).map_err(pattern_err_to_config))
+      .collect::<Result<Vec<Pattern>, ConfigError>>()?;
+
     Ok(Criterion {
       topics,
       partitions,
@@ -353,22 +363,9 @@ impl Criterion {
   }
 }
 
-#[derive(Debug, Clone)]
-pub struct Glob {
-  glob: String, // Placeholder. This is a POSIX `fnmatch()` "glob" pattern.
-}
-
-impl Glob {
-  fn check(&self, s: &str) -> bool {
-    // TODO: Implement fnmatch matching
-    // The glob sanity (syntax) checking should be performed at Glob construction
-    s == self.glob
-  }
-
-  fn new(s: &str) -> Self {
-    Glob {
-      glob: s.to_string(),
-    }
+pub(crate) fn pattern_err_to_config(e: glob::PatternError) -> ConfigError {
+  ConfigError::Custom {
+    field: format!("TopicAccessrule: Bad glob pattern: {:?}", e),
   }
 }
 
