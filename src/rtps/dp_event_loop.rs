@@ -915,6 +915,7 @@ mod tests {
         topic_cache_handle: topic_cache.clone(),
         last_read_sequence_number_ref: last_read_sequence_number_ref.clone(),
         topic_name: "test".to_string(),
+        like_stateless: false,
         qos_policy: QosPolicies::qos_none(),
         data_reader_command_receiver: reader_command_receiver,
         data_reader_waker: data_reader_waker.clone(),

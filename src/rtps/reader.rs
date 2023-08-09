@@ -65,6 +65,7 @@ pub(crate) struct ReaderIngredients {
   pub(crate) topic_cache_handle: Arc<Mutex<TopicCache>>, /* A handle to the topic cache in DDS
                                                           * cache */
   pub(crate) last_read_sequence_number_ref: Arc<Mutex<BTreeMap<GUID, SequenceNumber>>>,
+  pub(crate) like_stateless: bool, // Usually false (see like_stateless attribute of Reader)
   pub qos_policy: QosPolicies,
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
   pub(crate) data_reader_waker: Arc<Mutex<Option<Waker>>>,
@@ -96,11 +97,13 @@ pub(crate) struct Reader {
   status_sender: StatusChannelSender<DataReaderStatus>,
   udp_sender: Rc<UDPSender>,
 
-  is_stateful: bool, // is this StatefulReader or StatelessReader as per RTPS spec
-  // Currently we support only stateful behavior.
-  // RTPS Spec: Section 8.4.11.2 Reliable StatelessReader Behavior
-  // "This combination is not supported by the RTPS protocol."
-  // So stateful must be true whenever we are Reliable.
+  // By default, this reader is a StatefulReader (see RTPS spec section 8.4.12)
+  // If like_stateless is true, then the reader mimics the behaviour of a StatelessReader
+  // This means for example that the reader does not keep track of matched remote writers.
+  // This behaviour is needed only for a single built-in discovery topic of Secure DDS
+  // (topic DCPSParticipantStatelessMessage)
+  like_stateless: bool,
+  // Reliability Qos. Note that a StatelessReader cannot be Reliable (RTPS Spec: Section 8.4.11.2)
   reliability: policy::Reliability,
   // Reader stores a pointer to a mutex on the topic cache
   topic_cache: Arc<Mutex<TopicCache>>,
@@ -153,12 +156,16 @@ impl Reader {
       );
     }
 
+    // If reader should be stateless, only BestEffor QoS is supported
+    if i.like_stateless && i.qos_policy.reliability() != Some(policy::Reliability::BestEffort) {
+      panic!("Attempted to create a stateless Reader with other than BestEffort reliability");
+    }
+
     Self {
       notification_sender: i.notification_sender,
       status_sender: i.status_sender,
       udp_sender,
-      is_stateful: true, // Do not change this before stateless functionality is implemented.
-
+      like_stateless: i.like_stateless,
       reliability: i
         .qos_policy
         .reliability() // use qos specification
@@ -349,6 +356,14 @@ impl Reader {
 
   // updates or adds a new writer proxy, doesn't touch changes
   pub fn update_writer_proxy(&mut self, proxy: RtpsWriterProxy, offered_qos: &QosPolicies) {
+    if self.like_stateless {
+      debug!(
+        "Attempted to update writer proxy for stateless reader. Ignoring. topic={:?}",
+        self.topic_name
+      );
+      return;
+    }
+
     debug!("update_writer_proxy topic={:?}", self.topic_name);
     match offered_qos.compliance_failure_wrt(&self.qos_policy) {
       None => {
@@ -435,10 +450,15 @@ impl Reader {
   }
 
   pub fn contains_writer(&self, entity_id: EntityId) -> bool {
-    self
-      .matched_writers
-      .iter()
-      .any(|(&g, _)| g.entity_id == entity_id)
+    if !self.like_stateless {
+      self
+        .matched_writers
+        .iter()
+        .any(|(&g, _)| g.entity_id == entity_id)
+    } else {
+      // Making it explicit: stateless reader does not contain any writers
+      false
+    }
   }
 
   #[cfg(test)]
@@ -515,6 +535,15 @@ impl Reader {
     datafrag_flags: BitFlags<DATAFRAG_Flags>,
     mr_state: &MessageReceiverState,
   ) {
+    if self.like_stateless {
+      info!(
+        "Attempted to handle datafrag msg in a stateless Reader, which does not support \
+         datafrags. Ignoring. topic={:?}",
+        self.topic_name
+      );
+      return;
+    }
+
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, datafrag.writer_id);
     let seq_num = datafrag.writer_sn;
     let receive_timestamp = Timestamp::now();
@@ -587,14 +616,14 @@ impl Reader {
     writer_sn: SequenceNumber,
   ) {
     trace!(
-      "handle_data_msg from {:?} seq={:?} topic={:?} reliability={:?} stateful={:?}",
+      "handle_data_msg from {:?} seq={:?} topic={:?} reliability={:?} stateless={:?}",
       &writer_guid,
       writer_sn,
       self.topic_name,
       self.reliability,
-      self.is_stateful,
+      self.like_stateless,
     );
-    if self.is_stateful {
+    if !self.like_stateless {
       let my_entity_id = self.my_guid.entity_id; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_mut(writer_guid) {
         if writer_proxy.should_ignore_change(writer_sn) {
@@ -625,8 +654,7 @@ impl Reader {
         }
       }
     } else {
-      // stateless reader
-      todo!()
+      // stateless reader: nothing to do before making cache change
     }
 
     self.make_cache_change(
@@ -729,9 +757,10 @@ impl Reader {
     let writer_guid =
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
 
-    if self.reliability == policy::Reliability::BestEffort {
+    if self.reliability == policy::Reliability::BestEffort || self.like_stateless {
       debug!(
-        "HEARTBEAT from {:?}, but this Reader is BestEffort. Ignoring. topic={:?} reader={:?}",
+        "HEARTBEAT from {:?}, but this Reader is BestEffort or stateless. Ignoring. topic={:?} \
+         reader={:?}",
         writer_guid, self.topic_name, self.my_guid
       );
       // BestEffort Reader reacts only to DATA and GAP
@@ -924,9 +953,9 @@ impl Reader {
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
 
-    if !self.is_stateful {
+    if self.like_stateless {
       debug!(
-        "GAP from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}",
+        "GAP from {:?}, but reader is stateless. Ignoring. topic={:?} reader={:?}",
         writer_guid, self.topic_name, self.my_guid
       );
       return;
@@ -1040,9 +1069,12 @@ impl Reader {
     let mut tc = self.acquire_the_topic_cache_guard();
 
     tc.add_change(&receive_timestamp, cache_change);
-    self.matched_writer(writer_guid).map(|wp| {
-      tc.mark_reliably_received_before(writer_guid, wp.all_ackable_before());
-    });
+    // Mark seqnums as received if not behaving statelessly
+    if !self.like_stateless {
+      self.matched_writer(writer_guid).map(|wp| {
+        tc.mark_reliably_received_before(writer_guid, wp.all_ackable_before());
+      });
+    }
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for
@@ -1188,6 +1220,15 @@ impl Reader {
   }
 
   pub fn send_preemptive_acknacks(&mut self) {
+    if self.like_stateless {
+      info!(
+        "Attempted to send pre-emptive acknacks in a stateless Reader, which does not support \
+         them. Ignoring. topic={:?}",
+        self.topic_name
+      );
+      return;
+    }
+
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness);
     // Do not set final flag --> we are requesting immediate heartbeat from writers.
 
@@ -1337,6 +1378,7 @@ mod tests {
       topic_name: topic_name.to_string(),
       topic_cache_handle,
       last_read_sequence_number_ref,
+      like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
@@ -1422,6 +1464,7 @@ mod tests {
       topic_name: topic_name.to_string(),
       topic_cache_handle: topic_cache_handle.clone(),
       last_read_sequence_number_ref,
+      like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
@@ -1528,6 +1571,7 @@ mod tests {
       topic_name: topic_name.to_string(),
       topic_cache_handle,
       last_read_sequence_number_ref,
+      like_stateless: false,
       qos_policy: reliable_qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
@@ -1637,6 +1681,7 @@ mod tests {
       topic_name: topic_name.to_string(),
       topic_cache_handle,
       last_read_sequence_number_ref,
+      like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
@@ -1734,5 +1779,78 @@ mod tests {
         .all_ackable_before(),
       SequenceNumber::new(6)
     );
+  }
+
+  #[test]
+  fn stateless_reader_does_not_contain_writer_proxies() {
+    // 1. Create a stateless-like reader
+    // Create the DDS cache and a topic
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let topic_name = "test_name";
+    let qos_policy = QosPolicies::builder()
+      .reliability(Reliability::BestEffort) // Stateless needs to be BestEffort
+      .build();
+
+    let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
+      topic_name.to_string(),
+      TypeDesc::new("test_type".to_string()),
+      &qos_policy,
+    );
+
+    let last_read_sequence_number_ref =
+      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
+
+    // Create mechanisms for notifications, statuses & commands
+    let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
+    let (_notification_event_source, notification_event_sender) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker = Arc::new(Mutex::new(None));
+
+    let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
+    let like_stateless = true;
+    let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
+    let reader_ing = ReaderIngredients {
+      guid: reader_guid,
+      notification_sender,
+      status_sender,
+      topic_name: topic_name.to_string(),
+      topic_cache_handle,
+      last_read_sequence_number_ref,
+      like_stateless,
+      qos_policy,
+      data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker,
+      poll_event_sender: notification_event_sender,
+      security_plugins: None,
+    };
+    let mut reader = Reader::new(
+      reader_ing,
+      Rc::new(UDPSender::new(0).unwrap()),
+      mio_extras::timer::Builder::default().build(),
+    );
+
+    // 2. Attempt to add info of a matched writer to the reader
+    let writer_guid = GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED);
+
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.prefix,
+      ..Default::default()
+    };
+
+    reader.matched_writer_add(
+      writer_guid,
+      EntityId::UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+      &QosPolicies::qos_none(),
+    );
+
+    // 3. Verify that the reader does not contain a writer proxy for the writer that
+    // we attempted to add
+    assert!(reader.matched_writer(writer_guid).is_none());
   }
 }

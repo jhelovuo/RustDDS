@@ -159,7 +159,9 @@ impl Publisher {
     D: Keyed,
     SA: adapters::with_key::SerializerAdapter<D>,
   {
-    self.inner_lock().create_datawriter(self, None, topic, qos)
+    self
+      .inner_lock()
+      .create_datawriter(self, None, topic, qos, false)
   }
 
   /// Shorthand for crate_datawriter with Common Data Representation Little
@@ -212,7 +214,7 @@ impl Publisher {
   {
     self
       .inner_lock()
-      .create_datawriter_no_key(self, None, topic, qos)
+      .create_datawriter_no_key(self, None, topic, qos, false)
   }
 
   pub fn create_datawriter_no_key_cdr<D>(
@@ -233,6 +235,7 @@ impl Publisher {
     entity_id: EntityId,
     topic: &Topic,
     qos: Option<QosPolicies>,
+    writer_like_stateless: bool, // Create a stateless-like RTPS writer?
   ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
@@ -240,7 +243,7 @@ impl Publisher {
   {
     self
       .inner_lock()
-      .create_datawriter(self, Some(entity_id), topic, qos)
+      .create_datawriter(self, Some(entity_id), topic, qos, writer_like_stateless)
   }
 
   pub(crate) fn create_datawriter_with_entity_id_no_key<D, SA>(
@@ -248,13 +251,18 @@ impl Publisher {
     entity_id: EntityId,
     topic: &Topic,
     qos: Option<QosPolicies>,
+    writer_like_stateless: bool, // Create a stateless-like RTPS writer?
   ) -> CreateResult<NoKeyDataWriter<D, SA>>
   where
     SA: crate::no_key::SerializerAdapter<D>,
   {
-    self
-      .inner_lock()
-      .create_datawriter_no_key(self, Some(entity_id), topic, qos)
+    self.inner_lock().create_datawriter_no_key(
+      self,
+      Some(entity_id),
+      topic,
+      qos,
+      writer_like_stateless,
+    )
   }
 
   // delete_datawriter should not be needed. The DataWriter object itself should
@@ -429,6 +437,7 @@ impl InnerPublisher {
     entity_id_opt: Option<EntityId>,
     topic: &Topic,
     optional_qos: Option<QosPolicies>,
+    writer_like_stateless: bool, // Create a stateless-like RTPS writer? Usually false
   ) -> CreateResult<WithKeyDataWriter<D, SA>>
   where
     D: Keyed,
@@ -473,6 +482,7 @@ impl InnerPublisher {
       writer_command_receiver_waker: Arc::clone(&writer_waker),
       topic_name: topic.name(),
       topic_cache_handle,
+      like_stateless: writer_like_stateless,
       qos_policies: writer_qos.clone(),
       status_sender,
       security_plugins: None, // TODO pass security plugins
@@ -515,6 +525,7 @@ impl InnerPublisher {
     entity_id_opt: Option<EntityId>,
     topic: &Topic,
     qos: Option<QosPolicies>,
+    writer_like_stateless: bool, // Create a stateless-like RTPS writer? Usually false
   ) -> CreateResult<NoKeyDataWriter<D, SA>>
   where
     SA: adapters::no_key::SerializerAdapter<D>,
@@ -526,6 +537,7 @@ impl InnerPublisher {
       Some(entity_id),
       topic,
       qos,
+      writer_like_stateless,
     )?;
     Ok(NoKeyDataWriter::<D, SA>::from_keyed(d))
   }
@@ -669,7 +681,7 @@ impl Subscriber {
     D: Keyed,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
-    self.inner.create_datareader(self, topic, None, qos)
+    self.inner.create_datareader(self, topic, None, qos, false)
   }
 
   pub fn create_datareader_cdr<D: 'static>(
@@ -721,7 +733,9 @@ impl Subscriber {
   where
     SA: adapters::no_key::DeserializerAdapter<D>,
   {
-    self.inner.create_datareader_no_key(self, topic, None, qos)
+    self
+      .inner
+      .create_datareader_no_key(self, topic, None, qos, false)
   }
 
   pub fn create_simple_datareader_no_key<D: 'static, DA: 'static>(
@@ -755,6 +769,7 @@ impl Subscriber {
     topic: &Topic,
     entity_id: EntityId,
     qos: Option<QosPolicies>,
+    reader_like_stateless: bool, // Create a stateless-like RTPS reader?
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
@@ -762,7 +777,7 @@ impl Subscriber {
   {
     self
       .inner
-      .create_datareader(self, topic, Some(entity_id), qos)
+      .create_datareader(self, topic, Some(entity_id), qos, reader_like_stateless)
   }
 
   pub(crate) fn create_datareader_with_entity_id_no_key<D: 'static, SA>(
@@ -770,13 +785,14 @@ impl Subscriber {
     topic: &Topic,
     entity_id: EntityId,
     qos: Option<QosPolicies>,
+    reader_like_stateless: bool, // Create a stateless-like RTPS reader?
   ) -> CreateResult<NoKeyDataReader<D, SA>>
   where
     SA: adapters::no_key::DeserializerAdapter<D>,
   {
     self
       .inner
-      .create_datareader_no_key(self, topic, Some(entity_id), qos)
+      .create_datareader_no_key(self, topic, Some(entity_id), qos, reader_like_stateless)
   }
 
   // Retrieves a previously created DataReader belonging to the Subscriber.
@@ -855,13 +871,19 @@ impl InnerSubscriber {
     entity_id_opt: Option<EntityId>,
     topic: &Topic,
     optional_qos: Option<QosPolicies>,
+    reader_like_stateless: bool, // Create a stateless-like RTPS reader? Usually false
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
-    let simple_dr =
-      self.create_simple_datareader_internal(outer, entity_id_opt, topic, optional_qos)?;
+    let simple_dr = self.create_simple_datareader_internal(
+      outer,
+      entity_id_opt,
+      topic,
+      optional_qos,
+      reader_like_stateless,
+    )?;
     Ok(with_key::DataReader::<D, SA>::from_simple_data_reader(
       simple_dr,
     ))
@@ -873,6 +895,7 @@ impl InnerSubscriber {
     entity_id_opt: Option<EntityId>,
     topic: &Topic,
     optional_qos: Option<QosPolicies>,
+    reader_like_stateless: bool, // Create a stateless-like RTPS reader? Usually false
   ) -> CreateResult<with_key::SimpleDataReader<D, SA>>
   where
     D: Keyed,
@@ -927,6 +950,7 @@ impl InnerSubscriber {
       topic_name: topic.name(),
       topic_cache_handle: topic_cache_handle.clone(),
       last_read_sequence_number_ref: last_read_sequence_number_ref.clone(),
+      like_stateless: reader_like_stateless,
       qos_policy: qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
@@ -973,6 +997,7 @@ impl InnerSubscriber {
     topic: &Topic,
     entity_id: Option<EntityId>,
     qos: Option<QosPolicies>,
+    reader_like_stateless: bool, // Create a stateless-like RTPS reader? Usually false
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
     D: Keyed,
@@ -981,7 +1006,7 @@ impl InnerSubscriber {
     if topic.kind() != TopicKind::WithKey {
       return Err(CreateError::TopicKind(TopicKind::WithKey));
     }
-    self.create_datareader_internal(outer, entity_id, topic, qos)
+    self.create_datareader_internal(outer, entity_id, topic, qos, reader_like_stateless)
   }
 
   pub fn create_datareader_no_key<D: 'static, SA>(
@@ -990,6 +1015,7 @@ impl InnerSubscriber {
     topic: &Topic,
     entity_id_opt: Option<EntityId>,
     qos: Option<QosPolicies>,
+    reader_like_stateless: bool, // Create a stateless-like RTPS reader? Usually false
   ) -> CreateResult<NoKeyDataReader<D, SA>>
   where
     SA: adapters::no_key::DeserializerAdapter<D>,
@@ -1006,6 +1032,7 @@ impl InnerSubscriber {
       Some(entity_id),
       topic,
       qos,
+      reader_like_stateless,
     )?;
 
     Ok(NoKeyDataReader::<D, SA>::from_keyed(d))
@@ -1033,6 +1060,7 @@ impl InnerSubscriber {
       Some(entity_id),
       topic,
       qos,
+      false,
     )?;
 
     Ok(no_key::SimpleDataReader::<D, SA>::from_keyed(d))

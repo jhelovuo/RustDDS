@@ -72,6 +72,7 @@ pub(crate) struct WriterIngredients {
   pub topic_name: String,
   pub(crate) topic_cache_handle: Arc<Mutex<TopicCache>>, /* A handle to the topic cache in DDS
                                                           * cache */
+  pub(crate) like_stateless: bool, // Usually false (see like_stateless attribute of Writer)
   pub qos_policies: QosPolicies,
   pub status_sender: StatusChannelSender<DataWriterStatus>,
 
@@ -178,11 +179,23 @@ pub(crate) struct Writer {
   writer_command_receiver_waker: Arc<Mutex<Option<Waker>>>,
   /// The RTPS ReaderProxy class represents the information an RTPS
   /// StatefulWriter maintains on each matched RTPS Reader
-  readers: BTreeMap<GUID, RtpsReaderProxy>, // TODO: Convert to BTreeMap for faster finds.
+  readers: BTreeMap<GUID, RtpsReaderProxy>,
   matched_readers_count_total: i32, // all matches, never decremented
   requested_incompatible_qos_count: i32, // how many times a Reader requested incompatible QoS
   // message: Option<Message>,
   udp_sender: Rc<UDPSender>,
+
+  // By default, this writer is a StatefulWriter (see RTPS spec section 8.4.9)
+  // If like_stateless is true, then the writer mimics the behaviour of a Best-Effort
+  // StatelessWriter. This behaviour is needed only for a single built-in discovery topic of
+  // Secure DDS (topic DCPSParticipantStatelessMessage).
+  // The basic idea in mimicking BestEffort & Stateless is:
+  //  1. Make sure no heartbeats, acknacks, or anything related to Reliable behaviour is processed
+  //  2. Use the RtpsReaderProxies merely as locators, do not utilize/modify their state
+  // Note that unlike the Best-Effort StatelessWriter in the specification, here we don't send
+  // GAP messages. But this shouldn't matter since the expected remote Reader is also BestEffort &
+  // Stateless, and therefore does not process GAP messages at all.
+  like_stateless: bool,
 
   // Writer can read/write to one topic only, and it stores a pointer to a mutex on the topic cache
   topic_cache: Arc<Mutex<TopicCache>>,
@@ -251,6 +264,12 @@ impl Writer {
       );
     }
 
+    // If writer should behave statelessly, only BestEffor QoS is currently
+    // supported
+    if i.like_stateless && i.qos_policies.reliability() != Some(policy::Reliability::BestEffort) {
+      panic!("Attempted to create a stateless-like Writer with other than BestEffort reliability");
+    }
+
     let heartbeat_period = i
       .qos_policies
       .reliability
@@ -315,6 +334,7 @@ impl Writer {
       sequence_number_to_instant: BTreeMap::new(),
       disposed_sequence_numbers: HashSet::new(),
       timed_event_timer,
+      like_stateless: i.like_stateless,
       qos_policies: i.qos_policies,
       status_sender: i.status_sender,
       // offered_deadline_status: OfferedDeadlineMissedStatus::new(),
@@ -331,7 +351,12 @@ impl Writer {
   }
 
   pub fn is_reliable(&self) -> bool {
-    self.qos_policies.reliability.is_some()
+    if !self.like_stateless {
+      self.qos_policies.reliability.is_some()
+    } else {
+      // Reliable not currently supported for Writer which mimics stateless behaviour
+      false
+    }
   }
 
   pub fn local_readers(&self) -> Vec<EntityId> {
@@ -522,12 +547,23 @@ impl Writer {
               // ACKNACK asking for it.
             };
 
-            let final_flag = false; // false = request that readers acknowledge with ACKNACK.
-            let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
-                                         // writing new data.
-            let data_hb_message = message_builder
-              .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
-              .add_header_and_build(self.my_guid.prefix);
+            if !self.like_stateless {
+              // Add HEARTBEAT if regular stateful writer (stateless-like supports only
+              // BestEffort currently)
+              let final_flag = false; // false = request that readers acknowledge with ACKNACK.
+              let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
+                                           // writing new data.
+              message_builder =
+                message_builder.heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag);
+            } else {
+              debug!(
+                "Skipped sending HEARTBEAT in a stateless-like Writer. topic={:?}",
+                self.my_topic_name
+              );
+            }
+
+            let data_hb_message = message_builder.add_header_and_build(self.my_guid.prefix);
+
             self.send_message_to_readers(
               DeliveryMode::Multicast,
               data_hb_message,
@@ -535,6 +571,16 @@ impl Writer {
             );
           } else {
             // Large payload, must fragment.
+            if self.like_stateless {
+              // DataFrags are currently not supported by a stateless-like Writer
+              warn!(
+                "Attempted to fragment data in a stateless-like Writer, which does not currently \
+                 support DataFrags. Ignoring. topic={:?}",
+                self.my_topic_name
+              );
+              return;
+            }
+
             if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp)
             {
               let data_size = cache_change.data_value.payload_size();
@@ -596,6 +642,15 @@ impl Writer {
         //   self.reset_offered_deadline_missed_status();
         // }
         WriterCommand::WaitForAcknowledgments { all_acked } => {
+          if self.like_stateless {
+            error!(
+              "Attempted to wait for acknowledgements in a stateless Writer, which currently only \
+               supports BestEffort QoS. Ignoring. topic={:?}",
+              self.my_topic_name
+            );
+            return;
+          }
+
           let wait_until = self.last_change_sequence_number;
           let readers_pending: BTreeSet<_> = self
             .readers
@@ -678,9 +733,12 @@ impl Writer {
     // update key to timestamp mapping
     // self.key_to_instant.insert(data_key, timestamp);
 
-    // Notify reader proxies that there is a new sample
-    for reader in &mut self.readers.values_mut() {
-      reader.notify_new_cache_change(new_sequence_number);
+    // If not acting stateless-like, notify reader proxies that there is a new
+    // sample
+    if !self.like_stateless {
+      for reader in &mut self.readers.values_mut() {
+        reader.notify_new_cache_change(new_sequence_number);
+      }
     }
     timestamp
   }
@@ -691,7 +749,14 @@ impl Writer {
 
   /// This is called periodically.
   pub fn handle_heartbeat_tick(&mut self, is_manual_assertion: bool) {
-    // Reliable Stateless Writer will set the final flag.
+    if self.like_stateless {
+      info!(
+        "Ignoring handling heartbeat tick in a stateless-like Writer, since it currently supports \
+         only BestEffor QoS. topic={:?}",
+        self.my_topic_name
+      );
+      return;
+    }
     // Reliable Stateful Writer (that tracks Readers by ReaderProxy) will not set
     // the final flag.
     let final_flag = false;
@@ -742,9 +807,11 @@ impl Writer {
     ack_submessage: &AckSubmessage,
   ) {
     // sanity check
-    if !self.is_reliable() {
+    if !self.is_reliable() || self.like_stateless {
+      // Stateless-like Writer currently supports only BestEffort QoS, so ignore
+      // acknack also for it
       warn!(
-        "Writer {:x?} is best effort! It should not handle acknack messages!",
+        "Writer {:x?} is best effort or stateless-like! It should not handle acknack messages!",
         self.entity_id()
       );
       return;
@@ -851,6 +918,14 @@ impl Writer {
   // Send out missing data
 
   fn handle_repair_data_send(&mut self, to_reader: GUID) {
+    if self.like_stateless {
+      warn!(
+        "Not sending repair data in a stateless-like Writer, since it currently supports only \
+         BestEffor behaviour. topic={:?}",
+        self.my_topic_name
+      );
+      return;
+    }
     // Note: here we remove the reader from our reader map temporarily.
     // Then we can mutate both the reader and other fields in self.
     // Doing a .get_mut() on the reader map would make self immutable.
@@ -870,6 +945,15 @@ impl Writer {
   }
 
   fn handle_repair_frags_send(&mut self, to_reader: GUID) {
+    if self.like_stateless {
+      warn!(
+        "Not sending repair frags in a stateless-like Writer, since it currently supports only \
+         BestEffor behaviour. topic={:?}",
+        self.my_topic_name
+      );
+      return;
+    }
+
     // see similar function above
     if let Some(mut reader_proxy) = self.readers.remove(&to_reader) {
       self.handle_repair_frags_send_worker(&mut reader_proxy);
@@ -1063,19 +1147,26 @@ impl Writer {
   /// Returns SequenceNumbers of removed CacheChanges
   /// This is called repeatedly by handle_cache_cleaning action.
   fn remove_all_acked_changes_but_keep_depth(&mut self, depth: usize) {
-    // All readers have acked up to this point (SequenceNumber)
-    let acked_by_all_readers = self
-      .readers
-      .values()
-      .map(RtpsReaderProxy::acked_up_to_before)
-      .min()
-      .unwrap_or_else(SequenceNumber::zero);
-    // If all readers have acked all up to before 5, and depth is 5, we need
-    // to keep samples 0..4, i.e. from acked_up_to_before - depth .
-    let first_keeper = max(
-      acked_by_all_readers - SequenceNumber::from(depth),
-      self.first_change_sequence_number,
-    );
+    let first_keeper = if !self.like_stateless {
+      // Regular stateful writer behaviour
+      // All readers have acked up to this point (SequenceNumber)
+      let acked_by_all_readers = self
+        .readers
+        .values()
+        .map(RtpsReaderProxy::acked_up_to_before)
+        .min()
+        .unwrap_or_else(SequenceNumber::zero);
+      // If all readers have acked all up to before 5, and depth is 5, we need
+      // to keep samples 0..4, i.e. from acked_up_to_before - depth .
+      max(
+        acked_by_all_readers - SequenceNumber::from(depth),
+        self.first_change_sequence_number,
+      )
+    } else {
+      // Stateless-like writer currently supports only BestEffor behaviour, so here we
+      // make it explicit that it does not care about acked sequence numbers
+      self.first_change_sequence_number
+    };
 
     // We notify the topic cache that it can release older samples
     // as far as this Writer is concerned.

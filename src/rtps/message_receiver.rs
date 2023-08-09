@@ -970,6 +970,7 @@ mod tests {
       topic_name: "test".to_string(),
       topic_cache_handle: topic_cache_handle.clone(),
       last_read_sequence_number_ref,
+      like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
