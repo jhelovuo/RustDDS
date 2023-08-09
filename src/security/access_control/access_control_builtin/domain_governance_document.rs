@@ -1,10 +1,10 @@
 use serde_xml_rs::from_str;
 pub use xml::{BasicProtectionKind, ProtectionKind};
 
-use super::domainparticipant_permissions_document::{ConfigError, DomainIds};
+use super::domain_participant_permissions_document::{ConfigError, DomainIds};
 
 // This module provides access (parsing and query) to Domain Governance
-// Docuement as specified in Section "9.4.1.2 Domain Governance Document" of
+// Document as specified in Section "9.4.1.2 Domain Governance Document" of
 // DDS Security Spec v1.1
 
 #[derive(Debug)]
@@ -16,7 +16,7 @@ impl DomainGovernanceDocument {
   // Find an applicable rule for domain according to
   // Section "9.4.1.2.7 Application of Domain and Topic Rules"
   //
-  // If no rule is found (None), then the operation being attempted must fil with
+  // If no rule is found (None), then the operation being attempted must fail with
   // a permissions error.
   pub fn find_rule(&self, domain_id: u16) -> Option<&DomainRule> {
     self.domain_access_rules.iter().find(|dr| {
@@ -118,8 +118,8 @@ mod xml {
   // DDS Security Spec v1.1 Section
   // "9.4.1.2.3 Domain Governance document format"
 
-  // The data is structured maybe a bit oddly, because it must miror the structure
-  // of the XSD given in the DDS Security spec.
+  // The data is structured maybe a bit oddly, because it must mirror the
+  // structure of the XSD given in the DDS Security spec.
 
   // TODO: Allow Boolean literals also in all uppercase, e.g. "TRUE" in addition
   // to "true".
@@ -149,7 +149,7 @@ mod xml {
     pub topic_access_rules: TopicAccessRules,
   }
 
-  use super::super::domainparticipant_permissions_document::xml::DomainIdSet;
+  use super::super::domain_participant_permissions_document::xml::DomainIdSet;
 
   #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
   #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

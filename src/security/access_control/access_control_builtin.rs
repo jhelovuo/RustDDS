@@ -1,5 +1,7 @@
 use super::AccessControl;
 
+mod domain_governance_document;
+mod domain_participant_permissions_document;
 mod local_entity_access_control;
 mod participant_access_control;
 mod remote_entity_access_control;
