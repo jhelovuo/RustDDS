@@ -1,7 +1,9 @@
 use serde_xml_rs::from_str;
+use glob::*;
+
 pub use xml::{BasicProtectionKind, ProtectionKind};
 
-use super::domainparticipant_permissions_document::{ConfigError, DomainIds};
+use super::domainparticipant_permissions_document::{ConfigError, DomainIds, pattern_err_to_config};
 
 // This module provides access (parsing and query) to Domain Governance
 // Docuement as specified in Section "9.4.1.2 Domain Governance Document" of
@@ -55,11 +57,10 @@ pub struct DomainRule {
 
 impl DomainRule {
   pub fn find_topic_access_rule(&self, topic_name: &str) -> Option<&TopicAccessRule> {
-    //TODO: topic_expression is actually a pattern.  Use `fnmatch()` to compare.
     self
       .topic_access_rules
       .iter()
-      .find(|tar| tar.topic_expression == topic_name)
+      .find(|tar| tar.topic_expression.matches(topic_name) )
   }
 
   fn from_xml(xr: &xml::DomainRule) -> Result<Self, ConfigError> {
@@ -72,7 +73,7 @@ impl DomainRule {
       .rules
       .iter()
       .map(TopicAccessRule::from_xml)
-      .collect();
+      .collect::<Result<Vec<TopicAccessRule>, ConfigError>>()?;
 
     Ok(DomainRule {
       domains,
@@ -88,7 +89,7 @@ impl DomainRule {
 
 #[derive(Debug)]
 pub struct TopicAccessRule {
-  pub topic_expression: String,
+  pub topic_expression: Pattern,
   pub enable_discovery_protection: bool,
   pub enable_liveliness_protection: bool,
   pub enable_read_access_control: bool,
@@ -98,16 +99,20 @@ pub struct TopicAccessRule {
 }
 
 impl TopicAccessRule {
-  fn from_xml(xtr: &xml::TopicRule) -> Self {
-    TopicAccessRule {
-      topic_expression: xtr.topic_expression.expression.clone(),
+  fn from_xml(xtr: &xml::TopicRule) -> Result<Self,ConfigError> {
+    let topic_expression = 
+      Pattern::new(&xtr.topic_expression.expression)
+      .map_err(pattern_err_to_config)?;
+
+    Ok(TopicAccessRule {
+      topic_expression,
       enable_discovery_protection: xtr.enable_discovery_protection,
       enable_liveliness_protection: xtr.enable_liveliness_protection,
       enable_read_access_control: xtr.enable_read_access_control,
       enable_write_access_control: xtr.enable_write_access_control,
       metadata_protection_kind: xtr.metadata_protection_kind,
       data_protection_kind: xtr.data_protection_kind,
-    }
+    })
   }
 }
 
