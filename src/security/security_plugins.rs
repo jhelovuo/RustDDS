@@ -39,6 +39,9 @@ pub(crate) struct SecurityPlugins {
   participant_crypto_handle_cache_: HashMap<GuidPrefix, ParticipantCryptoHandle>,
   local_endpoint_crypto_handle_cache_: HashMap<GUID, EndpointCryptoHandle>,
   remote_endpoint_crypto_handle_cache_: HashMap<(GUID, GUID), EndpointCryptoHandle>,
+
+  test_disable_crypto_transform_: bool, /* TODO: Disables the crypto transform interface, remove
+                                         * after testing */
 }
 
 impl SecurityPlugins {
@@ -56,6 +59,8 @@ impl SecurityPlugins {
       participant_crypto_handle_cache_: HashMap::new(),
       local_endpoint_crypto_handle_cache_: HashMap::new(),
       remote_endpoint_crypto_handle_cache_: HashMap::new(),
+
+      test_disable_crypto_transform_: true, // TODO Remove after testing
     }
   }
 
@@ -234,13 +239,18 @@ impl SecurityPlugins {
   }
 }
 
-/// Interface for using the CryptoKeyTransform of the Cryptographic plugin
+/// Interface for using the CryptoTransform of the Cryptographic plugin
 impl SecurityPlugins {
   pub fn encode_serialized_payload(
     &self,
     serialized_payload: Vec<u8>,
     sending_datawriter_guid: &GUID,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
+    // TODO remove after testing, skips encoding
+    if self.test_disable_crypto_transform_ {
+      return Ok((serialized_payload, ParameterList::new()));
+    }
+
     self.crypto.encode_serialized_payload(
       serialized_payload,
       self.get_local_endpoint_crypto_handle(sending_datawriter_guid)?,
@@ -253,6 +263,11 @@ impl SecurityPlugins {
     source_guid: &GUID,
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
+    // TODO remove after testing, skips encoding
+    if self.test_disable_crypto_transform_ {
+      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+    }
+
     // Convert the destination GUIDs to crypto handles
     let mut receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle> =
       SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
@@ -275,6 +290,11 @@ impl SecurityPlugins {
     source_guid: &GUID,
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
+    // TODO remove after testing, skips encoding
+    if self.test_disable_crypto_transform_ {
+      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+    }
+
     // Convert the destination GUIDs to crypto handles
     let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
       SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
@@ -297,6 +317,11 @@ impl SecurityPlugins {
     source_guid_prefix: &GuidPrefix,
     destination_guid_prefix_list: &[GuidPrefix],
   ) -> SecurityResult<Message> {
+    // TODO remove after testing, skips encoding
+    if self.test_disable_crypto_transform_ {
+      return Ok(plain_message);
+    }
+
     // Convert the destination GUID prefixes to crypto handles
     let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
       SecurityResult::from_iter(destination_guid_prefix_list.iter().map(
@@ -372,6 +397,11 @@ impl SecurityPlugins {
     source_guid: &GUID,
     destination_guid: &GUID,
   ) -> SecurityResult<Vec<u8>> {
+    // TODO remove after testing, skips decoding
+    if self.test_disable_crypto_transform_ {
+      return Ok(encoded_payload);
+    }
+
     self.crypto.decode_serialized_payload(
       encoded_payload,
       inline_qos,
