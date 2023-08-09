@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 
 type ConfigError = serde_xml_rs::Error;
 
@@ -9,11 +10,7 @@ pub struct DomainParticiapntPermissions {
 }
 
 impl DomainParticiapntPermissions {
-  pub fn find_grant(
-    &self,
-    subject_name: String,
-    current_datetime: &chrono::DateTime<chrono::Utc>,
-  ) -> Option<&Grant> {
+  pub fn find_grant(&self, subject_name: &str, current_datetime: &DateTime<Utc>) -> Option<&Grant> {
     // TODO: How to match subject names?
     self
       .grants
@@ -50,7 +47,7 @@ impl DomainParticiapntPermissions {
 #[derive(Debug, Clone)]
 pub struct Grant {
   pub subject_name: String, // X.509 subject name
-  pub validity: std::ops::Range<chrono::DateTime<chrono::Utc>>,
+  pub validity: std::ops::Range<DateTime<Utc>>,
   pub rules: Vec<Rule>,
   pub default_action: AllowOrDeny,
 }
@@ -73,25 +70,80 @@ impl Grant {
   }
 
   fn from_xml(xgrant: &xml::Grant) -> Result<Self, ConfigError> {
-    todo!()
-    //   let subj_names = xgrant.elems.filter_map(|ge|
-    // Self::subject_name_from_xml(ge) );   let validity =
-    // xgrant.elems.filter_map(|ge| Self::validity_from_xml(ge) );
-    //   let allows = xgrant.elems.filter_map(|ge|
-    // Self::allow_rule_from_xml(ge));   let denys =
-    // xgrant.elems.filter_map(|ge| Self::deny_rule_from_xml(ge));
-    //   let defaults = xgrant.elems.filter_map(|ge|
-    // Self::default_from_xml(ge));
+    let too_short = || ConfigError::Custom {
+      field: "Grant element must contain at least four subelements".to_string(),
+    };
+    let (subject_name, rest) = xgrant.elems.split_first().ok_or_else(too_short)?;
+    let (validity, rest) = rest.split_first().ok_or_else(too_short)?;
+    let (default_action, rules) = rest.split_last().ok_or_else(too_short)?;
+    if rules.is_empty() {
+      return Err(too_short());
+    }
 
-    //   Ok(Self {
-    //     subject_name,
-    //     validity,
-    //     rules,
-    //     default_action,
-    //   })
+    match (subject_name, validity, rules, default_action) {
+      (
+        xml::GrantElement::SubjectName(subject_name),
+        xml::GrantElement::Validity(xml::Validity {
+          not_before,
+          not_after,
+        }),
+        rules,
+        xml::GrantElement::Default(default_action),
+      ) => {
+        let subject_name = subject_name.to_string();
+
+        let rules: Result<Vec<Rule>, ConfigError> = rules.iter().map(Rule::from_xml).collect();
+        let rules = rules?;
+
+        let validity = Self::parse_time(not_before)?..Self::parse_time(not_after)?;
+
+        let default_action = AllowOrDeny::from_xml(*default_action);
+
+        Ok(Self {
+          subject_name,
+          validity,
+          rules,
+          default_action,
+        })
+      }
+      _ => Err(ConfigError::Custom {
+        field: "Grant element must be contain subject_name, validity, 1..n rules, and a \
+                default_action."
+          .to_string(),
+      }),
+    }
   }
 
-  // fn subject_name_from_xml()
+  // DDS Security specification v1.1
+  // Section "9.4.1.3.2.2 Validity Section"
+  //
+  // "[...] using the format defined by dateTime data type as specified in sub
+  // clause 3.3.7 of [XSD]. Time zones that aren't specified are considered
+  // UTC."
+  //
+  // See https://www.w3.org/TR/xmlschema11-2/#dateTime
+  //
+  // Section "9.4.1.4 DomainParticipant example permissions document (non
+  // normative)"
+  //
+  // Format is CCYY-MM-DDThh:mm:ss[Z|(+|-)hh:mm] The time zone may
+  // be specified as Z (UTC) or (+|-)hh:mm. Time zones that aren't
+  // specified are considered UTC.
+  fn parse_time(time_str: &str) -> Result<DateTime<Utc>, ConfigError> {
+    // Try parsing RFC 3339 datetime, which includes time zone
+    DateTime::<FixedOffset>::parse_from_rfc3339(time_str)
+      .map(DateTime::<Utc>::from)
+      // ...but time zone spec is optional, so try parsing again without timezone specifier,
+      // whicih implies UTC by the spec.
+      .or_else(|_e| Utc.datetime_from_str(time_str, "%FT%H:%M:%S"))
+      .map_err(|e| ConfigError::Custom {
+        field: format!(
+          "DateTime parse error: {:?} . Input was \"{}\". Expected \
+           YYYY-MM-ddTHH:MM:ss[|Z|(+|-)hh:mm]",
+          e, time_str
+        ),
+      })
+  }
 }
 
 #[derive(Debug, Clone)]
@@ -140,6 +192,68 @@ impl Rule {
     } else {
       false // Did not apply to this domain, no result
     }
+  }
+
+  fn from_xml(ge: &xml::GrantElement) -> Result<Self, ConfigError> {
+    let (verdict, rule_elems) = match ge {
+      xml::GrantElement::AllowRule(rule) => Ok((AllowOrDeny::Allow, &rule.elems)),
+      xml::GrantElement::DenyRule(rule) => Ok((AllowOrDeny::Deny, &rule.elems)),
+      _ => Err(ConfigError::Custom {
+        field: "Expected allow or deny rule in grant.".to_string(),
+      }),
+    }?;
+    let too_short = || ConfigError::Custom {
+      field: "Rule must contain domains subelement".to_string(),
+    };
+
+    let (domains, rest) = rule_elems.split_first().ok_or_else(too_short)?;
+    let domains = match domains {
+      xml::RuleElement::Domains(xml::DomainIdSet { members }) => {
+        let domain_ids = members
+          .iter()
+          .map(DomainIds::from_xml)
+          .collect::<Result<Vec<DomainIds>, ConfigError>>()?;
+        Ok(domain_ids)
+      }
+      _ => Err(ConfigError::Custom {
+        field: "Rule must start with domains".to_string(),
+      }),
+    }?;
+
+    let publish = rest.iter().map_while(|re| match re {
+      xml::RuleElement::Publish(c) => Some(c),
+      _ => None,
+    });
+    let publish: Result<Vec<Criterion>, ConfigError> = publish.map(Criterion::from_xml).collect();
+    let publish = publish?;
+    let (_, rest) = rest.split_at(publish.len()); // panics if publish.len() > rest.len(), so should not panic.
+
+    let subscribe = rest.iter().map_while(|re| match re {
+      xml::RuleElement::Subscribe(c) => Some(c),
+      _ => None,
+    });
+    let subscribe: Result<Vec<Criterion>, ConfigError> =
+      subscribe.map(Criterion::from_xml).collect();
+    let subscribe = subscribe?;
+    let (_, rest) = rest.split_at(subscribe.len());
+
+    let relay = rest.iter().map_while(|re| match re {
+      xml::RuleElement::Relay(c) => Some(c),
+      _ => None,
+    });
+    let relay: Result<Vec<Criterion>, ConfigError> = relay.map(Criterion::from_xml).collect();
+    let relay = relay?;
+    let (_, rest) = rest.split_at(relay.len());
+
+    // at this point "rest" should be empty
+
+    Ok(Rule {
+      verdict,
+      domains,
+      publish,
+      subscribe,
+      relay,
+    })
   }
 }
 
@@ -226,7 +340,7 @@ impl Criterion {
     );
     let (topics, partitions, data_tags) = contents;
 
-    if topics.len() < 1 {
+    if topics.is_empty() {
       return Err(ConfigError::Custom {
         field: "Grant Criterion must define at least a Topic name.".to_string(),
       });
@@ -249,7 +363,7 @@ impl Glob {
   fn check(&self, s: &str) -> bool {
     // TODO: Implement fnmatch matching
     // The glob sanity (syntax) checking should be performed at Glob construction
-    s == &self.glob
+    s == self.glob
   }
 
   fn new(s: &str) -> Self {
@@ -267,7 +381,7 @@ pub struct DataTag {
 
 impl DataTag {
   fn check(&self, name: &str, value: &str) -> bool {
-    name == &self.name && value == &self.value
+    name == self.name && value == self.value
   }
 
   fn new(name: &str, value: &str) -> Self {
@@ -372,8 +486,8 @@ mod xml {
 
   #[derive(Debug, Serialize, Deserialize, PartialEq)]
   pub struct Validity {
-    not_before: String, // XsdDateTime,
-    not_after: String,  // XsdDateTime,
+    pub not_before: String, // XsdDateTime,
+    pub not_after: String,  // XsdDateTime,
   }
 
   #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -475,170 +589,181 @@ mod xml {
     pub value: String,
   }
 
-  #[derive(Debug, Serialize, Deserialize, PartialEq)]
+  #[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
   #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
   pub enum DefaultAction {
     Allow,
     Deny,
   }
+} // mod xml
 
-  #[cfg(test)]
-  mod tests {
-    use serde_xml_rs::from_str;
+#[cfg(test)]
+mod tests {
+  use serde_xml_rs::from_str;
 
-    use super::*;
+  use super::*;
 
-    #[test]
-    pub fn parse_spec_example() {
-      // Modifications to example in spec:
-      // * insert missing "/" in closing id_range
-      // * Boolean literals true/false in all lowercase
-      // * field `enable_liveliness_protection` is systematically missing from
-      //   `topic_rule`s
+  #[test]
+  pub fn parse_spec_example() {
+    // Modifications to example in spec:
+    // * insert missing "/" in closing id_range
+    // * Boolean literals true/false in all lowercase
+    // * field `enable_liveliness_protection` is systematically missing from
+    //   `topic_rule`s
 
-      let domain_governance_document = r#"<?xml version="1.0" encoding="UTF-8"?>
-  <dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg_shared_ca_permissions.xsd">
-    <permissions>
-      <grant name="ShapesPermission">
-        <subject_name>emailAddress=cto@acme.com, CN=DDS Shapes Demo, OU=CTO Office, O=ACME Inc., L=Sunnyvale, ST=CA, C=US</subject_name>
-        <validity>
-          <!-- Format is CCYY-MM-DDThh:mm:ss[Z|(+|-)hh:mm] The time zone may
-          be specified as Z (UTC) or (+|-)hh:mm. Time zones that aren't
-          specified are considered UTC.
-          -->
-          <not_before>2013-10-26T00:00:00</not_before>
-          <not_after>2018-10-26T22:45:30</not_after>
-        </validity>
+    let domain_particiapnt_permissions_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg_shared_ca_permissions.xsd">
+  <permissions>
+    <grant name="ShapesPermission">
+      <subject_name>emailAddress=cto@acme.com, CN=DDS Shapes Demo, OU=CTO Office, O=ACME Inc., L=Sunnyvale, ST=CA, C=US</subject_name>
+      <validity>
+        <!-- Format is CCYY-MM-DDThh:mm:ss[Z|(+|-)hh:mm] The time zone may
+        be specified as Z (UTC) or (+|-)hh:mm. Time zones that aren't
+        specified are considered UTC.
+        -->
+        <not_before>2013-10-26T00:00:00Z</not_before>
+        <not_after>2018-10-26T22:45:30</not_after>
+      </validity>
 
-        <allow_rule>
-          <domains>
+      <allow_rule>
+        <domains>
+        <id>0</id>
+        </domains>
+        <!-- DDSSEC11-56 - deleted invalid elements -->
+      </allow_rule>
+
+      <deny_rule>
+        <domains>
           <id>0</id>
-          </domains>
-          <!-- DDSSEC11-56 - deleted invalid elements -->
-        </allow_rule>
-
-        <deny_rule>
-          <domains>
-            <id>0</id>
-          </domains>
-          <publish>
-            <topics>
-            <topic>Circle1</topic>
-            </topics>
-          </publish>
-          <publish>
-            <topics>
-            <topic>Square</topic>
-            </topics>
-            <partitions>
-            <partition>A_partition</partition>
-            </partitions>
-          </publish>
-          <subscribe>
-            <topics>
-            <topic>Square1</topic>
-            </topics>
-          </subscribe>
-          <subscribe>
-            <topics>
-            <topic>Tr*</topic>
-            </topics>
-            <partitions>
-            <partition>P1*</partition>
-            </partitions>
-          </subscribe>
-        </deny_rule>
-
-        <allow_rule>
-          <domains>
-          <id>0</id>
-          </domains>
-          <publish>
+        </domains>
+        <publish>
           <topics>
-          <topic>Cir*</topic>
+          <topic>Circle1</topic>
           </topics>
-          <data_tags>
-          <tag>
-          <name>aTagName1</name>
-          <value>aTagValue1</value>
-          </tag>
-          </data_tags>
-          </publish>
-          <subscribe>
+        </publish>
+        <publish>
           <topics>
-          <topic>Sq*</topic>
-          </topics>
-          <data_tags>
-          <tag>
-          <name>aTagName1</name>
-          <value>aTagValue1</value>
-          </tag>
-          <tag>
-          <name>aTagName2</name>
-          <value>aTagValue2</value>
-          </tag>
-          </data_tags>
-          </subscribe>
-          <subscribe>
-          <topics>
-          <topic>Triangle</topic>
+          <topic>Square</topic>
           </topics>
           <partitions>
-          <partition>P*</partition>
+          <partition>A_partition</partition>
           </partitions>
-          <data_tags>
-          <tag>
-          <name>aTagName1</name>
-          <value>aTagValue1</value>
-          </tag>
-          </data_tags>
-          </subscribe>
-          <relay>
+        </publish>
+        <subscribe>
           <topics>
-          <topic>*</topic>
+          <topic>Square1</topic>
+          </topics>
+        </subscribe>
+        <subscribe>
+          <topics>
+          <topic>Tr*</topic>
           </topics>
           <partitions>
-          <partition>aPartitionName</partition>
+          <partition>P1*</partition>
           </partitions>
-          </relay>
-        </allow_rule>
+        </subscribe>
+      </deny_rule>
 
-        <default>DENY</default>
+      <allow_rule>
+        <domains>
+        <id>0</id>
+        </domains>
+        <publish>
+        <topics>
+        <topic>Cir*</topic>
+        </topics>
+        <data_tags>
+        <tag>
+        <name>aTagName1</name>
+        <value>aTagValue1</value>
+        </tag>
+        </data_tags>
+        </publish>
+        <subscribe>
+        <topics>
+        <topic>Sq*</topic>
+        </topics>
+        <data_tags>
+        <tag>
+        <name>aTagName1</name>
+        <value>aTagValue1</value>
+        </tag>
+        <tag>
+        <name>aTagName2</name>
+        <value>aTagValue2</value>
+        </tag>
+        </data_tags>
+        </subscribe>
+        <subscribe>
+        <topics>
+        <topic>Triangle</topic>
+        </topics>
+        <partitions>
+        <partition>P*</partition>
+        </partitions>
+        <data_tags>
+        <tag>
+        <name>aTagName1</name>
+        <value>aTagValue1</value>
+        </tag>
+        </data_tags>
+        </subscribe>
+        <relay>
+        <topics>
+        <topic>*</topic>
+        </topics>
+        <partitions>
+        <partition>aPartitionName</partition>
+        </partitions>
+        </relay>
+      </allow_rule>
 
-      </grant>
-    </permissions>
-  </dds>
-  "#;
+      <default>DENY</default>
 
-      let dgd: DomainParticiapntPermissionsDocument = from_str(domain_governance_document).unwrap();
-    }
+    </grant>
+  </permissions>
+</dds>
+"#;
+    // Test serde-xml parse only
+    let dpd_xml: xml::DomainParticiapntPermissionsDocument =
+      from_str(domain_particiapnt_permissions_xml).unwrap();
 
-    #[test]
-    pub fn parse_minimal() {
-      let domain_governance_document = r#"<?xml version="1.0" encoding="UTF-8"?>
-  <dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-    xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg_shared_ca_permissions.xsd">
-    <permissions>
-      <grant name="ShapesPermission">
-        <subject_name>emailAddress=cto@acme.com, CN=DDS Shapes Demo, OU=CTO Office, O=ACME Inc., L=Sunnyvale, ST=CA, C=US</subject_name>
-        <validity>
-          <not_before>2013-10-26T00:00:00</not_before>
-          <not_after>2018-10-26T22:45:30</not_after>
-        </validity>
+    // Test full parse
+    let dpd = DomainParticiapntPermissions::from_xml(domain_particiapnt_permissions_xml).unwrap();
+    println!("{:?}", dpd);
+  }
 
-        <allow_rule>
-          <domains><id> 0 </id></domains>
-        </allow_rule>
+  #[test]
+  pub fn parse_minimal() {
+    let domain_particiapnt_permissions_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg_shared_ca_permissions.xsd">
+  <permissions>
+    <grant name="ShapesPermission">
+      <subject_name>emailAddress=cto@acme.com, CN=DDS Shapes Demo, OU=CTO Office, O=ACME Inc., L=Sunnyvale, ST=CA, C=US</subject_name>
+      <validity>
+        <not_before>2013-10-26T00:00:00Z</not_before>
+        <not_after>2018-10-26T22:45:30+02:00</not_after>
+      </validity>
 
-        <default>DENY</default>
+      <allow_rule>
+        <domains><id> 0 </id></domains>
+      </allow_rule>
 
-      </grant>
-    </permissions>
-  </dds>
-  "#;
+      <default>ALLOW</default>
 
-      let dgd: DomainParticiapntPermissionsDocument = from_str(domain_governance_document).unwrap();
-    }
+    </grant>
+  </permissions>
+</dds>
+"#;
+
+    // Test serde-xml parse only
+    let dpd: xml::DomainParticiapntPermissionsDocument =
+      from_str(domain_particiapnt_permissions_xml).unwrap();
+
+    // Test full parse
+    let dpd = DomainParticiapntPermissions::from_xml(domain_particiapnt_permissions_xml).unwrap();
+    println!("{:?}", dpd);
   }
 }
