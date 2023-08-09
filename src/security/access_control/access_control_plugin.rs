@@ -17,7 +17,16 @@ use super::*;
 /// Ok-variant. When a function returns a boolean according to the
 /// specification, the Ok-variant is interpreted as true and Err-variant as
 /// false.
-pub trait AccessControl: Send {
+///
+/// We split the plugin interface to 3 parts according to the 5 groups described
+/// in 8.8.3
+pub trait AccessControl:
+  ParticipantAccessControl + LocalEntityAccessControl + RemoteEntityAccessControl
+{
+}
+
+/// Group1 in 8.8.3
+pub trait ParticipantAccessControl: Send {
   /// validate_local_permissions: section 8.4.2.9.1 of the Security
   /// specification
   fn validate_local_permissions(
@@ -48,6 +57,33 @@ pub trait AccessControl: Send {
     qos: &QosPolicies,
   ) -> SecurityResult<()>;
 
+  /// get_permissions_token: section 8.4.2.9.17 of the Security
+  /// specification.
+  fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken>;
+
+  /// get_permissions_credential_token: section 8.4.2.9.18 of the Security
+  /// specification.
+  fn get_permissions_credential_token(
+    &self,
+    handle: PermissionsHandle,
+  ) -> SecurityResult<PermissionsCredentialToken>;
+
+  /// set_listener: section 8.4.2.9.19 of the Security
+  /// specification.
+  /// TODO: we do not need this as listeners are not used in RustDDS, but which
+  /// async mechanism to use?
+  fn set_listener(&self) -> SecurityResult<()>;
+
+  /// get_participant_sec_attributes: section 8.4.2.9.22 of the Security
+  /// specification.
+  fn get_participant_sec_attributes(
+    &self,
+    permissions_handle: PermissionsHandle,
+  ) -> SecurityResult<ParticipantSecurityAttributes>;
+}
+
+/// Group2 and Group3 in 8.8.3
+pub trait LocalEntityAccessControl: Send {
   /// check_create_datawriter: section 8.4.2.9.4 of the Security
   /// specification. The parameters partition and data_tag have been left out,
   /// since RustDDS does not yet support PartitionQoS or data tagging
@@ -100,6 +136,37 @@ pub trait AccessControl: Send {
     key_todo: (),
   ) -> SecurityResult<()>;
 
+  /// get_topic_sec_attributes: section 8.4.2.9.23 of the Security
+  /// specification.
+  fn get_topic_sec_attributes(
+    &self,
+    permissions_handle: PermissionsHandle,
+    topic_name: String,
+  ) -> SecurityResult<TopicSecurityAttributes>;
+
+  /// get_datawriter_sec_attributes: section 8.4.2.9.24 of the Security
+  /// specification.
+  /// The parameters partition and data_tag have been left out,
+  /// since RustDDS does not yet support PartitionQoS or data tagging
+  fn get_datawriter_sec_attributes(
+    &self,
+    permissions_handle: PermissionsHandle,
+    topic_name: String,
+  ) -> SecurityResult<EndpointSecurityAttributes>;
+
+  /// get_datareader_sec_attributes: section 8.4.2.9.25 of the Security
+  /// specification.
+  /// The parameters partition and data_tag have been left out,
+  /// since RustDDS does not yet support PartitionQoS or data tagging
+  fn get_datareader_sec_attributes(
+    &self,
+    permissions_handle: PermissionsHandle,
+    topic_name: String,
+  ) -> SecurityResult<EndpointSecurityAttributes>;
+}
+
+/// Group4 and Group5 in 8.8.3
+pub trait RemoteEntityAccessControl: Send {
   /// check_remote_participant: section 8.4.2.9.9 of the Security
   /// specification.
   fn check_remote_participant(
@@ -181,59 +248,7 @@ pub trait AccessControl: Send {
     publication_handle_todo: (),
     key_todo: (),
   ) -> SecurityResult<()>;
-
-  /// get_permissions_token: section 8.4.2.9.17 of the Security
-  /// specification.
-  fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken>;
-
-  /// get_permissions_credential_token: section 8.4.2.9.18 of the Security
-  /// specification.
-  fn get_permissions_credential_token(
-    &self,
-    handle: PermissionsHandle,
-  ) -> SecurityResult<PermissionsCredentialToken>;
-
-  /// set_listener: section 8.4.2.9.19 of the Security
-  /// specification.
-  /// TODO: we do not need this as listeners are not used in RustDDS, but which
-  /// async mechanism to use?
-  fn set_listener(&self) -> SecurityResult<()>;
-
-  /// get_participant_sec_attributes: section 8.4.2.9.22 of the Security
-  /// specification.
-  fn get_participant_sec_attributes(
-    &self,
-    permissions_handle: PermissionsHandle,
-  ) -> SecurityResult<ParticipantSecurityAttributes>;
-
-  /// get_topic_sec_attributes: section 8.4.2.9.23 of the Security
-  /// specification.
-  fn get_topic_sec_attributes(
-    &self,
-    permissions_handle: PermissionsHandle,
-    topic_name: String,
-  ) -> SecurityResult<TopicSecurityAttributes>;
-
-  /// get_datawriter_sec_attributes: section 8.4.2.9.24 of the Security
-  /// specification.
-  /// The parameters partition and data_tag have been left out,
-  /// since RustDDS does not yet support PartitionQoS or data tagging
-  fn get_datawriter_sec_attributes(
-    &self,
-    permissions_handle: PermissionsHandle,
-    topic_name: String,
-  ) -> SecurityResult<EndpointSecurityAttributes>;
-
-  /// get_datareader_sec_attributes: section 8.4.2.9.25 of the Security
-  /// specification.
-  /// The parameters partition and data_tag have been left out,
-  /// since RustDDS does not yet support PartitionQoS or data tagging
-  fn get_datareader_sec_attributes(
-    &self,
-    permissions_handle: PermissionsHandle,
-    topic_name: String,
-  ) -> SecurityResult<EndpointSecurityAttributes>;
-
-  // TODO: Can the different return methods (e.g. return_permissions_token) be
-  // left out, since Rust manages memory for us?
 }
+
+// TODO: Can the different return methods (e.g. return_permissions_token) be
+// left out, since Rust manages memory for us?
