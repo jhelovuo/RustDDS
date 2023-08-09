@@ -252,6 +252,22 @@ impl Discovery {
     property: None,
   };
 
+  pub(crate) const PARTICIPANT_STATELESS_MESSAGE_QOS: QosPolicies = QosPolicies {
+    durability: None,
+    presentation: None,
+    deadline: None,
+    latency_budget: None,
+    ownership: None,
+    liveliness: None,
+    time_based_filter: None,
+    reliability: Some(Reliability::BestEffort), // Important (see Security spec section 7.3.4)
+    destination_order: None,
+    history: Some(History::KeepLast { depth: 1 }),
+    resource_limits: None,
+    lifespan: None,
+    property: None,
+  };
+
   #[allow(clippy::too_many_arguments)]
   pub fn new(
     domain_participant: DomainParticipantWeak,
@@ -305,6 +321,7 @@ impl Discovery {
       ( $repr:ident, $has_key:ident,
         $topic_name:expr, $topic_type_name:expr, $message_type:ty,
         $qos:expr,
+        $stateless_RTPS:expr,
         $reader_entity_id:expr, $reader_token:expr,
         $writer_entity_id:expr,
         $timeout:expr, $timer_token:expr, ) => {{
@@ -324,6 +341,7 @@ impl Discovery {
               &topic,
               $reader_entity_id,
               $qos,
+              $stateless_RTPS,
             ).expect("Unable to create DataReader. ");
 
           let writer =
@@ -332,6 +350,7 @@ impl Discovery {
                 $writer_entity_id,
                 &topic,
                 $qos,
+                $stateless_RTPS,
               ).expect("Unable to create DataWriter .");
         }
         poll
@@ -376,6 +395,7 @@ impl Discovery {
       "SPDPDiscoveredParticipantData", // topic type name over RTPS
       SpdpDiscoveredParticipantData,
       Some(Self::create_spdp_participant_qos()),
+      false, // Regular stateful RTPS Reader & Writer
       EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
       DISCOVERY_PARTICIPANT_DATA_TOKEN,
       EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
@@ -404,7 +424,8 @@ impl Discovery {
       "DCPSSubscription",     // topic name
       "DiscoveredReaderData", // topic type name over RTPS
       DiscoveredReaderData,
-      None, // QoS
+      None,  // QoS
+      false, // Regular stateful RTPS Reader & Writer
       EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
       DISCOVERY_READER_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
@@ -419,7 +440,8 @@ impl Discovery {
       "DCPSPublication",      // topic name
       "DiscoveredReaderData", // topic type name over RTPS
       DiscoveredWriterData,
-      None, // QoS
+      None,  // QoS,
+      false, // Regular stateful RTPS Reader & Writer
       EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
       DISCOVERY_WRITER_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
@@ -434,7 +456,8 @@ impl Discovery {
       "DCPSTopic",           // topic name
       "DiscoveredTopicData", // topic type name over RTPS
       DiscoveredTopicData,
-      None, // QoS
+      None,  // QoS,
+      false, // Regular stateful RTPS Reader & Writer
       EntityId::SEDP_BUILTIN_TOPIC_READER,
       DISCOVERY_TOPIC_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_TOPIC_WRITER,
@@ -463,6 +486,7 @@ impl Discovery {
       "ParticipantMessageData", // topic type name over RTPS
       ParticipantMessageData,
       Some(Self::PARTICIPANT_MESSAGE_QOS),
+      false, // Regular stateful RTPS Reader & Writer
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
       DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
@@ -543,7 +567,8 @@ impl Discovery {
       "DCPSParticipantsSecure",            // topic name
       "ParticipantBuiltinTopicDataSecure", // topic type name over RTPS (use the same data type)
       ParticipantBuiltinTopicDataSecure,
-      None, // QoS
+      None,  // QoS
+      false, // Regular stateful RTPS Reader & Writer
       EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_READER,
       SECURE_DISCOVERY_PARTICIPANT_DATA_TOKEN,
       EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER,
@@ -559,7 +584,8 @@ impl Discovery {
       "DCPSSubscriptionsSecure",            // topic name
       "SubscriptionBuiltinTopicDataSecure", // topic type name over RTPS
       SubscriptionBuiltinTopicDataSecure,
-      None, // QoS
+      None,  // QoS
+      false, // Regular stateful RTPS Reader & Writer
       EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_READER,
       SECURE_DISCOVERY_READER_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_WRITER,
@@ -574,7 +600,8 @@ impl Discovery {
       "DCPSPublicationsSecure",             // topic name
       "PublicationBuiltinTopicDataSecure,", // topic type name over RTPS
       PublicationBuiltinTopicDataSecure,
-      None, // QoS
+      None,  // QoS
+      false, // Regular stateful RTPS Reader & Writer
       EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_READER,
       SECURE_DISCOVERY_WRITER_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_WRITER,
@@ -590,6 +617,7 @@ impl Discovery {
       "ParticipantMessageData",       // topic type name over RTPS (use the same data type)
       ParticipantMessageData,         // actually reuse the non-secure data type
       None,                           // QoS
+      false,                          // Regular stateful RTPS Reader & Writer
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_READER,
       P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_WRITER,
@@ -603,7 +631,8 @@ impl Discovery {
       "DCPSParticipantStatelessMessage", // topic name
       "ParticipantStatelessMessage",
       ParticipantStatelessMessage,
-      None, // QoS
+      Some(Self::PARTICIPANT_STATELESS_MESSAGE_QOS),
+      true, // Important: STATELESS RTPS Reader & Writer (see Security spec. section 7.4.3)
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
       P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
@@ -618,6 +647,7 @@ impl Discovery {
       "ParticipantVolatileMessageSecure",
       ParticipantVolatileMessageSecure, // actually reuse the non-secure data type
       None,                             // QoS
+      false,                            // Regular stateful RTPS Reader & Writer
       EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
       P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
