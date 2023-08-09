@@ -1,6 +1,6 @@
 use crate::security::cryptographic::cryptographic_builtin::*;
 
-impl CryptoKeyExchange for CryptographicBuiltIn {
+impl CryptoKeyExchange for CryptographicBuiltin {
   fn create_local_participant_crypto_tokens(
     &mut self,
     local_participant_crypto_handle: ParticipantCryptoHandle,

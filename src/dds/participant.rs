@@ -73,9 +73,9 @@ impl DomainParticipantBuilder {
     let security_test_configs = security::config::test_config();
 
     if security_test_configs.security_enabled {
-      let auth = Box::new(security::AuthenticationBuiltIn::new());
-      let access = Box::new(security::AccessControlBuiltIn::new());
-      let crypto = Box::new(security::CryptographicBuiltIn::new());
+      let auth = Box::new(security::AuthenticationBuiltin::new());
+      let access = Box::new(security::AccessControlBuiltin::new());
+      let crypto = Box::new(security::CryptographicBuiltin::new());
       self.security(auth, access, crypto, security_test_configs.properties);
     }
     self

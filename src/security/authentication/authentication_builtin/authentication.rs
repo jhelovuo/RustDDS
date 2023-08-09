@@ -2,9 +2,9 @@ use crate::{
   security::{access_control::*, authentication::*, Authentication, *},
   QosPolicies, GUID,
 };
-use super::AuthenticationBuiltIn;
+use super::AuthenticationBuiltin;
 
-impl Authentication for AuthenticationBuiltIn {
+impl Authentication for AuthenticationBuiltin {
   // Currently only mocked
   fn validate_local_identity(
     &mut self,

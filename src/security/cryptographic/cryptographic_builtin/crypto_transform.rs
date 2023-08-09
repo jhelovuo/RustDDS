@@ -34,7 +34,7 @@ use super::{
   },
 };
 
-impl CryptographicBuiltIn {
+impl CryptographicBuiltin {
   fn encode_submessage(
     &self,
     plain_rtps_submessage: Submessage,
@@ -191,7 +191,7 @@ impl CryptographicBuiltIn {
   }
 }
 
-impl CryptoTransform for CryptographicBuiltIn {
+impl CryptoTransform for CryptographicBuiltin {
   fn encode_serialized_payload(
     &self,
     plain_buffer: Vec<u8>,

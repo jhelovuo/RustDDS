@@ -12,7 +12,7 @@ use crate::{
 };
 use super::aes_gcm_gmac::keygen;
 
-impl CryptographicBuiltIn {
+impl CryptographicBuiltin {
   fn generate_crypto_handle_(&mut self) -> CryptoHandle {
     self.crypto_handle_counter_ += 1;
     self.crypto_handle_counter_
@@ -196,7 +196,7 @@ impl CryptographicBuiltIn {
 
 /// Builtin CryptoKeyFactory implementation from section 9.5.3.1 of the Security
 /// specification (v. 1.1)
-impl CryptoKeyFactory for CryptographicBuiltIn {
+impl CryptoKeyFactory for CryptographicBuiltin {
   fn register_local_participant(
     &mut self,
     participant_identity: IdentityHandle,

@@ -1,15 +1,14 @@
-use serde::{Deserialize, Serialize};
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 
 type ConfigError = serde_xml_rs::Error;
 
 // A list of Grants
 #[derive(Debug, Clone)]
-pub struct DomainParticiapntPermissions {
+pub struct DomainParticipantPermissions {
   pub grants: Vec<Grant>,
 }
 
-impl DomainParticiapntPermissions {
+impl DomainParticipantPermissions {
   pub fn find_grant(&self, subject_name: &str, current_datetime: &DateTime<Utc>) -> Option<&Grant> {
     // TODO: How to match subject names?
     self
@@ -19,7 +18,7 @@ impl DomainParticiapntPermissions {
   }
 
   pub fn from_xml(domain_participant_permissions_xml: &str) -> Result<Self, ConfigError> {
-    let dpp: xml::DomainParticiapntPermissionsDocument =
+    let dpp: xml::DomainParticipantPermissionsDocument =
       serde_xml_rs::from_str(domain_participant_permissions_xml)?;
     let grants = dpp
       .permissions
@@ -36,8 +35,8 @@ impl DomainParticiapntPermissions {
 // The permissions allow or deny the DP to publish, subscribe, or relay messages
 // on particular DDS topics or DDS partitions.
 //
-// To check if a DP is allowd to e.g. publish to a particular topic, the list of
-// Grants is scanned in order. A matching grant (subject name and validity
+// To check if a DP is allowed to e.g. publish to a particular topic, the list
+// of Grants is scanned in order. A matching grant (subject name and validity
 // range) must be found. If not, then there is no permission.
 // If a matching Grant is found, the Rules are scanned in order. The Rules is
 // matched against the proposed action. The domain id and all the
@@ -134,7 +133,7 @@ impl Grant {
     DateTime::<FixedOffset>::parse_from_rfc3339(time_str)
       .map(DateTime::<Utc>::from)
       // ...but time zone spec is optional, so try parsing again without timezone specifier,
-      // whicih implies UTC by the spec.
+      // which implies UTC by the spec.
       .or_else(|_e| Utc.datetime_from_str(time_str, "%FT%H:%M:%S"))
       .map_err(|e| ConfigError::Custom {
         field: format!(
@@ -289,9 +288,9 @@ pub struct Criterion {
   partitions: Vec<Glob>, // Match occurs when any Glob matches the partition name.
   // If the Vec is empty, then the default "empty string" partition is assumed. This means that
   // only the "empty string" partition will match.
-  // DDS Security spec defines two matching behaviours in case of publishing (subscribing)
-  // to multiple partitions. "Default" behaviour requires all partitions to match, and
-  // the "legacy" behaviour requires only some partitions to match.
+  // DDS Security spec defines two matching behaviors in case of publishing (subscribing)
+  // to multiple partitions. "Default" behaviors requires all partitions to match, and
+  // the "legacy" behaviors requires only some partitions to match.
   data_tags: Vec<DataTag>, /* Match condition: All the data tags associated with a a DDS Entity
                             * must match an element of this vector. (But other, unmatched,
                             * DataTags in the Vec are ok.)
@@ -430,7 +429,7 @@ impl DomainIds {
         (None, Some(max)) => Ok(DomainIds::Max(max.id)),
         (Some(min), None) => Ok(DomainIds::Min(min.id)),
         (None, None) => Err(ConfigError::Custom {
-          field: "Domain id range must have at leat one bound".to_string(),
+          field: "Domain id range must have at least one bound".to_string(),
         }),
       },
     }
@@ -449,7 +448,7 @@ mod xml {
 
   #[derive(Debug, Serialize, Deserialize, PartialEq)]
   #[serde(rename = "dds")]
-  pub struct DomainParticiapntPermissionsDocument {
+  pub struct DomainParticipantPermissionsDocument {
     pub permissions: Permissions,
   }
 
@@ -467,7 +466,7 @@ mod xml {
     //TODO: This is a hacky way to get serde-xml to read the XML as specified.
     // We need to manually check that there is (exactly) one of each SubjectName, Validity, and
     // Default in a Grant.
-    // There may be an arbitray number of AllowRules and DenyRules, and their order is important.
+    // There may be an arbitrary number of AllowRules and DenyRules, and their order is important.
     // The AllowRules and DenyRules are to scanned in order until one matches, and that is to be
     // applied. if there is no match, then use Default.
     //
@@ -496,11 +495,11 @@ mod xml {
     pub elems: Vec<RuleElement>, /*TODO: This is a hacky way to get serde-xml to read the XML
                                   * as specified. We need to
                                   * manually check that there is (exactly) one of `domain`
-                                  * in a Rule, breferably at the begining. */
+                                  * in a Rule, preferably at the beginning. */
   }
 
   // The RuleElements should be in order Publish, Subscribe, Relay, witch 0..N
-  // occurencences of each. This definition accepts them in any order.
+  // occurrences of each. This definition accepts them in any order.
 
   #[derive(Debug, Serialize, Deserialize, PartialEq)]
   #[serde(rename_all = "snake_case")]
@@ -611,7 +610,7 @@ mod tests {
     // * field `enable_liveliness_protection` is systematically missing from
     //   `topic_rule`s
 
-    let domain_particiapnt_permissions_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+    let domain_participant_permissions_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg_shared_ca_permissions.xsd">
   <permissions>
@@ -726,17 +725,17 @@ mod tests {
 </dds>
 "#;
     // Test serde-xml parse only
-    let dpd_xml: xml::DomainParticiapntPermissionsDocument =
-      from_str(domain_particiapnt_permissions_xml).unwrap();
+    let dpd_xml: xml::DomainParticipantPermissionsDocument =
+      from_str(domain_participant_permissions_xml).unwrap();
 
     // Test full parse
-    let dpd = DomainParticiapntPermissions::from_xml(domain_particiapnt_permissions_xml).unwrap();
+    let dpd = DomainParticipantPermissions::from_xml(domain_participant_permissions_xml).unwrap();
     println!("{:?}", dpd);
   }
 
   #[test]
   pub fn parse_minimal() {
-    let domain_particiapnt_permissions_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
+    let domain_participant_permissions_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg_shared_ca_permissions.xsd">
   <permissions>
@@ -759,11 +758,11 @@ mod tests {
 "#;
 
     // Test serde-xml parse only
-    let dpd: xml::DomainParticiapntPermissionsDocument =
-      from_str(domain_particiapnt_permissions_xml).unwrap();
+    let dpd: xml::DomainParticipantPermissionsDocument =
+      from_str(domain_participant_permissions_xml).unwrap();
 
     // Test full parse
-    let dpd = DomainParticiapntPermissions::from_xml(domain_particiapnt_permissions_xml).unwrap();
+    let dpd = DomainParticipantPermissions::from_xml(domain_participant_permissions_xml).unwrap();
     println!("{:?}", dpd);
   }
 }

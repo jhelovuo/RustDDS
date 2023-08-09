@@ -18,9 +18,9 @@ use crate::{
   security_error,
 };
 
-// A struct implementing the built-in Cryptographic plugin
+// A struct implementing the builtin Cryptographic plugin
 // See sections 8.5 and 9.5 of the Security specification (v. 1.1)
-pub struct CryptographicBuiltIn {
+pub struct CryptographicBuiltin {
   encode_key_materials_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
   decode_key_materials_: HashMap<CryptoHandle, KeyMaterial_AES_GCM_GMAC_seq>,
   participant_encrypt_options_: HashMap<ParticipantCryptoHandle, ParticipantSecurityAttributes>,
@@ -42,11 +42,11 @@ pub struct CryptographicBuiltIn {
 }
 
 // Combine the trait implementations from the submodules
-impl super::Cryptographic for CryptographicBuiltIn {}
+impl super::Cryptographic for CryptographicBuiltin {}
 
-impl CryptographicBuiltIn {
+impl CryptographicBuiltin {
   pub fn new() -> Self {
-    CryptographicBuiltIn {
+    CryptographicBuiltin {
       encode_key_materials_: HashMap::new(),
       decode_key_materials_: HashMap::new(),
       participant_encrypt_options_: HashMap::new(),
