@@ -6,6 +6,7 @@ pub mod access_control;
 pub mod authentication;
 pub mod config;
 pub mod cryptographic;
+pub mod logging;
 pub mod security_plugins;
 pub mod types;
 
