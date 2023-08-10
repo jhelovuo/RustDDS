@@ -347,12 +347,12 @@ impl Criterion {
 
     let topics = topics
       .iter()
-      .map(|s| Pattern::new(&s).map_err(pattern_err_to_config))
+      .map(|s| Pattern::new(s).map_err(|e| pattern_err_to_config_err(&e)))
       .collect::<Result<Vec<Pattern>, ConfigError>>()?;
 
     let partitions = partitions
       .iter()
-      .map(|s| Pattern::new(&s).map_err(pattern_err_to_config))
+      .map(|s| Pattern::new(s).map_err(|e| pattern_err_to_config_err(&e)))
       .collect::<Result<Vec<Pattern>, ConfigError>>()?;
 
     Ok(Criterion {
@@ -363,9 +363,9 @@ impl Criterion {
   }
 }
 
-pub(crate) fn pattern_err_to_config(e: glob::PatternError) -> ConfigError {
+pub(crate) fn pattern_err_to_config_err(e: &glob::PatternError) -> ConfigError {
   ConfigError::Custom {
-    field: format!("TopicAccessrule: Bad glob pattern: {:?}", e),
+    field: format!("TopicAccessRule: Bad glob pattern: {:?}", e),
   }
 }
 

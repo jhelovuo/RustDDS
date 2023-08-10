@@ -3,7 +3,7 @@ use glob::*;
 pub use xml::{BasicProtectionKind, ProtectionKind};
 
 use super::domain_participant_permissions_document::{
-  pattern_err_to_config, ConfigError, DomainIds,
+  pattern_err_to_config_err, ConfigError, DomainIds,
 };
 
 // This module provides access (parsing and query) to Domain Governance
@@ -102,7 +102,7 @@ pub struct TopicAccessRule {
 impl TopicAccessRule {
   fn from_xml(xtr: &xml::TopicRule) -> Result<Self, ConfigError> {
     let topic_expression =
-      Pattern::new(&xtr.topic_expression.expression).map_err(pattern_err_to_config)?;
+      Pattern::new(&xtr.topic_expression.expression).map_err(|e| pattern_err_to_config_err(&e))?;
 
     Ok(TopicAccessRule {
       topic_expression,
