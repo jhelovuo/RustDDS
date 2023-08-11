@@ -11,6 +11,8 @@ use super::{AccessControl, PermissionsHandle};
 
 mod domain_governance_document;
 mod domain_participant_permissions_document;
+mod s_mime_config_parser;
+
 mod helpers;
 mod local_entity_access_control;
 mod participant_access_control;

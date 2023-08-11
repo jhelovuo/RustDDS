@@ -45,6 +45,10 @@ io-extras = "0.18.0"
 # For DDS Security:
 serde-xml-rs = "0.6"  # for reading spec-mandated XML config files
 glob = "0.3" # for reading spec-mandated XML config files
+mailparse = "0.6" # for reading S/MIME-encoded (XML) config files
+cms = "0.2" # for reading signatures on config files
+der = "*" # whatever cms uses
+const-oid = "*" # whatever cms uses
 
 [target.'cfg(windows)'.dependencies]
 local-ip-address = "0.5.3"
