@@ -45,7 +45,7 @@ impl DomainGovernanceDocument {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DomainRule {
   pub domains: Vec<DomainIds>,
   pub allow_unauthenticated_participants: bool,
@@ -88,7 +88,7 @@ impl DomainRule {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct TopicAccessRule {
   pub topic_expression: Pattern,
   pub enable_discovery_protection: bool,

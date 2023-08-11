@@ -5,8 +5,10 @@ use speedy::{Readable, Writable};
 
 use crate::{
   security::{
-    PluginEndpointSecurityAttributesMask, PluginParticipantSecurityAttributesMask,
-    PluginSecurityAttributesMask, SecurityError,
+    access_control::{PermissionsCredentialToken, PermissionsToken},
+    authentication::authentication_builtin::types::CertificateAlgorithm,
+    DataHolder, PluginEndpointSecurityAttributesMask, PluginParticipantSecurityAttributesMask,
+    PluginSecurityAttributesMask, Property, SecurityError,
   },
   security_error,
 };
@@ -193,4 +195,70 @@ pub(super) enum BuiltinPluginEndpointSecurityAttributesMaskFlags {
   IsSubmessageEncrypted = 0b0000_0001,
   IsPayloadEncrypted = 0b0000_0010,
   IsSubmessageOriginAuthenticated = 0b0000_0100,
+}
+
+const PERMISSIONS_TOKEN_CLASS_ID: &str = "DDS:Access:Permissions:1.0";
+const PERMISSIONS_TOKEN_SUBJECT_NAME_NAME: &str = "dds.perm_ca.sn";
+const PERMISSIONS_TOKEN_ALGORITHM_NAME: &str = "dds.perm_ca.algo";
+// 9.4.2.2
+pub(super) struct BuiltinPermissionsToken {
+  pub permissions_ca_subject_name: Option<String>,
+  pub permissions_ca_algorithm: Option<CertificateAlgorithm>,
+}
+impl From<BuiltinPermissionsToken> for PermissionsToken {
+  fn from(
+    BuiltinPermissionsToken {
+      permissions_ca_subject_name,
+      permissions_ca_algorithm,
+    }: BuiltinPermissionsToken,
+  ) -> Self {
+    PermissionsToken {
+      data_holder: DataHolder {
+        class_id: PERMISSIONS_TOKEN_CLASS_ID.into(),
+        properties: [
+          permissions_ca_subject_name.map(|subject_name| Property {
+            name: PERMISSIONS_TOKEN_SUBJECT_NAME_NAME.into(),
+            value: subject_name,
+            propagate: true,
+          }),
+          permissions_ca_algorithm.map(|algorithm| Property {
+            name: PERMISSIONS_TOKEN_ALGORITHM_NAME.into(),
+            value: algorithm.into(),
+            propagate: true,
+          }),
+        ]
+        .into_iter()
+        .collect::<Option<Vec<Property>>>()
+        .unwrap_or_default(),
+        binary_properties: Vec::new(),
+      },
+    }
+  }
+}
+
+const PERMISSIONS_CREDENTIAL_TOKEN_CLASS_ID: &str = "DDS:Access:PermissionsCredential";
+const PERMISSIONS_CREDENTIAL_TOKEN_CERTIFICATE_NAME: &str = "dds.perm.cert";
+// 9.4.2.1
+pub(super) struct BuiltinPermissionsCredentialToken {
+  pub permissions_certificate: String, /* TODO: Should this be the whole permissions document
+                                        * XML as a string? */
+}
+impl From<BuiltinPermissionsCredentialToken> for PermissionsCredentialToken {
+  fn from(
+    BuiltinPermissionsCredentialToken {
+      permissions_certificate,
+    }: BuiltinPermissionsCredentialToken,
+  ) -> Self {
+    PermissionsCredentialToken {
+      data_holder: DataHolder {
+        class_id: PERMISSIONS_CREDENTIAL_TOKEN_CLASS_ID.into(),
+        properties: vec![Property {
+          name: PERMISSIONS_CREDENTIAL_TOKEN_CERTIFICATE_NAME.into(),
+          value: permissions_certificate,
+          propagate: true,
+        }],
+        binary_properties: Vec::new(),
+      },
+    }
+  }
 }

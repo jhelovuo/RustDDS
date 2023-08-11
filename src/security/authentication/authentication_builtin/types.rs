@@ -1,7 +1,10 @@
 use bytes::Bytes;
 use log::debug;
 
-use crate::security::{authentication::types::*, DataHolderBuilder};
+use crate::{
+  security::{authentication::types::*, DataHolderBuilder, SecurityError},
+  security_error,
+};
 
 const IDENTITY_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
 
@@ -15,9 +18,41 @@ const CA_ALGO_PROPERTY_NAME: &str = "dds.ca.algo";
 const RSA_2048_ALGO_NAME: &str = "RSA-2048";
 const EC_PRIME_ALGO_NAME: &str = "EC-prime256v1";
 
-enum CertificateAlgorithm {
+pub(in crate::security) enum CertificateAlgorithm {
   RSA2048,
   ECPrime256v1,
+}
+impl From<CertificateAlgorithm> for &str {
+  fn from(value: CertificateAlgorithm) -> Self {
+    match value {
+      CertificateAlgorithm::RSA2048 => RSA_2048_ALGO_NAME,
+      CertificateAlgorithm::ECPrime256v1 => EC_PRIME_ALGO_NAME,
+    }
+  }
+}
+impl From<CertificateAlgorithm> for String {
+  fn from(value: CertificateAlgorithm) -> Self {
+    String::from(<&str>::from(value))
+  }
+}
+impl TryFrom<&str> for CertificateAlgorithm {
+  type Error = SecurityError;
+  fn try_from(value: &str) -> Result<Self, Self::Error> {
+    match value {
+      RSA_2048_ALGO_NAME => Ok(CertificateAlgorithm::RSA2048),
+      EC_PRIME_ALGO_NAME => Ok(CertificateAlgorithm::ECPrime256v1),
+      _ => Err(security_error!(
+        "Invalid certificate algorithm value: {}",
+        value
+      )),
+    }
+  }
+}
+impl TryFrom<String> for CertificateAlgorithm {
+  type Error = SecurityError;
+  fn try_from(value: String) -> Result<Self, Self::Error> {
+    CertificateAlgorithm::try_from(value.as_str())
+  }
 }
 
 /// DDS:Auth:PKI-DH IdentityToken type from section 9.3.2.1 of the
@@ -32,15 +67,16 @@ pub struct BuiltinIdentityToken {
 }
 
 impl TryFrom<IdentityToken> for BuiltinIdentityToken {
-  type Error = String;
+  type Error = SecurityError;
 
   fn try_from(token: IdentityToken) -> Result<Self, Self::Error> {
     let dh = token.data_holder;
     // Verify class id
     if dh.class_id != IDENTITY_TOKEN_CLASS_ID {
-      return Err(format!(
+      return Err(security_error!(
         "Invalid class ID. Got {}, expected {}",
-        dh.class_id, IDENTITY_TOKEN_CLASS_ID
+        dh.class_id,
+        IDENTITY_TOKEN_CLASS_ID
       ));
     }
 
@@ -55,16 +91,7 @@ impl TryFrom<IdentityToken> for BuiltinIdentityToken {
     };
 
     let certificate_algorithm = if let Some(prop) = properties_map.get(CERT_ALGO_PROPERTY_NAME) {
-      match prop.value().as_str() {
-        RSA_2048_ALGO_NAME => Some(CertificateAlgorithm::RSA2048),
-        EC_PRIME_ALGO_NAME => Some(CertificateAlgorithm::ECPrime256v1),
-        _ => {
-          return Err(format!(
-            "Invalid certificate algorithm value: {}",
-            prop.value()
-          ));
-        }
-      }
+      Some(CertificateAlgorithm::try_from(prop.value())?)
     } else {
       debug!("IdentityToken did not contain the certificate algorithm property");
       None
@@ -78,13 +105,7 @@ impl TryFrom<IdentityToken> for BuiltinIdentityToken {
     };
 
     let ca_algorithm = if let Some(prop) = properties_map.get(CA_ALGO_PROPERTY_NAME) {
-      match prop.value().as_str() {
-        RSA_2048_ALGO_NAME => Some(CertificateAlgorithm::RSA2048),
-        EC_PRIME_ALGO_NAME => Some(CertificateAlgorithm::ECPrime256v1),
-        _ => {
-          return Err(format!("Invalid CA algorithm value: {}", prop.value()));
-        }
-      }
+      Some(CertificateAlgorithm::try_from(prop.value())?)
     } else {
       debug!("IdentityToken did not contain the CA algorithm property");
       None
@@ -115,11 +136,7 @@ impl From<BuiltinIdentityToken> for IdentityToken {
 
     // Add certificate algorithm if present
     if let Some(val) = builtin_token.certificate_algorithm {
-      let algo_value = match val {
-        CertificateAlgorithm::RSA2048 => RSA_2048_ALGO_NAME.to_string(),
-        CertificateAlgorithm::ECPrime256v1 => EC_PRIME_ALGO_NAME.to_string(),
-      };
-      dh_builder.add_property(CERT_ALGO_PROPERTY_NAME, algo_value, true);
+      dh_builder.add_property(CERT_ALGO_PROPERTY_NAME, val.into(), true);
     }
 
     // Add CA subject name if present
@@ -129,11 +146,7 @@ impl From<BuiltinIdentityToken> for IdentityToken {
 
     // Add CA algorithm if present
     if let Some(val) = builtin_token.ca_algorithm {
-      let algo_value = match val {
-        CertificateAlgorithm::RSA2048 => RSA_2048_ALGO_NAME.to_string(),
-        CertificateAlgorithm::ECPrime256v1 => EC_PRIME_ALGO_NAME.to_string(),
-      };
-      dh_builder.add_property(CA_ALGO_PROPERTY_NAME, algo_value, true);
+      dh_builder.add_property(CA_ALGO_PROPERTY_NAME, val.into(), true);
     }
 
     // Build the DataHolder and create the IdentityToken from it

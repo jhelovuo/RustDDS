@@ -18,7 +18,7 @@ use crate::{
 use super::{CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind};
 
 const CRYPTO_TOKEN_CLASS_ID: &str = "DDS:Crypto:AES_GCM_GMAC";
-const CRYPTO_TOKEN_KEYMAT_NAME: &str = "dds.cryp.keymat";
+const CRYPTO_TOKEN_KEY_MATERIAL_NAME: &str = "dds.cryp.keymat";
 
 /// DDS:Crypto:AES-GCM-GMAC CryptoToken type from section 9.5.2.1 of the
 /// Security specification (v. 1.1)
@@ -35,7 +35,7 @@ impl TryFrom<CryptoToken> for BuiltinCryptoToken {
       dh.binary_properties.as_slice(),
     ) {
       (CRYPTO_TOKEN_CLASS_ID, [], [bp0]) => {
-        if bp0.name.eq(CRYPTO_TOKEN_KEYMAT_NAME) {
+        if bp0.name.eq(CRYPTO_TOKEN_KEY_MATERIAL_NAME) {
           Ok(Self {
             key_material: KeyMaterial_AES_GCM_GMAC::try_from(bp0.value.clone())?,
           })
@@ -43,7 +43,7 @@ impl TryFrom<CryptoToken> for BuiltinCryptoToken {
           Err(Self::Error {
             msg: format!(
               "The binary property of CryptoToken has the wrong name. Expected {}, got {}.",
-              CRYPTO_TOKEN_KEYMAT_NAME, bp0.name
+              CRYPTO_TOKEN_KEY_MATERIAL_NAME, bp0.name
             ),
           })
         }
@@ -76,7 +76,7 @@ impl TryFrom<BuiltinCryptoToken> for CryptoToken {
         class_id: String::from(CRYPTO_TOKEN_CLASS_ID),
         properties: Vec::new(),
         binary_properties: Vec::from([BinaryProperty {
-          name: String::from(CRYPTO_TOKEN_KEYMAT_NAME),
+          name: String::from(CRYPTO_TOKEN_KEY_MATERIAL_NAME),
           value: value.key_material.try_into()?,
           propagate: true,
         }]),

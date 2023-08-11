@@ -2,44 +2,43 @@ use enumflags2::BitFlags;
 use speedy::{Readable, Writable};
 
 use crate::security::{
-  EndpointSecurityAttributesMask, EndpointSecurityAttributesMaskFlags,
+  DataHolder, EndpointSecurityAttributesMask, EndpointSecurityAttributesMaskFlags,
   ParticipantSecurityAttributesMask, ParticipantSecurityAttributesMaskFlags,
   PluginParticipantSecurityAttributesMask, PluginSecurityAttributesMask, Property,
 };
 
-// TODO: PermissionsToken: section 8.4.2.1 of the Security specification (v.
+// PermissionsToken: section 8.4.2.1 of the Security specification (v.
 // 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
 pub struct PermissionsToken {
   // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
   // Readable and Writable are needed to (de)serialize to(from) ParameterList.
   // Note: The implementation has to observe CDR alignment rules.
-  // Automatic derive does not do so, but does not matter al long as the item is empty.
+  // Automatic derive does not do so.
+  pub data_holder: DataHolder,
 }
 
-impl PermissionsToken {
-  // Mock value used for development
-  pub const MOCK: Self = Self {};
+impl From<DataHolder> for PermissionsToken {
+  fn from(value: DataHolder) -> Self {
+    Self { data_holder: value }
+  }
 }
 
-// TODO: PermissionsCredentialToken: section 8.4.2.2 of the Security
+// PermissionsCredentialToken: section 8.4.2.2 of the Security
 // specification (v. 1.1)
-pub struct PermissionsCredentialToken {}
-
-impl PermissionsCredentialToken {
-  // Mock value used for development
-  pub const MOCK: Self = Self {};
+pub struct PermissionsCredentialToken {
+  pub data_holder: DataHolder,
 }
 
-// TODO: PermissionsHandle: section 8.4.2.3 of the Security specification (v.
+impl From<DataHolder> for PermissionsCredentialToken {
+  fn from(value: DataHolder) -> Self {
+    Self { data_holder: value }
+  }
+}
+
+// PermissionsHandle: section 8.4.2.3 of the Security specification (v.
 // 1.1)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PermissionsHandle {}
-
-impl PermissionsHandle {
-  // Mock value used for development
-  pub const MOCK: Self = Self {};
-}
+pub type PermissionsHandle = u32;
 
 // ParticipantSecurityAttributes: section 8.4.2.4 of the Security
 // specification (v. 1.1)

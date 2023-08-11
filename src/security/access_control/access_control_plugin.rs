@@ -30,7 +30,7 @@ pub trait ParticipantAccessControl: Send {
   /// validate_local_permissions: section 8.4.2.9.1 of the Security
   /// specification
   fn validate_local_permissions(
-    &self,
+    &mut self,
     auth_plugin: &dyn Authentication,
     identity: IdentityHandle,
     domain_id: u16,
@@ -40,7 +40,7 @@ pub trait ParticipantAccessControl: Send {
   /// validate_remote_permissions: section 8.4.2.9.2 of the Security
   /// specification
   fn validate_remote_permissions(
-    &self,
+    &mut self,
     auth_plugin: &dyn Authentication,
     local_identity_handle: IdentityHandle,
     remote_identity_handle: IdentityHandle,
