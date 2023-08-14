@@ -364,8 +364,8 @@ macro_rules! security_error {
 
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
 pub struct ParticipantSecurityInfo {
-  participant_security_attributes: ParticipantSecurityAttributesMask,
-  plugin_participant_security_attributes: PluginParticipantSecurityAttributesMask,
+  pub(crate) participant_security_attributes: ParticipantSecurityAttributesMask,
+  pub(crate) plugin_participant_security_attributes: PluginParticipantSecurityAttributesMask,
 }
 
 impl From<ParticipantSecurityAttributes> for ParticipantSecurityInfo {
@@ -398,6 +398,14 @@ pub enum ParticipantSecurityAttributesMaskFlags {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct ParticipantSecurityAttributesMask(pub BitFlags<ParticipantSecurityAttributesMaskFlags>);
+
+impl ParticipantSecurityAttributesMask {
+  pub fn is_valid(&self) -> bool {
+    let Self(value) = self;
+    value.contains(ParticipantSecurityAttributesMaskFlags::IsValid)
+  }
+}
+
 impl<'a, C: Context> Readable<'a, C> for ParticipantSecurityAttributesMask {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let underlying_value: u32 = reader.read_value()?;
@@ -461,6 +469,14 @@ pub enum EndpointSecurityAttributesMaskFlags {
 }
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct EndpointSecurityAttributesMask(pub BitFlags<EndpointSecurityAttributesMaskFlags>);
+
+impl EndpointSecurityAttributesMask {
+  pub fn is_valid(&self) -> bool {
+    let Self(value) = self;
+    value.contains(EndpointSecurityAttributesMaskFlags::IsValid)
+  }
+}
+
 impl<'a, C: Context> Readable<'a, C> for EndpointSecurityAttributesMask {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let underlying_value: u32 = reader.read_value()?;
@@ -499,7 +515,7 @@ pub type PluginEndpointSecurityAttributesMask = PluginSecurityAttributesMask;
 pub struct PluginSecurityAttributesMask(pub u32);
 
 impl PluginSecurityAttributesMask {
-  fn is_valid(self) -> bool {
+  pub fn is_valid(self) -> bool {
     let Self(value) = self;
     value >= 0x8000_0000 // Check whether the most significant bit is set
   }
