@@ -1,8 +1,65 @@
 use crate::{
   dds::qos::QosPolicies,
   security::{access_control::*, *},
+  security_error,
 };
-use super::AccessControlBuiltin;
+use super::{
+  domain_governance_document::TopicRule, types::BuiltinPluginEndpointSecurityAttributes,
+  AccessControlBuiltin,
+};
+
+impl AccessControlBuiltin {
+  fn get_endpoint_security_attributes(
+    &self,
+    permissions_handle: PermissionsHandle,
+    topic_name: &str,
+  ) -> SecurityResult<EndpointSecurityAttributes> {
+    self
+      .get_domain_rule_(&permissions_handle)
+      .and_then(|domain_rule| {
+        domain_rule.find_topic_rule(topic_name).ok_or_else(|| {
+          security_error!("Could not find a topic rule for the topic_name {topic_name}")
+        })
+      })
+      .map(
+        |TopicRule {
+           enable_discovery_protection,
+           enable_liveliness_protection,
+           enable_read_access_control,
+           enable_write_access_control,
+           metadata_protection_kind,
+           data_protection_kind,
+           ..
+         }| {
+          let (
+            is_submessage_protected,
+            is_submessage_encrypted,
+            is_submessage_origin_authenticated,
+          ) = metadata_protection_kind.to_security_attributes_format();
+          let (is_payload_protected, is_payload_encrypted, is_key_protected) =
+            data_protection_kind.to_security_attributes_format();
+          EndpointSecurityAttributes {
+            topic_security_attributes: TopicSecurityAttributes {
+              is_read_protected: *enable_read_access_control,
+              is_write_protected: *enable_write_access_control,
+              is_discovery_protected: *enable_discovery_protection,
+              is_liveliness_protected: *enable_liveliness_protection,
+            },
+            is_submessage_protected,
+            is_payload_protected,
+            is_key_protected,
+            plugin_endpoint_attributes: BuiltinPluginEndpointSecurityAttributes {
+              is_submessage_encrypted,
+              is_submessage_origin_authenticated,
+              is_payload_encrypted,
+            }
+            .into(),
+            ac_endpoint_properties: Vec::new(),
+          }
+        },
+      )
+  }
+}
 
 impl LocalEntityAccessControl for AccessControlBuiltin {
   // Currently only mocked
@@ -50,7 +107,9 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     writer_todo: (),
     key_todo: (),
   ) -> SecurityResult<()> {
-    todo!();
+    // According to 9.4.3 this actually just returns OK, probably reserved for
+    // custom plugins
+    Ok(())
   }
 
   fn check_local_datawriter_dispose_instance(
@@ -59,39 +118,50 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     writer_todo: (),
     key_todo: (),
   ) -> SecurityResult<()> {
-    todo!();
+    // According to 9.4.3 this actually just returns OK, probably reserved for
+    // custom plugins
+    Ok(())
   }
 
-  // Currently only mocked
+  // Currently only mocked, but ready after removing the last line
   fn get_topic_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
     topic_name: String,
   ) -> SecurityResult<TopicSecurityAttributes> {
-    // TODO: actual implementation
-
-    Ok(TopicSecurityAttributes::empty())
+    self
+      .get_endpoint_security_attributes(permissions_handle, &topic_name)
+      .map(
+        |EndpointSecurityAttributes {
+           topic_security_attributes,
+           ..
+         }| topic_security_attributes,
+      )
+      // TODO remove after testing
+      .or(Ok(TopicSecurityAttributes::empty()))
   }
 
-  // Currently only mocked
+  // Currently only mocked, but ready after removing the last line
   fn get_datawriter_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
     topic_name: String,
   ) -> SecurityResult<EndpointSecurityAttributes> {
-    // TODO: actual implementation
-
-    Ok(EndpointSecurityAttributes::empty())
+    self
+      .get_endpoint_security_attributes(permissions_handle, &topic_name)
+      // TODO remove after testing
+      .or(Ok(EndpointSecurityAttributes::empty()))
   }
 
-  // Currently only mocked
+  // Currently only mocked, but ready after removing the last line
   fn get_datareader_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
     topic_name: String,
   ) -> SecurityResult<EndpointSecurityAttributes> {
-    // TODO: actual implementation
-
-    Ok(EndpointSecurityAttributes::empty())
+    self
+      .get_endpoint_security_attributes(permissions_handle, &topic_name)
+      // TODO remove after testing
+      .or(Ok(EndpointSecurityAttributes::empty()))
   }
 }

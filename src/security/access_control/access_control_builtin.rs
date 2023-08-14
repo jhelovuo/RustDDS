@@ -1,5 +1,9 @@
 use std::collections::HashMap;
 
+use crate::{
+  security::{SecurityError, SecurityResult},
+  security_error,
+};
 use self::{
   domain_governance_document::DomainRule, domain_participant_permissions_document::Grant,
 };
@@ -35,5 +39,28 @@ impl AccessControlBuiltin {
   fn generate_permissions_handle_(&mut self) -> PermissionsHandle {
     self.permissions_handle_counter_ += 1;
     self.permissions_handle_counter_
+  }
+
+  fn get_domain_rule_(
+    &self,
+    permissions_handle: &PermissionsHandle,
+  ) -> SecurityResult<&DomainRule> {
+    self
+      .domain_rules_
+      .get(permissions_handle)
+      .ok_or(security_error!(
+        "Could not find a domain rule for the PermissionsHandle {}",
+        permissions_handle
+      ))
+  }
+
+  fn get_grant_(&self, permissions_handle: &PermissionsHandle) -> SecurityResult<&Grant> {
+    self
+      .domain_participant_grants_
+      .get(permissions_handle)
+      .ok_or(security_error!(
+        "Could not find a grant for the PermissionsHandle {}",
+        permissions_handle
+      ))
   }
 }

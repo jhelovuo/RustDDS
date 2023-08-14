@@ -17,7 +17,11 @@ use crate::{
   security_error,
 };
 use super::{
-  types::{BuiltinPermissionsCredentialToken, BuiltinPermissionsToken},
+  domain_governance_document::DomainRule,
+  types::{
+    BuiltinPermissionsCredentialToken, BuiltinPermissionsToken,
+    BuiltinPluginParticipantSecurityAttributes,
+  },
   AccessControlBuiltin,
 };
 
@@ -163,13 +167,52 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     todo!();
   }
 
-  // Currently only mocked
+  // Currently only mocked, but ready after removing the last line
   fn get_participant_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
   ) -> SecurityResult<ParticipantSecurityAttributes> {
-    // TODO: actual implementation
+    self
+      .get_domain_rule_(&permissions_handle)
+      .map(
+        |DomainRule {
+           allow_unauthenticated_participants,
+           enable_join_access_control,
+           discovery_protection_kind,
+           liveliness_protection_kind,
+           rtps_protection_kind,
+           ..
+         }| {
+          let (is_rtps_protected, is_rtps_encrypted, is_rtps_origin_authenticated) =
+            rtps_protection_kind.to_security_attributes_format();
+          let (is_discovery_protected, is_discovery_encrypted, is_discovery_origin_authenticated) =
+            discovery_protection_kind.to_security_attributes_format();
+          let (
+            is_liveliness_protected,
+            is_liveliness_encrypted,
+            is_liveliness_origin_authenticated,
+          ) = liveliness_protection_kind.to_security_attributes_format();
 
-    Ok(ParticipantSecurityAttributes::empty())
+          ParticipantSecurityAttributes {
+            allow_unauthenticated_participants: *allow_unauthenticated_participants,
+            is_access_protected: *enable_join_access_control,
+            is_discovery_protected,
+            is_liveliness_protected,
+            is_rtps_protected,
+            plugin_participant_attributes: BuiltinPluginParticipantSecurityAttributes {
+              is_discovery_encrypted,
+              is_discovery_origin_authenticated,
+              is_liveliness_encrypted,
+              is_liveliness_origin_authenticated,
+              is_rtps_encrypted,
+              is_rtps_origin_authenticated,
+            }
+            .into(),
+            ac_participant_properties: Vec::new(),
+          }
+        },
+      )
+      // TODO Remove after testing
+      .or(Ok(ParticipantSecurityAttributes::empty()))
   }
 }

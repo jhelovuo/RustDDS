@@ -6,8 +6,8 @@ use crate::{
 pub(super) fn get_property(properties: &[Property], property_name: &str) -> SecurityResult<String> {
   properties
     .iter()
-    .find(|property| property.name.eq(property_name))
-    .map(|property| property.value.clone())
+    .find(|Property { name, .. }| name.eq(property_name))
+    .map(|Property { value, .. }| value.clone())
     .ok_or_else(|| security_error!("Could not find a property of the name {}.", property_name))
 }
 
