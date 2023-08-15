@@ -1,9 +1,10 @@
 //
 // DDS Security spec v1.1
-// 
+//
 // Section "9.4.1.2 Domain Governance Document
-// 
-// The domain governance document is an XML document that specifies how the domain should be secured.
+//
+// The domain governance document is an XML document that specifies how the
+// domain should be secured.
 //
 // The domain governance document shall be signed by the Permissions CA. The
 // signed document shall use S/MIME version 3.2 format as defined in IETF RFC
@@ -13,18 +14,16 @@
 // signer certificate shall be included within the signature."
 //
 
-// This module is for decoding the said S/MIME encoding. The same encoding applies also for
-// the DomainParticipant Permissions Document. (Section 9.4.1.3)
+// This module is for decoding the said S/MIME encoding. The same encoding
+// applies also for the DomainParticipant Permissions Document. (Section
+// 9.4.1.3)
 
-use std::io::Write;
-use std::process::Command;
+use std::{io::Write, process::Command};
 
-use bytes::{Bytes};
+use bytes::Bytes;
+use x509_certificate::certificate::CapturedX509Certificate;
 
-use x509_certificate::certificate::{CapturedX509Certificate};
-
-use super::domain_participant_permissions_document::{ConfigError, to_config_error, config_error};
-
+use super::domain_participant_permissions_document::{config_error, to_config_error, ConfigError};
 
 #[derive(Debug)]
 pub struct SignedDocument {
@@ -35,81 +34,86 @@ pub struct SignedDocument {
 
 impl SignedDocument {
   pub fn from_bytes(input: &[u8]) -> Result<SignedDocument, ConfigError> {
-
-    let parsed_mail = mailparse::parse_mail(input)
-      .map_err(|e| to_config_error("S/MIME parse failure", e))?;
+    let parsed_mail =
+      mailparse::parse_mail(input).map_err(|e| to_config_error("S/MIME parse failure", e))?;
 
     match parsed_mail.subparts.as_slice() {
       [doc_content, signature] => {
-        let content = Bytes::from(doc_content.get_body_raw()
-              .map_err(|e| to_config_error("S/MIME content read failure", e))?);
+        let content = Bytes::from(
+          doc_content
+            .get_body_raw()
+            .map_err(|e| to_config_error("S/MIME content read failure", e))?,
+        );
 
-        let signature_der = Bytes::from(signature.get_body_raw()
-              .map_err(|e| to_config_error("S/MIME signature read failure", e))?);
+        let signature_der = Bytes::from(
+          signature
+            .get_body_raw()
+            .map_err(|e| to_config_error("S/MIME signature read failure", e))?,
+        );
 
         Ok(SignedDocument {
           input_bytes: Bytes::copy_from_slice(input),
           content,
-          signature_der, 
+          signature_der,
         })
       }
-      parts => 
-        Err(config_error(&format!("Expected 2-part S/MIME document, found {} parts.", parts.len())))
+      parts => Err(config_error(&format!(
+        "Expected 2-part S/MIME document, found {} parts.",
+        parts.len()
+      ))),
     }
   }
 
-  // Use given X.509 certificate (in PEM format) to verify signature 
+  // Use given X.509 certificate (in PEM format) to verify signature
   // and check that the data matches the signature.
   //
   // If successful, returns reference to the verified document.
-  pub fn verify_signature(&self, certificate_pem: impl AsRef<[u8]>) 
-    -> Result< impl AsRef<[u8]>, ConfigError> 
-  {
+  pub fn verify_signature(
+    &self,
+    certificate_pem: impl AsRef<[u8]>,
+  ) -> Result<impl AsRef<[u8]>, ConfigError> {
     let cert = CapturedX509Certificate::from_pem(certificate_pem.as_ref())
-      .map_err(|e| to_config_error("Cannot read X.509 Certificate",e) ) ?;
+      .map_err(|e| to_config_error("Cannot read X.509 Certificate", e))?;
 
-    let verification_result = 
-      cert.verify_signed_data(self.content.as_ref(), self.signature_der.as_ref())
-        .map_err(|e| to_config_error("SignedDocument: verification failure", e))
-        .map( |()| self.content.clone() );
+    let verification_result = cert
+      .verify_signed_data(self.content.as_ref(), self.signature_der.as_ref())
+      .map_err(|e| to_config_error("SignedDocument: verification failure", e))
+      .map(|()| self.content.clone());
 
     // TODO:
-    // The following is a backup logic, in case x509-certificate crate fails to verify.
-    // Remove this after x509-certificate works as required, and just return `verification_result`.
-    verification_result
-      .or_else(|_e| self.verify_with_openssl(certificate_pem) )
+    // The following is a backup logic, in case x509-certificate crate fails to
+    // verify. Remove this after x509-certificate works as required, and just
+    // return `verification_result`.
+    verification_result.or_else(|_e| self.verify_with_openssl(certificate_pem))
   }
 
-  fn verify_with_openssl(&self, certificate_pem: impl AsRef<[u8]>) -> Result<Bytes, ConfigError>
-  {
-    let mut doc_file = tempfile::NamedTempFile::new()
-      .map_err(|e| to_config_error("Cannot open temp file 1", e))?;
-    doc_file.write_all(self.input_bytes.as_ref())
+  fn verify_with_openssl(&self, certificate_pem: impl AsRef<[u8]>) -> Result<Bytes, ConfigError> {
+    let mut doc_file =
+      tempfile::NamedTempFile::new().map_err(|e| to_config_error("Cannot open temp file 1", e))?;
+    doc_file
+      .write_all(self.input_bytes.as_ref())
       .map_err(|e| to_config_error("Cannot write temp file 1", e))?;
-    
 
-    let mut cert_file = tempfile::NamedTempFile::new()
-      .map_err(|e| to_config_error("Cannot open temp file 2", e))?;
-    cert_file.write_all(certificate_pem.as_ref())
+    let mut cert_file =
+      tempfile::NamedTempFile::new().map_err(|e| to_config_error("Cannot open temp file 2", e))?;
+    cert_file
+      .write_all(certificate_pem.as_ref())
       .map_err(|e| to_config_error("Cannot write temp file 2", e))?;
 
-    let openssl_output = 
-        Command::new("openssl")
-            .args(["smime", "-verify", "-text",  "-in"])
-            .arg(doc_file.path())
-            .arg("-CAfile")
-            .arg(cert_file.path())
-            .output()
-            .map_err(|e| to_config_error("Cannot excute openssl", e))?;
+    let openssl_output = Command::new("openssl")
+      .args(["smime", "-verify", "-text", "-in"])
+      .arg(doc_file.path())
+      .arg("-CAfile")
+      .arg(cert_file.path())
+      .output()
+      .map_err(|e| to_config_error("Cannot execute openssl", e))?;
 
     if openssl_output.status.success() {
-      Ok( self.content.clone() )
+      Ok(self.content.clone())
     } else {
-      Err( config_error("Signature verification failed") )
+      Err(config_error("Signature verification failed"))
     }
-
-  } 
-
+  }
 
   // This is for test use only.
   // Use `verify_signature()` to get contents in a more secure manner.
@@ -118,13 +122,12 @@ impl SignedDocument {
   }
 }
 
-
-
 #[cfg(test)]
 mod tests {
-  use super::*;
-  use super::super::domain_governance_document::*;
-  use super::super::domain_participant_permissions_document::*;
+  use super::{
+    super::{domain_governance_document::*, domain_participant_permissions_document::*},
+    *,
+  };
 
   #[test]
   pub fn parse_example() {
@@ -236,11 +239,13 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 -----END CERTIFICATE-----
 "#;
 
-    let dpp_signed = SignedDocument::from_bytes(&mut document.as_bytes() ) .unwrap();
+    let dpp_signed = SignedDocument::from_bytes(&mut document.as_bytes()).unwrap();
 
     let verified_dpp_xml = dpp_signed.verify_signature(cert_pem).unwrap();
 
-    let dpp = DomainParticipantPermissions::from_xml(&String::from_utf8_lossy( verified_dpp_xml.as_ref() )).unwrap();
+    let dpp =
+      DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(verified_dpp_xml.as_ref()))
+        .unwrap();
 
     // getting here with no panic is success
 
@@ -327,17 +332,16 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 -----END CERTIFICATE-----
 "#;
 
-    let dgd_signed = SignedDocument::from_bytes(&mut document.as_bytes() ) .unwrap();
+    let dgd_signed = SignedDocument::from_bytes(&mut document.as_bytes()).unwrap();
 
     let verified_dgd_xml = dgd_signed.verify_signature(cert_pem).unwrap();
 
-    let dgd = DomainGovernanceDocument::from_xml(&String::from_utf8_lossy( verified_dgd_xml.as_ref() )).unwrap();
+    let dgd =
+      DomainGovernanceDocument::from_xml(&String::from_utf8_lossy(verified_dgd_xml.as_ref()))
+        .unwrap();
 
     // getting here with no panic is success
 
     //println!("{:?}", dgd);
   }
-
-
 }
-

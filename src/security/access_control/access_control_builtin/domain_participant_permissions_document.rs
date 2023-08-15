@@ -373,11 +373,15 @@ pub(crate) fn pattern_err_to_config_err(e: &glob::PatternError) -> ConfigError {
 }
 
 pub(crate) fn to_config_error<E: Debug>(text: &str, e: E) -> ConfigError {
-  ConfigError::Custom { field: format!("{}: {:?}", text, e) } 
+  ConfigError::Custom {
+    field: format!("{}: {:?}", text, e),
+  }
 }
 
 pub(crate) fn config_error(text: &str) -> ConfigError {
-  ConfigError::Custom { field: text.to_string() } 
+  ConfigError::Custom {
+    field: text.to_string(),
+  }
 }
 
 #[derive(Debug, Clone)]

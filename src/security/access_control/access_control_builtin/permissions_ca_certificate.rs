@@ -1,6 +1,6 @@
 //
 // DDS Security spec v1.1
-// 
+//
 // Section "9.4.1.1 Permissions CA Certificate
 //
 // This is an X.509 certificate that contains the Public Key of the CA that will
@@ -13,10 +13,9 @@
 // Table 56."
 //
 
-use x509_certificate::certificate::{CapturedX509Certificate};
+use x509_certificate::certificate::CapturedX509Certificate;
 
-use super::domain_participant_permissions_document::{ConfigError, to_config_error, };
-
+use super::domain_participant_permissions_document::{to_config_error, ConfigError};
 
 #[derive(Debug)]
 struct Certificate {
@@ -26,17 +25,16 @@ struct Certificate {
 impl Certificate {
   pub fn from_pem(pem_data: impl AsRef<[u8]>) -> Result<Self, ConfigError> {
     let cert = CapturedX509Certificate::from_pem(pem_data)
-      .map_err(|e| to_config_error("Cannot read X.509 Certificate",e) ) ?;
+      .map_err(|e| to_config_error("Cannot read X.509 Certificate", e))?;
 
-    Ok(Certificate{ cert })
+    Ok(Certificate { cert })
   }
 }
-
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  
+
   #[test]
   pub fn parse_example() {
     let cert_pem = r#"-----BEGIN CERTIFICATE-----
@@ -52,7 +50,6 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 
     let cert = Certificate::from_pem(cert_pem).unwrap();
 
-    println!("{:?}",cert);
-
+    println!("{:?}", cert);
   }
 }
