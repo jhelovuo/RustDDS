@@ -46,9 +46,9 @@ io-extras = "0.18.0"
 serde-xml-rs = "0.6"  # for reading spec-mandated XML config files
 glob = "0.3" # for reading spec-mandated XML config files
 mailparse = "0.6" # for reading S/MIME-encoded (XML) config files
-cms = "0.2" # for reading signatures on config files
-der = "*" # whatever cms uses
-const-oid = "*" # whatever cms uses
+x509-certificate = "0.21" # for configuration certificates
+tempfile = "3" # for calling external openssl command. Remove when no longer used.
+
 
 [target.'cfg(windows)'.dependencies]
 local-ip-address = "0.5.3"
