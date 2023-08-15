@@ -1,6 +1,11 @@
+use std::ops::Not;
+
 use crate::{
   dds::qos::QosPolicies,
-  security::{access_control::*, *},
+  security::{
+    access_control::{access_control_builtin::domain_participant_permissions_document::Action, *},
+    *,
+  },
   security_error,
 };
 use super::{
@@ -62,7 +67,6 @@ impl AccessControlBuiltin {
 }
 
 impl LocalEntityAccessControl for AccessControlBuiltin {
-  // Currently only mocked
   fn check_create_datawriter(
     &self,
     permissions_handle: PermissionsHandle,
@@ -70,12 +74,40 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     topic_name: String,
     qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    // TODO: actual implementation
+    // TODO: remove after testing
+    if true {
+      return Ok(());
+    }
 
-    Ok(())
+    let grant = self.get_grant_(&permissions_handle)?;
+    let domain_rule = self.get_domain_rule_(&permissions_handle)?;
+
+    let partitions = &[]; // Partitions currently unsupported. TODO: get from PartitionQosPolicy
+    let data_tags = &[]; // Data tagging currently unsupported. TODO: get from DataTagQosPolicy
+
+    let write_access_is_unprotected = domain_rule
+      .find_topic_rule(&topic_name)
+      .map(
+        |TopicRule {
+           enable_write_access_control,
+           ..
+         }| *enable_write_access_control,
+      )
+      .is_some_and(bool::not);
+
+    let participant_has_write_access = grant.check_action(
+      Action::Publish,
+      domain_id,
+      &topic_name,
+      partitions,
+      data_tags,
+    );
+
+    (write_access_is_unprotected || participant_has_write_access.into())
+      .then_some(())
+      .ok_or_else(|| security_error!("The participant has no write access to the topic."))
   }
 
-  // Currently only mocked
   fn check_create_datareader(
     &self,
     permissions_handle: PermissionsHandle,
@@ -83,12 +115,40 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     topic_name: String,
     qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    // TODO: actual implementation
+    // TODO: remove after testing
+    if true {
+      return Ok(());
+    }
 
-    Ok(())
+    let grant = self.get_grant_(&permissions_handle)?;
+    let domain_rule = self.get_domain_rule_(&permissions_handle)?;
+
+    let partitions = &[]; // Partitions currently unsupported. TODO: get from PartitionQosPolicy
+    let data_tags = &[]; // Data tagging currently unsupported. TODO: get from DataTagQosPolicy
+
+    let read_access_is_unprotected = domain_rule
+      .find_topic_rule(&topic_name)
+      .map(
+        |TopicRule {
+           enable_read_access_control,
+           ..
+         }| *enable_read_access_control,
+      )
+      .is_some_and(bool::not);
+
+    let participant_has_read_access = grant.check_action(
+      Action::Subscribe,
+      domain_id,
+      &topic_name,
+      partitions,
+      data_tags,
+    );
+
+    (read_access_is_unprotected || participant_has_read_access.into())
+      .then_some(())
+      .ok_or_else(|| security_error!("The participant has no read access to the topic."))
   }
 
-  // Currently only mocked
   fn check_create_topic(
     &self,
     permissions_handle: PermissionsHandle,
@@ -96,9 +156,49 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     topic_name: String,
     qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    // TODO: actual implementation
+    // TODO: remove after testing
+    if true {
+      return Ok(());
+    }
 
-    Ok(())
+    let grant = self.get_grant_(&permissions_handle)?;
+    let domain_rule = self.get_domain_rule_(&permissions_handle)?;
+
+    let partitions = &[]; // Partitions currently unsupported. TODO: get from PartitionQosPolicy
+    let data_tags = &[]; // Data tagging currently unsupported. TODO: get from DataTagQosPolicy
+
+    let read_or_write_access_is_unprotected = domain_rule
+      .find_topic_rule(&topic_name)
+      .map(
+        |TopicRule {
+           enable_read_access_control,
+           enable_write_access_control,
+           ..
+         }| *enable_read_access_control || *enable_write_access_control,
+      )
+      .is_some_and(bool::not);
+
+    let participant_has_read_access = grant.check_action(
+      Action::Subscribe,
+      domain_id,
+      &topic_name,
+      partitions,
+      data_tags,
+    );
+
+    let participant_has_write_access = grant.check_action(
+      Action::Publish,
+      domain_id,
+      &topic_name,
+      partitions,
+      data_tags,
+    );
+
+    (read_or_write_access_is_unprotected
+      || participant_has_read_access.into()
+      || participant_has_write_access.into())
+    .then_some(())
+    .ok_or_else(|| security_error!("The participant has no read or write access to the topic."))
   }
 
   fn check_local_datawriter_register_instance(

@@ -414,9 +414,8 @@ impl<C: Context> Writable<C> for ParticipantSecurityAttributesMask {
   }
 }
 impl PartialOrd for ParticipantSecurityAttributesMask {
-  fn partial_cmp(&self, Self(value2): &Self) -> Option<std::cmp::Ordering> {
-    let Self(value1) = self;
-    value1.bits().partial_cmp(&value2.bits())
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    Some(self.cmp(other))
   }
 }
 impl Ord for ParticipantSecurityAttributesMask {
@@ -477,9 +476,8 @@ impl<C: Context> Writable<C> for EndpointSecurityAttributesMask {
   }
 }
 impl PartialOrd for EndpointSecurityAttributesMask {
-  fn partial_cmp(&self, Self(value2): &Self) -> Option<std::cmp::Ordering> {
-    let Self(value1) = self;
-    value1.bits().partial_cmp(&value2.bits())
+  fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+    Some(self.cmp(other))
   }
 }
 impl Ord for EndpointSecurityAttributesMask {

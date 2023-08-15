@@ -183,14 +183,11 @@ impl Rule {
         Action::Subscribe => &self.subscribe,
         Action::Relay => &self.relay,
       };
-      if criteria
+
+      // Check for matching criteria
+      criteria
         .iter()
         .any(|c| c.is_applicable(topic_name, partitions.iter(), data_tags.iter()))
-      {
-        true
-      } else {
-        false // No criterion matches, no result
-      }
     } else {
       false // Did not apply to this domain, no result
     }

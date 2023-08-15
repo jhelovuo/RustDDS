@@ -1,3 +1,5 @@
+use std::ops::Not;
+
 use chrono::Utc;
 
 use crate::{
@@ -17,7 +19,7 @@ use crate::{
   security_error,
 };
 use super::{
-  domain_governance_document::DomainRule,
+  domain_governance_document::{DomainRule, TopicRule},
   types::{
     BuiltinPermissionsCredentialToken, BuiltinPermissionsToken,
     BuiltinPluginParticipantSecurityAttributes,
@@ -123,16 +125,54 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     todo!()
   }
 
-  // Currently only mocked
   fn check_create_participant(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    // TODO: actual implementation
+    // TODO: remove after testing
+    if true {
+      return Ok(());
+    }
 
-    Ok(())
+    self
+      // Check that permissions have been configured (is this necessary?)
+      .get_grant_(&permissions_handle)
+      // Get domain rule
+      .and(self.get_domain_rule_(&permissions_handle))
+      .and_then(
+        |DomainRule {
+           // corresponds to is_access_protected
+           enable_join_access_control,
+           topic_access_rules,
+           ..
+         }| {
+          // Check if there is a joinable topic
+          topic_access_rules
+            .iter()
+            .fold(
+              *enable_join_access_control,
+              |accumulator,
+               TopicRule {
+                 enable_read_access_control,
+                 enable_write_access_control,
+                 ..
+               }| {
+                accumulator && *enable_read_access_control && *enable_write_access_control
+              },
+            )
+            .not()
+            // Convert to Result
+            .then_some(())
+            .ok_or_else(|| {
+              security_error!(
+                "The participant is not allowed to join any topic by the domain rule."
+              )
+            })
+        },
+      )
+    // TODO the specification seems to have a mistake here. See https://issues.omg.org/issues/DDSSEC12-79 and fix when 1.2 comes out
   }
 
   // Currently only mocked
