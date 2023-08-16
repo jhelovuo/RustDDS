@@ -33,8 +33,8 @@ pub(crate) struct SecurityPlugins {
   crypto: Box<dyn Cryptographic>,
 
   identity_handle_cache_: HashMap<GUID, IdentityHandle>,
-
   permissions_handle_cache_: HashMap<GUID, PermissionsHandle>,
+  handshake_handle_cache_: HashMap<GUID, HandshakeHandle>,
 
   participant_crypto_handle_cache_: HashMap<GuidPrefix, ParticipantCryptoHandle>,
   local_endpoint_crypto_handle_cache_: HashMap<GUID, EndpointCryptoHandle>,
@@ -56,6 +56,7 @@ impl SecurityPlugins {
       crypto,
       identity_handle_cache_: HashMap::new(),
       permissions_handle_cache_: HashMap::new(),
+      handshake_handle_cache_: HashMap::new(),
       participant_crypto_handle_cache_: HashMap::new(),
       local_endpoint_crypto_handle_cache_: HashMap::new(),
       remote_endpoint_crypto_handle_cache_: HashMap::new(),
@@ -183,6 +184,60 @@ impl SecurityPlugins {
       permissions_credential_token,
       permissions_token,
     )
+  }
+
+  pub fn validate_remote_identity(
+    &mut self,
+    local_participant_guid: GUID,
+    remote_identity_token: IdentityToken,
+    remote_participant_guid: GUID,
+    remote_auth_request_token: Option<AuthRequestMessageToken>,
+  ) -> SecurityResult<(ValidationOutcome, Option<AuthRequestMessageToken>)> {
+    let local_identity_handle = self.get_identity_handle(&local_participant_guid)?;
+
+    let (outcome, remote_id_handle, auth_req_token_opt) = self.auth.validate_remote_identity(
+      remote_auth_request_token,
+      local_identity_handle,
+      remote_identity_token,
+      remote_participant_guid,
+    )?;
+
+    // Add remote identity handle to cache
+    self
+      .identity_handle_cache_
+      .insert(remote_participant_guid, remote_id_handle);
+
+    Ok((outcome, auth_req_token_opt))
+  }
+
+  pub fn begin_handshake_request(
+    &mut self,
+    initiator_guid: GUID,
+    replier_guid: GUID,
+    serialized_local_participant_data: Vec<u8>,
+  ) -> SecurityResult<HandshakeMessageToken> {
+    let initiator_identity_handle = self.get_identity_handle(&initiator_guid)?;
+    let replier_identity_handle = self.get_identity_handle(&replier_guid)?;
+
+    let (outcome, handshake_handle, handshake_token) = self.auth.begin_handshake_request(
+      initiator_identity_handle,
+      replier_identity_handle,
+      serialized_local_participant_data,
+    )?;
+
+    if let ValidationOutcome::PendingHandshakeMessage = outcome {
+      // This is the only expected OK outcome from builtin plugin
+      // Store handshake handle and return token
+      self
+        .handshake_handle_cache_
+        .insert(initiator_guid, handshake_handle);
+      Ok(handshake_token)
+    } else {
+      Err(security_error!(
+        "Unexptected validation outcome from begin_handshake_request. Outcome: {:?}",
+        outcome
+      ))
+    }
   }
 }
 

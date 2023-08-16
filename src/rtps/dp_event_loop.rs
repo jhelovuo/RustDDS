@@ -15,6 +15,7 @@ use crate::{
     builtin_endpoint::BuiltinEndpointSet,
     discovery::Discovery,
     discovery_db::DiscoveryDB,
+    secure_discovery::AuthenticationStatus,
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
   messages::submessages::submessages::AckSubmessage,
@@ -51,6 +52,74 @@ pub const PREEMPTIVE_ACKNACK_PERIOD: Duration = Duration::from_secs(5);
 pub const NACK_RESPONSE_DELAY: Duration = Duration::from_millis(200);
 pub const NACK_SUPPRESSION_DURATION: Duration = Duration::from_millis(0);
 
+const STANDARD_BUILTIN_READERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[
+  (
+    EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
+    EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
+    BuiltinEndpointSet::PARTICIPANT_DETECTOR,
+  ),
+  (
+    EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
+    EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+    BuiltinEndpointSet::SUBSCRIPTIONS_DETECTOR,
+  ),
+  (
+    EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
+    EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
+    BuiltinEndpointSet::PUBLICATIONS_DETECTOR,
+  ),
+  (
+    EntityId::SEDP_BUILTIN_TOPIC_WRITER,
+    EntityId::SEDP_BUILTIN_TOPIC_READER,
+    BuiltinEndpointSet::TOPICS_DETECTOR,
+  ),
+  (
+    EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+    EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+    BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_READER,
+  ),
+];
+
+const STANDARD_BUILTIN_WRITERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[
+  (
+    EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
+    EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
+    BuiltinEndpointSet::PARTICIPANT_ANNOUNCER,
+  ),
+  (
+    EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
+    EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+    BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
+  ),
+  (
+    EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
+    EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
+    BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
+  ),
+  (
+    EntityId::SEDP_BUILTIN_TOPIC_WRITER,
+    EntityId::SEDP_BUILTIN_TOPIC_READER,
+    BuiltinEndpointSet::TOPICS_ANNOUNCER,
+  ),
+  (
+    EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
+    EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
+    BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_WRITER,
+  ),
+];
+
+const AUTHENTICATION_BUILTIN_READERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[(
+  EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
+  EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
+  BuiltinEndpointSet::PARTICIPANT_STATELESS_MESSAGE_READER,
+)];
+
+const AUTHENTICATION_BUILTIN_WRITERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[(
+  EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
+  EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
+  BuiltinEndpointSet::PARTICIPANT_STATELESS_MESSAGE_WRITER,
+)];
+
 pub struct DPEventLoop {
   domain_info: DomainInfo,
   poll: Poll,
@@ -58,6 +127,9 @@ pub struct DPEventLoop {
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   udp_listeners: HashMap<Token, UDPListener>,
   message_receiver: MessageReceiver, // This contains our Readers
+
+  // If security is enabled, this contains the security plugins
+  security_plugins_opt: Option<SecurityPluginsHandle>,
 
   // Adding readers
   add_reader_receiver: TokenReceiverPair<ReaderIngredients>,
@@ -93,7 +165,7 @@ impl DPEventLoop {
     stop_poll_receiver: mio_channel::Receiver<EventLoopCommand>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-    security_plugins: Option<SecurityPluginsHandle>,
+    security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> Self {
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_receiver) =
@@ -186,8 +258,9 @@ impl DPEventLoop {
         participant_guid_prefix,
         acknack_sender,
         spdp_liveness_sender,
-        security_plugins,
+        security_plugins_opt.clone(),
       ),
+      security_plugins_opt,
       add_reader_receiver,
       remove_reader_receiver,
       add_writer_receiver,
@@ -551,33 +624,48 @@ impl DPEventLoop {
         return;
       };
 
-    for (writer_eid, reader_eid, endpoint) in &[
-      (
-        EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
-        EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-        BuiltinEndpointSet::PARTICIPANT_DETECTOR,
-      ),
-      (
-        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
-        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-        BuiltinEndpointSet::SUBSCRIPTIONS_DETECTOR,
-      ),
-      (
-        EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
-        EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
-        BuiltinEndpointSet::PUBLICATIONS_DETECTOR,
-      ),
-      (
-        EntityId::SEDP_BUILTIN_TOPIC_WRITER,
-        EntityId::SEDP_BUILTIN_TOPIC_READER,
-        BuiltinEndpointSet::TOPICS_DETECTOR,
-      ),
-      (
-        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-        BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_READER,
-      ),
-    ] {
+    // Select which builtin endpoints of the remote participant are updated to local
+    // readers & writers
+    let (readers_init_list, writers_init_list) = match &self.security_plugins_opt {
+      None => {
+        // No security enabled, just the standard endpoints
+        let readers_init_list = STANDARD_BUILTIN_READERS_INIT_LIST.to_vec();
+        let writers_init_list = STANDARD_BUILTIN_WRITERS_INIT_LIST.to_vec();
+
+        (readers_init_list, writers_init_list)
+      }
+      Some(_handle) => {
+        // Security enabled. The endpoints are selected based on the authentication
+        // status of the remote participant
+        let mut readers_init_list = vec![];
+        let mut writers_init_list = vec![];
+
+        match db.get_authentication_status(participant_guid_prefix) {
+          Some(AuthenticationStatus::Authenticating) => {
+            // Add just the stateless endpoint used for authentication
+            readers_init_list.extend_from_slice(AUTHENTICATION_BUILTIN_READERS_INIT_LIST);
+            writers_init_list.extend_from_slice(AUTHENTICATION_BUILTIN_WRITERS_INIT_LIST);
+          }
+          Some(AuthenticationStatus::Authenticated) => {
+            // Match all builtin endpoints
+            todo!();
+          }
+          Some(AuthenticationStatus::Unauthenticated) => {
+            // Match only the regular builtin endpoints (see Security spec section 8.8.2.1)
+            readers_init_list.extend_from_slice(STANDARD_BUILTIN_READERS_INIT_LIST);
+            writers_init_list.extend_from_slice(STANDARD_BUILTIN_WRITERS_INIT_LIST);
+          }
+          _ => {
+            // Not adding any endpoints when authentication status is Rejected
+            // or None
+          }
+        }
+        (readers_init_list, writers_init_list)
+      }
+    };
+
+    // Update local writers
+    for (writer_eid, reader_eid, endpoint) in &readers_init_list {
       if let Some(writer) = self.writers.get_mut(writer_eid) {
         debug!("update_discovery_writer - {:?}", writer.topic_name());
         let mut qos = Discovery::subscriber_qos();
@@ -612,8 +700,12 @@ impl DPEventLoop {
             // get_local_multicast_locators(
             //   spdp_well_known_multicast_port(self.domain_info.domain_id),
             // );
+          } else if *writer_eid == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER {
+            // Also ParticipantStatelessMessage reader has special Qos
+            qos = Discovery::PARTICIPANT_STATELESS_MESSAGE_QOS;
           }
-          // common processing for SPDP and SEDP
+
+          // common processing for all builtin topics
           writer.update_reader_proxy(&reader_proxy, &qos);
           debug!(
             "update_discovery writer - endpoint {:?} - {:?}",
@@ -627,39 +719,15 @@ impl DPEventLoop {
     // update local readers.
     // list to be looped over is the same as above, but now
     // EntityIds are for announcers
-    for (writer_eid, reader_eid, endpoint) in &[
-      (
-        EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
-        EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-        BuiltinEndpointSet::PARTICIPANT_ANNOUNCER,
-      ),
-      (
-        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
-        EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-        BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
-      ),
-      (
-        EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
-        EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
-        BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
-      ),
-      (
-        EntityId::SEDP_BUILTIN_TOPIC_WRITER,
-        EntityId::SEDP_BUILTIN_TOPIC_READER,
-        BuiltinEndpointSet::TOPICS_ANNOUNCER,
-      ),
-      (
-        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-        EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-        BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_WRITER,
-      ),
-    ] {
+    for (writer_eid, reader_eid, endpoint) in &writers_init_list {
       if let Some(reader) = self.message_receiver.available_readers.get_mut(reader_eid) {
         debug!("try update_discovery_reader - {:?}", reader.topic_name());
-        let qos = if *reader_eid == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
-          Discovery::create_spdp_participant_qos()
-        } else {
-          Discovery::publisher_qos()
+        let qos = match *reader_eid {
+          EntityId::SPDP_BUILTIN_PARTICIPANT_READER => Discovery::create_spdp_participant_qos(),
+          EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER => {
+            Discovery::PARTICIPANT_STATELESS_MESSAGE_QOS
+          }
+          _ => Discovery::publisher_qos(), // For all others
         };
         let wp = discovered_participant.as_writer_proxy(true, Some(*writer_eid));
 

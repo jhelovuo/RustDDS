@@ -53,17 +53,21 @@ impl Authentication for AuthenticationBuiltin {
   // Currently only mocked
   fn validate_remote_identity(
     &self,
-    remote_auth_request_token: AuthRequestMessageToken,
+    remote_auth_request_token: Option<AuthRequestMessageToken>,
     local_identity_handle: IdentityHandle,
     remote_identity_token: IdentityToken,
     remote_participant_guid: GUID,
-  ) -> SecurityResult<(ValidationOutcome, IdentityHandle, AuthRequestMessageToken)> {
+  ) -> SecurityResult<(
+    ValidationOutcome,
+    IdentityHandle,
+    Option<AuthRequestMessageToken>,
+  )> {
     // TODO: actual implementation
 
     Ok((
       ValidationOutcome::Ok,
       IdentityHandle::default(),
-      AuthRequestMessageToken::dummy(),
+      Some(AuthRequestMessageToken::dummy()),
     ))
   }
 

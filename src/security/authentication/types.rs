@@ -7,6 +7,7 @@ use crate::security::types::DataHolder;
 // specification v.1.1 (section 8.3.2.11.1), but does not contain
 // VALIDATION_FAILED. Failure is handled as an error in the result type
 // SecurityResult
+#[derive(Debug, Clone)]
 pub enum ValidationOutcome {
   Ok,
   // PendingRetry,  // Not included because builtin plugins never return this
@@ -38,6 +39,10 @@ impl From<DataHolder> for IdentityToken {
 }
 
 impl IdentityToken {
+  pub fn class_id(&self) -> String {
+    self.data_holder.class_id.clone()
+  }
+
   // Mock value used for development
   pub fn dummy() -> Self {
     Self {

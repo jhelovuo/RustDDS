@@ -711,9 +711,9 @@ impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
 
 // ParticipantStatelessMessage from section 7.4.3.3 of the Security
 // specification
-#[derive(Serialize, Deserialize)]
-pub struct ParticipantStatelessMessage {
-  generic: ParticipantGenericMessage,
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct ParticipantStatelessMessage {
+  pub generic: ParticipantGenericMessage,
 }
 // The specification defines and uses the following specific values for the
 // GenericMessageClassId:
@@ -762,7 +762,7 @@ use super::access_control::ParticipantSecurityAttributes;
 // This is the transport (message) type for specialized versions above.
 // DDS Security Spec v1.1
 // Section 7.2.6 ParticipantGenericMessage
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ParticipantGenericMessage {
   pub message_identity: rpc::SampleIdentity,
   pub related_message_identity: rpc::SampleIdentity,

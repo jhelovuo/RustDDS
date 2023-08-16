@@ -39,11 +39,15 @@ pub trait Authentication: Send {
   /// outcome.
   fn validate_remote_identity(
     &self,
-    remote_auth_request_token: AuthRequestMessageToken,
+    remote_auth_request_token: Option<AuthRequestMessageToken>,
     local_identity_handle: IdentityHandle,
     remote_identity_token: IdentityToken,
     remote_participant_guid: GUID,
-  ) -> SecurityResult<(ValidationOutcome, IdentityHandle, AuthRequestMessageToken)>;
+  ) -> SecurityResult<(
+    ValidationOutcome,
+    IdentityHandle,
+    Option<AuthRequestMessageToken>,
+  )>;
 
   /// begin_handshake_request: section 8.3.2.11.4 of the Security
   /// specification
