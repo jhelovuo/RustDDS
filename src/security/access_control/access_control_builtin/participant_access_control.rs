@@ -20,6 +20,7 @@ use crate::{
 };
 use super::{
   domain_governance_document::{DomainRule, TopicRule},
+  s_mime_config_parser::SignedDocument,
   types::{
     BuiltinPermissionsCredentialToken, BuiltinPermissionsToken,
     BuiltinPluginParticipantSecurityAttributes,
@@ -38,17 +39,32 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     participant_qos: &QosPolicies,
   ) -> SecurityResult<PermissionsHandle> {
     // TODO: actual implementation
+
+    // TODO remove after testing
     if true {
       return Ok(self.generate_permissions_handle_());
     }
+
+    let permissions_ca_certificate = participant_qos
+      .get_property("dds.sec.access.permissions_ca")
+      .and_then(|certificate_uri| {
+        // TODO read file
+        if true {
+          Ok(String::from(""))
+        } else {
+          Err(security_error!(
+            "Failed to read the permissions certificate file {}",
+            certificate_uri
+          ))
+        }
+      })?;
 
     let domain_rule = participant_qos
       .get_property("dds.sec.access.governance")
       .and_then(|governance_uri| {
         // TODO read XML
-        // TODO verify signature
         if true {
-          Ok("")
+          Ok(Vec::<u8>::new())
         } else {
           Err(security_error!(
             "Failed to read the domain governance document file {}",
@@ -56,8 +72,14 @@ impl ParticipantAccessControl for AccessControlBuiltin {
           ))
         }
       })
+      .and_then(|governance_bytes| {
+        SignedDocument::from_bytes(&governance_bytes)
+          .and_then(|signed_document| signed_document.verify_signature(&permissions_ca_certificate))
+          .map_err(|e| security_error!("{e:?}"))
+      })
       .and_then(|governance_xml| {
-        DomainGovernanceDocument::from_xml(governance_xml).map_err(|e| security_error!("{}", e))
+        DomainGovernanceDocument::from_xml(&String::from_utf8_lossy(governance_xml.as_ref()))
+          .map_err(|e| security_error!("{}", e))
       })
       .and_then(|domain_governance_document| {
         domain_governance_document
@@ -77,9 +99,8 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       .get_property("dds.sec.access.permissions")
       .and_then(|permissions_uri| {
         // TODO read XML
-        // TODO verify signature
         if true {
-          Ok("")
+          Ok(Vec::<u8>::new())
         } else {
           Err(security_error!(
             "Failed to read the domain participant permissions file {}",
@@ -87,8 +108,13 @@ impl ParticipantAccessControl for AccessControlBuiltin {
           ))
         }
       })
+      .and_then(|permissions_bytes| {
+        SignedDocument::from_bytes(&permissions_bytes)
+          .and_then(|signed_document| signed_document.verify_signature(permissions_ca_certificate))
+          .map_err(|e| security_error!("{e:?}"))
+      })
       .and_then(|permissions_xml| {
-        DomainParticipantPermissions::from_xml(permissions_xml)
+        DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
           .map_err(|e| security_error!("{}", e))
       })
       .and_then(|domain_participant_permissions| {
