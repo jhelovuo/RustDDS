@@ -572,13 +572,11 @@ impl MessageReceiver {
       })
       .transpose()
       // If there were no errors, give DecodedData to the reader
-      .map_or(
-        // Errors have already been printed
-        (),
-        |decoded_payload| {
-          reader.handle_data_msg(data.decoded(decoded_payload), data_flags, mr_state);
-        },
-      );
+      .map(|decoded_payload| {
+        reader.handle_data_msg(data.decoded(decoded_payload), data_flags, mr_state);
+      })
+      // Errors have already been printed
+      .ok();
   }
 
   fn decode_and_handle_datafrag(
@@ -618,35 +616,35 @@ impl MessageReceiver {
         )
       })
       .map_err(|e| error!("{e:?}"))
+      .ok()
       // Deserialize
       .and_then(|serialized_payload| {
         // The check that used to be in DataFrag deserialization
         if serialized_payload.len()
           > (datafrag.fragments_in_submessage as usize) * (datafrag.fragment_size as usize)
         {
-          Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!(
-              "Invalid DataFrag. serializedData length={} should be less than or equal to \
-               (fragments_in_submessage={}) x (fragment_size={})",
-              serialized_payload.len(),
-              datafrag.fragments_in_submessage,
-              datafrag.fragment_size
-            ),
-          ))
-          .map_err(|e| error!("{e:?}"))
+          error!(
+            "{:?}",
+            std::io::Error::new(
+              std::io::ErrorKind::Other,
+              format!(
+                "Invalid DataFrag. serializedData length={} should be less than or equal to \
+                 (fragments_in_submessage={}) x (fragment_size={})",
+                serialized_payload.len(),
+                datafrag.fragments_in_submessage,
+                datafrag.fragment_size
+              ),
+            )
+          );
+          None
         } else {
-          Ok(serialized_payload)
+          Some(serialized_payload)
         }
       })
       // If there were no errors, give DecodedDataFrag to the reader
-      .map_or(
-        // Errors have already been printed
-        (),
-        |decoded_payload| {
-          reader.handle_datafrag_msg(&datafrag.decoded(decoded_payload), datafrag_flags, mr_state);
-        },
-      );
+      .map(|decoded_payload| {
+        reader.handle_datafrag_msg(&datafrag.decoded(decoded_payload), datafrag_flags, mr_state);
+      });
   }
 
   fn handle_reader_submessage(&mut self, submessage: ReaderSubmessage) {

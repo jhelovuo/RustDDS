@@ -49,7 +49,7 @@ impl ParameterList {
 
   pub fn to_map(&self) -> BTreeMap<ParameterId, Vec<&Parameter>> {
     self.parameters.iter().fold(BTreeMap::new(), |mut m, p| {
-      m.entry(p.parameter_id).or_insert(Vec::new()).push(p);
+      m.entry(p.parameter_id).or_default().push(p);
       m
     })
   }

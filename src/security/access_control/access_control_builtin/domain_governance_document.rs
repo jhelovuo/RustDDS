@@ -53,11 +53,11 @@ pub struct DomainRule {
   pub discovery_protection_kind: ProtectionKind,
   pub liveliness_protection_kind: ProtectionKind,
   pub rtps_protection_kind: ProtectionKind,
-  pub topic_access_rules: Vec<TopicAccessRule>,
+  pub topic_access_rules: Vec<TopicRule>,
 }
 
 impl DomainRule {
-  pub fn find_topic_access_rule(&self, topic_name: &str) -> Option<&TopicAccessRule> {
+  pub fn find_topic_rule(&self, topic_name: &str) -> Option<&TopicRule> {
     self
       .topic_access_rules
       .iter()
@@ -73,8 +73,8 @@ impl DomainRule {
       .topic_access_rules
       .rules
       .iter()
-      .map(TopicAccessRule::from_xml)
-      .collect::<Result<Vec<TopicAccessRule>, ConfigError>>()?;
+      .map(TopicRule::from_xml)
+      .collect::<Result<Vec<TopicRule>, ConfigError>>()?;
 
     Ok(DomainRule {
       domains,
@@ -89,7 +89,7 @@ impl DomainRule {
 }
 
 #[derive(Debug, Clone)]
-pub struct TopicAccessRule {
+pub struct TopicRule {
   pub topic_expression: Pattern,
   pub enable_discovery_protection: bool,
   pub enable_liveliness_protection: bool,
@@ -99,12 +99,12 @@ pub struct TopicAccessRule {
   pub data_protection_kind: BasicProtectionKind,
 }
 
-impl TopicAccessRule {
+impl TopicRule {
   fn from_xml(xtr: &xml::TopicRule) -> Result<Self, ConfigError> {
     let topic_expression =
       Pattern::new(&xtr.topic_expression.expression).map_err(|e| pattern_err_to_config_err(&e))?;
 
-    Ok(TopicAccessRule {
+    Ok(TopicRule {
       topic_expression,
       enable_discovery_protection: xtr.enable_discovery_protection,
       enable_liveliness_protection: xtr.enable_liveliness_protection,
@@ -165,6 +165,22 @@ mod xml {
     Sign,
     None,
   }
+  impl ProtectionKind {
+    /// Outputs ( is_{aspect}_protected, is_{aspect}_encrypted,
+    /// is_{aspect}_origin_authenticated ), where {aspect} can be for example
+    /// rtps or discovery
+    pub(in crate::security::access_control::access_control_builtin) fn to_security_attributes_format(
+      self,
+    ) -> (bool, bool, bool) {
+      match self {
+        Self::None => (false, false, false),
+        Self::Encrypt => (true, true, false),
+        Self::EncryptWithOriginAuthentication => (true, true, true),
+        Self::Sign => (true, false, false),
+        Self::SignWithOriginAuthentication => (true, false, true),
+      }
+    }
+  }
 
   #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Clone, Copy)]
   #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -172,6 +188,18 @@ mod xml {
     Encrypt,
     Sign,
     None,
+  }
+  impl BasicProtectionKind {
+    /// Outputs ( is_payload_protected, is_payload_encrypted, is_key_protected )
+    pub(in crate::security::access_control::access_control_builtin) fn to_security_attributes_format(
+      self,
+    ) -> (bool, bool, bool) {
+      match self {
+        Self::None => (false, false, false),
+        Self::Encrypt => (true, true, true),
+        Self::Sign => (true, false, false),
+      }
+    }
   }
 
   #[derive(Debug, Serialize, Deserialize, PartialEq)]

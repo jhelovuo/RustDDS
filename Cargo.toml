@@ -10,7 +10,7 @@ edition = "2021"
 homepage = "https://atostek.com/en/products/rustdds/"  
 repository = "https://github.com/jhelovuo/RustDDS"
 categories = ["network-programming", "science::robotics"] 
-rust-version = "1.66.1"
+rust-version = "1.70.0"
 # the science-robotics category is because of ROS2
 
 [dependencies]
@@ -45,6 +45,10 @@ io-extras = "0.18.0"
 # For DDS Security:
 serde-xml-rs = "0.6"  # for reading spec-mandated XML config files
 glob = "0.3" # for reading spec-mandated XML config files
+mailparse = "0.6" # for reading S/MIME-encoded (XML) config files
+x509-certificate = "0.21" # for configuration certificates
+tempfile = "3" # for calling external openssl command. Remove when no longer used.
+
 
 [target.'cfg(windows)'.dependencies]
 local-ip-address = "0.5.3"

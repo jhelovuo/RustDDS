@@ -245,7 +245,7 @@ impl TopicCache {
     self
       .sequence_numbers
       .entry(cc.writer_guid)
-      .or_insert_with(BTreeMap::new)
+      .or_default()
       .insert(cc.sequence_number, instant);
   }
 

@@ -1,5 +1,8 @@
+use std::fmt::Debug;
+
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use glob::Pattern;
+
 pub type ConfigError = serde_xml_rs::Error;
 
 // A list of Grants
@@ -180,14 +183,11 @@ impl Rule {
         Action::Subscribe => &self.subscribe,
         Action::Relay => &self.relay,
       };
-      if criteria
+
+      // Check for matching criteria
+      criteria
         .iter()
         .any(|c| c.is_applicable(topic_name, partitions.iter(), data_tags.iter()))
-      {
-        true
-      } else {
-        false // No criterion matches, no result
-      }
     } else {
       false // Did not apply to this domain, no result
     }
@@ -366,6 +366,18 @@ impl Criterion {
 pub(crate) fn pattern_err_to_config_err(e: &glob::PatternError) -> ConfigError {
   ConfigError::Custom {
     field: format!("TopicAccessRule: Bad glob pattern: {:?}", e),
+  }
+}
+
+pub(crate) fn to_config_error<E: Debug>(text: &str, e: E) -> ConfigError {
+  ConfigError::Custom {
+    field: format!("{}: {:?}", text, e),
+  }
+}
+
+pub(crate) fn config_error(text: &str) -> ConfigError {
+  ConfigError::Custom {
+    field: text.to_string(),
   }
 }
 
