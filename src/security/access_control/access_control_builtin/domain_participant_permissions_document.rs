@@ -21,8 +21,11 @@ impl DomainParticipantPermissions {
   }
 
   pub fn from_xml(domain_participant_permissions_xml: &str) -> Result<Self, ConfigError> {
-    let dpp: xml::DomainParticipantPermissionsDocument =
-      serde_xml_rs::from_str(domain_participant_permissions_xml)?;
+    let dpp: xml::DomainParticipantPermissionsDocument = serde_xml_rs::from_str(
+      domain_participant_permissions_xml
+        .trim_start_matches("Content-Type: text/plain")
+        .trim_start_matches(char::is_whitespace),
+    )?;
     let grants = dpp
       .permissions
       .grants
@@ -371,6 +374,14 @@ pub(crate) fn pattern_err_to_config_err(e: &glob::PatternError) -> ConfigError {
 
 pub(crate) fn to_config_error<E: Debug>(text: &str, e: E) -> ConfigError {
   ConfigError::Custom {
+    field: format!("{}: {:?}", text, e),
+  }
+}
+
+pub(crate) fn to_config_error_simple<E: Debug + 'static>(
+  text: &str,
+) -> impl FnOnce(E) -> ConfigError + '_ {
+  move |e: E| ConfigError::Custom {
     field: format!("{}: {:?}", text, e),
   }
 }

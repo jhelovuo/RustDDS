@@ -45,9 +45,14 @@ io-extras = "0.18.0"
 # For DDS Security:
 serde-xml-rs = "0.6"  # for reading spec-mandated XML config files
 glob = "0.3" # for reading spec-mandated XML config files
-mailparse = "0.6" # for reading S/MIME-encoded (XML) config files
+mailparse = "0.14" # for reading S/MIME-encoded (XML) config files
 x509-certificate = "0.21" # for configuration certificates
 tempfile = "3" # for calling external openssl command. Remove when no longer used.
+newline-converter = "0.3" # helper for handling S/MIME
+ring = "*" # Cryptographic primitives
+cms = "*" # for ASN.1 parsing
+der = "*" # ASN.1 DER encoding
+const-oid = "*" # more ASN.1
 
 
 [target.'cfg(windows)'.dependencies]
