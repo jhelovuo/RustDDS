@@ -1,7 +1,6 @@
 use std::ops::Not;
 
 use chrono::Utc;
-use x509_certificate::CapturedX509Certificate;
 
 use crate::{
   dds::qos::QosPolicies,
@@ -10,6 +9,7 @@ use crate::{
       access_control_builtin::{
         domain_governance_document::DomainGovernanceDocument,
         domain_participant_permissions_document::DomainParticipantPermissions,
+        permissions_ca_certificate::Certificate,
       },
       *,
     },
@@ -67,6 +67,9 @@ impl ParticipantAccessControl for AccessControlBuiltin {
             certificate_uri
           ))
         }
+      })
+      .and_then(|certificate_contents_pem| {
+        Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
       })?;
 
     let domain_rule = participant_qos
@@ -98,14 +101,15 @@ impl ParticipantAccessControl for AccessControlBuiltin {
           .cloned()
       })?;
 
-    let subject_name =
-      auth_plugin
+    let subject_name = auth_plugin
         .get_identity_token(identity_handle)
         .and_then(|identity_token| {
           identity_token
             .data_holder
             .get_property(CERT_SN_PROPERTY_NAME)
-        })?;
+        })
+        //TODO Parse into x509_certificate::rfc3280::Name?
+        ?;
 
     let domain_participant_grant = participant_qos
       .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
@@ -122,7 +126,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
       .and_then(|permissions_bytes| {
         SignedDocument::from_bytes(&permissions_bytes)
-          .and_then(|signed_document| signed_document.verify_signature(permissions_ca_certificate))
+          .and_then(|signed_document| signed_document.verify_signature(&permissions_ca_certificate))
           .map_err(|e| security_error!("{e:?}"))
       })
       .and_then(|permissions_xml| {
@@ -149,6 +153,9 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     self
       .identity_to_permissions_
       .insert(identity_handle, permissions_handle);
+    self
+      .permissions_ca_certificates_
+      .insert(permissions_handle, permissions_ca_certificate);
     Ok(permissions_handle)
   }
 
@@ -176,9 +183,8 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     let remote_subject_name = remote_credential_token
       .data_holder
       .get_property(AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME)
-      .and_then(|remote_identity_certificate| {
-        CapturedX509Certificate::from_pem(remote_identity_certificate)
-          .map_err(|e| security_error!("{e:?}"))
+      .and_then(|certificate_contents_pem| {
+        Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
       })
       .map(|remote_identity_certificate| {
         remote_identity_certificate.subject_name();

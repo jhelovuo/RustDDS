@@ -13,21 +13,51 @@
 // Table 56."
 //
 
+// So this type is to be used to verify both Domain Governance and Domain
+// Permissions documents. The verification of the two can use the same or
+// different Certificate instances.
+
 use x509_certificate::certificate::CapturedX509Certificate;
 
-use super::domain_participant_permissions_document::{to_config_error, ConfigError};
+use super::domain_participant_permissions_document::{to_config_error_simple, ConfigError};
 
+// This is mostly a wrapper around
+// x509_certificate::certificate::CapturedX509Certificate
+// so that we can keep track of what operations we use.
 #[derive(Debug)]
-struct Certificate {
+pub struct Certificate {
   cert: CapturedX509Certificate,
 }
 
 impl Certificate {
   pub fn from_pem(pem_data: impl AsRef<[u8]>) -> Result<Self, ConfigError> {
     let cert = CapturedX509Certificate::from_pem(pem_data)
-      .map_err(|e| to_config_error("Cannot read X.509 Certificate", e))?;
+      .map_err(to_config_error_simple("Cannot read X.509 Certificate"))?;
 
     Ok(Certificate { cert })
+  }
+
+  // This is for getting and comparing Subject Name.
+  // The returned "Name" implements Eq, so that can be used, although
+  // it is not the procedure prescribed by
+  // https://www.rfc-editor.org/rfc/rfc5280#section-7.1
+  // for comparing Distinguished Names.
+  //
+  // TODO: Implement the procedure referred to above.
+  pub fn subject_name(&self) -> &x509_certificate::rfc3280::Name {
+    self.cert.subject_name()
+  }
+
+  pub fn verify_signed_data_with_algorithm(
+    &self,
+    signed_data: impl AsRef<[u8]>,
+    signature: impl AsRef<[u8]>,
+    verify_algorithm: &'static dyn ring::signature::VerificationAlgorithm,
+  ) -> Result<(), ConfigError> {
+    self
+      .cert
+      .verify_signed_data_with_algorithm(signed_data, signature, verify_algorithm)
+      .map_err(to_config_error_simple("Certificate verification failure"))
   }
 }
 

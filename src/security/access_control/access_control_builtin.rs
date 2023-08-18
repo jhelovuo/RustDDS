@@ -6,6 +6,7 @@ use crate::{
 };
 use self::{
   domain_governance_document::DomainRule, domain_participant_permissions_document::Grant,
+  permissions_ca_certificate::Certificate,
 };
 use super::{AccessControl, PermissionsHandle};
 
@@ -24,7 +25,7 @@ pub(in crate::security) mod types;
 pub struct AccessControlBuiltin {
   domain_participant_grants_: HashMap<PermissionsHandle, Grant>,
   domain_rules_: HashMap<PermissionsHandle, DomainRule>,
-  permissions_ca_certificates_: HashMap<PermissionsHandle, String>,
+  permissions_ca_certificates_: HashMap<PermissionsHandle, Certificate>,
   identity_to_permissions_: HashMap<IdentityHandle, PermissionsHandle>,
   permissions_handle_counter_: u32,
 }
@@ -73,7 +74,7 @@ impl AccessControlBuiltin {
   fn get_permissions_ca_certificate_(
     &self,
     permissions_handle: &PermissionsHandle,
-  ) -> SecurityResult<&String> {
+  ) -> SecurityResult<&Certificate> {
     self
       .permissions_ca_certificates_
       .get(permissions_handle)
