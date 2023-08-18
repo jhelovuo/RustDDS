@@ -9,7 +9,7 @@ use crate::{
 const IDENTITY_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
 
 // Expected property names in IdentityToken
-const CERT_SN_PROPERTY_NAME: &str = "dds.cert.sn";
+pub(in crate::security) const CERT_SN_PROPERTY_NAME: &str = "dds.cert.sn";
 const CERT_ALGO_PROPERTY_NAME: &str = "dds.cert.algo";
 const CA_SN_PROPERTY_NAME: &str = "dds.ca.sn";
 const CA_ALGO_PROPERTY_NAME: &str = "dds.ca.algo";
@@ -415,6 +415,11 @@ impl From<BuiltinHandshakeMessageToken> for HandshakeMessageToken {
 
 const AUTHENTICATED_PEER_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
 
+pub(in crate::security) const AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME: &str =
+  "c.id";
+pub(in crate::security) const AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME: &str =
+  "c.perm";
+
 /// DDS:Auth:PKI-DH AuthenticatedPeerCredentialToken type from section 9.3.2.3
 /// of the Security specification (v. 1.1)
 pub struct BuiltinAuthenticatedPeerCredentialToken {
@@ -438,16 +443,26 @@ impl TryFrom<AuthenticatedPeerCredentialToken> for BuiltinAuthenticatedPeerCrede
     // Extract properties
     let properties_map = dh.properties_as_map();
 
-    let c_id = if let Some(prop) = properties_map.get("c.id") {
+    let c_id = if let Some(prop) =
+      properties_map.get(AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME)
+    {
       prop.value()
     } else {
-      return Err("No required c.id property".to_string());
+      return Err(format!(
+        "No required {} property",
+        AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME
+      ));
     };
 
-    let c_perm = if let Some(prop) = properties_map.get("c.perm") {
+    let c_perm = if let Some(prop) =
+      properties_map.get(AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
+    {
       prop.value()
     } else {
-      return Err("No required c.perm property".to_string());
+      return Err(format!(
+        "No required {} property",
+        AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME
+      ));
     };
 
     let builtin_token = Self { c_id, c_perm };
@@ -464,8 +479,16 @@ impl From<BuiltinAuthenticatedPeerCredentialToken> for AuthenticatedPeerCredenti
     dh_builder.set_class_id(AUTHENTICATED_PEER_TOKEN_CLASS_ID);
 
     // Add properties
-    dh_builder.add_property("c.id", builtin_token.c_id, true);
-    dh_builder.add_property("c.perm", builtin_token.c_perm, true);
+    dh_builder.add_property(
+      AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME,
+      builtin_token.c_id,
+      true,
+    );
+    dh_builder.add_property(
+      AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
+      builtin_token.c_perm,
+      true,
+    );
 
     AuthenticatedPeerCredentialToken::from(dh_builder.build())
   }

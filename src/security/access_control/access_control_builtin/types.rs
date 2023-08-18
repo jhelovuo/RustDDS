@@ -198,8 +198,8 @@ pub(super) enum BuiltinPluginEndpointSecurityAttributesMaskFlags {
 }
 
 const PERMISSIONS_TOKEN_CLASS_ID: &str = "DDS:Access:Permissions:1.0";
-const PERMISSIONS_TOKEN_SUBJECT_NAME_NAME: &str = "dds.perm_ca.sn";
-const PERMISSIONS_TOKEN_ALGORITHM_NAME: &str = "dds.perm_ca.algo";
+const PERMISSIONS_TOKEN_SUBJECT_NAME_PROPERTY_NAME: &str = "dds.perm_ca.sn";
+const PERMISSIONS_TOKEN_ALGORITHM_PROPERTY_NAME: &str = "dds.perm_ca.algo";
 // 9.4.2.2
 pub(super) struct BuiltinPermissionsToken {
   pub permissions_ca_subject_name: Option<String>,
@@ -217,12 +217,12 @@ impl From<BuiltinPermissionsToken> for PermissionsToken {
         class_id: PERMISSIONS_TOKEN_CLASS_ID.into(),
         properties: [
           permissions_ca_subject_name.map(|subject_name| Property {
-            name: PERMISSIONS_TOKEN_SUBJECT_NAME_NAME.into(),
+            name: PERMISSIONS_TOKEN_SUBJECT_NAME_PROPERTY_NAME.into(),
             value: subject_name,
             propagate: true,
           }),
           permissions_ca_algorithm.map(|algorithm| Property {
-            name: PERMISSIONS_TOKEN_ALGORITHM_NAME.into(),
+            name: PERMISSIONS_TOKEN_ALGORITHM_PROPERTY_NAME.into(),
             value: algorithm.into(),
             propagate: true,
           }),

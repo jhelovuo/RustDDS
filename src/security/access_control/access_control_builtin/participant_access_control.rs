@@ -1,6 +1,7 @@
 use std::ops::Not;
 
 use chrono::Utc;
+use x509_certificate::CapturedX509Certificate;
 
 use crate::{
   dds::qos::QosPolicies,
@@ -9,11 +10,16 @@ use crate::{
       access_control_builtin::{
         domain_governance_document::DomainGovernanceDocument,
         domain_participant_permissions_document::DomainParticipantPermissions,
-        helpers::get_property,
       },
       *,
     },
-    authentication::*,
+    authentication::{
+      authentication_builtin::types::{
+        AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME,
+        AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME, CERT_SN_PROPERTY_NAME,
+      },
+      *,
+    },
     *,
   },
   security_error,
@@ -27,6 +33,10 @@ use super::{
   },
   AccessControlBuiltin,
 };
+
+const QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME: &str = "dds.sec.access.permissions_ca";
+const QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME: &str = "dds.sec.access.governance";
+const QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME: &str = "dds.sec.access.permissions";
 
 // 9.4.3
 impl ParticipantAccessControl for AccessControlBuiltin {
@@ -46,7 +56,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     }
 
     let permissions_ca_certificate = participant_qos
-      .get_property("dds.sec.access.permissions_ca")
+      .get_property(QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME)
       .and_then(|certificate_uri| {
         // TODO read file
         if true {
@@ -60,7 +70,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })?;
 
     let domain_rule = participant_qos
-      .get_property("dds.sec.access.governance")
+      .get_property(QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME)
       .and_then(|governance_uri| {
         // TODO read XML
         if true {
@@ -79,7 +89,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
       .and_then(|governance_xml| {
         DomainGovernanceDocument::from_xml(&String::from_utf8_lossy(governance_xml.as_ref()))
-          .map_err(|e| security_error!("{}", e))
+          .map_err(|e| security_error!("{e:?}"))
       })
       .and_then(|domain_governance_document| {
         domain_governance_document
@@ -92,11 +102,13 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       auth_plugin
         .get_identity_token(identity_handle)
         .and_then(|identity_token| {
-          get_property(&identity_token.data_holder.properties, "dds.cert.sn")
+          identity_token
+            .data_holder
+            .get_property(CERT_SN_PROPERTY_NAME)
         })?;
 
     let domain_participant_grant = participant_qos
-      .get_property("dds.sec.access.permissions")
+      .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|permissions_uri| {
         // TODO read XML
         if true {
@@ -115,7 +127,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
       .and_then(|permissions_xml| {
         DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
-          .map_err(|e| security_error!("{}", e))
+          .map_err(|e| security_error!("{e:?}"))
       })
       .and_then(|domain_participant_permissions| {
         domain_participant_permissions
@@ -134,6 +146,9 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     self
       .domain_participant_grants_
       .insert(permissions_handle, domain_participant_grant);
+    self
+      .identity_to_permissions_
+      .insert(identity_handle, permissions_handle);
     Ok(permissions_handle)
   }
 
@@ -148,7 +163,61 @@ impl ParticipantAccessControl for AccessControlBuiltin {
   ) -> SecurityResult<PermissionsHandle> {
     // TODO: actual implementation
 
-    todo!()
+    // TODO remove after testing
+    if true {
+      return Ok(self.generate_permissions_handle_());
+    }
+
+    let local_permissions_handle = self.get_permissions_handle_(&local_identity_handle)?;
+
+    let permissions_ca_certificate =
+      self.get_permissions_ca_certificate_(local_permissions_handle)?;
+
+    let remote_subject_name = remote_credential_token
+      .data_holder
+      .get_property(AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME)
+      .and_then(|remote_identity_certificate| {
+        CapturedX509Certificate::from_pem(remote_identity_certificate)
+          .map_err(|e| security_error!("{e:?}"))
+      })
+      .map(|remote_identity_certificate| {
+        remote_identity_certificate.subject_name();
+        // TODO deal with the structured subject name
+        "TODO"
+      })?;
+
+    let remote_grant = remote_credential_token
+      .data_holder
+      .get_property(AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
+      .and_then(|remote_permissions_document| {
+        SignedDocument::from_bytes(remote_permissions_document.as_ref())
+          .and_then(|signed_document| signed_document.verify_signature(permissions_ca_certificate))
+          .map_err(|e| security_error!("{e:?}"))
+      })
+      .and_then(|permissions_xml| {
+        DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
+          .map_err(|e| security_error!("{e:?}"))
+      })
+      .and_then(|domain_participant_permissions| {
+        domain_participant_permissions
+          .find_grant(remote_subject_name, &Utc::now())
+          .ok_or_else(|| {
+            security_error!(
+              "No valid grants with the subject name {} found",
+              remote_subject_name
+            )
+          })
+          .cloned()
+      })?;
+
+    let domain_rule = self.get_domain_rule_(local_permissions_handle).cloned()?;
+
+    let permissions_handle = self.generate_permissions_handle_();
+    self.domain_rules_.insert(permissions_handle, domain_rule);
+    self
+      .domain_participant_grants_
+      .insert(permissions_handle, remote_grant);
+    Ok(permissions_handle)
   }
 
   fn check_create_participant(

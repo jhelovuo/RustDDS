@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use crate::{
-  security::{SecurityError, SecurityResult},
+  security::{authentication::IdentityHandle, SecurityError, SecurityResult},
   security_error,
 };
 use self::{
@@ -14,7 +14,6 @@ mod domain_participant_permissions_document;
 mod permissions_ca_certificate;
 mod s_mime_config_parser;
 
-mod helpers;
 mod local_entity_access_control;
 mod participant_access_control;
 mod remote_entity_access_control;
@@ -25,6 +24,8 @@ pub(in crate::security) mod types;
 pub struct AccessControlBuiltin {
   domain_participant_grants_: HashMap<PermissionsHandle, Grant>,
   domain_rules_: HashMap<PermissionsHandle, DomainRule>,
+  permissions_ca_certificates_: HashMap<PermissionsHandle, String>,
+  identity_to_permissions_: HashMap<IdentityHandle, PermissionsHandle>,
   permissions_handle_counter_: u32,
 }
 
@@ -35,6 +36,8 @@ impl AccessControlBuiltin {
     Self {
       domain_participant_grants_: HashMap::new(),
       domain_rules_: HashMap::new(),
+      permissions_ca_certificates_: HashMap::new(),
+      identity_to_permissions_: HashMap::new(),
       permissions_handle_counter_: 0,
     }
   }
@@ -64,6 +67,32 @@ impl AccessControlBuiltin {
       .ok_or(security_error!(
         "Could not find a grant for the PermissionsHandle {}",
         permissions_handle
+      ))
+  }
+
+  fn get_permissions_ca_certificate_(
+    &self,
+    permissions_handle: &PermissionsHandle,
+  ) -> SecurityResult<&String> {
+    self
+      .permissions_ca_certificates_
+      .get(permissions_handle)
+      .ok_or(security_error!(
+        "Could not find a permissions CA certificate for the PermissionsHandle {}",
+        permissions_handle
+      ))
+  }
+
+  fn get_permissions_handle_(
+    &self,
+    identity_handle: &IdentityHandle,
+  ) -> SecurityResult<&PermissionsHandle> {
+    self
+      .identity_to_permissions_
+      .get(identity_handle)
+      .ok_or(security_error!(
+        "Could not find a PermissionsHandle for the IdentityHandle {}",
+        identity_handle
       ))
   }
 }

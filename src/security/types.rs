@@ -18,8 +18,28 @@ use crate::{
     speedy_pl_cdr_helpers::*,
   },
   structure::parameter_id::ParameterId,
-  Keyed, RepresentationIdentifier, GUID,
+  Keyed, QosPolicies, RepresentationIdentifier, GUID,
 };
+
+// Result type with generic OK type. Error type is SecurityError.
+pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
+
+// Something like the SecurityException of the specification
+#[derive(Debug, thiserror::Error)]
+#[error("Security exception: {msg}")]
+pub struct SecurityError {
+  pub(crate) msg: String,
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! security_error {
+  ($($arg:tt)*) => (
+      { log::error!($($arg)*);
+        SecurityError{ msg: format!($($arg)*) }
+      }
+    )
+}
 
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)] // for CDR in Discovery
@@ -74,6 +94,26 @@ impl Property {
 
   pub fn value(&self) -> String {
     self.value.clone()
+  }
+}
+
+fn get_property(properties: &[Property], property_name: &str) -> SecurityResult<String> {
+  properties
+    .iter()
+    .find(|Property { name, .. }| name.eq(property_name))
+    .map(|Property { value, .. }| value.clone())
+    .ok_or_else(|| security_error!("Could not find a property of the name {}.", property_name))
+}
+
+impl QosPolicies {
+  pub(super) fn get_property(&self, property_name: &str) -> SecurityResult<String> {
+    self
+      .property
+      .as_ref()
+      .ok_or_else(|| security_error!("The QosPolicies did not have any properties."))
+      .and_then(|properties_or_binary_properties| {
+        get_property(&properties_or_binary_properties.value, property_name)
+      })
   }
 }
 
@@ -278,6 +318,10 @@ impl DataHolder {
     }
   }
 
+  pub(super) fn get_property(&self, property_name: &str) -> SecurityResult<String> {
+    get_property(&self.properties, property_name)
+  }
+
   pub fn properties_as_map(&self) -> HashMap<String, &Property> {
     // Return a HashMap where keys are property names and values are
     // references to properties
@@ -338,26 +382,6 @@ impl<C: Context> Writable<C> for DataHolder {
 
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
 pub type Token = DataHolder;
-
-// Result type with generic OK type. Error type is SecurityError.
-pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
-
-// Something like the SecurityException of the specification
-#[derive(Debug, thiserror::Error)]
-#[error("Security exception: {msg}")]
-pub struct SecurityError {
-  pub(crate) msg: String,
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! security_error {
-  ($($arg:tt)*) => (
-      { log::error!($($arg)*);
-        SecurityError{ msg: format!($($arg)*) }
-      }
-    )
-}
 
 // DDS Security spec v1.1 Section 7.2.7 ParticipantSecurityInfo
 // This is communicated over Discovery
