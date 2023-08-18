@@ -378,18 +378,19 @@ impl MessageReceiver {
             "handle_entity_submessage DATA from unknown. writer_id = {:?}",
             &data.writer_id
           );
-          for reader in self
-            .available_readers
-            .values_mut()
-            // exception: discovery protocol reader must read from unknown discovery protocol
-            // writers TODO: This logic here is uglyish. Can we just inject a
-            // presupposed writer (proxy) to the built-in reader as it is created?
-            .filter(|r| {
-              r.contains_writer(data.writer_id)
+          for reader in self.available_readers.values_mut().filter(|r| {
+            // Reader must contain the writer
+            r.contains_writer(data.writer_id)
+                // But there are two exceptions:
+                // 1. SPDP reader must read from unknown SPDP writers
+                //  TODO: This logic here is uglyish. Can we just inject a
+                //  presupposed writer (proxy) to the built-in reader as it is created?
                 || (data.writer_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
                   && r.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_READER)
-            })
-          {
+                // 2. ParticipantStatelessReader does not contain any writers, since it is stateless
+                || (data.writer_id == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER
+                  && r.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER)
+          }) {
             debug!(
               "handle_entity_submessage DATA from unknown handling in {:?}",
               &reader
