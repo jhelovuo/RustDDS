@@ -18,12 +18,18 @@
 // applies also for the DomainParticipant Permissions Document. (Section
 // 9.4.1.3)
 
-use std::{io::Write, process::Command};
-
 use bytes::Bytes;
 use x509_certificate::certificate::CapturedX509Certificate;
+use cms::{
+  attr::MessageDigest,
+  signed_data::{EncapsulatedContentInfo, SignedData},
+};
+use der::{Decode, Encode};
+use ring::{digest, signature};
 
-use super::domain_participant_permissions_document::{config_error, to_config_error, ConfigError};
+use super::domain_participant_permissions_document::{
+  config_error, to_config_error, to_config_error_simple, ConfigError,
+};
 
 #[derive(Debug)]
 pub struct SignedDocument {
@@ -39,11 +45,21 @@ impl SignedDocument {
 
     match parsed_mail.subparts.as_slice() {
       [doc_content, signature] => {
-        let content = Bytes::from(
-          doc_content
-            .get_body_raw()
-            .map_err(|e| to_config_error("S/MIME content read failure", e))?,
-        );
+        let mut content = Vec::<u8>::from(doc_content.raw_bytes);
+
+        if content.ends_with(b"\n\n") {
+          // Remove an extra newline at end. mailparse seems to add this.
+          // In case mailparse stops doing it, this needs to be removed.
+          content.pop();
+        }
+
+        // OpenSSL has converted to MS-DOS line endings when MIME encoding, and
+        // the contents has has been computed from that.
+        //
+        // We need to reconstruct the line endings to get a correct hash value.
+        let content = bytes_unix2dos(content)?.into();
+        // Now `content` should be byte-for-byte the same as what was
+        // the orignal signing input.
 
         let signature_der = Bytes::from(
           signature
@@ -72,54 +88,142 @@ impl SignedDocument {
     &self,
     certificate_pem: impl AsRef<[u8]>,
   ) -> Result<impl AsRef<[u8]>, ConfigError> {
+    // load certificate
     let cert = CapturedX509Certificate::from_pem(certificate_pem.as_ref())
       .map_err(|e| to_config_error("Cannot read X.509 Certificate", e))?;
 
-    let verification_result = cert
-      .verify_signed_data(self.content.as_ref(), self.signature_der.as_ref())
-      .map_err(|e| to_config_error("SignedDocument: verification failure", e))
-      .map(|()| self.content.clone());
+    // compute a digest of actual contents
+    let computed_contents_digest = digest::digest(&digest::SHA256, &self.content);
 
-    // TODO:
-    // The following is a backup logic, in case x509-certificate crate fails to
-    // verify. Remove this after x509-certificate works as required, and just
-    // return `verification_result`.
-    verification_result.or_else(|_e| self.verify_with_openssl(certificate_pem))
-  }
+    // start parsing signature
+    let signature_encap = EncapsulatedContentInfo::from_der(&self.signature_der)
+      .map_err(to_config_error_simple("Cannot parse PKCS#7 signature"))?;
 
-  fn verify_with_openssl(&self, certificate_pem: impl AsRef<[u8]>) -> Result<Bytes, ConfigError> {
-    let mut doc_file =
-      tempfile::NamedTempFile::new().map_err(|e| to_config_error("Cannot open temp file 1", e))?;
-    doc_file
-      .write_all(self.input_bytes.as_ref())
-      .map_err(|e| to_config_error("Cannot write temp file 1", e))?;
-
-    let mut cert_file =
-      tempfile::NamedTempFile::new().map_err(|e| to_config_error("Cannot open temp file 2", e))?;
-    cert_file
-      .write_all(certificate_pem.as_ref())
-      .map_err(|e| to_config_error("Cannot write temp file 2", e))?;
-
-    let openssl_output = Command::new("openssl")
-      .args(["smime", "-verify", "-text", "-in"])
-      .arg(doc_file.path())
-      .arg("-CAfile")
-      .arg(cert_file.path())
-      .output()
-      .map_err(|e| to_config_error("Cannot execute openssl", e))?;
-
-    if openssl_output.status.success() {
-      Ok(self.content.clone())
-    } else {
-      Err(config_error("Signature verification failed"))
+    // The SignedData type is defined in RFC 5652 Section 5.1.
+    // OpenSSL calls this "pkcs7-signedData (1.2.840.113549.1.7.2)"
+    if signature_encap.econtent_type
+      != const_oid::ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.2")
+    {
+      return Err(config_error("Expected to find SignedData object"));
     }
+
+    let signed_data = match signature_encap.econtent {
+      None => Err(config_error("SignedData: Empty container?")),
+      Some(sig) => sig
+        .decode_as::<SignedData>()
+        .map_err(to_config_error_simple("Cannot decode SignedData")),
+    }?;
+
+    let signer_info = signed_data
+      .signer_infos
+      .0
+      .get(0)
+      .ok_or(config_error("SignerInfo list in SignedData is empty!"))?;
+
+    let (content_hash_in_signature, signed_attributes_der) = match &signer_info.signed_attrs {
+      None => Err(config_error(
+        "SignedData without signed attributes not implemented",
+      )),
+      Some(sas) => {
+        //println!("signed_attrs bytes={:02x?}\ndebug=\n{:?}",sas.to_der(), sas );
+
+        // RFC 5652, Section 5.3.  SignerInfo Type:
+        // "If the [signedAttrs] field is present, it MUST contain [...]
+        // A message-digest attribute [...]""
+        match sas.iter().find(|attr| attr.oid ==
+                  const_oid::ObjectIdentifier::new_unwrap("1.2.840.113549.1.9.4")) 
+                // id-messageDigest OBJECT IDENTIFIER ::= { iso(1) member-body(2)
+                // us(840) rsadsi(113549) pkcs(1) pkcs9(9) 4 }
+                {
+                    None => Err(config_error("SignedAttrs has no MessageDigest")),
+                    Some(attr) => {
+                      let value_0 = attr.values.get(0)
+                        .ok_or(config_error("Empty Attribute"))?;
+                      let digest = value_0.decode_as::<MessageDigest>()
+                        .map_err(to_config_error_simple("Cannot decode MessageDigest"))?;
+                      // Section 5.4.  Message Digest Calculation Process:
+                      // "A separate encoding
+                      // of the signedAttrs field is performed for message digest calculation.
+                      // The IMPLICIT [0] tag in the signedAttrs is not used for the DER
+                      // encoding, rather an EXPLICIT SET OF tag is used."
+                      //
+                      // Simple re-encoding to DER will do the EXPLICIT re-tagging by default.
+                      let sas_der = sas.to_der()
+                        .map_err(to_config_error_simple("Cannot re-encode signed attributes"))?;
+
+                      Ok(( digest, sas_der ))
+                    }
+                }
+      }
+    }?;
+
+    // Check that hash actually matches the content
+    if content_hash_in_signature.as_bytes() != computed_contents_digest.as_ref() {
+      return Err(config_error(&format!(
+        "Contents hash in signature does not match actual content.\nsignature: {:02x?}\ncontent: \
+         {:02x?}",
+        content_hash_in_signature, computed_contents_digest
+      )));
+    }
+
+    // Section 5.4:
+    // When the [signedAttrs] field is present, however, the result is the message
+    // digest of the complete DER encoding of the SignedAttrs value
+    // contained in the signedAttrs field.
+
+    cert
+      .verify_signed_data_with_algorithm(
+        signed_attributes_der,
+        signer_info.signature.as_bytes(),
+        &signature::ECDSA_P256_SHA256_ASN1, // TODO: Hardwired algorithm
+      )
+      .map_err(|e| to_config_error("SignedDocument: verification failure", e))
+      .map(|()| self.content.clone())
   }
 
-  // This is for test use only.
-  // Use `verify_signature()` to get contents in a more secure manner.
-  pub fn get_content_unverified(&self) -> impl AsRef<[u8]> {
-    self.content.clone() // cheap Bytes clone
-  }
+  // use std::{io::Write, process::Command};
+
+  // fn verify_with_openssl(&self, certificate_pem: impl AsRef<[u8]>) ->
+  // Result<Bytes, ConfigError> {   let mut doc_file =
+  //     tempfile::NamedTempFile::new().map_err(to_config_error_simple("Cannot
+  // open temp file 1"))?;   doc_file
+  //     .write_all(self.input_bytes.as_ref())
+  //     .map_err(|e| to_config_error("Cannot write temp file 1", e))?;
+
+  //   let mut cert_file =
+  //     tempfile::NamedTempFile::new().map_err(to_config_error_simple("Cannot
+  // open temp file 2"))?;   cert_file
+  //     .write_all(certificate_pem.as_ref())
+  //     .map_err(|e| to_config_error("Cannot write temp file 2", e))?;
+
+  //   let openssl_output = Command::new("openssl")
+  //     .args(["smime", "-verify", "-text", "-in"])
+  //     .arg(doc_file.path())
+  //     .arg("-CAfile")
+  //     .arg(cert_file.path())
+  //     .output()
+  //     .map_err(|e| to_config_error("Cannot execute openssl", e))?;
+
+  //   if openssl_output.status.success() {
+  //     Ok(self.content.clone())
+  //   } else {
+  //     Err(config_error("Signature verification failed"))
+  //   }
+  // }
+
+  // // This is for test use only.
+  // // Use `verify_signature()` to get contents in a more secure manner.
+  // pub fn get_content_unverified(&self) -> impl AsRef<[u8]> {
+  //   self.content.clone() // cheap Bytes clone
+  // }
+}
+
+fn bytes_unix2dos(unix: Vec<u8>) -> Result<Vec<u8>, ConfigError> {
+  let string =
+    String::from_utf8(unix).map_err(|e| to_config_error("Input is not valid UTF-8", e))?;
+  Ok(Vec::from(
+    newline_converter::unix2dos(&string).as_ref().as_bytes(),
+  ))
 }
 
 #[cfg(test)]
@@ -131,6 +235,17 @@ mod tests {
 
   #[test]
   pub fn parse_example() {
+    // How to generate test data:
+    // Use
+    // * valid XML input file exmaple.xml
+    // * Signing certificate cert.pem
+    // * Private key of certificate cert.key.pem
+    //
+    // openssl smime -sign -in example.xml -out example.p7s -signer cert.pem -inkey
+    // cert.key.pem -text
+    //
+    // The resulting example.p7s file is the signed "document".
+
     let document = r#"MIME-Version: 1.0
 Content-Type: multipart/signed; protocol="application/x-pkcs7-signature"; micalg="sha-256"; boundary="----D7B1B9F5CFE597B428D44692C7027BCF"
 

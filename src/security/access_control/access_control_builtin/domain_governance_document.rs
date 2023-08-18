@@ -30,7 +30,11 @@ impl DomainGovernanceDocument {
   }
 
   pub fn from_xml(xml: &str) -> Result<Self, ConfigError> {
-    let dgd: xml::DomainGovernanceDocument = from_str(xml)?;
+    let dgd: xml::DomainGovernanceDocument = from_str(
+      xml
+        .trim_start_matches("Content-Type: text/plain")
+        .trim_start_matches(char::is_whitespace),
+    )?;
 
     let domain_access_rules = dgd
       .domain_access_rules
