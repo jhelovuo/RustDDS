@@ -228,7 +228,7 @@ impl Discovery {
   const SEND_WRITERS_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
   const SEND_TOPIC_INFO_PERIOD: StdDuration = StdDuration::from_secs(10);
   const CHECK_PARTICIPANT_MESSAGES: StdDuration = StdDuration::from_secs(1);
-  const CHECK_AUTHENTICATION_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
+  const AUTHENTICATION_MESSAGE_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
 
   pub(crate) const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
@@ -580,7 +580,7 @@ impl Discovery {
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
       P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
-      Self::CHECK_AUTHENTICATION_RESEND_PERIOD,
+      Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD,
       CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN,
     );
     //TODO: NO_KEY topic
@@ -843,6 +843,9 @@ impl Discovery {
                 }
               }
             }
+          }
+          CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN => {
+            self.on_authentication_message_resend_triggered();
           }
           other_token => {
             error!("discovery event loop got token: {:?}", other_token);
@@ -1323,6 +1326,20 @@ impl Discovery {
           }
         }
       };
+    }
+  }
+
+  fn on_authentication_message_resend_triggered(&mut self) {
+    if let Some(security) = self.security_opt.as_mut() {
+      // Security is enabled
+      security
+        .resend_unanswered_authentication_messages(&self.dcps_participant_stateless_message.writer);
+
+      // Reset timer for resending authentication messages
+      self
+        .dcps_participant_stateless_message
+        .timer
+        .set_timeout(Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD, ());
     }
   }
 

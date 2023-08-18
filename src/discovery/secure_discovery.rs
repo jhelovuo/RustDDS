@@ -39,6 +39,20 @@ pub(crate) enum AuthenticationStatus {
   Rejected, // Could not authenticate & should not communicate to
 }
 
+struct UnansweredAuthenticationMessage {
+  message: ParticipantStatelessMessage,
+  remaining_resend_times: u8,
+}
+
+impl UnansweredAuthenticationMessage {
+  pub fn new(message: ParticipantStatelessMessage) -> Self {
+    Self {
+      message,
+      remaining_resend_times: 10, // Message is resent at most 10 times
+    }
+  }
+}
+
 // This struct is an appendix to Discovery that handles Security-related
 // functionality. The intention is that Discovery calls the methods of this
 // struct when Security matters needs to be handled.
@@ -54,7 +68,7 @@ pub(crate) struct SecureDiscovery {
   pub local_dp_sec_attributes: ParticipantSecurityAttributes,
 
   stateless_message_helper: ParticipantStatelessMessageHelper,
-  cached_authentication_messages: HashMap<GUID, ParticipantStatelessMessage>,
+  unanswered_authentication_messages: HashMap<GUID, UnansweredAuthenticationMessage>,
 }
 
 impl SecureDiscovery {
@@ -131,7 +145,7 @@ impl SecureDiscovery {
       local_dp_property_qos: property_qos,
       local_dp_sec_attributes: security_attributes,
       stateless_message_helper: ParticipantStatelessMessageHelper::new(),
-      cached_authentication_messages: HashMap::new(),
+      unanswered_authentication_messages: HashMap::new(),
     })
   }
 
@@ -452,11 +466,12 @@ impl SecureDiscovery {
           }
         };
 
-        // Add request message to cache so that we'll try resending it later if sending
-        // it fails or we don't get an answer
-        self
-          .cached_authentication_messages
-          .insert(remote_guid, request_message.clone());
+        // Add request message to cache of unanswered messages so that we'll try
+        // resending it later if needed
+        self.unanswered_authentication_messages.insert(
+          remote_guid,
+          UnansweredAuthenticationMessage::new(request_message.clone()),
+        );
 
         // Send the message
         let _ = auth_msg_writer.write(request_message, None).map_err(|err| {
@@ -466,6 +481,11 @@ impl SecureDiscovery {
             remote_guid, err
           );
         });
+
+        debug!(
+          "Sent a handshake request message to remote with guid: {:?}",
+          remote_guid
+        );
         AuthenticationStatus::Authenticating // return value
       }
       ValidationOutcome::PendingHandshakeMessage => {
@@ -540,6 +560,35 @@ impl SecureDiscovery {
       "dds.sec.auth_request", // TODO: get this constant somewhere
       handshake_request_token,
     ))
+  }
+
+  pub fn resend_unanswered_authentication_messages(
+    &mut self,
+    auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
+  ) {
+    for (guid, unswered_message) in self.unanswered_authentication_messages.iter_mut() {
+      match auth_msg_writer.write(unswered_message.message.clone(), None) {
+        Ok(()) => {
+          unswered_message.remaining_resend_times -= 1;
+          debug!(
+            "Resent an unanswered authentication message to remote with guid {:?}. Resending at \
+             most {} more times.",
+            guid, unswered_message.remaining_resend_times,
+          );
+        }
+        Err(err) => {
+          debug!(
+            "Failed to resend an unanswered authentication message to remote with guid {:?}. \
+             Error: {}. Retrying later.",
+            guid, err
+          );
+        }
+      }
+    }
+    // Remove messages with no more resends
+    self
+      .unanswered_authentication_messages
+      .retain(|_guid, message| message.remaining_resend_times > 0);
   }
 }
 
