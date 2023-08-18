@@ -9,6 +9,7 @@ use crate::{
       access_control_builtin::{
         domain_governance_document::DomainGovernanceDocument,
         domain_participant_permissions_document::DomainParticipantPermissions,
+        permissions_ca_certificate::Certificate,
         helpers::get_property,
       },
       *,
@@ -57,6 +58,10 @@ impl ParticipantAccessControl for AccessControlBuiltin {
             certificate_uri
           ))
         }
+      })
+      .and_then(|certificate_contents_pem| {
+        Certificate::from_pem(certificate_contents_pem)
+          .map_err(|e| security_error!("{e:?}"))
       })?;
 
     let domain_rule = participant_qos
@@ -110,7 +115,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
       .and_then(|permissions_bytes| {
         SignedDocument::from_bytes(&permissions_bytes)
-          .and_then(|signed_document| signed_document.verify_signature(permissions_ca_certificate))
+          .and_then(|signed_document| signed_document.verify_signature(&permissions_ca_certificate))
           .map_err(|e| security_error!("{e:?}"))
       })
       .and_then(|permissions_xml| {
