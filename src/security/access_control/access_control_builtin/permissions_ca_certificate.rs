@@ -19,7 +19,7 @@
 
 use x509_certificate::certificate::CapturedX509Certificate;
 
-use super::config_error::{ to_config_error_parse, ConfigError, };
+use super::config_error::{to_config_error_parse, ConfigError};
 
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
@@ -52,9 +52,10 @@ impl Certificate {
     &self,
     signed_data: impl AsRef<[u8]>,
     signature: impl AsRef<[u8]>,
-    verify_algorithm: &'static dyn ring::signature::VerificationAlgorithm) 
-  -> Result<(), String> {
-    self.cert
+    verify_algorithm: &'static dyn ring::signature::VerificationAlgorithm,
+  ) -> Result<(), String> {
+    self
+      .cert
       .verify_signed_data_with_algorithm(signed_data, signature, verify_algorithm)
       .map_err(|e| format!("Signature verification failure: {e:?}"))
   }

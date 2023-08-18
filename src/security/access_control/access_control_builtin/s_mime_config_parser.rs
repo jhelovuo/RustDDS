@@ -26,10 +26,12 @@ use cms::{
 use der::{Decode, Encode};
 use ring::{digest, signature};
 
-use super::permissions_ca_certificate::Certificate;
-
-use super::config_error::{
-  ConfigError, to_config_error_pkcs7, pkcs7_config_error, to_config_error_other, other_config_error,
+use super::{
+  config_error::{
+    other_config_error, pkcs7_config_error, to_config_error_other, to_config_error_pkcs7,
+    ConfigError,
+  },
+  permissions_ca_certificate::Certificate,
 };
 
 #[derive(Debug)]
@@ -60,7 +62,7 @@ impl SignedDocument {
         // We need to reconstruct the line endings to get a correct hash value.
         let content = bytes_unix2dos(content)?.into();
         // Now `content` should be byte-for-byte the same as what was
-        // the orignal signing input.
+        // the original signing input.
 
         let signature_der = Bytes::from(
           signature
@@ -98,25 +100,28 @@ impl SignedDocument {
     if signature_encap.econtent_type
       != const_oid::ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.2")
     {
-      return Err(pkcs7_config_error("Expected to find SignedData object".to_owned()));
+      return Err(pkcs7_config_error(
+        "Expected to find SignedData object".to_owned(),
+      ));
     }
 
     let signed_data = match signature_encap.econtent {
-      None => Err(pkcs7_config_error("SignedData: Empty container?".to_owned())),
+      None => Err(pkcs7_config_error(
+        "SignedData: Empty container?".to_owned(),
+      )),
       Some(sig) => sig
         .decode_as::<SignedData>()
         .map_err(to_config_error_pkcs7("Cannot decode SignedData")),
     }?;
 
-    let signer_info = signed_data
-      .signer_infos
-      .0
-      .get(0)
-      .ok_or(pkcs7_config_error("SignerInfo list in SignedData is empty!".to_owned()))?;
+    let signer_info = signed_data.signer_infos.0.get(0).ok_or(pkcs7_config_error(
+      "SignerInfo list in SignedData is empty!".to_owned(),
+    ))?;
 
     let (content_hash_in_signature, signed_attributes_der) = match &signer_info.signed_attrs {
       None => Err(pkcs7_config_error(
-        "SignedData without signed attributes not implemented".to_owned() )),
+        "SignedData without signed attributes not implemented".to_owned(),
+      )),
       Some(sas) => {
         //println!("signed_attrs bytes={:02x?}\ndebug=\n{:?}",sas.to_der(), sas );
 
@@ -173,7 +178,7 @@ impl SignedDocument {
         signer_info.signature.as_bytes(),
         &signature::ECDSA_P256_SHA256_ASN1, // TODO: Hardwired algorithm
       )
-      .map_err(|sign_err| ConfigError::Security(sign_err) )
+      .map_err(ConfigError::Security)
       .map(|()| self.content.clone())
   }
 }
@@ -200,7 +205,7 @@ mod tests {
   pub fn parse_example() {
     // How to generate test data:
     // Use
-    // * valid XML input file exmaple.xml
+    // * valid XML input file example.xml
     // * Signing certificate cert.pem
     // * Private key of certificate cert.key.pem
     //

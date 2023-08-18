@@ -10,11 +10,11 @@ use self::{
 };
 use super::{AccessControl, PermissionsHandle};
 
+mod config_error;
 mod domain_governance_document;
 mod domain_participant_permissions_document;
 mod permissions_ca_certificate;
 mod s_mime_config_parser;
-mod config_error;
 
 mod local_entity_access_control;
 mod participant_access_control;

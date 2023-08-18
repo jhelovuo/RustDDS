@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use glob::Pattern;
 
-use super::config_error::{ConfigError, parse_config_error, };
+use super::config_error::{parse_config_error, ConfigError};
 
 // A list of Grants
 #[derive(Debug, Clone)]
@@ -75,8 +75,8 @@ impl Grant {
   }
 
   fn from_xml(xgrant: &xml::Grant) -> Result<Self, ConfigError> {
-    let too_short = || parse_config_error(
-      "Grant element must contain at least four subelements".to_string());
+    let too_short =
+      || parse_config_error("Grant element must contain at least four subelements".to_string());
     let (subject_name, rest) = xgrant.elems.split_first().ok_or_else(too_short)?;
     let (validity, rest) = rest.split_first().ok_or_else(too_short)?;
     let (default_action, rules) = rest.split_last().ok_or_else(too_short)?;
@@ -111,9 +111,9 @@ impl Grant {
         })
       }
       _ => Err(parse_config_error(
-        "Grant element must be contain subject_name, validity, 1..n rules, and a \
-         default_action."
-          .to_string())),
+        "Grant element must be contain subject_name, validity, 1..n rules, and a default_action."
+          .to_string(),
+      )),
     }
   }
 
@@ -139,11 +139,13 @@ impl Grant {
       // ...but time zone spec is optional, so try parsing again without timezone specifier,
       // which implies UTC by the spec.
       .or_else(|_e| Utc.datetime_from_str(time_str, "%FT%H:%M:%S"))
-      .map_err(|e| parse_config_error(
-        format!(
+      .map_err(|e| {
+        parse_config_error(format!(
           "DateTime parse error: {:?} . Input was \"{}\". Expected \
            YYYY-MM-ddTHH:MM:ss[|Z|(+|-)hh:mm]",
-          e, time_str)))
+          e, time_str
+        ))
+      })
   }
 }
 
@@ -197,10 +199,10 @@ impl Rule {
       xml::GrantElement::AllowRule(rule) => Ok((AllowOrDeny::Allow, &rule.elems)),
       xml::GrantElement::DenyRule(rule) => Ok((AllowOrDeny::Deny, &rule.elems)),
       _ => Err(parse_config_error(
-        "Expected allow or deny rule in grant.".to_string())),
+        "Expected allow or deny rule in grant.".to_string(),
+      )),
     }?;
-    let too_short = || parse_config_error( 
-      "Rule must contain domains subelement".to_string());
+    let too_short = || parse_config_error("Rule must contain domains subelement".to_string());
 
     let (domains, rest) = rule_elems.split_first().ok_or_else(too_short)?;
     let domains = match domains {
@@ -212,7 +214,8 @@ impl Rule {
         Ok(domain_ids)
       }
       _ => Err(parse_config_error(
-        "Rule must start with domains".to_string())),
+        "Rule must start with domains".to_string(),
+      )),
     }?;
 
     let publish = rest.iter().map_while(|re| match re {
@@ -337,7 +340,8 @@ impl Criterion {
 
     if topics.is_empty() {
       return Err(parse_config_error(
-        "Grant Criterion must define at least a Topic name.".to_string() ));
+        "Grant Criterion must define at least a Topic name.".to_string(),
+      ));
     }
 
     let topics = topics
@@ -357,7 +361,6 @@ impl Criterion {
     })
   }
 }
-
 
 #[derive(Debug, Clone)]
 pub struct DataTag {
@@ -416,9 +419,10 @@ impl DomainIds {
         (None, Some(max)) => Ok(DomainIds::Max(max.id)),
         (Some(min), None) => Ok(DomainIds::Min(min.id)),
         (None, None) => Err(parse_config_error(
-          "Domain id range must have at least one bound".to_string())),
-      } // match
-    } // match 
+          "Domain id range must have at least one bound".to_string(),
+        )),
+      }, // match
+    } // match
   } // fn
 }
 
