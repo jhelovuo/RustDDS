@@ -380,6 +380,86 @@ impl<C: Context> Writable<C> for DataHolder {
   }
 }
 
+// In some cases the class_id of DataHolder is interpreted as consisting of a
+// PluginClassName, a MajorVersion and a MinorVersion. For example in 9.3.2.1:
+// "The value of the class_id shall be interpreted as composed of three parts: a
+// PluginClassName, a MajorVersion and a MinorVersion according to the following
+// format: <PluginClassName>:<MajorVersion>.<MinorVersion>. The PluginClassName
+// is separated from the MajorVersion by the last ':' character in the class_id.
+// The MajorVersion and MinorVersion are separated by a '.' character.
+// Accordingly this version of the specification has PluginClassName equal to
+// "DDS:Auth:PKI-DH", MajorVersion set to 1, and MinorVersion set to 0"
+pub(super) struct PluginClassId {
+  plugin_class_name: String,
+  major_version: String, // Can be changed to number if needed
+  minor_version: String, // Can be changed to number if needed
+}
+impl PluginClassId {
+  pub fn matches_up_to_major_version(
+    &self,
+    Self {
+      plugin_class_name: other_plugin_class_name,
+      major_version: other_major_version,
+      ..
+    }: &Self,
+  ) -> SecurityResult<()> {
+    self
+      .plugin_class_name
+      .eq(other_plugin_class_name)
+      .then_some(())
+      .ok_or_else(|| {
+        security_error!(
+          "Mismatched plugin class names: {} and {}",
+          self.plugin_class_name,
+          other_plugin_class_name
+        )
+      })
+      .and(
+        self
+          .major_version
+          .eq(other_major_version)
+          .then_some(())
+          .ok_or_else(|| {
+            security_error!(
+              "Mismatched plugin major versions: {} and {}",
+              self.major_version,
+              other_major_version
+            )
+          }),
+      )
+  }
+}
+impl TryFrom<String> for PluginClassId {
+  type Error = SecurityError;
+  fn try_from(value: String) -> Result<Self, Self::Error> {
+    value
+      .rsplit_once(':')
+      .ok_or_else(|| {
+        security_error!(
+          "Failed to parse the class_id {}. Expected PluginClassName:VersionNumber",
+          value
+        )
+      })
+      .and_then(|(plugin_class_name, version_number)| {
+        version_number
+          .split_once('.')
+          .ok_or_else(|| {
+            security_error!(
+              "Failed to parse the version number {} of class_id {}. Expected \
+               MajorVersion.MinorVersion",
+              version_number,
+              value
+            )
+          })
+          .map(|(major_version, minor_version)| Self {
+            plugin_class_name: plugin_class_name.into(),
+            major_version: major_version.into(),
+            minor_version: minor_version.into(),
+          })
+      })
+  }
+}
+
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
 pub type Token = DataHolder;
 

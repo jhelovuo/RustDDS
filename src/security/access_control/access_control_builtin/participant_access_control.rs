@@ -171,6 +171,23 @@ impl ParticipantAccessControl for AccessControlBuiltin {
 
     let local_permissions_handle = self.get_permissions_handle_(&local_identity_handle)?;
 
+    // Move the following check here from check_remote_ methods, as here we have
+    // access to the tokens: "If the PluginClassName or the MajorVersion of the
+    // local permissions_token differ from those in the
+    // remote_permissions_token, the operation shall return FALSE."
+    self
+      .get_permissions_token(*local_permissions_handle)
+      .and_then(|local_permissions_token| {
+        PluginClassId::try_from(local_permissions_token.data_holder.class_id)
+      })
+      .and_then(|local_plugin_class_id| {
+        PluginClassId::try_from(remote_permissions_token.data_holder.class_id).and_then(
+          |remote_plugin_class_id| {
+            local_plugin_class_id.matches_up_to_major_version(&remote_plugin_class_id)
+          },
+        )
+      })?;
+
     let permissions_ca_certificate =
       self.get_permissions_ca_certificate_(local_permissions_handle)?;
 
