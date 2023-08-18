@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use bytes::Bytes;
+
 use crate::{
   security::{authentication::IdentityHandle, SecurityError, SecurityResult},
   security_error,
@@ -7,6 +9,7 @@ use crate::{
 use self::{
   domain_governance_document::DomainRule, domain_participant_permissions_document::Grant,
   permissions_ca_certificate::Certificate,
+  config_error::{ConfigError, other_config_error, to_config_error_other, parse_config_error, }
 };
 use super::{AccessControl, PermissionsHandle};
 
@@ -97,4 +100,18 @@ impl AccessControlBuiltin {
         identity_handle
       ))
   }
+
+  fn read_uri(&self, uri: &str) -> Result<Bytes,ConfigError> {
+    match uri.split_once(':') {
+      Some(("data", content)) =>  Ok(Bytes::copy_from_slice(content.as_bytes())),
+      Some(("pkcs11", _)) => Err(other_config_error("Config URI schema 'pkcs11:' not implemented.".to_owned())),
+      Some(("file",path)) => {
+        std::fs::read(path)
+          .map_err(to_config_error_other(&format!("I/O error reading {path}")))
+          .map(Bytes::from)
+      }
+      _ => Err(parse_config_error("Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned() )),
+    }
+  }
+
 }

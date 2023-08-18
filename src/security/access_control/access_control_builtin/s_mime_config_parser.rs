@@ -178,7 +178,7 @@ impl SignedDocument {
         signer_info.signature.as_bytes(),
         &signature::ECDSA_P256_SHA256_ASN1, // TODO: Hardwired algorithm
       )
-      .map_err(ConfigError::Security)
+      .map_err( ConfigError::Security )
       .map(|()| self.content.clone())
   }
 }
