@@ -57,22 +57,30 @@ impl ParticipantAccessControl for AccessControlBuiltin {
 
     let permissions_ca_certificate = participant_qos
       .get_property(QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME)
-      .and_then(|certificate_uri| 
-        self.read_uri(&certificate_uri)
-          .map_err(|conf_err| security_error!(
+      .and_then(|certificate_uri| {
+        self.read_uri(&certificate_uri).map_err(|conf_err| {
+          security_error!(
             "Failed to read the permissions certificate from {}: {:?}",
-            certificate_uri, conf_err)))
+            certificate_uri,
+            conf_err
+          )
+        })
+      })
       .and_then(|certificate_contents_pem| {
         Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
       })?;
 
     let domain_rule = participant_qos
       .get_property(QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME)
-      .and_then(|governance_uri| 
-        self.read_uri(&governance_uri)
-          .map_err(|conf_err| security_error!(
+      .and_then(|governance_uri| {
+        self.read_uri(&governance_uri).map_err(|conf_err| {
+          security_error!(
             "Failed to read the domain governance document from {}: {:?}",
-            governance_uri, conf_err)))
+            governance_uri,
+            conf_err
+          )
+        })
+      })
       .and_then(|governance_bytes| {
         SignedDocument::from_bytes(&governance_bytes)
           .and_then(|signed_document| signed_document.verify_signature(&permissions_ca_certificate))
@@ -102,10 +110,13 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     let domain_participant_grant = participant_qos
       .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|permissions_uri| {
-        self.read_uri(&permissions_uri)
-          .map_err(|conf_err| security_error!(
+        self.read_uri(&permissions_uri).map_err(|conf_err| {
+          security_error!(
             "Failed to read the domain participant permissions from {}: {:?}",
-            permissions_uri, conf_err))
+            permissions_uri,
+            conf_err
+          )
+        })
       })
       .and_then(|permissions_bytes| {
         SignedDocument::from_bytes(&permissions_bytes)
@@ -339,5 +350,4 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       // TODO Remove after testing
       .or(Ok(ParticipantSecurityAttributes::empty()))
   }
-
 }

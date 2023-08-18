@@ -7,9 +7,10 @@ use crate::{
   security_error,
 };
 use self::{
-  domain_governance_document::DomainRule, domain_participant_permissions_document::Grant,
+  config_error::{other_config_error, parse_config_error, to_config_error_other, ConfigError},
+  domain_governance_document::DomainRule,
+  domain_participant_permissions_document::Grant,
   permissions_ca_certificate::Certificate,
-  config_error::{ConfigError, other_config_error, to_config_error_other, parse_config_error, }
 };
 use super::{AccessControl, PermissionsHandle};
 
@@ -101,17 +102,18 @@ impl AccessControlBuiltin {
       ))
   }
 
-  fn read_uri(&self, uri: &str) -> Result<Bytes,ConfigError> {
+  fn read_uri(&self, uri: &str) -> Result<Bytes, ConfigError> {
     match uri.split_once(':') {
-      Some(("data", content)) =>  Ok(Bytes::copy_from_slice(content.as_bytes())),
-      Some(("pkcs11", _)) => Err(other_config_error("Config URI schema 'pkcs11:' not implemented.".to_owned())),
-      Some(("file",path)) => {
-        std::fs::read(path)
-          .map_err(to_config_error_other(&format!("I/O error reading {path}")))
-          .map(Bytes::from)
-      }
-      _ => Err(parse_config_error("Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned() )),
+      Some(("data", content)) => Ok(Bytes::copy_from_slice(content.as_bytes())),
+      Some(("pkcs11", _)) => Err(other_config_error(
+        "Config URI schema 'pkcs11:' not implemented.".to_owned(),
+      )),
+      Some(("file", path)) => std::fs::read(path)
+        .map_err(to_config_error_other(&format!("I/O error reading {path}")))
+        .map(Bytes::from),
+      _ => Err(parse_config_error(
+        "Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned(),
+      )),
     }
   }
-
 }
