@@ -501,6 +501,10 @@ impl PluginSecurityAttributesMask {
     let Self(value) = self;
     value >= 0x8000_0000 // Check whether the most significant bit is set
   }
+
+  pub fn empty() -> Self {
+    Self(0x8000_0000) // Only valid bit is set
+  }
 }
 
 // ParticipantBuiltinTopicDataSecure from section 7.4.1.6 of the Security

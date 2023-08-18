@@ -60,7 +60,7 @@ impl ParticipantSecurityAttributes {
       is_rtps_protected: false,
       is_discovery_protected: false,
       is_liveliness_protected: false,
-      plugin_participant_attributes: PluginSecurityAttributesMask(0),
+      plugin_participant_attributes: PluginSecurityAttributesMask::empty(),
       ac_participant_properties: Vec::new(),
     }
   }
