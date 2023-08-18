@@ -1,10 +1,8 @@
 use serde_xml_rs::from_str;
 use glob::*;
 pub use xml::{BasicProtectionKind, ProtectionKind};
-
-use super::domain_participant_permissions_document::{
-  pattern_err_to_config_err, ConfigError, DomainIds,
-};
+use super::config_error::{ConfigError,};
+use super::domain_participant_permissions_document::{ DomainIds, };
 
 // This module provides access (parsing and query) to Domain Governance
 // Document as specified in Section "9.4.1.2 Domain Governance Document" of
@@ -106,7 +104,8 @@ pub struct TopicRule {
 impl TopicRule {
   fn from_xml(xtr: &xml::TopicRule) -> Result<Self, ConfigError> {
     let topic_expression =
-      Pattern::new(&xtr.topic_expression.expression).map_err(|e| pattern_err_to_config_err(&e))?;
+      Pattern::new(&xtr.topic_expression.expression)
+        .map_err(ConfigError::from)?;
 
     Ok(TopicRule {
       topic_expression,

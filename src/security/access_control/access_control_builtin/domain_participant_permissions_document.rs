@@ -3,7 +3,7 @@ use std::fmt::Debug;
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use glob::Pattern;
 
-pub type ConfigError = serde_xml_rs::Error;
+use super::config_error::{ConfigError, parse_config_error, };
 
 // A list of Grants
 #[derive(Debug, Clone)]
@@ -31,7 +31,7 @@ impl DomainParticipantPermissions {
       .grants
       .iter()
       .map(Grant::from_xml)
-      .collect::<Result<Vec<Grant>, serde_xml_rs::Error>>()?;
+      .collect::<Result<Vec<Grant>, ConfigError>>()?;
     Ok(Self { grants })
   }
 }
@@ -75,9 +75,8 @@ impl Grant {
   }
 
   fn from_xml(xgrant: &xml::Grant) -> Result<Self, ConfigError> {
-    let too_short = || ConfigError::Custom {
-      field: "Grant element must contain at least four subelements".to_string(),
-    };
+    let too_short = || parse_config_error(
+      "Grant element must contain at least four subelements".to_string());
     let (subject_name, rest) = xgrant.elems.split_first().ok_or_else(too_short)?;
     let (validity, rest) = rest.split_first().ok_or_else(too_short)?;
     let (default_action, rules) = rest.split_last().ok_or_else(too_short)?;
@@ -111,11 +110,10 @@ impl Grant {
           default_action,
         })
       }
-      _ => Err(ConfigError::Custom {
-        field: "Grant element must be contain subject_name, validity, 1..n rules, and a \
-                default_action."
-          .to_string(),
-      }),
+      _ => Err(parse_config_error(
+        "Grant element must be contain subject_name, validity, 1..n rules, and a \
+         default_action."
+          .to_string())),
     }
   }
 
@@ -141,13 +139,11 @@ impl Grant {
       // ...but time zone spec is optional, so try parsing again without timezone specifier,
       // which implies UTC by the spec.
       .or_else(|_e| Utc.datetime_from_str(time_str, "%FT%H:%M:%S"))
-      .map_err(|e| ConfigError::Custom {
-        field: format!(
+      .map_err(|e| parse_config_error(
+        format!(
           "DateTime parse error: {:?} . Input was \"{}\". Expected \
            YYYY-MM-ddTHH:MM:ss[|Z|(+|-)hh:mm]",
-          e, time_str
-        ),
-      })
+          e, time_str)))
   }
 }
 
@@ -200,13 +196,11 @@ impl Rule {
     let (verdict, rule_elems) = match ge {
       xml::GrantElement::AllowRule(rule) => Ok((AllowOrDeny::Allow, &rule.elems)),
       xml::GrantElement::DenyRule(rule) => Ok((AllowOrDeny::Deny, &rule.elems)),
-      _ => Err(ConfigError::Custom {
-        field: "Expected allow or deny rule in grant.".to_string(),
-      }),
+      _ => Err(parse_config_error(
+        "Expected allow or deny rule in grant.".to_string())),
     }?;
-    let too_short = || ConfigError::Custom {
-      field: "Rule must contain domains subelement".to_string(),
-    };
+    let too_short = || parse_config_error( 
+      "Rule must contain domains subelement".to_string());
 
     let (domains, rest) = rule_elems.split_first().ok_or_else(too_short)?;
     let domains = match domains {
@@ -217,9 +211,8 @@ impl Rule {
           .collect::<Result<Vec<DomainIds>, ConfigError>>()?;
         Ok(domain_ids)
       }
-      _ => Err(ConfigError::Custom {
-        field: "Rule must start with domains".to_string(),
-      }),
+      _ => Err(parse_config_error(
+        "Rule must start with domains".to_string())),
     }?;
 
     let publish = rest.iter().map_while(|re| match re {
@@ -343,19 +336,18 @@ impl Criterion {
     let (topics, partitions, data_tags) = contents;
 
     if topics.is_empty() {
-      return Err(ConfigError::Custom {
-        field: "Grant Criterion must define at least a Topic name.".to_string(),
-      });
+      return Err(parse_config_error(
+        "Grant Criterion must define at least a Topic name.".to_string() ));
     }
 
     let topics = topics
       .iter()
-      .map(|s| Pattern::new(s).map_err(|e| pattern_err_to_config_err(&e)))
+      .map(|s| Pattern::new(s).map_err(ConfigError::from))
       .collect::<Result<Vec<Pattern>, ConfigError>>()?;
 
     let partitions = partitions
       .iter()
-      .map(|s| Pattern::new(s).map_err(|e| pattern_err_to_config_err(&e)))
+      .map(|s| Pattern::new(s).map_err(ConfigError::from))
       .collect::<Result<Vec<Pattern>, ConfigError>>()?;
 
     Ok(Criterion {
@@ -366,31 +358,6 @@ impl Criterion {
   }
 }
 
-pub(crate) fn pattern_err_to_config_err(e: &glob::PatternError) -> ConfigError {
-  ConfigError::Custom {
-    field: format!("TopicAccessRule: Bad glob pattern: {:?}", e),
-  }
-}
-
-pub(crate) fn to_config_error<E: Debug>(text: &str, e: E) -> ConfigError {
-  ConfigError::Custom {
-    field: format!("{}: {:?}", text, e),
-  }
-}
-
-pub(crate) fn to_config_error_simple<E: Debug + 'static>(
-  text: &str,
-) -> impl FnOnce(E) -> ConfigError + '_ {
-  move |e: E| ConfigError::Custom {
-    field: format!("{}: {:?}", text, e),
-  }
-}
-
-pub(crate) fn config_error(text: &str) -> ConfigError {
-  ConfigError::Custom {
-    field: text.to_string(),
-  }
-}
 
 #[derive(Debug, Clone)]
 pub struct DataTag {
@@ -448,11 +415,10 @@ impl DomainIds {
         (Some(min), Some(max)) => Ok(DomainIds::Range(min.id, max.id)),
         (None, Some(max)) => Ok(DomainIds::Max(max.id)),
         (Some(min), None) => Ok(DomainIds::Min(min.id)),
-        (None, None) => Err(ConfigError::Custom {
-          field: "Domain id range must have at least one bound".to_string(),
-        }),
-      },
-    }
+        (None, None) => Err(parse_config_error(
+          "Domain id range must have at least one bound".to_string())),
+      } // match
+    } // match 
   } // fn
 }
 

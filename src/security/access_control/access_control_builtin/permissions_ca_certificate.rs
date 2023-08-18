@@ -19,7 +19,7 @@
 
 use x509_certificate::certificate::CapturedX509Certificate;
 
-use super::domain_participant_permissions_document::{to_config_error_simple, ConfigError};
+use super::config_error::{ to_config_error_parse, ConfigError, };
 
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
@@ -32,7 +32,7 @@ pub struct Certificate {
 impl Certificate {
   pub fn from_pem(pem_data: impl AsRef<[u8]>) -> Result<Self, ConfigError> {
     let cert = CapturedX509Certificate::from_pem(pem_data)
-      .map_err(to_config_error_simple("Cannot read X.509 Certificate"))?;
+      .map_err(to_config_error_parse("Cannot read X.509 Certificate"))?;
 
     Ok(Certificate { cert })
   }
@@ -52,12 +52,11 @@ impl Certificate {
     &self,
     signed_data: impl AsRef<[u8]>,
     signature: impl AsRef<[u8]>,
-    verify_algorithm: &'static dyn ring::signature::VerificationAlgorithm,
-  ) -> Result<(), ConfigError> {
-    self
-      .cert
+    verify_algorithm: &'static dyn ring::signature::VerificationAlgorithm) 
+  -> Result<(), String> {
+    self.cert
       .verify_signed_data_with_algorithm(signed_data, signature, verify_algorithm)
-      .map_err(to_config_error_simple("Certificate verification failure"))
+      .map_err(|e| format!("Signature verification failure: {e:?}"))
   }
 }
 

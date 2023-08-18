@@ -26,11 +26,10 @@ use cms::{
 use der::{Decode, Encode};
 use ring::{digest, signature};
 
-use super::{
-  domain_participant_permissions_document::{
-    config_error, to_config_error, to_config_error_simple, ConfigError,
-  },
-  permissions_ca_certificate::Certificate,
+use super::permissions_ca_certificate::Certificate;
+
+use super::config_error::{
+  ConfigError, to_config_error_pkcs7, pkcs7_config_error, to_config_error_other, other_config_error,
 };
 
 #[derive(Debug)]
@@ -43,7 +42,7 @@ pub struct SignedDocument {
 impl SignedDocument {
   pub fn from_bytes(input: &[u8]) -> Result<SignedDocument, ConfigError> {
     let parsed_mail =
-      mailparse::parse_mail(input).map_err(|e| to_config_error("S/MIME parse failure", e))?;
+      mailparse::parse_mail(input).map_err(to_config_error_other("S/MIME parse failure"))?;
 
     match parsed_mail.subparts.as_slice() {
       [doc_content, signature] => {
@@ -66,7 +65,7 @@ impl SignedDocument {
         let signature_der = Bytes::from(
           signature
             .get_body_raw()
-            .map_err(|e| to_config_error("S/MIME signature read failure", e))?,
+            .map_err(to_config_error_other("S/MIME signature read failure"))?,
         );
 
         Ok(SignedDocument {
@@ -75,7 +74,7 @@ impl SignedDocument {
           signature_der,
         })
       }
-      parts => Err(config_error(&format!(
+      parts => Err(other_config_error(format!(
         "Expected 2-part S/MIME document, found {} parts.",
         parts.len()
       ))),
@@ -92,33 +91,32 @@ impl SignedDocument {
   ) -> Result<impl AsRef<[u8]>, ConfigError> {
     // start parsing signature
     let signature_encap = EncapsulatedContentInfo::from_der(&self.signature_der)
-      .map_err(to_config_error_simple("Cannot parse PKCS#7 signature"))?;
+      .map_err(to_config_error_pkcs7("Cannot parse PKCS#7 signature"))?;
 
     // The SignedData type is defined in RFC 5652 Section 5.1.
     // OpenSSL calls this "pkcs7-signedData (1.2.840.113549.1.7.2)"
     if signature_encap.econtent_type
       != const_oid::ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.2")
     {
-      return Err(config_error("Expected to find SignedData object"));
+      return Err(pkcs7_config_error("Expected to find SignedData object".to_owned()));
     }
 
     let signed_data = match signature_encap.econtent {
-      None => Err(config_error("SignedData: Empty container?")),
+      None => Err(pkcs7_config_error("SignedData: Empty container?".to_owned())),
       Some(sig) => sig
         .decode_as::<SignedData>()
-        .map_err(to_config_error_simple("Cannot decode SignedData")),
+        .map_err(to_config_error_pkcs7("Cannot decode SignedData")),
     }?;
 
     let signer_info = signed_data
       .signer_infos
       .0
       .get(0)
-      .ok_or(config_error("SignerInfo list in SignedData is empty!"))?;
+      .ok_or(pkcs7_config_error("SignerInfo list in SignedData is empty!".to_owned()))?;
 
     let (content_hash_in_signature, signed_attributes_der) = match &signer_info.signed_attrs {
-      None => Err(config_error(
-        "SignedData without signed attributes not implemented",
-      )),
+      None => Err(pkcs7_config_error(
+        "SignedData without signed attributes not implemented".to_owned() )),
       Some(sas) => {
         //println!("signed_attrs bytes={:02x?}\ndebug=\n{:?}",sas.to_der(), sas );
 
@@ -130,12 +128,12 @@ impl SignedDocument {
                 // id-messageDigest OBJECT IDENTIFIER ::= { iso(1) member-body(2)
                 // us(840) rsadsi(113549) pkcs(1) pkcs9(9) 4 }
                 {
-                    None => Err(config_error("SignedAttrs has no MessageDigest")),
+                    None => Err(pkcs7_config_error("SignedAttrs has no MessageDigest".to_owned())),
                     Some(attr) => {
                       let value_0 = attr.values.get(0)
-                        .ok_or(config_error("Empty Attribute"))?;
+                        .ok_or(pkcs7_config_error("Empty Attribute".to_owned()))?;
                       let digest = value_0.decode_as::<MessageDigest>()
-                        .map_err(to_config_error_simple("Cannot decode MessageDigest"))?;
+                        .map_err(to_config_error_pkcs7("Cannot decode MessageDigest"))?;
                       // Section 5.4.  Message Digest Calculation Process:
                       // "A separate encoding
                       // of the signedAttrs field is performed for message digest calculation.
@@ -144,7 +142,7 @@ impl SignedDocument {
                       //
                       // Simple re-encoding to DER will do the EXPLICIT re-tagging by default.
                       let sas_der = sas.to_der()
-                        .map_err(to_config_error_simple("Cannot re-encode signed attributes"))?;
+                        .map_err(to_config_error_pkcs7("Cannot re-encode signed attributes"))?;
 
                       Ok(( digest, sas_der ))
                     }
@@ -157,7 +155,7 @@ impl SignedDocument {
 
     // Check that hash actually matches the content
     if content_hash_in_signature.as_bytes() != computed_contents_digest.as_ref() {
-      return Err(config_error(&format!(
+      return Err(pkcs7_config_error(format!(
         "Contents hash in signature does not match actual content.\nsignature: {:02x?}\ncontent: \
          {:02x?}",
         content_hash_in_signature, computed_contents_digest
@@ -175,13 +173,14 @@ impl SignedDocument {
         signer_info.signature.as_bytes(),
         &signature::ECDSA_P256_SHA256_ASN1, // TODO: Hardwired algorithm
       )
+      .map_err(|sign_err| ConfigError::Security(sign_err) )
       .map(|()| self.content.clone())
   }
 }
 
 fn bytes_unix2dos(unix: Vec<u8>) -> Result<Vec<u8>, ConfigError> {
   let string =
-    String::from_utf8(unix).map_err(|e| to_config_error("Input is not valid UTF-8", e))?;
+    String::from_utf8(unix).map_err(to_config_error_pkcs7("Input is not valid UTF-8"))?;
   Ok(Vec::from(
     newline_converter::unix2dos(&string).as_ref().as_bytes(),
   ))
