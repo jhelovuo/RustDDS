@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, ops::Not};
 
 use bytes::Bytes;
 
@@ -8,9 +8,10 @@ use crate::{
 };
 use self::{
   config_error::{other_config_error, parse_config_error, to_config_error_other, ConfigError},
-  domain_governance_document::DomainRule,
-  domain_participant_permissions_document::Grant,
+  domain_governance_document::{DomainRule, TopicRule},
+  domain_participant_permissions_document::{Action, Grant},
   permissions_ca_certificate::Certificate,
+  types::Entity,
 };
 use super::{AccessControl, PermissionsHandle};
 
@@ -115,5 +116,78 @@ impl AccessControlBuiltin {
         "Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned(),
       )),
     }
+  }
+
+  // check_create_ and check_remote_ methods are very similar
+  fn check_entity(
+    &self,
+    permissions_handle: PermissionsHandle,
+    domain_id: u16,
+    topic_name: &str,
+    partitions: &[&str],
+    data_tags: &[(&str, &str)],
+    entity_kind: &Entity,
+  ) -> SecurityResult<()> {
+    // TODO: remove after testing
+    if true {
+      return Ok(());
+    }
+
+    let grant = self.get_grant_(&permissions_handle)?;
+    let domain_rule = self.get_domain_rule_(&permissions_handle)?;
+
+    let requested_access_is_unprotected = domain_rule
+      .find_topic_rule(topic_name)
+      .map(
+        |TopicRule {
+           enable_read_access_control,
+           enable_write_access_control,
+           ..
+         }| match entity_kind {
+          Entity::Datawriter => *enable_write_access_control,
+          Entity::Datareader => *enable_read_access_control,
+          Entity::Topic => *enable_read_access_control && *enable_write_access_control,
+        },
+      )
+      .is_some_and(bool::not);
+
+    let participant_has_write_access = grant
+      .check_action(
+        Action::Publish,
+        domain_id,
+        topic_name,
+        partitions,
+        data_tags,
+      )
+      .into();
+
+    let participant_has_read_access = grant
+      .check_action(
+        Action::Subscribe,
+        domain_id,
+        topic_name,
+        partitions,
+        data_tags,
+      )
+      .into();
+
+    let participant_has_requested_access = match entity_kind {
+      Entity::Datawriter => participant_has_write_access,
+      Entity::Datareader => participant_has_read_access,
+      Entity::Topic => participant_has_write_access || participant_has_read_access,
+    };
+
+    (requested_access_is_unprotected || participant_has_requested_access)
+      .then_some(())
+      .ok_or_else(|| {
+        security_error!(
+          "The participant has no {} access to the topic.",
+          match entity_kind {
+            Entity::Datawriter => "write",
+            Entity::Datareader => "read",
+            Entity::Topic => "write nor read",
+          }
+        )
+      })
   }
 }

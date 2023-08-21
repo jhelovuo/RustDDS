@@ -57,6 +57,15 @@ pub trait ParticipantAccessControl: Send {
     qos: &QosPolicies,
   ) -> SecurityResult<()>;
 
+  /// check_remote_participant: section 8.4.2.9.9 of the Security
+  /// specification.
+  fn check_remote_participant(
+    &self,
+    permissions_handle: PermissionsHandle,
+    domain_id: u16,
+    participant_data: &ParticipantBuiltinTopicDataSecure,
+  ) -> SecurityResult<()>;
+
   /// get_permissions_token: section 8.4.2.9.17 of the Security
   /// specification.
   fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken>;
@@ -167,15 +176,6 @@ pub trait LocalEntityAccessControl: Send {
 
 /// Group4 and Group5 in 8.8.3
 pub trait RemoteEntityAccessControl: Send {
-  /// check_remote_participant: section 8.4.2.9.9 of the Security
-  /// specification.
-  fn check_remote_participant(
-    &self,
-    permissions_handle: PermissionsHandle,
-    domain_id: u16,
-    participant_data: &ParticipantBuiltinTopicDataSecure,
-  ) -> SecurityResult<()>;
-
   /// check_remote_datawriter: section 8.4.2.9.10 of the Security
   /// specification.
   fn check_remote_datawriter(
@@ -192,8 +192,7 @@ pub trait RemoteEntityAccessControl: Send {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     subscription_data: &SubscriptionBuiltinTopicDataSecure,
-    relay_only: &mut bool,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /// check_remote_topic: section 8.4.2.9.12 of the Security
   /// specification.

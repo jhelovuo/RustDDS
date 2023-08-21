@@ -262,3 +262,9 @@ impl From<BuiltinPermissionsCredentialToken> for PermissionsCredentialToken {
     }
   }
 }
+
+pub(super) enum Entity {
+  Datawriter,
+  Datareader,
+  Topic,
+}

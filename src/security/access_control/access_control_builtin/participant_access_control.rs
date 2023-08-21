@@ -288,6 +288,18 @@ impl ParticipantAccessControl for AccessControlBuiltin {
   }
 
   // Currently only mocked
+  fn check_remote_participant(
+    &self,
+    permissions_handle: PermissionsHandle,
+    domain_id: u16,
+    participant_data: &ParticipantBuiltinTopicDataSecure,
+  ) -> SecurityResult<()> {
+    // TODO: actual implementation
+
+    Ok(())
+  }
+
+  // Currently only mocked
   fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken> {
     // TODO: actual implementation
 
