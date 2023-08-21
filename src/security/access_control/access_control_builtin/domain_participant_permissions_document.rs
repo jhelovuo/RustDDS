@@ -3,7 +3,9 @@ use std::fmt::Debug;
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use glob::Pattern;
 
-use super::config_error::{parse_config_error, ConfigError};
+use super::config_error::{parse_config_error, ConfigError, to_config_error_parse};
+
+use super::permissions_ca_certificate::DistinguishedName;
 
 // A list of Grants
 #[derive(Debug, Clone)]
@@ -12,12 +14,13 @@ pub struct DomainParticipantPermissions {
 }
 
 impl DomainParticipantPermissions {
-  pub fn find_grant(&self, subject_name: &str, current_datetime: &DateTime<Utc>) -> Option<&Grant> {
+  pub fn find_grant(&self, subject_name: &DistinguishedName, current_datetime: &DateTime<Utc>) -> Option<&Grant> {
     // TODO: How to match subject names?
     self
       .grants
       .iter()
-      .find(|g| g.subject_name == subject_name && g.validity.contains(current_datetime))
+      .find(|g| g.subject_name.matches( subject_name ) 
+                && g.validity.contains(current_datetime))
   }
 
   pub fn from_xml(domain_participant_permissions_xml: &str) -> Result<Self, ConfigError> {
@@ -51,7 +54,7 @@ impl DomainParticipantPermissions {
 // If no applicable rule exists, then the verdict is default_action.
 #[derive(Debug, Clone)]
 pub struct Grant {
-  pub subject_name: String, // X.509 subject name
+  pub subject_name: DistinguishedName, // X.509 subject name
   pub validity: std::ops::Range<DateTime<Utc>>,
   pub rules: Vec<Rule>,
   pub default_action: AllowOrDeny,
@@ -94,12 +97,14 @@ impl Grant {
         rules,
         xml::GrantElement::Default(default_action),
       ) => {
-        let subject_name = subject_name.to_string();
+        let subject_name = DistinguishedName::parse( subject_name )
+          .map_err(to_config_error_parse(
+            &format!("Subject Name parsing failed. input was '{}'", subject_name)))?;
 
         let rules: Result<Vec<Rule>, ConfigError> = rules.iter().map(Rule::from_xml).collect();
         let rules = rules?;
 
-        let validity = Self::parse_time(not_before)?..Self::parse_time(not_after)?;
+        let validity = Self::parse_time(not_before)? .. Self::parse_time(not_after)?;
 
         let default_action = AllowOrDeny::from_xml(*default_action);
 
@@ -730,7 +735,7 @@ mod tests {
   xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg_shared_ca_permissions.xsd">
   <permissions>
     <grant name="ShapesPermission">
-      <subject_name>emailAddress=cto@acme.com, CN=DDS Shapes Demo, OU=CTO Office, O=ACME Inc., L=Sunnyvale, ST=CA, C=US</subject_name>
+      <subject_name>CN=some_subject</subject_name>
       <validity>
         <not_before>2013-10-26T00:00:00Z</not_before>
         <not_after>2018-10-26T22:45:30+02:00</not_after>
@@ -753,6 +758,17 @@ mod tests {
 
     // Test full parse
     let dpd = DomainParticipantPermissions::from_xml(domain_participant_permissions_xml).unwrap();
-    println!("{:?}", dpd);
+    println!("{:?}\n", dpd);
+
+
+    let grant = dpd.find_grant( 
+      &DistinguishedName::parse("CN=some_subject").unwrap(),
+      &chrono::Utc.with_ymd_and_hms(2014, 11, 28, 0, 0, 0).unwrap()
+    );
+
+    assert!(grant.is_some());
+
+    println!("{:?}", grant);
+
   }
 }
