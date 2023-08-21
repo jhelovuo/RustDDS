@@ -189,7 +189,6 @@ impl Rule {
 
     if self.domains.iter().any(|d| d.matches(domain_id)) {
       // Rule applies to this domain
-      let verdict = self.verdict;
       let criteria = match action {
         Action::Publish => &self.publish,
         Action::Subscribe => &self.subscribe,

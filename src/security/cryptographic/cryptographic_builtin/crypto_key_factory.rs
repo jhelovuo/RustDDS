@@ -199,8 +199,8 @@ impl CryptographicBuiltin {
 impl CryptoKeyFactory for CryptographicBuiltin {
   fn register_local_participant(
     &mut self,
-    participant_identity: IdentityHandle,
-    participant_permissions: PermissionsHandle,
+    _participant_identity: IdentityHandle,
+    _participant_permissions: PermissionsHandle,
     participant_properties: &[Property],
     participant_security_attributes: ParticipantSecurityAttributes,
   ) -> SecurityResult<ParticipantCryptoHandle> {
@@ -231,8 +231,8 @@ impl CryptoKeyFactory for CryptographicBuiltin {
   fn register_matched_remote_participant(
     &mut self,
     local_participant_crypto_handle: ParticipantCryptoHandle,
-    remote_participant_identity: IdentityHandle,
-    remote_participant_permissions: PermissionsHandle,
+    _remote_participant_identity: IdentityHandle,
+    _remote_participant_permissions: PermissionsHandle,
     shared_secret: SharedSecretHandle,
   ) -> SecurityResult<ParticipantCryptoHandle> {
     //TODO: this is only a mock implementation

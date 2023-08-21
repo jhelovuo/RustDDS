@@ -68,7 +68,7 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_name: String,
-    qos: &QosPolicies,
+    _qos: &QosPolicies,
   ) -> SecurityResult<()> {
     let partitions = &[]; // Partitions currently unsupported. TODO: get from PartitionQosPolicy
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from DataTagQosPolicy
@@ -87,7 +87,7 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_name: String,
-    qos: &QosPolicies,
+    _qos: &QosPolicies,
   ) -> SecurityResult<()> {
     let partitions = &[]; // Partitions currently unsupported. TODO: get from PartitionQosPolicy
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from DataTagQosPolicy
@@ -106,7 +106,7 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_name: String,
-    qos: &QosPolicies,
+    _qos: &QosPolicies,
   ) -> SecurityResult<()> {
     let partitions = &[]; // Partitions currently unsupported. TODO: get from PartitionQosPolicy
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from DataTagQosPolicy
@@ -122,9 +122,9 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
 
   fn check_local_datawriter_register_instance(
     &self,
-    permissions_handle: PermissionsHandle,
-    writer_todo: (),
-    key_todo: (),
+    _permissions_handle: PermissionsHandle,
+    _writer_todo: (),
+    _key_todo: (),
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
@@ -133,9 +133,9 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
 
   fn check_local_datawriter_dispose_instance(
     &self,
-    permissions_handle: PermissionsHandle,
-    writer_todo: (),
-    key_todo: (),
+    _permissions_handle: PermissionsHandle,
+    _writer_todo: (),
+    _key_todo: (),
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins

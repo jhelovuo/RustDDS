@@ -77,7 +77,6 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
       .map(
         |TopicRule {
            enable_read_access_control,
-           enable_write_access_control,
            ..
          }| *enable_read_access_control,
       )
@@ -126,10 +125,10 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
 
   fn check_local_datawriter_match(
     &self,
-    writer_permissions_handle: PermissionsHandle,
-    reader_permissions_handle: PermissionsHandle,
-    publication_data: &PublicationBuiltinTopicDataSecure,
-    subscription_data: &SubscriptionBuiltinTopicDataSecure,
+    _writer_permissions_handle: PermissionsHandle,
+    _reader_permissions_handle: PermissionsHandle,
+    _publication_data: &PublicationBuiltinTopicDataSecure,
+    _subscription_data: &SubscriptionBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
@@ -138,10 +137,10 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
 
   fn check_local_datareader_match(
     &self,
-    reader_permissions_handle: PermissionsHandle,
-    writer_permissions_handle: PermissionsHandle,
-    subscription_data: &SubscriptionBuiltinTopicDataSecure,
-    publication_data: &PublicationBuiltinTopicDataSecure,
+    _reader_permissions_handle: PermissionsHandle,
+    _writer_permissions_handle: PermissionsHandle,
+    _subscription_data: &SubscriptionBuiltinTopicDataSecure,
+    _publication_data: &PublicationBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
@@ -150,11 +149,11 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
 
   fn check_remote_datawriter_register_instance(
     &self,
-    permissions_handle: PermissionsHandle,
-    reader_todo: (),
-    publication_handle_todo: (),
-    key_todo: (),
-    instance_handle_todo: (),
+    _permissions_handle: PermissionsHandle,
+    _reader_todo: (),
+    _publication_handle_todo: (),
+    _key_todo: (),
+    _instance_handle_todo: (),
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
@@ -163,10 +162,10 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
 
   fn check_remote_datawriter_dispose_instance(
     &self,
-    permissions_handle: PermissionsHandle,
-    reader_todo: (),
-    publication_handle_todo: (),
-    key_todo: (),
+    _permissions_handle: PermissionsHandle,
+    _reader_todo: (),
+    _publication_handle_todo: (),
+    _key_todo: (),
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins

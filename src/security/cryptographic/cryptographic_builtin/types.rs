@@ -49,12 +49,12 @@ impl TryFrom<CryptoToken> for BuiltinCryptoToken {
         }
       }
 
-      (CRYPTO_TOKEN_CLASS_ID, [], bps) => Err(Self::Error {
+      (CRYPTO_TOKEN_CLASS_ID, [], _) => Err(Self::Error {
         msg: String::from(
           "CryptoToken has wrong binary_properties. Expected exactly 1 binary property.",
         ),
       }),
-      (CRYPTO_TOKEN_CLASS_ID, ps, _) => Err(Self::Error {
+      (CRYPTO_TOKEN_CLASS_ID, _, _) => Err(Self::Error {
         msg: String::from("CryptoToken has wrong properties. Expected properties to be empty."),
       }),
 

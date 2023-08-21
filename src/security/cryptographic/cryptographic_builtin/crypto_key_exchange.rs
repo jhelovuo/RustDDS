@@ -3,7 +3,7 @@ use crate::security::cryptographic::cryptographic_builtin::*;
 impl CryptoKeyExchange for CryptographicBuiltin {
   fn create_local_participant_crypto_tokens(
     &mut self,
-    local_participant_crypto_handle: ParticipantCryptoHandle,
+    _local_participant_crypto_handle: ParticipantCryptoHandle,
     remote_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
     //TODO: this is only a mock implementation (or is it?)
@@ -16,7 +16,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
 
   fn set_remote_participant_crypto_tokens(
     &mut self,
-    local_participant_crypto_handle: ParticipantCryptoHandle,
+    _local_participant_crypto_handle: ParticipantCryptoHandle,
     remote_participant_crypto_handle: ParticipantCryptoHandle,
     remote_participant_tokens: Vec<ParticipantCryptoToken>,
   ) -> SecurityResult<()> {
@@ -28,7 +28,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
 
   fn create_local_datawriter_crypto_tokens(
     &mut self,
-    local_datawriter_crypto_handle: DatawriterCryptoHandle,
+    _local_datawriter_crypto_handle: DatawriterCryptoHandle,
     remote_datareader_crypto_handle: DatareaderCryptoHandle,
   ) -> SecurityResult<Vec<DatawriterCryptoToken>> {
     //TODO: this is only a mock implementation (or is it?)
@@ -42,7 +42,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
 
   fn set_remote_datawriter_crypto_tokens(
     &mut self,
-    local_datareader_crypto_handle: DatareaderCryptoHandle,
+    _local_datareader_crypto_handle: DatareaderCryptoHandle,
     remote_datawriter_crypto_handle: DatawriterCryptoHandle,
     remote_datawriter_tokens: Vec<DatawriterCryptoToken>,
   ) -> SecurityResult<()> {
@@ -54,7 +54,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
 
   fn create_local_datareader_crypto_tokens(
     &mut self,
-    local_datareader_crypto_handle: DatareaderCryptoHandle,
+    _local_datareader_crypto_handle: DatareaderCryptoHandle,
     remote_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<Vec<DatareaderCryptoToken>> {
     //TODO: this is only a mock implementation (or is it?)
@@ -68,7 +68,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
 
   fn set_remote_datareader_crypto_tokens(
     &mut self,
-    local_datawriter_crypto_handle: DatawriterCryptoHandle,
+    _local_datawriter_crypto_handle: DatawriterCryptoHandle,
     remote_datareader_crypto_handle: DatareaderCryptoHandle,
     remote_datareader_tokens: Vec<DatareaderCryptoToken>,
   ) -> SecurityResult<()> {
@@ -78,7 +78,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
     })
   }
 
-  fn return_crypto_tokens(&mut self, crypto_tokens: Vec<CryptoToken>) -> SecurityResult<()> {
+  fn return_crypto_tokens(&mut self, _crypto_tokens: Vec<CryptoToken>) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
     Ok(())
   }

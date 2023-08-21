@@ -499,7 +499,7 @@ impl CryptoTransform for CryptographicBuiltin {
   fn decode_rtps_message(
     &self,
     encoded_message: Message,
-    receiving_participant_crypto_handle: ParticipantCryptoHandle,
+    _receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<Message> {
     //TODO: this is only a mock implementation
@@ -663,7 +663,7 @@ impl CryptoTransform for CryptographicBuiltin {
   fn preprocess_secure_submessage(
     &self,
     secure_prefix: &SecurePrefix,
-    receiving_participant_crypto_handle: ParticipantCryptoHandle,
+    _receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<SecureSubmessageKind> {
     // 9.5.3.3.5
@@ -744,7 +744,7 @@ impl CryptoTransform for CryptographicBuiltin {
   fn decode_datawriter_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datareader_crypto_handle: DatareaderCryptoHandle,
+    _receiving_datareader_crypto_handle: DatareaderCryptoHandle,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<WriterSubmessage> {
     //TODO: this is only a mock implementation
@@ -872,7 +872,7 @@ impl CryptoTransform for CryptographicBuiltin {
   fn decode_datareader_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datawriter_crypto_handle: DatawriterCryptoHandle,
+    _receiving_datawriter_crypto_handle: DatawriterCryptoHandle,
     sending_datareader_crypto_handle: DatareaderCryptoHandle,
   ) -> SecurityResult<ReaderSubmessage> {
     //TODO: this is only a mock implementation
@@ -1000,8 +1000,8 @@ impl CryptoTransform for CryptographicBuiltin {
   fn decode_serialized_payload(
     &self,
     encoded_buffer: Vec<u8>,
-    inline_qos: ParameterList,
-    receiving_datareader_crypto_handle: DatareaderCryptoHandle,
+    _inline_qos: ParameterList,
+    _receiving_datareader_crypto_handle: DatareaderCryptoHandle,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<Vec<u8>> {
     //TODO: this is only a mock implementation

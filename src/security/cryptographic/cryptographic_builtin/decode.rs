@@ -38,12 +38,7 @@ pub(super) fn find_receiver_specific_mac(
              ..
            }| receiver_specific_key_id.eq(receiver_mac_key_id),
         )
-        .map(
-          |ReceiverSpecificMAC {
-             receiver_mac_key_id,
-             receiver_mac,
-           }| *receiver_mac,
-        )
+        .map(|ReceiverSpecificMAC { receiver_mac, .. }| *receiver_mac)
         // We are expecting to find a MAC, so reject if we don't
         .ok_or(security_error!(
           "No MAC found for receiver_specific_key_id {}",
