@@ -9,7 +9,7 @@ use crate::{
       access_control_builtin::{
         domain_governance_document::DomainGovernanceDocument,
         domain_participant_permissions_document::DomainParticipantPermissions,
-        permissions_ca_certificate::Certificate,
+        permissions_ca_certificate::{Certificate, DistinguishedName, },
       },
       *,
     },
@@ -97,15 +97,17 @@ impl ParticipantAccessControl for AccessControlBuiltin {
           .cloned()
       })?;
 
-    let subject_name = auth_plugin
+    let subject_name : DistinguishedName = auth_plugin
         .get_identity_token(identity_handle)
         .and_then(|identity_token| {
           identity_token
             .data_holder
             .get_property(CERT_SN_PROPERTY_NAME)
         })
-        //TODO Parse into x509_certificate::rfc3280::Name?
-        ?;
+        .and_then(|name| {
+          DistinguishedName::parse( &name )
+            .map_err(|e| security_error!("{e:?}"))
+        })?;
 
     let domain_participant_grant = participant_qos
       .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
@@ -132,7 +134,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
           .find_grant(&subject_name, &Utc::now())
           .ok_or_else(|| {
             security_error!(
-              "No valid grants with the subject name {} found",
+              "No valid grants with the subject name {:?} found",
               subject_name
             )
           })
@@ -191,17 +193,14 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     let permissions_ca_certificate =
       self.get_permissions_ca_certificate_(local_permissions_handle)?;
 
-    let remote_subject_name = remote_credential_token
+    let remote_identity_certificate = remote_credential_token
       .data_holder
       .get_property(AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME)
-      .and_then(|certificate_contents_pem| {
-        Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
-      })
-      .map(|remote_identity_certificate| {
-        remote_identity_certificate.subject_name();
-        // TODO deal with the structured subject name
-        "TODO"
-      })?;
+      .and_then(|certificate_contents_pem| 
+        Certificate::from_pem(certificate_contents_pem)
+          .map_err(|e| security_error!("{e:?}"))
+      )?;
+    let remote_subject_name = remote_identity_certificate.subject_name();
 
     let remote_grant = remote_credential_token
       .data_holder

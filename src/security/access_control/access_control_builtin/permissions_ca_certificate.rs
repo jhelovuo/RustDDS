@@ -18,15 +18,17 @@
 // different Certificate instances.
 
 use x509_certificate::certificate::CapturedX509Certificate;
+use x509_cert;
+use der::Decode;
 
-use super::config_error::{to_config_error_parse, ConfigError};
-
+use super::config_error::{ConfigError, to_config_error_parse, };
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
 // so that we can keep track of what operations we use.
 #[derive(Debug)]
 pub struct Certificate {
   cert: CapturedX509Certificate,
+  subject_name: DistinguishedName,
 }
 
 impl Certificate {
@@ -34,18 +36,18 @@ impl Certificate {
     let cert = CapturedX509Certificate::from_pem(pem_data)
       .map_err(to_config_error_parse("Cannot read X.509 Certificate"))?;
 
-    Ok(Certificate { cert })
+    let other_cert =  x509_cert::certificate
+      ::Certificate::from_der(cert.constructed_data())
+      .map_err(to_config_error_parse("Cannot read X.509 Certificate(2)"))?;
+
+    let subject_name = other_cert.tbs_certificate.subject.into();
+
+    Ok(Certificate { cert , subject_name })
   }
 
-  // This is for getting and comparing Subject Name.
-  // The returned "Name" implements Eq, so that can be used, although
-  // it is not the procedure prescribed by
-  // https://www.rfc-editor.org/rfc/rfc5280#section-7.1
-  // for comparing Distinguished Names.
-  //
-  // TODO: Implement the procedure referred to above.
-  pub fn subject_name(&self) -> &x509_certificate::rfc3280::Name {
-    self.cert.subject_name()
+  
+  pub fn subject_name(&self) -> &DistinguishedName {
+    &self.subject_name
   }
 
   pub fn verify_signed_data_with_algorithm(
@@ -60,6 +62,56 @@ impl Certificate {
       .map_err(|e| format!("Signature verification failure: {e:?}"))
   }
 }
+
+// This represents X.501 Distinguised Name
+//
+// See https://datatracker.ietf.org/doc/html/rfc4514
+//
+// It is supposed to be a structured type of key-value-mappings,
+// but for simplicity, we treat it just as a string for time being.
+// It is needes to proces "Subject Name" and "Issuer Name" in
+// X.509 Certificates.
+//
+// Structured representation would allow standards-compliant
+// equality comparison (`.matches()`) according to
+// https://datatracker.ietf.org/doc/html/rfc5280#section-7.1
+//
+// TODO: Implement the structured format and matching.
+#[derive(Debug, Clone)]
+pub struct DistinguishedName {
+  name: String,
+}
+
+impl DistinguishedName {
+  pub fn parse(s: &str) -> Result<DistinguishedName,ConfigError> {
+    Ok( DistinguishedName{
+      name: s.to_string(),
+    })
+  }
+
+  pub fn matches(&self, other: &Self) -> bool {
+    self.name == other.name
+  }
+}
+
+// This conversion should be non-fallible?
+impl From<x509_cert::name::Name> for DistinguishedName {
+
+  fn from(n : x509_cert::name::Name) -> DistinguishedName {
+    DistinguishedName{
+      name: format!("{}",n),
+    }
+  }
+}
+
+use std::fmt;
+
+impl fmt::Display for DistinguishedName {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
+    write!(f,"{}",self.name)
+  }
+}
+
 
 #[cfg(test)]
 mod tests {
