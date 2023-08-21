@@ -32,9 +32,9 @@ pub(crate) struct SecurityPlugins {
   access: Box<dyn AccessControl>,
   crypto: Box<dyn Cryptographic>,
 
-  identity_handle_cache_: HashMap<GUID, IdentityHandle>,
-  permissions_handle_cache_: HashMap<GUID, PermissionsHandle>,
-  handshake_handle_cache_: HashMap<GUID, HandshakeHandle>,
+  identity_handle_cache_: HashMap<GuidPrefix, IdentityHandle>,
+  permissions_handle_cache_: HashMap<GuidPrefix, PermissionsHandle>,
+  handshake_handle_cache_: HashMap<GuidPrefix, HandshakeHandle>,
 
   participant_crypto_handle_cache_: HashMap<GuidPrefix, ParticipantCryptoHandle>,
   local_endpoint_crypto_handle_cache_: HashMap<GUID, EndpointCryptoHandle>,
@@ -65,19 +65,29 @@ impl SecurityPlugins {
     }
   }
 
-  fn get_identity_handle(&self, guid: &GUID) -> SecurityResult<IdentityHandle> {
+  fn get_identity_handle(&self, guidp: &GuidPrefix) -> SecurityResult<IdentityHandle> {
     self
       .identity_handle_cache_
-      .get(guid)
-      .ok_or_else(|| security_error!("Could not find an IdentityHandle for the Guid {:?}", guid))
+      .get(guidp)
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find an IdentityHandle for the GUID prefix {:?}",
+          guidp
+        )
+      })
       .copied()
   }
 
-  fn get_permissions_handle(&self, guid: &GUID) -> SecurityResult<PermissionsHandle> {
+  fn get_permissions_handle(&self, guidp: &GuidPrefix) -> SecurityResult<PermissionsHandle> {
     self
       .permissions_handle_cache_
-      .get(guid)
-      .ok_or_else(|| security_error!("Could not find a PermissionsHandle for the Guid {:?}", guid))
+      .get(guidp)
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find a PermissionsHandle for the GUID prefix {:?}",
+          guidp
+        )
+      })
       .copied()
   }
 
@@ -148,7 +158,7 @@ impl SecurityPlugins {
       // Everything OK, store handle and return GUID
       self
         .identity_handle_cache_
-        .insert(sec_guid, identity_handle);
+        .insert(sec_guid.prefix, identity_handle);
       Ok(sec_guid)
     } else {
       // If the builtin authentication does not fail, it should produce only OK
@@ -159,26 +169,26 @@ impl SecurityPlugins {
     }
   }
 
-  pub fn get_identity_token(&self, participant_guid: GUID) -> SecurityResult<IdentityToken> {
-    let identity_handle = self.get_identity_handle(&participant_guid)?;
+  pub fn get_identity_token(&self, participant_guidp: GuidPrefix) -> SecurityResult<IdentityToken> {
+    let identity_handle = self.get_identity_handle(&participant_guidp)?;
     self.auth.get_identity_token(identity_handle)
   }
 
   pub fn get_identity_status_token(
     &self,
-    participant_guid: GUID,
+    participant_guidp: GuidPrefix,
   ) -> SecurityResult<IdentityStatusToken> {
-    let identity_handle = self.get_identity_handle(&participant_guid)?;
+    let identity_handle = self.get_identity_handle(&participant_guidp)?;
     self.auth.get_identity_status_token(identity_handle)
   }
 
   pub fn set_permissions_credential_and_token(
     &self,
-    participant_guid: GUID,
+    participant_guidp: GuidPrefix,
     permissions_credential_token: PermissionsCredentialToken,
     permissions_token: PermissionsToken,
   ) -> SecurityResult<()> {
-    let handle = self.get_identity_handle(&participant_guid)?;
+    let handle = self.get_identity_handle(&participant_guidp)?;
     self.auth.set_permissions_credential_and_token(
       handle,
       permissions_credential_token,
@@ -188,36 +198,36 @@ impl SecurityPlugins {
 
   pub fn validate_remote_identity(
     &mut self,
-    local_participant_guid: GUID,
+    local_participant_guidp: GuidPrefix,
     remote_identity_token: IdentityToken,
-    remote_participant_guid: GUID,
+    remote_participant_guidp: GuidPrefix,
     remote_auth_request_token: Option<AuthRequestMessageToken>,
   ) -> SecurityResult<(ValidationOutcome, Option<AuthRequestMessageToken>)> {
-    let local_identity_handle = self.get_identity_handle(&local_participant_guid)?;
+    let local_identity_handle = self.get_identity_handle(&local_participant_guidp)?;
 
     let (outcome, remote_id_handle, auth_req_token_opt) = self.auth.validate_remote_identity(
       remote_auth_request_token,
       local_identity_handle,
       remote_identity_token,
-      remote_participant_guid,
+      remote_participant_guidp,
     )?;
 
     // Add remote identity handle to cache
     self
       .identity_handle_cache_
-      .insert(remote_participant_guid, remote_id_handle);
+      .insert(remote_participant_guidp, remote_id_handle);
 
     Ok((outcome, auth_req_token_opt))
   }
 
   pub fn begin_handshake_request(
     &mut self,
-    initiator_guid: GUID,
-    replier_guid: GUID,
+    initiator_guidp: GuidPrefix,
+    replier_guidp: GuidPrefix,
     serialized_local_participant_data: Vec<u8>,
   ) -> SecurityResult<HandshakeMessageToken> {
-    let initiator_identity_handle = self.get_identity_handle(&initiator_guid)?;
-    let replier_identity_handle = self.get_identity_handle(&replier_guid)?;
+    let initiator_identity_handle = self.get_identity_handle(&initiator_guidp)?;
+    let replier_identity_handle = self.get_identity_handle(&replier_guidp)?;
 
     let (outcome, handshake_handle, handshake_token) = self.auth.begin_handshake_request(
       initiator_identity_handle,
@@ -230,7 +240,7 @@ impl SecurityPlugins {
       // Store handshake handle and return token
       self
         .handshake_handle_cache_
-        .insert(initiator_guid, handshake_handle);
+        .insert(initiator_guidp, handshake_handle);
       Ok(handshake_token)
     } else {
       Err(security_error!(
@@ -246,10 +256,10 @@ impl SecurityPlugins {
   pub fn validate_local_permissions(
     &mut self,
     domain_id: u16,
-    participant_guid: GUID,
+    participant_guidp: GuidPrefix,
     participant_qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    let identity_handle = self.get_identity_handle(&participant_guid)?;
+    let identity_handle = self.get_identity_handle(&participant_guidp)?;
     let permissions_handle = self.access.validate_local_permissions(
       &*self.auth,
       identity_handle,
@@ -258,38 +268,41 @@ impl SecurityPlugins {
     )?;
     self
       .permissions_handle_cache_
-      .insert(participant_guid, permissions_handle);
+      .insert(participant_guidp, permissions_handle);
     Ok(())
   }
 
   pub fn check_create_participant(
     &self,
     domain_id: u16,
-    participant_guid: GUID,
+    participant_guidp: GuidPrefix,
     qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    let handle = self.get_permissions_handle(&participant_guid)?;
+    let handle = self.get_permissions_handle(&participant_guidp)?;
     self.access.check_create_participant(handle, domain_id, qos)
   }
 
-  pub fn get_permissions_token(&self, participant_guid: GUID) -> SecurityResult<PermissionsToken> {
-    let handle: PermissionsHandle = self.get_permissions_handle(&participant_guid)?;
+  pub fn get_permissions_token(
+    &self,
+    participant_guidp: GuidPrefix,
+  ) -> SecurityResult<PermissionsToken> {
+    let handle: PermissionsHandle = self.get_permissions_handle(&participant_guidp)?;
     self.access.get_permissions_token(handle)
   }
 
   pub fn get_permissions_credential_token(
     &self,
-    participant_guid: GUID,
+    participant_guidp: GuidPrefix,
   ) -> SecurityResult<PermissionsCredentialToken> {
-    let handle: PermissionsHandle = self.get_permissions_handle(&participant_guid)?;
+    let handle: PermissionsHandle = self.get_permissions_handle(&participant_guidp)?;
     self.access.get_permissions_credential_token(handle)
   }
 
   pub fn get_participant_sec_attributes(
     &self,
-    participant_guid: GUID,
+    participant_guidp: GuidPrefix,
   ) -> SecurityResult<ParticipantSecurityAttributes> {
-    let handle: PermissionsHandle = self.get_permissions_handle(&participant_guid)?;
+    let handle: PermissionsHandle = self.get_permissions_handle(&participant_guidp)?;
     self.access.get_participant_sec_attributes(handle)
   }
 }

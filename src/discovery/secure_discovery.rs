@@ -24,7 +24,10 @@ use crate::{
   },
   security_error, security_log,
   serialization::pl_cdr_adapters::PlCdrSerialize,
-  structure::{entity::RTPSEntity, guid::EntityId},
+  structure::{
+    entity::RTPSEntity,
+    guid::{EntityId, GuidPrefix},
+  },
   RepresentationIdentifier, SequenceNumber, GUID,
 };
 use super::{discovery_db::DiscoveryDB, Participant_GUID, SpdpDiscoveredParticipantData};
@@ -68,7 +71,7 @@ pub(crate) struct SecureDiscovery {
   pub local_dp_sec_attributes: ParticipantSecurityAttributes,
 
   stateless_message_helper: ParticipantStatelessMessageHelper,
-  unanswered_authentication_messages: HashMap<GUID, UnansweredAuthenticationMessage>,
+  unanswered_authentication_messages: HashMap<GuidPrefix, UnansweredAuthenticationMessage>,
 }
 
 impl SecureDiscovery {
@@ -82,35 +85,35 @@ impl SecureDiscovery {
 
     let plugins = security_plugins.lock().unwrap();
 
-    let participant_guid = domain_participant.guid();
+    let participant_guid_prefix = domain_participant.guid().prefix;
 
     let property_qos = domain_participant
       .qos()
       .property()
       .expect("No property QoS defined even though security is enabled");
 
-    let identity_token = match plugins.get_identity_token(participant_guid) {
+    let identity_token = match plugins.get_identity_token(participant_guid_prefix) {
       Ok(token) => token,
       Err(_e) => {
         return Err("Could not get IdentityToken");
       }
     };
 
-    let _identity_status_token = match plugins.get_identity_status_token(participant_guid) {
+    let _identity_status_token = match plugins.get_identity_status_token(participant_guid_prefix) {
       Ok(token) => token,
       Err(_e) => {
         return Err("Could not get IdentityStatusToken");
       }
     };
 
-    let permissions_token = match plugins.get_permissions_token(participant_guid) {
+    let permissions_token = match plugins.get_permissions_token(participant_guid_prefix) {
       Ok(token) => token,
       Err(_e) => {
         return Err("Could not get PermissionsToken");
       }
     };
 
-    let credential_token = match plugins.get_permissions_credential_token(participant_guid) {
+    let credential_token = match plugins.get_permissions_credential_token(participant_guid_prefix) {
       Ok(token) => token,
       Err(_e) => {
         return Err("Could not get PermissionsCredentialToken");
@@ -119,7 +122,7 @@ impl SecureDiscovery {
 
     if plugins
       .set_permissions_credential_and_token(
-        participant_guid,
+        participant_guid_prefix,
         credential_token,
         permissions_token.clone(),
       )
@@ -128,7 +131,8 @@ impl SecureDiscovery {
       return Err("Could not set permission tokens.");
     }
 
-    let security_attributes = match plugins.get_participant_sec_attributes(participant_guid) {
+    let security_attributes = match plugins.get_participant_sec_attributes(participant_guid_prefix)
+    {
       Ok(val) => val,
       Err(_e) => {
         return Err("Could not get ParticipantSecurityAttributes");
@@ -139,7 +143,7 @@ impl SecureDiscovery {
 
     Ok(Self {
       security_plugins,
-      local_participant_guid: participant_guid,
+      local_participant_guid: domain_participant.guid(),
       local_dp_identity_token: identity_token,
       local_dp_permissions_token: permissions_token,
       local_dp_property_qos: property_qos,
@@ -400,8 +404,12 @@ impl SecureDiscovery {
       .expect("IdentityToken disappeared"); // Identity token is here since compatibility test passed
 
     let outcome: ValidationOutcome = match get_security_plugins(&self.security_plugins)
-      .validate_remote_identity(my_guid, remote_identity_token, remote_guid, None)
-    {
+      .validate_remote_identity(
+        my_guid.prefix,
+        remote_identity_token,
+        remote_guid.prefix,
+        None,
+      ) {
       Ok(res) => {
         // Validation passed. Getting only the validation outcome, ignoring
         // authentication request token which is not used
@@ -469,7 +477,7 @@ impl SecureDiscovery {
         // Add request message to cache of unanswered messages so that we'll try
         // resending it later if needed
         self.unanswered_authentication_messages.insert(
-          remote_guid,
+          remote_guid.prefix,
           UnansweredAuthenticationMessage::new(request_message.clone()),
         );
 
@@ -548,8 +556,8 @@ impl SecureDiscovery {
     // Get the handshake request token
     let handshake_request_token = get_security_plugins(&self.security_plugins)
       .begin_handshake_request(
-        self.local_participant_guid,
-        remote_guid,
+        self.local_participant_guid.prefix,
+        remote_guid.prefix,
         my_ser_data.to_vec(),
       )?;
 
@@ -566,21 +574,21 @@ impl SecureDiscovery {
     &mut self,
     auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
   ) {
-    for (guid, unswered_message) in self.unanswered_authentication_messages.iter_mut() {
+    for (guid_prefix, unswered_message) in self.unanswered_authentication_messages.iter_mut() {
       match auth_msg_writer.write(unswered_message.message.clone(), None) {
         Ok(()) => {
           unswered_message.remaining_resend_times -= 1;
           debug!(
-            "Resent an unanswered authentication message to remote with guid {:?}. Resending at \
-             most {} more times.",
-            guid, unswered_message.remaining_resend_times,
+            "Resent an unanswered authentication message to remote with guid prefix {:?}. \
+             Resending at most {} more times.",
+            guid_prefix, unswered_message.remaining_resend_times,
           );
         }
         Err(err) => {
           debug!(
-            "Failed to resend an unanswered authentication message to remote with guid {:?}. \
-             Error: {}. Retrying later.",
-            guid, err
+            "Failed to resend an unanswered authentication message to remote with guid prefix \
+             {:?}. Error: {}. Retrying later.",
+            guid_prefix, err
           );
         }
       }
@@ -588,7 +596,7 @@ impl SecureDiscovery {
     // Remove messages with no more resends
     self
       .unanswered_authentication_messages
-      .retain(|_guid, message| message.remaining_resend_times > 0);
+      .retain(|_guid_prefix, message| message.remaining_resend_times > 0);
   }
 }
 

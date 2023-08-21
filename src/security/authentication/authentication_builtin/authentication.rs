@@ -1,5 +1,11 @@
 use crate::{
-  security::{access_control::*, authentication::*, Authentication, *},
+  security::{
+    access_control::*,
+    authentication::{authentication_builtin::HandshakeInfo, *},
+    Authentication, *,
+  },
+  security_error,
+  structure::guid::GuidPrefix,
   QosPolicies, GUID,
 };
 use super::AuthenticationBuiltin;
@@ -56,7 +62,7 @@ impl Authentication for AuthenticationBuiltin {
     remote_auth_request_token: Option<AuthRequestMessageToken>,
     local_identity_handle: IdentityHandle,
     remote_identity_token: IdentityToken,
-    remote_participant_guid: GUID,
+    remote_participant_guidp: GuidPrefix,
   ) -> SecurityResult<(
     ValidationOutcome,
     IdentityHandle,

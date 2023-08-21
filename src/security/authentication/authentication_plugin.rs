@@ -1,7 +1,7 @@
 use crate::{
   dds::qos::QosPolicies,
   security::{access_control::*, SecurityResult},
-  structure::guid::GUID,
+  structure::guid::{GuidPrefix, GUID},
 };
 use super::*;
 
@@ -42,7 +42,7 @@ pub trait Authentication: Send {
     remote_auth_request_token: Option<AuthRequestMessageToken>,
     local_identity_handle: IdentityHandle,
     remote_identity_token: IdentityToken,
-    remote_participant_guid: GUID,
+    remote_participant_guidp: GuidPrefix,
   ) -> SecurityResult<(
     ValidationOutcome,
     IdentityHandle,
