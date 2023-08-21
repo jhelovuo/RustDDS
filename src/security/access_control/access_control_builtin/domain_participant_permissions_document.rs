@@ -3,9 +3,10 @@ use std::fmt::Debug;
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use glob::Pattern;
 
-use super::config_error::{parse_config_error, ConfigError, to_config_error_parse};
-
-use super::permissions_ca_certificate::DistinguishedName;
+use super::{
+  config_error::{parse_config_error, to_config_error_parse, ConfigError},
+  permissions_ca_certificate::DistinguishedName,
+};
 
 // A list of Grants
 #[derive(Debug, Clone)]
@@ -14,13 +15,16 @@ pub struct DomainParticipantPermissions {
 }
 
 impl DomainParticipantPermissions {
-  pub fn find_grant(&self, subject_name: &DistinguishedName, current_datetime: &DateTime<Utc>) -> Option<&Grant> {
+  pub fn find_grant(
+    &self,
+    subject_name: &DistinguishedName,
+    current_datetime: &DateTime<Utc>,
+  ) -> Option<&Grant> {
     // TODO: How to match subject names?
     self
       .grants
       .iter()
-      .find(|g| g.subject_name.matches( subject_name ) 
-                && g.validity.contains(current_datetime))
+      .find(|g| g.subject_name.matches(subject_name) && g.validity.contains(current_datetime))
   }
 
   pub fn from_xml(domain_participant_permissions_xml: &str) -> Result<Self, ConfigError> {
@@ -97,14 +101,16 @@ impl Grant {
         rules,
         xml::GrantElement::Default(default_action),
       ) => {
-        let subject_name = DistinguishedName::parse( subject_name )
-          .map_err(to_config_error_parse(
-            &format!("Subject Name parsing failed. input was '{}'", subject_name)))?;
+        let subject_name =
+          DistinguishedName::parse(subject_name).map_err(to_config_error_parse(&format!(
+            "Subject Name parsing failed. input was '{}'",
+            subject_name
+          )))?;
 
         let rules: Result<Vec<Rule>, ConfigError> = rules.iter().map(Rule::from_xml).collect();
         let rules = rules?;
 
-        let validity = Self::parse_time(not_before)? .. Self::parse_time(not_after)?;
+        let validity = Self::parse_time(not_before)?..Self::parse_time(not_after)?;
 
         let default_action = AllowOrDeny::from_xml(*default_action);
 
@@ -760,15 +766,13 @@ mod tests {
     let dpd = DomainParticipantPermissions::from_xml(domain_participant_permissions_xml).unwrap();
     println!("{:?}\n", dpd);
 
-
-    let grant = dpd.find_grant( 
+    let grant = dpd.find_grant(
       &DistinguishedName::parse("CN=some_subject").unwrap(),
-      &chrono::Utc.with_ymd_and_hms(2014, 11, 28, 0, 0, 0).unwrap()
+      &chrono::Utc.with_ymd_and_hms(2014, 11, 28, 0, 0, 0).unwrap(),
     );
 
     assert!(grant.is_some());
 
     println!("{:?}", grant);
-
   }
 }

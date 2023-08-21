@@ -21,7 +21,7 @@ use x509_certificate::certificate::CapturedX509Certificate;
 use x509_cert;
 use der::Decode;
 
-use super::config_error::{ConfigError, to_config_error_parse, };
+use super::config_error::{to_config_error_parse, ConfigError};
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
 // so that we can keep track of what operations we use.
@@ -36,16 +36,14 @@ impl Certificate {
     let cert = CapturedX509Certificate::from_pem(pem_data)
       .map_err(to_config_error_parse("Cannot read X.509 Certificate"))?;
 
-    let other_cert =  x509_cert::certificate
-      ::Certificate::from_der(cert.constructed_data())
+    let other_cert = x509_cert::certificate::Certificate::from_der(cert.constructed_data())
       .map_err(to_config_error_parse("Cannot read X.509 Certificate(2)"))?;
 
     let subject_name = other_cert.tbs_certificate.subject.into();
 
-    Ok(Certificate { cert , subject_name })
+    Ok(Certificate { cert, subject_name })
   }
 
-  
   pub fn subject_name(&self) -> &DistinguishedName {
     &self.subject_name
   }
@@ -63,13 +61,13 @@ impl Certificate {
   }
 }
 
-// This represents X.501 Distinguised Name
+// This represents X.501 Distinguished Name
 //
 // See https://datatracker.ietf.org/doc/html/rfc4514
 //
 // It is supposed to be a structured type of key-value-mappings,
 // but for simplicity, we treat it just as a string for time being.
-// It is needes to proces "Subject Name" and "Issuer Name" in
+// It is needs to process "Subject Name" and "Issuer Name" in
 // X.509 Certificates.
 //
 // Structured representation would allow standards-compliant
@@ -83,8 +81,8 @@ pub struct DistinguishedName {
 }
 
 impl DistinguishedName {
-  pub fn parse(s: &str) -> Result<DistinguishedName,ConfigError> {
-    Ok( DistinguishedName{
+  pub fn parse(s: &str) -> Result<DistinguishedName, ConfigError> {
+    Ok(DistinguishedName {
       name: s.to_string(),
     })
   }
@@ -96,10 +94,9 @@ impl DistinguishedName {
 
 // This conversion should be non-fallible?
 impl From<x509_cert::name::Name> for DistinguishedName {
-
-  fn from(n : x509_cert::name::Name) -> DistinguishedName {
-    DistinguishedName{
-      name: format!("{}",n),
+  fn from(n: x509_cert::name::Name) -> DistinguishedName {
+    DistinguishedName {
+      name: format!("{}", n),
     }
   }
 }
@@ -108,10 +105,9 @@ use std::fmt;
 
 impl fmt::Display for DistinguishedName {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-    write!(f,"{}",self.name)
+    write!(f, "{}", self.name)
   }
 }
-
 
 #[cfg(test)]
 mod tests {
