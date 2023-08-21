@@ -32,6 +32,11 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
       ..
     } = publication_data;
 
+    // Move the following check to validate_remote_permissions from check_remote_
+    // methods, as there we have access to the tokens: "If the PluginClassName
+    // or the MajorVersion of the local permissions_token differ from those in
+    // the remote_permissions_token, the operation shall return FALSE."
+
     self.check_entity(
       permissions_handle,
       domain_id,
@@ -92,6 +97,11 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
       )
       .into();
 
+    // Move the following check to validate_remote_permissions from check_remote_
+    // methods, as there we have access to the tokens: "If the PluginClassName
+    // or the MajorVersion of the local permissions_token differ from those in
+    // the remote_permissions_token, the operation shall return FALSE."
+
     (requested_access_is_unprotected || participant_has_read_access)
       .then_some(false)
       // Check for relay only access
@@ -112,6 +122,11 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from publication_data
 
     let TopicBuiltinTopicData { name, .. } = topic_data;
+
+    // Move the following check to validate_remote_permissions from check_remote_
+    // methods, as there we have access to the tokens: "If the PluginClassName
+    // or the MajorVersion of the local permissions_token differ from those in
+    // the remote_permissions_token, the operation shall return FALSE."
 
     self.check_entity(
       permissions_handle,

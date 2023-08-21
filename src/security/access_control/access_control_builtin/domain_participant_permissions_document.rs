@@ -81,6 +81,19 @@ impl Grant {
       .unwrap_or(self.default_action)
   }
 
+  // Check if there are any rules that could allow access for the participant
+  pub fn check_participant_join(&self, domain_id: u16) -> bool {
+    self.default_action.into()
+      || self.rules.iter().any(|rule| {
+        rule.verdict.into()
+          && !(rule.publish.is_empty() && rule.subscribe.is_empty() && rule.relay.is_empty())
+          && rule
+            .domains
+            .iter()
+            .any(|domain_ids| domain_ids.matches(domain_id))
+      })
+  }
+
   fn from_xml(xgrant: &xml::Grant) -> Result<Self, ConfigError> {
     let too_short =
       || parse_config_error("Grant element must contain at least four subelements".to_string());

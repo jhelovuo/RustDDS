@@ -1,5 +1,3 @@
-use std::ops::Not;
-
 use chrono::Utc;
 
 use crate::{
@@ -37,6 +35,45 @@ use super::{
 const QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME: &str = "dds.sec.access.permissions_ca";
 const QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME: &str = "dds.sec.access.governance";
 const QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME: &str = "dds.sec.access.permissions";
+
+impl AccessControlBuiltin {
+  fn check_participant(
+    &self,
+    permissions_handle: PermissionsHandle,
+    domain_id: u16,
+  ) -> SecurityResult<()> {
+    // TODO: remove after testing
+    if true {
+      return Ok(());
+    }
+
+    let grant = self.get_grant_(&permissions_handle)?;
+    let DomainRule {
+      // corresponds to is_access_protected
+      enable_join_access_control,
+      topic_access_rules,
+      ..
+    } = self.get_domain_rule_(&permissions_handle)?;
+
+    let unprotected_topics = !enable_join_access_control
+      || topic_access_rules.iter().any(
+        |TopicRule {
+           enable_read_access_control,
+           enable_write_access_control,
+           ..
+         }| !(*enable_read_access_control && *enable_write_access_control),
+      );
+
+    // The specification seems to have a mistake here for check_create_participant. We should also check for protected topics for which we haver permissions. See https://issues.omg.org/issues/DDSSEC12-79
+    let joinable_topics = unprotected_topics || grant.check_participant_join(domain_id);
+
+    joinable_topics.then_some(()).ok_or_else(|| {
+      security_error!(
+        "The participant is not allowed to join any topic by the domain rule nor the grant."
+      )
+    })
+  }
+}
 
 // 9.4.3
 impl ParticipantAccessControl for AccessControlBuiltin {
@@ -155,9 +192,9 @@ impl ParticipantAccessControl for AccessControlBuiltin {
   // Currently only mocked
   fn validate_remote_permissions(
     &mut self,
-    auth_plugin: &dyn Authentication,
+    _auth_plugin: &dyn Authentication,
     local_identity_handle: IdentityHandle,
-    remote_identity_handle: IdentityHandle,
+    _remote_identity_handle: IdentityHandle,
     remote_permissions_token: PermissionsToken,
     remote_credential_token: AuthenticatedPeerCredentialToken,
   ) -> SecurityResult<PermissionsHandle> {
@@ -236,50 +273,9 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
-    qos: &QosPolicies,
+    _qos: &QosPolicies,
   ) -> SecurityResult<()> {
-    // TODO: remove after testing
-    if true {
-      return Ok(());
-    }
-
-    self
-      // Check that permissions have been configured (is this necessary?)
-      .get_grant_(&permissions_handle)
-      // Get domain rule
-      .and(self.get_domain_rule_(&permissions_handle))
-      .and_then(
-        |DomainRule {
-           // corresponds to is_access_protected
-           enable_join_access_control,
-           topic_access_rules,
-           ..
-         }| {
-          // Check if there is a joinable topic
-          topic_access_rules
-            .iter()
-            .fold(
-              *enable_join_access_control,
-              |accumulator,
-               TopicRule {
-                 enable_read_access_control,
-                 enable_write_access_control,
-                 ..
-               }| {
-                accumulator && *enable_read_access_control && *enable_write_access_control
-              },
-            )
-            .not()
-            // Convert to Result
-            .then_some(())
-            .ok_or_else(|| {
-              security_error!(
-                "The participant is not allowed to join any topic by the domain rule."
-              )
-            })
-        },
-      )
-    // TODO the specification seems to have a mistake here. See https://issues.omg.org/issues/DDSSEC12-79 and fix when 1.2 comes out
+    self.check_participant(permissions_handle, domain_id)
   }
 
   // Currently only mocked
@@ -287,11 +283,13 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
-    participant_data: &ParticipantBuiltinTopicDataSecure,
+    _participant_data: &ParticipantBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
-    // TODO: actual implementation
-
-    Ok(())
+    // Move the following check to validate_remote_permissions from check_remote_
+    // methods, as there we have access to the tokens: "If the PluginClassName
+    // or the MajorVersion of the local permissions_token differ from those in
+    // the remote_permissions_token, the operation shall return FALSE."
+    self.check_participant(permissions_handle, domain_id)
   }
 
   // Currently only mocked
