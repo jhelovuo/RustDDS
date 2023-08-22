@@ -16,7 +16,7 @@ use super::{
   aes_gcm_gmac::{decrypt, validate_mac},
   types::{
     BuiltinCryptoContent, BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinKey, BuiltinMAC,
-    KeyLength, ReceiverSpecificMAC, MAC_LENGTH,
+    ReceiverSpecificMAC, MAC_LENGTH,
   },
 };
 
@@ -53,7 +53,6 @@ pub(super) fn find_receiver_specific_mac(
 
 pub(super) fn decode_serialized_payload_gmac(
   key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
 ) -> SecurityResult<Vec<u8>> {
@@ -81,7 +80,6 @@ pub(super) fn decode_serialized_payload_gmac(
   // Validate MAC and deserialize serialized payload
   validate_mac(
     key,
-    key_length,
     initialization_vector,
     serialized_payload_data,
     common_mac,
@@ -91,7 +89,6 @@ pub(super) fn decode_serialized_payload_gmac(
 
 pub(super) fn decode_serialized_payload_gcm(
   key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
 ) -> SecurityResult<Vec<u8>> {
@@ -112,13 +109,12 @@ pub(super) fn decode_serialized_payload_gcm(
     .and_then(BuiltinCryptoFooter::try_from)?;
 
   // Decrypt serialized payload
-  decrypt(key, key_length, initialization_vector, &data, common_mac)
+  decrypt(key, initialization_vector, &data, common_mac)
 }
 
 pub(super) fn decode_datawriter_submessage_gmac(
   key: &BuiltinKey,
   receiver_specific_key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: Submessage,
   common_mac: BuiltinMAC,
@@ -130,12 +126,11 @@ pub(super) fn decode_datawriter_submessage_gmac(
     .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
 
   // Validate the common MAC
-  validate_mac(key, key_length, initialization_vector, &data, common_mac)?;
+  validate_mac(key, initialization_vector, &data, common_mac)?;
   // Validate the receiver-specific MAC if one exists
   if let Some(receiver_specific_mac) = receiver_specific_mac {
     validate_mac(
       receiver_specific_key,
-      key_length,
       initialization_vector,
       &data,
       receiver_specific_mac,
@@ -156,7 +151,6 @@ pub(super) fn decode_datawriter_submessage_gmac(
 pub(super) fn decode_datawriter_submessage_gcm(
   key: &BuiltinKey,
   receiver_specific_key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: Submessage,
   common_mac: BuiltinMAC,
@@ -174,7 +168,6 @@ pub(super) fn decode_datawriter_submessage_gcm(
       if let Some(receiver_specific_mac) = receiver_specific_mac {
         validate_mac(
           receiver_specific_key,
-          key_length,
           initialization_vector,
           &data,
           receiver_specific_mac,
@@ -184,7 +177,6 @@ pub(super) fn decode_datawriter_submessage_gcm(
       // Authenticated decryption
       let mut plaintext = Bytes::copy_from_slice(&decrypt(
         key,
-        key_length,
         initialization_vector,
         &data,
         common_mac,
@@ -222,7 +214,6 @@ pub(super) fn decode_datawriter_submessage_gcm(
 pub(super) fn decode_datareader_submessage_gmac(
   key: &BuiltinKey,
   receiver_specific_key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: Submessage,
   common_mac: BuiltinMAC,
@@ -234,12 +225,11 @@ pub(super) fn decode_datareader_submessage_gmac(
     .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
 
   // Validate the common MAC
-  validate_mac(key, key_length, initialization_vector, &data, common_mac)?;
+  validate_mac(key, initialization_vector, &data, common_mac)?;
   // Validate the receiver-specific MAC if one exists
   if let Some(receiver_specific_mac) = receiver_specific_mac {
     validate_mac(
       receiver_specific_key,
-      key_length,
       initialization_vector,
       &data,
       receiver_specific_mac,
@@ -260,7 +250,6 @@ pub(super) fn decode_datareader_submessage_gmac(
 pub(super) fn decode_datareader_submessage_gcm(
   key: &BuiltinKey,
   receiver_specific_key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: Submessage,
   common_mac: BuiltinMAC,
@@ -278,7 +267,6 @@ pub(super) fn decode_datareader_submessage_gcm(
       if let Some(receiver_specific_mac) = receiver_specific_mac {
         validate_mac(
           receiver_specific_key,
-          key_length,
           initialization_vector,
           &data,
           receiver_specific_mac,
@@ -288,7 +276,6 @@ pub(super) fn decode_datareader_submessage_gcm(
       // Authenticated decryption
       let mut plaintext = Bytes::copy_from_slice(&decrypt(
         key,
-        key_length,
         initialization_vector,
         &data,
         common_mac,
@@ -326,7 +313,6 @@ pub(super) fn decode_datareader_submessage_gcm(
 pub(super) fn decode_rtps_message_gmac(
   key: &BuiltinKey,
   receiver_specific_key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   submessages_with_info_source: &[Submessage],
   common_mac: BuiltinMAC,
@@ -349,14 +335,13 @@ pub(super) fn decode_rtps_message_gmac(
     .and_then(|serialized_submessages| {
       let data = serialized_submessages.concat();
       // Validate the common MAC
-      validate_mac(key, key_length, initialization_vector, &data, common_mac)
+      validate_mac(key, initialization_vector, &data, common_mac)
         // Validate the receiver-specific MAC if one exists
         .and(
           receiver_specific_mac
             .map(|receiver_specific_mac| {
               validate_mac(
                 receiver_specific_key,
-                key_length,
                 initialization_vector,
                 &data,
                 receiver_specific_mac,
@@ -377,7 +362,6 @@ pub(super) fn decode_rtps_message_gmac(
 pub(super) fn decode_rtps_message_gcm(
   key: &BuiltinKey,
   receiver_specific_key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   encrypted_submessages: &[Submessage],
   common_mac: BuiltinMAC,
@@ -399,7 +383,6 @@ pub(super) fn decode_rtps_message_gcm(
     if let Some(receiver_specific_mac) = receiver_specific_mac {
       validate_mac(
         receiver_specific_key,
-        key_length,
         initialization_vector,
         data,
         receiver_specific_mac,
@@ -409,7 +392,6 @@ pub(super) fn decode_rtps_message_gcm(
     // Authenticated decryption
     let mut plaintext = Bytes::copy_from_slice(&decrypt(
       key,
-      key_length,
       initialization_vector,
       data,
       common_mac,

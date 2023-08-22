@@ -10,7 +10,7 @@ use crate::{
   },
   security_error,
 };
-use super::aes_gcm_gmac::keygen;
+use super::aes_gcm_gmac::{try_keygen};
 
 impl CryptographicBuiltin {
   fn generate_crypto_handle_(&mut self) -> CryptoHandle {
@@ -112,16 +112,17 @@ impl CryptographicBuiltin {
     crypto_handle: CryptoHandle,
     transformation_kind: BuiltinCryptoTransformationKind,
   ) -> KeyMaterial_AES_GCM_GMAC {
+    let master_sender_key = try_keygen(transformation_kind.try_into().ok());
     KeyMaterial_AES_GCM_GMAC {
       transformation_kind,
       // TODO
       master_salt: Vec::new(),
 
       sender_key_id: crypto_handle,
-      master_sender_key: keygen(transformation_kind.into()),
+      master_sender_key,
       // Leave receiver-specific key empty initially
       receiver_specific_key_id: 0,
-      master_receiver_specific_key: BuiltinKey::new(),
+      master_receiver_specific_key: BuiltinKey::ZERO,
     }
   }
 
@@ -140,10 +141,10 @@ impl CryptographicBuiltin {
   ) -> KeyMaterial_AES_GCM_GMAC_seq {
     if origin_authentication {
       let master_receiver_specific_key =
-        keygen(key_materials.key_material().transformation_kind.into());
+        try_keygen(key_materials.key_material().transformation_kind.try_into().ok());
       key_materials.add_master_receiver_specific_key(crypto_handle, master_receiver_specific_key)
     } else {
-      key_materials.add_master_receiver_specific_key(0, BuiltinKey::new())
+      key_materials.add_master_receiver_specific_key(0, BuiltinKey::ZERO)
     }
   }
 

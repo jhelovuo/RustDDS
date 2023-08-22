@@ -1,156 +1,148 @@
+
+use ring::aead::*;
+use ring::error::Unspecified;
+
 use crate::{
-  security::{SecurityError, SecurityResult},
-  security_error,
+  security::{SecurityResult},
 };
 use super::types::{
-  AES128Key, AES256Key, BuiltinInitializationVector, BuiltinKey, BuiltinMAC, KeyLength,
-  AES128_KEY_LENGTH, AES256_KEY_LENGTH, MAC_LENGTH,
+  BuiltinInitializationVector, BuiltinKey, BuiltinMAC, KeyLength, MAC_LENGTH,
 };
 
-#[doc(hidden)]
-#[macro_export]
-// A shorthand to a closure that replaces an error with one that compares the
-// key lengths
-macro_rules! key_length_error {
-  ($key:expr,$key_length:expr) => {
-    |_| {
-      security_error!(
-        "Got a {} bytes long key, expected {:?}.",
-        $key.len(),
-        $key_length
-      )
-    }
-  };
+
+// By design of Secure RTPS, there is a unique Initialization Vector
+// for each submessage, and we only encrypt once (one submessage) with that,
+// so we can construct a trivial sequence of just one element.
+
+struct TrivialNonceSequence {
+  iv: [u8;12], 
+  used: bool, // The purpose of this is to panic on misuse.
 }
 
-#[doc(hidden)]
-#[macro_export]
-// Converts the key to AES128Key and saves it in a variable, sending an error if
-// the conversion fails
-macro_rules! convert_to_AES128_key {
-  ($key:expr,$key_length:expr,$variable_name:ident) => {
-    let $variable_name =
-      AES128Key::try_from($key.clone()).map_err(key_length_error!($key, $key_length))?;
-  };
+impl TrivialNonceSequence {
+  fn new(iv: BuiltinInitializationVector) -> Self {
+    TrivialNonceSequence{
+      iv, used: false
+    }
+  }
 }
-#[doc(hidden)]
-#[macro_export]
-// Converts the key to AES256Key and saves it in a variable, sending an error if
-// the conversion fails
-macro_rules! convert_to_AES256_key {
-  ($key:expr,$key_length:expr,$variable_name:ident) => {
-    let $variable_name =
-      AES256Key::try_from($key.clone()).map_err(key_length_error!($key, $key_length))?;
-  };
+
+impl NonceSequence for TrivialNonceSequence {
+  fn advance(&mut self) -> Result<Nonce, Unspecified> {
+    if self.used {
+      Err(Unspecified) // you had one nonce
+    } else {
+      self.used = true;
+      Ok(Nonce::assume_unique_for_key(self.iv))
+    }
+  }
 }
+
 
 // Generate a key of the given length
 pub(super) fn keygen(key_length: KeyLength) -> BuiltinKey {
+  BuiltinKey::generate_random(key_length)
+}
+
+// Generate a key of the given length
+pub(super) fn try_keygen(key_length: Option<KeyLength>) -> BuiltinKey {
   match key_length {
-    KeyLength::None => Vec::new(),
-    KeyLength::AES128 => Vec::from(rand::random::<[u8; AES128_KEY_LENGTH]>()),
-    KeyLength::AES256 => Vec::from(rand::random::<[u8; AES256_KEY_LENGTH]>()),
+    Some(key_length) =>  BuiltinKey::generate_random(key_length),
+    None => BuiltinKey::ZERO,
   }
+}
+
+
+fn to_unbound_key(key: &BuiltinKey) -> UnboundKey {
+  match key {
+    // unwraps should be safe, because builtin key lengths always match expected length
+    BuiltinKey::AES128(key) => UnboundKey::new(&AES_128_GCM, key).unwrap(),
+    BuiltinKey::AES256(key) => UnboundKey::new(&AES_256_GCM, key).unwrap(),
+  }
+}
+
+fn to_builtin_mac(tag: &Tag) -> BuiltinMAC {
+  // This .unwrap() cannot fail, as both have fixed length
+  tag.as_ref().try_into().unwrap()   
 }
 
 // Computes the message authentication code (MAC) for the given data
 pub(super) fn compute_mac(
   key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
 ) -> SecurityResult<BuiltinMAC> {
-  match key_length {
-    // If no authentication is done, the MAC shall be all zeros
-    KeyLength::None => Ok([0; MAC_LENGTH]),
+  // ring encrypts + tags (signs) in place, so we must create a buffer for that.
+  let mut in_out_data = Vec::from(data);
 
-    KeyLength::AES128 => {
-      convert_to_AES128_key!(key, key_length, key);
-      // TODO: this is a mock implementation
-      Ok(key)
-    }
-    KeyLength::AES256 => {
-      convert_to_AES256_key!(key, key_length, key);
-      // TODO: this is a mock implementation
-      Ok(data[..16].try_into().unwrap())
-    }
-  }
+  let mut sealing_key = 
+    SealingKey::new(to_unbound_key(key), TrivialNonceSequence::new(initialization_vector));
+
+  let tag = sealing_key.seal_in_place_separate_tag(Aad::empty(), &mut in_out_data)?;
+
+  Ok(to_builtin_mac(&tag))
 }
 
 // Authenticated encryption: computes the ciphertext and and a MAC for it
 pub(super) fn encrypt(
   key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   plaintext: &[u8],
 ) -> SecurityResult<(Vec<u8>, BuiltinMAC)> {
   // Compute the ciphertext
-  let ciphertext = match key_length {
-    // If no encryption is done, return the plaintext
-    KeyLength::None => Vec::from(plaintext),
+  // ring encrypts + tags (signs) in place, so we must create a buffer for that.
+  let mut in_out_data = Vec::from(plaintext);
 
-    KeyLength::AES128 => {
-      convert_to_AES128_key!(key, key_length, key);
-      // TODO: this is a mock implementation
-      [Vec::from(plaintext), Vec::from(key)].concat()
-    }
-    KeyLength::AES256 => {
-      convert_to_AES256_key!(key, key_length, key);
-      // TODO: this is a mock implementation
-      [Vec::from(plaintext), Vec::from(key)].concat()
-    }
-  };
-  // compute the MAC for the ciphertext and return the pair
-  compute_mac(key, key_length, initialization_vector, &ciphertext).map(|mac| (ciphertext, mac))
+  let mut sealing_key = 
+    SealingKey::new(to_unbound_key(key), TrivialNonceSequence::new(initialization_vector));
+
+  let tag = sealing_key.seal_in_place_separate_tag(Aad::empty(), &mut in_out_data)?;
+
+  Ok( (in_out_data, to_builtin_mac(&tag)) )
 }
 
 // Computes the MAC for the data and compares it with the one provided
 pub(super) fn validate_mac(
   key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
   mac: BuiltinMAC,
 ) -> SecurityResult<()> {
-  if compute_mac(key, key_length, initialization_vector, data)?.eq(&mac) {
-    Ok(())
-  } else {
-    Err(security_error!(
-      "The computed MAC does not match the provided one."
-    ))
-  }
+  // TODO: round data.len() up to block size
+  let mut in_out = Vec::with_capacity( data.len() + MAC_LENGTH);
+  in_out.extend_from_slice(data);
+  in_out.extend_from_slice(&mac);
+
+  let mut opening_key = 
+    OpeningKey::new(to_unbound_key(key), TrivialNonceSequence::new(initialization_vector));
+
+  // This will return `Err(..)` if verification fails
+  let plaintext = opening_key.open_in_place(Aad::empty(), &mut in_out)?;
+  // If we get here, the mac ("tag") was valid.
+  Ok(())
 }
 
 // Authenticated decryption: validates the MAC and decrypts the ciphertext
 pub(super) fn decrypt(
   key: &BuiltinKey,
-  key_length: KeyLength,
   initialization_vector: BuiltinInitializationVector,
   ciphertext: &[u8],
   mac: BuiltinMAC,
 ) -> SecurityResult<Vec<u8>> {
-  validate_mac(key, key_length, initialization_vector, ciphertext, mac)?;
-  match key_length {
-    // If no encryption was done, the ciphertext is the plaintext
-    KeyLength::None => Ok(Vec::from(ciphertext)),
+  // TODO: round data.len() up to block size
+  let mut in_out = Vec::with_capacity( ciphertext.len() + MAC_LENGTH);
+  in_out.extend_from_slice(ciphertext.as_ref());
+  in_out.extend_from_slice(mac.as_ref());
 
-    KeyLength::AES128 => {
-      convert_to_AES128_key!(key, key_length, key);
-      // TODO: this is a mock implementation
-      Ok(Vec::from(
-        ciphertext
-          .split_at(ciphertext.len() - key_length as usize)
-          .0,
-      ))
-    }
-    KeyLength::AES256 => {
-      convert_to_AES256_key!(key, key_length, key);
-      // TODO: this is a mock implementation
-      Ok(Vec::from(
-        ciphertext
-          .split_at(ciphertext.len() - key_length as usize)
-          .0,
-      ))
-    }
-  }
+  let mut opening_key = 
+    OpeningKey::new(to_unbound_key(key), TrivialNonceSequence::new(initialization_vector));
+
+  // This will return `Err(..)` if verification fails
+  let plaintext = opening_key.open_in_place(Aad::empty(), &mut in_out)?;
+  // If we get here, the mac ("tag") was valid.
+  // and `plaintext` is actually a slice of `in_out`
+  let plain_len = plaintext.len();
+  in_out.truncate(plain_len);
+
+  Ok( in_out ) 
 }

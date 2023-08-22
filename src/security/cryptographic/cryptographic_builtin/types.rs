@@ -9,7 +9,8 @@ use crate::{
     crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
   security::{
-    cryptographic::EndpointCryptoHandle, BinaryProperty, DataHolder, SecurityError, SecurityResult,
+    cryptographic::EndpointCryptoHandle, BinaryProperty, DataHolder, 
+    SecurityError, SecurityResult, security_error,
   },
   security_error,
   serialization::cdr_serializer::to_bytes,
@@ -230,9 +231,9 @@ impl TryFrom<Vec<KeyMaterial_AES_GCM_GMAC>> for KeyMaterial_AES_GCM_GMAC_seq {
           transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
           master_salt: Vec::new(),
           sender_key_id: 0,
-          master_sender_key: Vec::new(),
+          master_sender_key: BuiltinKey::ZERO,
           receiver_specific_key_id: 0,
-          master_receiver_specific_key: Vec::new(),
+          master_receiver_specific_key: BuiltinKey::ZERO,
         },
       )),
       _ => Err(security_error!(
@@ -378,15 +379,17 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Vec<CryptoToken> {
   }
 }
 //For (de)serialization
+// See definition in DDS Security spec v1.1
+// "9.5.2.1.1 KeyMaterial_AES_GCM_GMAC structure"
 #[allow(non_camel_case_types)] // We use the name from the spec
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 struct Serializable_KeyMaterial_AES_GCM_GMAC {
   transformation_kind: CryptoTransformKind,
-  master_salt: Vec<u8>,
+  master_salt: [u8;32],
   sender_key_id: CryptoTransformKeyId,
-  master_sender_key: BuiltinKey,
+  master_sender_key: [u8;32],
   receiver_specific_key_id: CryptoTransformKeyId,
-  master_receiver_specific_key: BuiltinKey,
+  master_receiver_specific_key: [u8;32],
 }
 impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
@@ -401,18 +404,30 @@ impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC
     }: Serializable_KeyMaterial_AES_GCM_GMAC,
   ) -> Result<Self, Self::Error> {
     // Map transformation_kind to builtin
-    BuiltinCryptoTransformationKind::try_from(transformation_kind)
-      // Construct a keymat
-      .map(|transformation_kind| Self {
-        transformation_kind,
-        master_salt,
-        sender_key_id,
-        master_sender_key,
-        receiver_specific_key_id,
-        master_receiver_specific_key,
-      })
+    let transformation_kind = 
+      BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
+    let (master_salt, master_sender_key, master_receiver_specific_key) =
+      match KeyLength::try_from(transformation_kind) {
+        Ok(key_len) => {
+          ( Vec::from(&master_salt[0..8]),
+            BuiltinKey::from_bytes(key_len, &master_sender_key)?,
+            BuiltinKey::from_bytes(key_len, &master_sender_key)? ) 
+        }
+        Err(_) => ( Vec::new(), BuiltinKey::ZERO, BuiltinKey::ZERO ),
+      };
+    Ok(Self {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      receiver_specific_key_id,
+      master_receiver_specific_key,
+    })
   }
 }
+
+use std::io::Write;
+
 impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
   fn from(
     KeyMaterial_AES_GCM_GMAC {
@@ -424,14 +439,24 @@ impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
       master_receiver_specific_key,
     }: KeyMaterial_AES_GCM_GMAC,
   ) -> Self {
+    // The unwraps do not fail, because the source material is <= destination array
+    let mut ser_master_salt = [0_u8;32];
+    // ...except for master_salt. TODO: Enforce size statically. It is now Vec.
+    ser_master_salt.as_mut_slice().write_all(&master_salt).unwrap();
+    let mut ser_master_sender_key = [0_u8;32];
+    ser_master_sender_key.as_mut_slice().write_all(master_sender_key.as_bytes()).unwrap();
+    let mut ser_master_receiver_specific_key = [0_u8;32];
+    ser_master_receiver_specific_key.as_mut_slice()
+      .write_all(master_receiver_specific_key.as_bytes())
+      .unwrap();
+
     Serializable_KeyMaterial_AES_GCM_GMAC {
-      // Serialize transformation_kind
       transformation_kind: transformation_kind.into(),
-      master_salt,
+      master_salt: ser_master_salt,
       sender_key_id,
-      master_sender_key,
+      master_sender_key: ser_master_sender_key,
       receiver_specific_key_id,
-      master_receiver_specific_key,
+      master_receiver_specific_key: ser_master_receiver_specific_key,
     }
   }
 }
@@ -697,22 +722,74 @@ pub(super) type AES256Key = [u8; AES256_KEY_LENGTH];
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum KeyLength {
-  None = 0, // Mostly for testing and debugging
+  //None = 0, // for cases where encryption or signing is not requested
   AES128 = AES128_KEY_LENGTH as isize,
   AES256 = AES256_KEY_LENGTH as isize,
 }
 
-impl From<BuiltinCryptoTransformationKind> for KeyLength {
-  fn from(value: BuiltinCryptoTransformationKind) -> Self {
+impl TryFrom<BuiltinCryptoTransformationKind> for KeyLength {
+  type Error = SecurityError;
+
+  fn try_from(value: BuiltinCryptoTransformationKind) -> Result<Self,SecurityError> {
     match value {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Self::None,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => Self::AES128,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => Self::AES128,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => Self::AES256,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => Self::AES256,
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => 
+        Err(security_error("No crypto transform requested, no key length")),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => Ok(Self::AES128),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => Ok(Self::AES128),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => Ok(Self::AES256),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => Ok(Self::AES256),
     }
   }
 }
 
 // The keys are given as byte sequences that can be empty or of length 16 or 32
-pub(super) type BuiltinKey = Vec<u8>;
+//pub(super) type BuiltinKey = Vec<u8>;
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub(super) enum BuiltinKey {
+  AES128([u8;AES128_KEY_LENGTH]),
+  AES256([u8;AES256_KEY_LENGTH]),
+}
+
+impl BuiltinKey {
+  pub const ZERO:Self = BuiltinKey::AES256([0;AES256_KEY_LENGTH]);
+
+  pub fn as_bytes(&self) -> &[u8] {
+    match self {
+      BuiltinKey::AES128(d) => d,
+      BuiltinKey::AES256(d) => d,
+    }
+  }
+
+  pub fn from_bytes(length:KeyLength, bytes:&[u8]) -> SecurityResult<Self> {
+    let l = length as usize;
+    match length {
+      // unwraps will succeed, because we test for sufficient length just before.
+      KeyLength::AES128 if bytes.len() >= l 
+        => Ok(BuiltinKey::AES128( bytes[0..l].try_into().unwrap() )),
+
+      KeyLength::AES256 if bytes.len() >= l 
+        => Ok(BuiltinKey::AES256( bytes[0..l].try_into().unwrap() )),
+
+      _ => Err(security_error("BuiltinKey: source material too short.")),
+    }
+  }
+
+  pub fn len(&self) -> usize {
+    match self {
+      BuiltinKey::AES128(d) => d.len(),
+      BuiltinKey::AES256(d) => d.len(),
+    }
+  }
+
+  // Rust `rand` library uses by default the 12-round chacha-algorithm, which is
+  // "widely believed" to be secure.
+  // The library documentation states that the generator may be upgraded, if it is found
+  // to be insecure.
+  pub fn generate_random(key_len: KeyLength) -> Self {
+    match key_len {
+      KeyLength::AES128 => BuiltinKey::AES128(rand::random::<[u8; AES128_KEY_LENGTH]>()),
+      KeyLength::AES256 => BuiltinKey::AES256(rand::random::<[u8; AES256_KEY_LENGTH]>()),
+    }
+  }
+}
