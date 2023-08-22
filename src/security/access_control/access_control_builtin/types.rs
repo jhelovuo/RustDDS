@@ -12,6 +12,7 @@ use crate::{
   },
   security_error,
 };
+use super::permissions_ca_certificate::DistinguishedName;
 
 // 9.4.2.3
 // This is also used in the builtin cryptographic plugin, hence pub(in
@@ -202,7 +203,7 @@ const PERMISSIONS_TOKEN_SUBJECT_NAME_PROPERTY_NAME: &str = "dds.perm_ca.sn";
 const PERMISSIONS_TOKEN_ALGORITHM_PROPERTY_NAME: &str = "dds.perm_ca.algo";
 // 9.4.2.2
 pub(super) struct BuiltinPermissionsToken {
-  pub permissions_ca_subject_name: Option<String>,
+  pub permissions_ca_subject_name: Option<DistinguishedName>,
   pub permissions_ca_algorithm: Option<CertificateAlgorithm>,
 }
 impl From<BuiltinPermissionsToken> for PermissionsToken {
@@ -218,7 +219,7 @@ impl From<BuiltinPermissionsToken> for PermissionsToken {
         properties: [
           permissions_ca_subject_name.map(|subject_name| Property {
             name: PERMISSIONS_TOKEN_SUBJECT_NAME_PROPERTY_NAME.into(),
-            value: subject_name,
+            value: subject_name.serialize(),
             propagate: true,
           }),
           permissions_ca_algorithm.map(|algorithm| Property {
@@ -240,8 +241,7 @@ const PERMISSIONS_CREDENTIAL_TOKEN_CLASS_ID: &str = "DDS:Access:PermissionsCrede
 const PERMISSIONS_CREDENTIAL_TOKEN_CERTIFICATE_NAME: &str = "dds.perm.cert";
 // 9.4.2.1
 pub(super) struct BuiltinPermissionsCredentialToken {
-  pub permissions_certificate: String, /* TODO: Should this be the whole permissions document
-                                        * XML as a string? */
+  pub permissions_certificate: String, // Permissions document XML as a string
 }
 impl From<BuiltinPermissionsCredentialToken> for PermissionsCredentialToken {
   fn from(

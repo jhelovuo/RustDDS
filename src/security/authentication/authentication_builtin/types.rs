@@ -16,6 +16,7 @@ const CA_ALGO_PROPERTY_NAME: &str = "dds.ca.algo";
 
 // Accepted values for the algorithm properties in IdentityToken
 const RSA_2048_ALGO_NAME: &str = "RSA-2048";
+pub(in crate::security) const RSA_2048_KEY_LENGTH: usize = 256;
 const EC_PRIME_ALGO_NAME: &str = "EC-prime256v1";
 
 pub(in crate::security) enum CertificateAlgorithm {

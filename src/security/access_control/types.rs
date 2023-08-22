@@ -7,7 +7,23 @@ use crate::security::{
   PluginParticipantSecurityAttributesMask, PluginSecurityAttributesMask, Property,
 };
 
-// PermissionsToken: section 8.4.2.1 of the Security specification (v.
+// PermissionsCredentialToken: section 8.4.2.1 of the Security
+// specification (v. 1.1)
+pub struct PermissionsCredentialToken {
+  // TODO: Readable & Writable are now derived, but likely need to be implemented manually.
+  // Readable and Writable are needed to (de)serialize to(from) ParameterList.
+  // Note: The implementation has to observe CDR alignment rules.
+  // Automatic derive does not do so.
+  pub data_holder: DataHolder,
+}
+
+impl From<DataHolder> for PermissionsCredentialToken {
+  fn from(value: DataHolder) -> Self {
+    Self { data_holder: value }
+  }
+}
+
+// PermissionsToken: section 8.4.2.2 of the Security specification (v.
 // 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
 pub struct PermissionsToken {
@@ -19,18 +35,6 @@ pub struct PermissionsToken {
 }
 
 impl From<DataHolder> for PermissionsToken {
-  fn from(value: DataHolder) -> Self {
-    Self { data_holder: value }
-  }
-}
-
-// PermissionsCredentialToken: section 8.4.2.2 of the Security
-// specification (v. 1.1)
-pub struct PermissionsCredentialToken {
-  pub data_holder: DataHolder,
-}
-
-impl From<DataHolder> for PermissionsCredentialToken {
   fn from(value: DataHolder) -> Self {
     Self { data_holder: value }
   }
@@ -89,7 +93,7 @@ impl From<ParticipantSecurityAttributes> for ParticipantSecurityAttributesMask {
   }
 }
 
-// TODO: TopicSecurityAttributes: section 8.4.2.6 of the Security specification
+// TopicSecurityAttributes: section 8.4.2.6 of the Security specification
 // (v. 1.1)
 #[derive(Clone, Copy)]
 pub struct TopicSecurityAttributes {
@@ -109,7 +113,7 @@ impl TopicSecurityAttributes {
   }
 }
 
-// TODO: EndpointSecurityAttributes: section 8.4.2.7 of the Security
+// EndpointSecurityAttributes: section 8.4.2.7 of the Security
 // specification (v. 1.1)
 #[derive(Clone)]
 pub struct EndpointSecurityAttributes {
@@ -127,7 +131,7 @@ impl EndpointSecurityAttributes {
       is_submessage_protected: false,
       is_payload_protected: false,
       is_key_protected: false,
-      plugin_endpoint_attributes: PluginSecurityAttributesMask(0),
+      plugin_endpoint_attributes: PluginSecurityAttributesMask::empty(),
       ac_endpoint_properties: Vec::new(),
     }
   }

@@ -17,10 +17,13 @@
 // Permissions documents. The verification of the two can use the same or
 // different Certificate instances.
 
-use x509_certificate::certificate::CapturedX509Certificate;
+use x509_certificate::{certificate::CapturedX509Certificate, EcdsaCurve, KeyAlgorithm};
 use x509_cert;
 use der::Decode;
 
+use crate::security::authentication::authentication_builtin::types::{
+  CertificateAlgorithm, RSA_2048_KEY_LENGTH,
+};
 use super::config_error::{to_config_error_parse, ConfigError};
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
@@ -46,6 +49,33 @@ impl Certificate {
 
   pub fn subject_name(&self) -> &DistinguishedName {
     &self.subject_name
+  }
+
+  pub(super) fn algorithm(&self) -> Option<CertificateAlgorithm> {
+    let key_algorithm = &self.cert.key_algorithm();
+    match key_algorithm {
+      Some(KeyAlgorithm::Rsa) => {
+        let key_length = self.cert.public_key_data().len();
+        if key_length == RSA_2048_KEY_LENGTH {
+          Some(CertificateAlgorithm::RSA2048)
+        } else {
+          log::error!(
+            "Wrong RSA key length: expected {}, got {}",
+            RSA_2048_KEY_LENGTH,
+            key_length
+          );
+          None
+        }
+      }
+      Some(KeyAlgorithm::Ecdsa(EcdsaCurve::Secp256r1)) => Some(CertificateAlgorithm::ECPrime256v1),
+      _ => {
+        log::error!(
+          "Unknown key algorithm. cert.key_algorithm returned {:?}",
+          key_algorithm
+        );
+        None
+      }
+    }
   }
 
   pub fn verify_signed_data_with_algorithm(
@@ -85,6 +115,11 @@ impl DistinguishedName {
     Ok(DistinguishedName {
       name: s.to_string(),
     })
+  }
+
+  // TODO we need serialized subject names in tokens
+  pub fn serialize(self) -> String {
+    self.name
   }
 
   pub fn matches(&self, other: &Self) -> bool {

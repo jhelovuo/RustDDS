@@ -292,17 +292,27 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     self.check_participant(permissions_handle, domain_id)
   }
 
-  // Currently only mocked
   fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken> {
-    // TODO: actual implementation
+    // TODO remove after testing
+    if true {
+      return Ok(
+        BuiltinPermissionsToken {
+          permissions_ca_subject_name: None, // TODO
+          permissions_ca_algorithm: None,    // TODO
+        }
+        .into(),
+      );
+    }
 
-    Ok(
-      BuiltinPermissionsToken {
-        permissions_ca_subject_name: None, // TODO
-        permissions_ca_algorithm: None,    // TODO
-      }
-      .into(),
-    )
+    self
+      .get_permissions_ca_certificate_(&handle)
+      .map(|certificate| {
+        BuiltinPermissionsToken {
+          permissions_ca_subject_name: Some(certificate.subject_name().clone()),
+          permissions_ca_algorithm: certificate.algorithm(),
+        }
+        .into()
+      })
   }
 
   // Currently only mocked
