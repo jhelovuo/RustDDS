@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ops::Not};
 
+use chrono::Utc;
 use bytes::Bytes;
 
 use crate::{
@@ -9,8 +10,8 @@ use crate::{
 use self::{
   config_error::{other_config_error, parse_config_error, to_config_error_other, ConfigError},
   domain_governance_document::{DomainRule, TopicRule},
-  domain_participant_permissions_document::{Action, Grant},
-  permissions_ca_certificate::Certificate,
+  domain_participant_permissions_document::{Action, DomainParticipantPermissions, Grant},
+  permissions_ca_certificate::{Certificate, DistinguishedName},
   types::Entity,
 };
 use super::{AccessControl, PermissionsHandle};
@@ -29,7 +30,8 @@ pub(in crate::security) mod types;
 // A struct implementing the builtin Access control plugin
 // See sections 8.4 and 9.4 of the Security specification (v. 1.1)
 pub struct AccessControlBuiltin {
-  domain_participant_grants_: HashMap<PermissionsHandle, Grant>,
+  domain_participant_permissions_:
+    HashMap<PermissionsHandle, (DistinguishedName, DomainParticipantPermissions)>,
   domain_rules_: HashMap<PermissionsHandle, DomainRule>,
   permissions_ca_certificates_: HashMap<PermissionsHandle, Certificate>,
   identity_to_permissions_: HashMap<IdentityHandle, PermissionsHandle>,
@@ -41,7 +43,7 @@ impl AccessControl for AccessControlBuiltin {}
 impl AccessControlBuiltin {
   pub fn new() -> Self {
     Self {
-      domain_participant_grants_: HashMap::new(),
+      domain_participant_permissions_: HashMap::new(),
       domain_rules_: HashMap::new(),
       permissions_ca_certificates_: HashMap::new(),
       identity_to_permissions_: HashMap::new(),
@@ -58,23 +60,56 @@ impl AccessControlBuiltin {
     &self,
     permissions_handle: &PermissionsHandle,
   ) -> SecurityResult<&DomainRule> {
-    self
-      .domain_rules_
-      .get(permissions_handle)
-      .ok_or(security_error!(
+    self.domain_rules_.get(permissions_handle).ok_or_else(|| {
+      security_error!(
         "Could not find a domain rule for the PermissionsHandle {}",
         permissions_handle
-      ))
+      )
+    })
+  }
+
+  fn get_permissions_document_(
+    &self,
+    permissions_handle: &PermissionsHandle,
+  ) -> SecurityResult<&(DistinguishedName, DomainParticipantPermissions)> {
+    self
+      .domain_participant_permissions_
+      .get(permissions_handle)
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find a permissions document for the PermissionsHandle {}",
+          permissions_handle
+        )
+      })
   }
 
   fn get_grant_(&self, permissions_handle: &PermissionsHandle) -> SecurityResult<&Grant> {
-    self
-      .domain_participant_grants_
-      .get(permissions_handle)
-      .ok_or(security_error!(
-        "Could not find a grant for the PermissionsHandle {}",
-        permissions_handle
-      ))
+    self.get_permissions_document_(permissions_handle).and_then(
+      |(subject_name, permissions_document)| {
+        permissions_document
+          .find_grant(subject_name, &Utc::now())
+          .ok_or_else(|| {
+            security_error!(
+              "Could not find a valid grant for the PermissionsHandle {}",
+              permissions_handle
+            )
+          })
+      },
+    )
+  }
+
+  fn get_permissions_document_string_(
+    &self,
+    permissions_handle: &PermissionsHandle,
+  ) -> SecurityResult<&String> {
+    self.get_permissions_document_(permissions_handle).map(
+      |(
+        _,
+        DomainParticipantPermissions {
+          original_string, ..
+        },
+      )| original_string,
+    )
   }
 
   fn get_permissions_ca_certificate_(
@@ -84,10 +119,12 @@ impl AccessControlBuiltin {
     self
       .permissions_ca_certificates_
       .get(permissions_handle)
-      .ok_or(security_error!(
-        "Could not find a permissions CA certificate for the PermissionsHandle {}",
-        permissions_handle
-      ))
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find a permissions CA certificate for the PermissionsHandle {}",
+          permissions_handle
+        )
+      })
   }
 
   fn get_permissions_handle_(
@@ -97,10 +134,12 @@ impl AccessControlBuiltin {
     self
       .identity_to_permissions_
       .get(identity_handle)
-      .ok_or(security_error!(
-        "Could not find a PermissionsHandle for the IdentityHandle {}",
-        identity_handle
-      ))
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find a PermissionsHandle for the IdentityHandle {}",
+          identity_handle
+        )
+      })
   }
 
   fn read_uri(&self, uri: &str) -> Result<Bytes, ConfigError> {

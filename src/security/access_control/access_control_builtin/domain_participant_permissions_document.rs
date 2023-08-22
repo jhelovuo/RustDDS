@@ -12,6 +12,7 @@ use super::{
 #[derive(Debug, Clone)]
 pub struct DomainParticipantPermissions {
   pub grants: Vec<Grant>,
+  pub original_string: String,
 }
 
 impl DomainParticipantPermissions {
@@ -39,7 +40,10 @@ impl DomainParticipantPermissions {
       .iter()
       .map(Grant::from_xml)
       .collect::<Result<Vec<Grant>, ConfigError>>()?;
-    Ok(Self { grants })
+    Ok(Self {
+      grants,
+      original_string: domain_participant_permissions_xml.into(),
+    })
   }
 }
 

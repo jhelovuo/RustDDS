@@ -87,10 +87,12 @@ impl CryptographicBuiltin {
     self
       .encode_key_materials_
       .get(crypto_handle)
-      .ok_or(security_error!(
-        "Could not find encode key materials for the CryptoHandle {}",
-        crypto_handle
-      ))
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find encode key materials for the CryptoHandle {}",
+          crypto_handle
+        )
+      })
   }
 
   fn insert_decode_key_materials_(
@@ -122,10 +124,12 @@ impl CryptographicBuiltin {
     self
       .decode_key_materials_
       .get(crypto_handle)
-      .ok_or(security_error!(
-        "Could not find decode key materials for the CryptoHandle {}",
-        crypto_handle
-      ))
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find decode key materials for the CryptoHandle {}",
+          crypto_handle
+        )
+      })
   }
 
   fn insert_endpoint_info_(

@@ -238,22 +238,23 @@ impl From<BuiltinPermissionsToken> for PermissionsToken {
 }
 
 const PERMISSIONS_CREDENTIAL_TOKEN_CLASS_ID: &str = "DDS:Access:PermissionsCredential";
-const PERMISSIONS_CREDENTIAL_TOKEN_CERTIFICATE_NAME: &str = "dds.perm.cert";
+const PERMISSIONS_CREDENTIAL_TOKEN_DOCUMENT_NAME: &str = "dds.perm.cert"; // Why is this cert, if the property contains the permissions document
+
 // 9.4.2.1
 pub(super) struct BuiltinPermissionsCredentialToken {
-  pub permissions_certificate: String, // Permissions document XML as a string
+  pub permissions_document: String, // Permissions document XML as a string
 }
 impl From<BuiltinPermissionsCredentialToken> for PermissionsCredentialToken {
   fn from(
     BuiltinPermissionsCredentialToken {
-      permissions_certificate,
+      permissions_document: permissions_certificate,
     }: BuiltinPermissionsCredentialToken,
   ) -> Self {
     PermissionsCredentialToken {
       data_holder: DataHolder {
         class_id: PERMISSIONS_CREDENTIAL_TOKEN_CLASS_ID.into(),
         properties: vec![Property {
-          name: PERMISSIONS_CREDENTIAL_TOKEN_CERTIFICATE_NAME.into(),
+          name: PERMISSIONS_CREDENTIAL_TOKEN_DOCUMENT_NAME.into(),
           value: permissions_certificate,
           propagate: true,
         }],

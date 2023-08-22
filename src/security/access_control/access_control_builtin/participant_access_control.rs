@@ -143,7 +143,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
       .and_then(|name| DistinguishedName::parse(&name).map_err(|e| security_error!("{e:?}")))?;
 
-    let domain_participant_grant = participant_qos
+    let domain_participant_permissions = participant_qos
       .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|permissions_uri| {
         self.read_uri(&permissions_uri).map_err(|conf_err| {
@@ -162,24 +162,26 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       .and_then(|permissions_xml| {
         DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
           .map_err(|e| security_error!("{e:?}"))
-      })
-      .and_then(|domain_participant_permissions| {
-        domain_participant_permissions
-          .find_grant(&subject_name, &Utc::now())
-          .ok_or_else(|| {
-            security_error!(
-              "No valid grants with the subject name {:?} found",
-              subject_name
-            )
-          })
-          .cloned()
       })?;
+
+    // Check the subject name in the identity certificate matches the one from the
+    // permissions document.
+    if domain_participant_permissions
+      .find_grant(&subject_name, &Utc::now())
+      .is_none()
+    {
+      Err(security_error!(
+        "No valid grants with the subject name {:?} found",
+        subject_name
+      ))?;
+    }
 
     let permissions_handle = self.generate_permissions_handle_();
     self.domain_rules_.insert(permissions_handle, domain_rule);
-    self
-      .domain_participant_grants_
-      .insert(permissions_handle, domain_participant_grant);
+    self.domain_participant_permissions_.insert(
+      permissions_handle,
+      (subject_name, domain_participant_permissions),
+    );
     self
       .identity_to_permissions_
       .insert(identity_handle, permissions_handle);
@@ -235,7 +237,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })?;
     let remote_subject_name = remote_identity_certificate.subject_name();
 
-    let remote_grant = remote_credential_token
+    let remote_domain_participant_permissions = remote_credential_token
       .data_holder
       .get_property(AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|remote_permissions_document| {
@@ -246,26 +248,31 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       .and_then(|permissions_xml| {
         DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
           .map_err(|e| security_error!("{e:?}"))
-      })
-      .and_then(|domain_participant_permissions| {
-        domain_participant_permissions
-          .find_grant(remote_subject_name, &Utc::now())
-          .ok_or_else(|| {
-            security_error!(
-              "No valid grants with the subject name {} found",
-              remote_subject_name
-            )
-          })
-          .cloned()
       })?;
+
+    // Check the subject name in the identity certificate matches the one from the
+    // permissions document.
+    if remote_domain_participant_permissions
+      .find_grant(remote_subject_name, &Utc::now())
+      .is_none()
+    {
+      Err(security_error!(
+        "No valid grants with the subject name {:?} found",
+        remote_subject_name
+      ))?;
+    }
 
     let domain_rule = self.get_domain_rule_(local_permissions_handle).cloned()?;
 
     let permissions_handle = self.generate_permissions_handle_();
     self.domain_rules_.insert(permissions_handle, domain_rule);
-    self
-      .domain_participant_grants_
-      .insert(permissions_handle, remote_grant);
+    self.domain_participant_permissions_.insert(
+      permissions_handle,
+      (
+        remote_subject_name.clone(),
+        remote_domain_participant_permissions,
+      ),
+    );
     Ok(permissions_handle)
   }
 
@@ -315,19 +322,29 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
   }
 
-  // Currently only mocked
   fn get_permissions_credential_token(
     &self,
     handle: PermissionsHandle,
   ) -> SecurityResult<PermissionsCredentialToken> {
-    // TODO: actual implementation
+    // TODO remove after testing
+    if true {
+      return Ok(
+        BuiltinPermissionsCredentialToken {
+          permissions_document: "TODO: remove after testing".into(),
+        }
+        .into(),
+      );
+    }
 
-    Ok(
-      BuiltinPermissionsCredentialToken {
-        permissions_certificate: "TODO".into(), // TODO
-      }
-      .into(),
-    )
+    self
+      .get_permissions_document_string_(&handle)
+      .cloned()
+      .map(|permissions_document| {
+        BuiltinPermissionsCredentialToken {
+          permissions_document,
+        }
+        .into()
+      })
   }
 
   fn set_listener(&self) -> SecurityResult<()> {
