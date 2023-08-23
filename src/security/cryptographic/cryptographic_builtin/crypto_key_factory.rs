@@ -12,6 +12,7 @@ use crate::{
 };
 use super::aes_gcm_gmac::try_keygen;
 use super::builtin_key::*;
+use super::key_material::*;
 
 impl CryptographicBuiltin {
   fn generate_crypto_handle(&mut self) -> CryptoHandle {

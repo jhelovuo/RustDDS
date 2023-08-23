@@ -33,6 +33,7 @@ use super::{
     encode_gcm, encode_gmac, encode_serialized_payload_gcm, encode_serialized_payload_gmac,
   },
 };
+use super::key_material::*;
 
 impl CryptographicBuiltin {
   fn encode_submessage(

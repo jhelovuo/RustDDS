@@ -6,6 +6,7 @@ mod decode;
 mod encode;
 mod types;
 mod builtin_key;
+mod key_material;
 
 use std::collections::{HashMap, HashSet};
 
@@ -18,6 +19,8 @@ use crate::{
   },
   security_error,
 };
+
+use self::key_material::*;
 
 // A struct implementing the builtin Cryptographic plugin
 // See sections 8.5 and 9.5 of the Security specification (v. 1.1)

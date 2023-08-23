@@ -8,7 +8,7 @@ use super::types::BuiltinCryptoTransformationKind;
 
 
 #[derive(Debug, Clone, Eq, PartialEq)]
-pub(super) enum BuiltinKey {
+pub(crate) enum BuiltinKey {
   AES128([u8;AES128_KEY_LENGTH]),
   AES256([u8;AES256_KEY_LENGTH]),
 }

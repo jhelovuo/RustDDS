@@ -1,4 +1,5 @@
 use crate::security::cryptographic::cryptographic_builtin::*;
+use super::key_material::*;
 
 impl CryptoKeyExchange for CryptographicBuiltin {
   fn create_local_participant_crypto_tokens(
