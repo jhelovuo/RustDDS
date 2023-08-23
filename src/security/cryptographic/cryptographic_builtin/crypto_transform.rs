@@ -33,6 +33,7 @@ use super::{
     encode_gcm, encode_gmac, encode_serialized_payload_gcm, encode_serialized_payload_gmac,
   },
   key_material::*,
+  builtin_key::*,
 };
 
 impl CryptographicBuiltin {
@@ -93,8 +94,22 @@ impl CryptographicBuiltin {
 
     let initialization_vector = self.random_initialization_vector();
 
-    // TODO use session keys
-    let encode_key = &master_sender_key;
+
+    let encode_key = {
+      // "9.5.3.3.3 Computation of SessionKey and SessionReceiverSpecificKey"
+      //
+      // TODO: Extract this block to a separate function and reuse in
+      // other transform functions below.
+      use ring::hmac;
+
+      let master_key = hmac::Key::new(hmac::HMAC_SHA256, master_sender_key.as_bytes());
+      let digest = hmac::sign(&master_key, &[ 
+        b"SessionKey", 
+        master_salt.as_slice(), 
+        initialization_vector.session_id().as_bytes() ].concat());
+
+      BuiltinKey::from_bytes( KeyLength::try_from(transformation_kind)? , digest.as_ref())?
+    };
 
     // Compute encoded submessage and footer
 
@@ -106,7 +121,7 @@ impl CryptographicBuiltin {
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => (
         plain_rtps_submessage,
         encode_gmac(
-          encode_key,
+          &encode_key,
           initialization_vector,
           &plaintext,
           &receiver_specific_key_materials,
@@ -114,7 +129,7 @@ impl CryptographicBuiltin {
       ),
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => encode_gcm(
-        encode_key,
+        &encode_key,
         initialization_vector,
         &plaintext,
         &receiver_specific_key_materials,
