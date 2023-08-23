@@ -30,12 +30,12 @@ pub(in crate::security) mod types;
 // A struct implementing the builtin Access control plugin
 // See sections 8.4 and 9.4 of the Security specification (v. 1.1)
 pub struct AccessControlBuiltin {
-  domain_participant_permissions_:
+  domain_participant_permissions:
     HashMap<PermissionsHandle, (DistinguishedName, DomainParticipantPermissions)>,
-  domain_rules_: HashMap<PermissionsHandle, DomainRule>,
-  permissions_ca_certificates_: HashMap<PermissionsHandle, Certificate>,
-  identity_to_permissions_: HashMap<IdentityHandle, PermissionsHandle>,
-  permissions_handle_counter_: u32,
+  domain_rules: HashMap<PermissionsHandle, DomainRule>,
+  permissions_ca_certificates: HashMap<PermissionsHandle, Certificate>,
+  identity_to_permissions: HashMap<IdentityHandle, PermissionsHandle>,
+  permissions_handle_counter: u32,
 }
 
 impl AccessControl for AccessControlBuiltin {}
@@ -43,24 +43,21 @@ impl AccessControl for AccessControlBuiltin {}
 impl AccessControlBuiltin {
   pub fn new() -> Self {
     Self {
-      domain_participant_permissions_: HashMap::new(),
-      domain_rules_: HashMap::new(),
-      permissions_ca_certificates_: HashMap::new(),
-      identity_to_permissions_: HashMap::new(),
-      permissions_handle_counter_: 0,
+      domain_participant_permissions: HashMap::new(),
+      domain_rules: HashMap::new(),
+      permissions_ca_certificates: HashMap::new(),
+      identity_to_permissions: HashMap::new(),
+      permissions_handle_counter: 0,
     }
   }
 
-  fn generate_permissions_handle_(&mut self) -> PermissionsHandle {
-    self.permissions_handle_counter_ += 1;
-    self.permissions_handle_counter_
+  fn generate_permissions_handle(&mut self) -> PermissionsHandle {
+    self.permissions_handle_counter += 1;
+    self.permissions_handle_counter
   }
 
-  fn get_domain_rule_(
-    &self,
-    permissions_handle: &PermissionsHandle,
-  ) -> SecurityResult<&DomainRule> {
-    self.domain_rules_.get(permissions_handle).ok_or_else(|| {
+  fn get_domain_rule(&self, permissions_handle: &PermissionsHandle) -> SecurityResult<&DomainRule> {
+    self.domain_rules.get(permissions_handle).ok_or_else(|| {
       security_error!(
         "Could not find a domain rule for the PermissionsHandle {}",
         permissions_handle
@@ -68,12 +65,12 @@ impl AccessControlBuiltin {
     })
   }
 
-  fn get_permissions_document_(
+  fn get_permissions_document(
     &self,
     permissions_handle: &PermissionsHandle,
   ) -> SecurityResult<&(DistinguishedName, DomainParticipantPermissions)> {
     self
-      .domain_participant_permissions_
+      .domain_participant_permissions
       .get(permissions_handle)
       .ok_or_else(|| {
         security_error!(
@@ -83,8 +80,8 @@ impl AccessControlBuiltin {
       })
   }
 
-  fn get_grant_(&self, permissions_handle: &PermissionsHandle) -> SecurityResult<&Grant> {
-    self.get_permissions_document_(permissions_handle).and_then(
+  fn get_grant(&self, permissions_handle: &PermissionsHandle) -> SecurityResult<&Grant> {
+    self.get_permissions_document(permissions_handle).and_then(
       |(subject_name, permissions_document)| {
         permissions_document
           .find_grant(subject_name, &Utc::now())
@@ -98,11 +95,11 @@ impl AccessControlBuiltin {
     )
   }
 
-  fn get_permissions_document_string_(
+  fn get_permissions_document_string(
     &self,
     permissions_handle: &PermissionsHandle,
   ) -> SecurityResult<&String> {
-    self.get_permissions_document_(permissions_handle).map(
+    self.get_permissions_document(permissions_handle).map(
       |(
         _,
         DomainParticipantPermissions {
@@ -112,12 +109,12 @@ impl AccessControlBuiltin {
     )
   }
 
-  fn get_permissions_ca_certificate_(
+  fn get_permissions_ca_certificate(
     &self,
     permissions_handle: &PermissionsHandle,
   ) -> SecurityResult<&Certificate> {
     self
-      .permissions_ca_certificates_
+      .permissions_ca_certificates
       .get(permissions_handle)
       .ok_or_else(|| {
         security_error!(
@@ -127,12 +124,12 @@ impl AccessControlBuiltin {
       })
   }
 
-  fn get_permissions_handle_(
+  fn get_permissions_handle(
     &self,
     identity_handle: &IdentityHandle,
   ) -> SecurityResult<&PermissionsHandle> {
     self
-      .identity_to_permissions_
+      .identity_to_permissions
       .get(identity_handle)
       .ok_or_else(|| {
         security_error!(
@@ -172,8 +169,8 @@ impl AccessControlBuiltin {
       return Ok(());
     }
 
-    let grant = self.get_grant_(&permissions_handle)?;
-    let domain_rule = self.get_domain_rule_(&permissions_handle)?;
+    let grant = self.get_grant(&permissions_handle)?;
+    let domain_rule = self.get_domain_rule(&permissions_handle)?;
 
     let requested_access_is_unprotected = domain_rule
       .find_topic_rule(topic_name)

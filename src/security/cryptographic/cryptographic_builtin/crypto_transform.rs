@@ -50,7 +50,7 @@ impl CryptographicBuiltin {
 
     // Get the key material for encoding
     let sender_key_material = self
-      .get_encode_key_materials_(&sending_endpoint_crypto_handle)
+      .get_encode_key_materials(&sending_endpoint_crypto_handle)
       .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
       .cloned()?;
 
@@ -62,7 +62,7 @@ impl CryptographicBuiltin {
         .map(|receiver_crypto_handle| {
           // Get the encode key material
           self
-            .get_encode_key_materials_(receiver_crypto_handle)
+            .get_encode_key_materials(receiver_crypto_handle)
             .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
             // Compare to the common key material and get the receiver specific key material
             .and_then(|receiver_key_material| {
@@ -156,7 +156,7 @@ impl CryptoTransform for CryptographicBuiltin {
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
     // Get the key material for encrypting serialized payloads
     let payload_key_material = self
-      .get_encode_key_materials_(&sending_datawriter_crypto_handle)
+      .get_encode_key_materials(&sending_datawriter_crypto_handle)
       .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key_material)?;
 
     // TODO: Generate proper session_id
@@ -261,7 +261,7 @@ impl CryptoTransform for CryptographicBuiltin {
 
     // Get the key material for encoding
     let sender_key_material = self
-      .get_encode_key_materials_(&sending_participant_crypto_handle)
+      .get_encode_key_materials(&sending_participant_crypto_handle)
       .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
       .cloned()?;
 
@@ -273,7 +273,7 @@ impl CryptoTransform for CryptographicBuiltin {
         .map(|receiver_handle| {
           // Get the encode key material
           self
-            .get_encode_key_materials_(receiver_handle)
+            .get_encode_key_materials(receiver_handle)
             .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
             // Compare to the common key and get the receiver specific key
             .and_then(|receiver_key_material| {
@@ -430,7 +430,7 @@ impl CryptoTransform for CryptographicBuiltin {
         receiver_specific_key_id,
         master_receiver_specific_key,
       } = self
-        .get_decode_key_materials_(&sending_participant_crypto_handle)
+        .get_decode_key_materials(&sending_participant_crypto_handle)
         // Get the one for submessages (not only payload)
         .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
 
@@ -541,7 +541,7 @@ impl CryptoTransform for CryptographicBuiltin {
 
     // Search for matching key materials over endpoints registered to the sender
     let sending_participant_endpoints = self
-      .participant_to_endpoint_info_
+      .participant_to_endpoint_info
       .get(&sending_participant_crypto_handle)
       .ok_or(security_error!(
         "Could not find registered entities for the sending_participant_crypto_handle {}",
@@ -558,7 +558,7 @@ impl CryptoTransform for CryptographicBuiltin {
         sender_key_id,
         ..
       }) = self
-        .decode_key_materials_
+        .decode_key_materials
         .get(handle)
         .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
       {
@@ -568,7 +568,7 @@ impl CryptoTransform for CryptographicBuiltin {
         {
           let remote_endpoint_crypto_handle = *handle;
           let matched_local_endpoint_crypto_handle = *self
-            .matched_local_endpoint_
+            .matched_local_endpoint
             .get(&remote_endpoint_crypto_handle)
             .ok_or(security_error!(
               "The local endpoint matched to the remote endpoint crypto handle {} is missing.",
@@ -631,7 +631,7 @@ impl CryptoTransform for CryptographicBuiltin {
       receiver_specific_key_id,
       master_receiver_specific_key,
     } = self
-      .get_decode_key_materials_(&sending_datawriter_crypto_handle)
+      .get_decode_key_materials(&sending_datawriter_crypto_handle)
       // Get the one for submessages (not only payload)
       .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
 
@@ -732,7 +732,7 @@ impl CryptoTransform for CryptographicBuiltin {
       receiver_specific_key_id,
       master_receiver_specific_key,
     } = self
-      .get_decode_key_materials_(&sending_datareader_crypto_handle)
+      .get_decode_key_materials(&sending_datareader_crypto_handle)
       // Get the one for submessages (not only payload)
       .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
 
@@ -823,7 +823,7 @@ impl CryptoTransform for CryptographicBuiltin {
 
     // Get the payload decode key material
     let decode_key_material = self
-      .get_decode_key_materials_(&sending_datawriter_crypto_handle)
+      .get_decode_key_materials(&sending_datawriter_crypto_handle)
       .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key_material)?;
 
     // Check that the key IDs match

@@ -32,16 +32,16 @@ pub(crate) struct SecurityPlugins {
   access: Box<dyn AccessControl>,
   crypto: Box<dyn Cryptographic>,
 
-  identity_handle_cache_: HashMap<GUID, IdentityHandle>,
+  identity_handle_cache: HashMap<GUID, IdentityHandle>,
 
-  permissions_handle_cache_: HashMap<GUID, PermissionsHandle>,
+  permissions_handle_cache: HashMap<GUID, PermissionsHandle>,
 
-  participant_crypto_handle_cache_: HashMap<GuidPrefix, ParticipantCryptoHandle>,
-  local_endpoint_crypto_handle_cache_: HashMap<GUID, EndpointCryptoHandle>,
-  remote_endpoint_crypto_handle_cache_: HashMap<(GUID, GUID), EndpointCryptoHandle>,
+  participant_crypto_handle_cache: HashMap<GuidPrefix, ParticipantCryptoHandle>,
+  local_endpoint_crypto_handle_cache: HashMap<GUID, EndpointCryptoHandle>,
+  remote_endpoint_crypto_handle_cache: HashMap<(GUID, GUID), EndpointCryptoHandle>,
 
-  test_disable_crypto_transform_: bool, /* TODO: Disables the crypto transform interface, remove
-                                         * after testing */
+  test_disable_crypto_transform: bool, /* TODO: Disables the crypto transform interface, remove
+                                        * after testing */
 }
 
 impl SecurityPlugins {
@@ -54,19 +54,19 @@ impl SecurityPlugins {
       auth,
       access,
       crypto,
-      identity_handle_cache_: HashMap::new(),
-      permissions_handle_cache_: HashMap::new(),
-      participant_crypto_handle_cache_: HashMap::new(),
-      local_endpoint_crypto_handle_cache_: HashMap::new(),
-      remote_endpoint_crypto_handle_cache_: HashMap::new(),
+      identity_handle_cache: HashMap::new(),
+      permissions_handle_cache: HashMap::new(),
+      participant_crypto_handle_cache: HashMap::new(),
+      local_endpoint_crypto_handle_cache: HashMap::new(),
+      remote_endpoint_crypto_handle_cache: HashMap::new(),
 
-      test_disable_crypto_transform_: true, // TODO Remove after testing
+      test_disable_crypto_transform: true, // TODO Remove after testing
     }
   }
 
   fn get_identity_handle(&self, guid: &GUID) -> SecurityResult<IdentityHandle> {
     self
-      .identity_handle_cache_
+      .identity_handle_cache
       .get(guid)
       .ok_or_else(|| security_error!("Could not find an IdentityHandle for the Guid {:?}", guid))
       .copied()
@@ -74,7 +74,7 @@ impl SecurityPlugins {
 
   fn get_permissions_handle(&self, guid: &GUID) -> SecurityResult<PermissionsHandle> {
     self
-      .permissions_handle_cache_
+      .permissions_handle_cache
       .get(guid)
       .ok_or_else(|| security_error!("Could not find a PermissionsHandle for the Guid {:?}", guid))
       .copied()
@@ -85,7 +85,7 @@ impl SecurityPlugins {
     guid_prefix: &GuidPrefix,
   ) -> SecurityResult<ParticipantCryptoHandle> {
     self
-      .participant_crypto_handle_cache_
+      .participant_crypto_handle_cache
       .get(guid_prefix)
       .ok_or_else(|| {
         security_error!(
@@ -98,7 +98,7 @@ impl SecurityPlugins {
 
   fn get_local_endpoint_crypto_handle(&self, guid: &GUID) -> SecurityResult<EndpointCryptoHandle> {
     self
-      .local_endpoint_crypto_handle_cache_
+      .local_endpoint_crypto_handle_cache
       .get(guid)
       .ok_or_else(|| {
         security_error!(
@@ -117,7 +117,7 @@ impl SecurityPlugins {
   ) -> SecurityResult<ParticipantCryptoHandle> {
     let local_and_proxy_guid_pair = (*local_endpoint_guid, *proxy_guid);
     self
-      .remote_endpoint_crypto_handle_cache_
+      .remote_endpoint_crypto_handle_cache
       .get(&local_and_proxy_guid_pair)
       .ok_or_else(|| {
         security_error!(
@@ -145,9 +145,7 @@ impl SecurityPlugins {
 
     if let ValidationOutcome::Ok = outcome {
       // Everything OK, store handle and return GUID
-      self
-        .identity_handle_cache_
-        .insert(sec_guid, identity_handle);
+      self.identity_handle_cache.insert(sec_guid, identity_handle);
       Ok(sec_guid)
     } else {
       // If the builtin authentication does not fail, it should produce only OK
@@ -202,7 +200,7 @@ impl SecurityPlugins {
       participant_qos,
     )?;
     self
-      .permissions_handle_cache_
+      .permissions_handle_cache
       .insert(participant_guid, permissions_handle);
     Ok(())
   }
@@ -247,7 +245,7 @@ impl SecurityPlugins {
     sending_datawriter_guid: &GUID,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
     // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform_ {
+    if self.test_disable_crypto_transform {
       return Ok((serialized_payload, ParameterList::new()));
     }
 
@@ -264,7 +262,7 @@ impl SecurityPlugins {
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
     // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform_ {
+    if self.test_disable_crypto_transform {
       return Ok(EncodedSubmessage::Unencoded(plain_submessage));
     }
 
@@ -291,7 +289,7 @@ impl SecurityPlugins {
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
     // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform_ {
+    if self.test_disable_crypto_transform {
       return Ok(EncodedSubmessage::Unencoded(plain_submessage));
     }
 
@@ -318,7 +316,7 @@ impl SecurityPlugins {
     destination_guid_prefix_list: &[GuidPrefix],
   ) -> SecurityResult<Message> {
     // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform_ {
+    if self.test_disable_crypto_transform {
       return Ok(plain_message);
     }
 
@@ -398,7 +396,7 @@ impl SecurityPlugins {
     destination_guid: &GUID,
   ) -> SecurityResult<Vec<u8>> {
     // TODO remove after testing, skips decoding
-    if self.test_disable_crypto_transform_ {
+    if self.test_disable_crypto_transform {
       return Ok(encoded_payload);
     }
 

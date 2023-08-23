@@ -74,8 +74,8 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
       return Ok(false);
     }
 
-    let grant = self.get_grant_(&permissions_handle)?;
-    let domain_rule = self.get_domain_rule_(&permissions_handle)?;
+    let grant = self.get_grant(&permissions_handle)?;
+    let domain_rule = self.get_domain_rule(&permissions_handle)?;
 
     let requested_access_is_unprotected = domain_rule
       .find_topic_rule(topic_name)

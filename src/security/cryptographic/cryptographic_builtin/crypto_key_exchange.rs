@@ -8,7 +8,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
   ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
     //TODO: this is only a mock implementation (or is it?)
     self
-      .get_encode_key_materials_(&remote_participant_crypto_handle)
+      .get_encode_key_materials(&remote_participant_crypto_handle)
       .cloned()
       // Convert to CryptoTokens
       .and_then(Vec::<DatawriterCryptoToken>::try_from)
@@ -22,7 +22,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation (or is it?)
     KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_participant_tokens).and_then(|key_materials| {
-      self.insert_decode_key_materials_(remote_participant_crypto_handle, key_materials)
+      self.insert_decode_key_materials(remote_participant_crypto_handle, key_materials)
     })
   }
 
@@ -34,7 +34,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
     //TODO: this is only a mock implementation (or is it?)
 
     self
-      .get_encode_key_materials_(&remote_datareader_crypto_handle)
+      .get_encode_key_materials(&remote_datareader_crypto_handle)
       .cloned()
       // Convert to CryptoTokens
       .and_then(Vec::<DatawriterCryptoToken>::try_from)
@@ -48,7 +48,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
     KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_datawriter_tokens).and_then(|key_materials| {
-      self.insert_decode_key_materials_(remote_datawriter_crypto_handle, key_materials)
+      self.insert_decode_key_materials(remote_datawriter_crypto_handle, key_materials)
     })
   }
 
@@ -60,7 +60,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
     //TODO: this is only a mock implementation (or is it?)
 
     self
-      .get_encode_key_materials_(&remote_datawriter_crypto_handle)
+      .get_encode_key_materials(&remote_datawriter_crypto_handle)
       .cloned()
       // Convert to CryptoTokens
       .and_then(Vec::<DatawriterCryptoToken>::try_from)
@@ -74,7 +74,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
   ) -> SecurityResult<()> {
     //TODO: this is only a mock implementation
     KeyMaterial_AES_GCM_GMAC_seq::try_from(remote_datareader_tokens).and_then(|key_materials| {
-      self.insert_decode_key_materials_(remote_datareader_crypto_handle, key_materials)
+      self.insert_decode_key_materials(remote_datareader_crypto_handle, key_materials)
     })
   }
 

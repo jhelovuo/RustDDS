@@ -16,7 +16,7 @@ impl AccessControlBuiltin {
     topic_name: &str,
   ) -> SecurityResult<EndpointSecurityAttributes> {
     self
-      .get_domain_rule_(&permissions_handle)
+      .get_domain_rule(&permissions_handle)
       .and_then(|domain_rule| {
         domain_rule.find_topic_rule(topic_name).ok_or_else(|| {
           security_error!("Could not find a topic rule for the topic_name {topic_name}")

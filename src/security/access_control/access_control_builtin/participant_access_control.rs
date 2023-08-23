@@ -47,13 +47,13 @@ impl AccessControlBuiltin {
       return Ok(());
     }
 
-    let grant = self.get_grant_(&permissions_handle)?;
+    let grant = self.get_grant(&permissions_handle)?;
     let DomainRule {
       // corresponds to is_access_protected
       enable_join_access_control,
       topic_access_rules,
       ..
-    } = self.get_domain_rule_(&permissions_handle)?;
+    } = self.get_domain_rule(&permissions_handle)?;
 
     let unprotected_topics = !enable_join_access_control
       || topic_access_rules.iter().any(
@@ -89,7 +89,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
 
     // TODO remove after testing
     if true {
-      return Ok(self.generate_permissions_handle_());
+      return Ok(self.generate_permissions_handle());
     }
 
     let permissions_ca_certificate = participant_qos
@@ -176,17 +176,17 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       ))?;
     }
 
-    let permissions_handle = self.generate_permissions_handle_();
-    self.domain_rules_.insert(permissions_handle, domain_rule);
-    self.domain_participant_permissions_.insert(
+    let permissions_handle = self.generate_permissions_handle();
+    self.domain_rules.insert(permissions_handle, domain_rule);
+    self.domain_participant_permissions.insert(
       permissions_handle,
       (subject_name, domain_participant_permissions),
     );
     self
-      .identity_to_permissions_
+      .identity_to_permissions
       .insert(identity_handle, permissions_handle);
     self
-      .permissions_ca_certificates_
+      .permissions_ca_certificates
       .insert(permissions_handle, permissions_ca_certificate);
     Ok(permissions_handle)
   }
@@ -204,10 +204,10 @@ impl ParticipantAccessControl for AccessControlBuiltin {
 
     // TODO remove after testing
     if true {
-      return Ok(self.generate_permissions_handle_());
+      return Ok(self.generate_permissions_handle());
     }
 
-    let local_permissions_handle = self.get_permissions_handle_(&local_identity_handle)?;
+    let local_permissions_handle = self.get_permissions_handle(&local_identity_handle)?;
 
     // Move the following check here from check_remote_ methods, as here we have
     // access to the tokens: "If the PluginClassName or the MajorVersion of the
@@ -227,7 +227,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })?;
 
     let permissions_ca_certificate =
-      self.get_permissions_ca_certificate_(local_permissions_handle)?;
+      self.get_permissions_ca_certificate(local_permissions_handle)?;
 
     let remote_identity_certificate = remote_credential_token
       .data_holder
@@ -262,11 +262,11 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       ))?;
     }
 
-    let domain_rule = self.get_domain_rule_(local_permissions_handle).cloned()?;
+    let domain_rule = self.get_domain_rule(local_permissions_handle).cloned()?;
 
-    let permissions_handle = self.generate_permissions_handle_();
-    self.domain_rules_.insert(permissions_handle, domain_rule);
-    self.domain_participant_permissions_.insert(
+    let permissions_handle = self.generate_permissions_handle();
+    self.domain_rules.insert(permissions_handle, domain_rule);
+    self.domain_participant_permissions.insert(
       permissions_handle,
       (
         remote_subject_name.clone(),
@@ -312,7 +312,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     }
 
     self
-      .get_permissions_ca_certificate_(&handle)
+      .get_permissions_ca_certificate(&handle)
       .map(|certificate| {
         BuiltinPermissionsToken {
           permissions_ca_subject_name: Some(certificate.subject_name().clone()),
@@ -337,7 +337,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     }
 
     self
-      .get_permissions_document_string_(&handle)
+      .get_permissions_document_string(&handle)
       .cloned()
       .map(|permissions_document| {
         BuiltinPermissionsCredentialToken {
@@ -357,7 +357,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
   ) -> SecurityResult<ParticipantSecurityAttributes> {
     self
-      .get_domain_rule_(&permissions_handle)
+      .get_domain_rule(&permissions_handle)
       .map(
         |DomainRule {
            allow_unauthenticated_participants,
