@@ -91,11 +91,7 @@ impl CryptographicBuiltin {
       ..
     } = sender_key_material;
 
-    // TODO proper session_id
-    let builtin_crypto_header_extra =
-      BuiltinCryptoHeaderExtra::from(([0, 0, 0, 0], rand::random()));
-
-    let initialization_vector = builtin_crypto_header_extra.initialization_vector();
+    let initialization_vector = self.random_initialization_vector();
 
     // TODO use session keys
     let encode_key = &master_sender_key;
@@ -132,7 +128,7 @@ impl CryptographicBuiltin {
           transformation_kind,
           transformation_key_id: sender_key_id,
         },
-        builtin_crypto_header_extra,
+        builtin_crypto_header_extra: initialization_vector.into(),
       }),
     };
 
@@ -160,19 +156,14 @@ impl CryptoTransform for CryptographicBuiltin {
       .get_encode_key_materials(&sending_datawriter_crypto_handle)
       .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key_material)?;
 
-    // TODO: Generate proper session_id
-    // Session id [0,0,0,0] should work, but is less safe.
-    let builtin_crypto_header_extra =
-      BuiltinCryptoHeaderExtra::from(([0, 0, 0, 0], rand::random()));
-
-    let initialization_vector = builtin_crypto_header_extra.initialization_vector();
+    let initialization_vector = self.random_initialization_vector();
 
     let header = BuiltinCryptoHeader {
       transform_identifier: BuiltinCryptoTransformIdentifier {
         transformation_kind: payload_key_material.transformation_kind,
         transformation_key_id: payload_key_material.sender_key_id,
       },
-      builtin_crypto_header_extra,
+      builtin_crypto_header_extra: initialization_vector.into(),
     };
 
     // TODO use session key
@@ -302,11 +293,7 @@ impl CryptoTransform for CryptographicBuiltin {
       ..
     } = sender_key_material;
 
-    // TODO proper session_id
-    let builtin_crypto_header_extra =
-      BuiltinCryptoHeaderExtra::from(([0, 0, 0, 0], rand::random()));
-
-    let initialization_vector = builtin_crypto_header_extra.initialization_vector();
+    let initialization_vector = self.random_initialization_vector();
 
     // TODO use session keys
     let encode_key = &master_sender_key;
@@ -339,7 +326,6 @@ impl CryptoTransform for CryptographicBuiltin {
       ),
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        // TODO: implement encryption
         encode_gcm(
           encode_key,
           initialization_vector,
@@ -358,7 +344,7 @@ impl CryptoTransform for CryptographicBuiltin {
           transformation_kind,
           transformation_key_id: sender_key_id,
         },
-        builtin_crypto_header_extra,
+        builtin_crypto_header_extra: initialization_vector.into(),
       }),
     };
 

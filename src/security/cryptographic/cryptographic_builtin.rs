@@ -32,7 +32,20 @@ pub struct CryptographicBuiltin {
   // For reverse lookups
   endpoint_to_participant: HashMap<EndpointCryptoHandle, ParticipantCryptoHandle>,
 
-  // sessions_ ?
+  // sessions
+  //
+  // TODO: The session ids should be stored in a data structure.
+  // Associated with each should be a (sent) data block counter, so we should count how many
+  // outgoing encrypted blocks are sent. (per remote endpoint)
+  // There should be a configuration variable `max_blocks_per_session`. When a counter
+  // reaches that, the session_id is changed. Likely a simple increment is sufficient, but random
+  // successor is also ok.
+  // Initial session id values are also arbitrary.
+  // See DDS Security Spec v1.1 Section "9.5.3.3.4 Computation of ciphertext from plaintext"
+  //
+  // TODO: The current session_id is just a constant. Implementing counting above requires
+  // some access to shared mutable state from encryption/send operations.
+
   /// For each (local datawriter (/datareader), remote participant) pair, stores
   /// the matched remote datareader (/datawriter)
   matched_remote_endpoint:
@@ -191,5 +204,14 @@ impl CryptographicBuiltin {
         ))
       }
     }
+  }
+
+  fn session_id(&self) -> SessionId {
+    // TODO: This should change at times. See comment at struct definition.
+    SessionId::new( [1,3,3,7] )
+  }
+
+  fn random_initialization_vector(&self) -> BuiltinInitializationVector {
+    BuiltinInitializationVector::new( self.session_id(), rand::random() )
   }
 }

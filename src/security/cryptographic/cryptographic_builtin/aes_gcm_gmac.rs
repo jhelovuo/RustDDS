@@ -11,7 +11,7 @@ use super::{
 // so we can construct a trivial sequence of just one element.
 
 struct TrivialNonceSequence {
-  iv: [u8; 12],
+  iv: BuiltinInitializationVector,
   used: bool, // The purpose of this is to panic on misuse.
 }
 
@@ -27,7 +27,7 @@ impl NonceSequence for TrivialNonceSequence {
       Err(Unspecified) // you had one nonce
     } else {
       self.used = true;
-      Ok(Nonce::assume_unique_for_key(self.iv))
+      Ok(Nonce::assume_unique_for_key(self.iv.into()))
     }
   }
 }

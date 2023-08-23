@@ -1,5 +1,7 @@
 use byteorder::BigEndian;
 use serde::{Deserialize, Serialize};
+use concat_arrays::concat_arrays; // macro
+
 
 use crate::{
   messages::submessages::elements::{
@@ -169,7 +171,50 @@ impl From<BuiltinCryptoTransformIdentifier> for CryptoTransformIdentifier {
 /// The plugin_crypto_header_extra contains the initialization vector, which
 /// consists of the session_id and initialization_vector_suffix. 9.5.2.3
 pub(super) const INITIALIZATION_VECTOR_LENGTH: usize = 12;
-pub(super) type BuiltinInitializationVector = [u8; INITIALIZATION_VECTOR_LENGTH];
+
+#[derive(Debug,Clone,Copy)]
+pub(super) struct BuiltinInitializationVector([u8; INITIALIZATION_VECTOR_LENGTH]);
+
+impl BuiltinInitializationVector {
+  pub(super) fn new(session_id:SessionId, initialization_vector_suffix:[u8; 8]) -> Self {
+    BuiltinInitializationVector( concat_arrays!(session_id.0, initialization_vector_suffix ) )
+  }
+  pub(super) fn session_id(&self) -> SessionId {
+    // Succeeds as the slice length is 4
+    SessionId::new( <[u8; 4]>::try_from(&self.0[..4]).unwrap() )
+  }
+  pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
+    // Succeeds as the slice length is 12-4=8
+    <[u8; 8]>::try_from(&self.0[4..]).unwrap()
+  }
+
+  pub fn try_from_slice(s: impl AsRef<[u8]>) -> Result<Self,std::array::TryFromSliceError> {
+    Ok(Self( <[u8;INITIALIZATION_VECTOR_LENGTH]>::try_from(s.as_ref())? ))
+  }
+}
+
+impl From<BuiltinInitializationVector> for [u8;INITIALIZATION_VECTOR_LENGTH] {
+  fn from(value:BuiltinInitializationVector) -> [u8;INITIALIZATION_VECTOR_LENGTH] {
+    value.0
+  }
+}
+
+
+#[derive(Debug,Clone,Copy)]
+pub(crate) struct SessionId( [u8;4] );
+
+impl SessionId {
+  pub fn new( s:[u8;4] ) -> Self {
+    SessionId( s )
+  }
+
+  pub fn as_bytes(&self) -> &[u8] {
+    &self.0
+  }
+}
+
+
+#[derive(Debug,Clone,Copy)]
 pub(super) struct BuiltinCryptoHeaderExtra(pub(super) BuiltinInitializationVector);
 
 /// Methods for getting the contained data
@@ -177,14 +222,16 @@ impl BuiltinCryptoHeaderExtra {
   pub(super) fn initialization_vector(&self) -> BuiltinInitializationVector {
     self.0
   }
-  pub(super) fn session_id(&self) -> [u8; 4] {
-    // Succeeds as the slice length is 4
-    <[u8; 4]>::try_from(&self.0[..4]).unwrap()
+  pub(super) fn session_id(&self) -> SessionId {
+    self.0.session_id()
   }
   pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
-    // Succeeds as the slice length is 12-4=8
-    <[u8; 8]>::try_from(&self.0[4..]).unwrap()
+    self.0.initialization_vector_suffix()
   }
+  pub fn new(session_id:SessionId, initialization_vector_suffix:[u8; 8]) -> Self {
+    Self::from((session_id, initialization_vector_suffix))
+  }
+
 }
 
 impl From<BuiltinInitializationVector> for BuiltinCryptoHeaderExtra {
@@ -192,27 +239,21 @@ impl From<BuiltinInitializationVector> for BuiltinCryptoHeaderExtra {
     Self(value)
   }
 }
+
 // Conversion from session_id and initialization_vector_suffix
-impl From<([u8; 4], [u8; 8])> for BuiltinCryptoHeaderExtra {
-  fn from((session_id, initialization_vector_suffix): ([u8; 4], [u8; 8])) -> Self {
-    Self::from(
-      // Succeeds as the vector length is 4+8=12
-      BuiltinInitializationVector::try_from(
-        [
-          Vec::from(session_id),
-          Vec::from(initialization_vector_suffix),
-        ]
-        .concat(),
-      )
-      .unwrap(),
-    )
+impl From<(SessionId, [u8; 8])> for BuiltinCryptoHeaderExtra {
+  fn from((session_id, initialization_vector_suffix): (SessionId, [u8; 8])) -> Self {
+    Self( BuiltinInitializationVector::new(session_id, initialization_vector_suffix ))
+    //Self( concat_arrays!(session_id.0, initialization_vector_suffix  ))
   }
 }
+
 impl From<BuiltinCryptoHeaderExtra> for PluginCryptoHeaderExtra {
   fn from(value: BuiltinCryptoHeaderExtra) -> Self {
-    Self::from(Vec::from(value.initialization_vector()))
+    Self::from(Vec::from(value.initialization_vector().0))
   }
 }
+
 impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
   type Error = SecurityError;
   fn try_from(
@@ -221,7 +262,7 @@ impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
     // Save the length for the error message
     let plugin_crypto_header_length = data.len();
     // Convert to fixed-length array
-    BuiltinInitializationVector::try_from(data)
+    BuiltinInitializationVector::try_from_slice(data)
       .map_err(|_| {
         security_error!(
           "plugin_crypto_header_extra was of length {}. Expected {}.",
