@@ -5,13 +5,10 @@ use crate::{
 };
 use super::{
   aes_gcm_gmac::{compute_mac, encrypt},
-  types::{
-    BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinMAC, 
-    ReceiverSpecificMAC,
-  },
+  builtin_key::*,
+  key_material::*,
+  types::{BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinMAC, ReceiverSpecificMAC},
 };
-use super::builtin_key::*;
-use super::key_material::*;
 
 pub(super) fn encode_serialized_payload_gmac(
   key: &BuiltinKey,

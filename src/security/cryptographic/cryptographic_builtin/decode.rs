@@ -14,13 +14,12 @@ use crate::{
 };
 use super::{
   aes_gcm_gmac::{decrypt, validate_mac},
+  builtin_key::*,
   types::{
     BuiltinCryptoContent, BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinMAC,
     ReceiverSpecificMAC, MAC_LENGTH,
   },
 };
-
-use super::builtin_key::*;
 
 pub(super) fn find_receiver_specific_mac(
   receiver_specific_key_id: CryptoTransformKeyId,

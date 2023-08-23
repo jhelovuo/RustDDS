@@ -3,18 +3,15 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  security::{
-    SecurityError, SecurityResult, 
-  },
+  security::{SecurityError, SecurityResult},
   security_error,
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
 };
 use super::{
-  CryptoToken, CryptoTransformKeyId, CryptoTransformKind,
-  BuiltinCryptoTransformationKind, BuiltinCryptoToken};
-
-use super::builtin_key::*;
+  builtin_key::*, BuiltinCryptoToken, BuiltinCryptoTransformationKind, CryptoToken,
+  CryptoTransformKeyId, CryptoTransformKind,
+};
 
 /// KeyMaterial_AES_GCM_GMAC type from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)

@@ -1,14 +1,10 @@
 use ring::{aead::*, error::Unspecified};
 
-
-
-use crate::{
-  security::{SecurityResult},
+use crate::security::SecurityResult;
+use super::{
+  builtin_key::*,
+  types::{BuiltinInitializationVector, BuiltinMAC, MAC_LENGTH},
 };
-use super::types::{
-  BuiltinInitializationVector, BuiltinMAC, MAC_LENGTH,
-};
-use super::builtin_key::*;
 
 // By design of Secure RTPS, there is a unique Initialization Vector
 // for each submessage, and we only encrypt once (one submessage) with that,

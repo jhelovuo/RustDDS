@@ -7,17 +7,15 @@ use crate::{
     crypto_footer::CryptoFooter,
     crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
-  security::{
-    cryptographic::EndpointCryptoHandle, BinaryProperty, DataHolder, 
-    SecurityError, 
-  },
+  security::{cryptographic::EndpointCryptoHandle, BinaryProperty, DataHolder, SecurityError},
   security_error,
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
 };
-use super::{CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind};
-
-use super::key_material::*;
+use super::{
+  key_material::*, CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId,
+  CryptoTransformKind,
+};
 
 const CRYPTO_TOKEN_CLASS_ID: &str = "DDS:Crypto:AES_GCM_GMAC";
 const CRYPTO_TOKEN_KEY_MATERIAL_NAME: &str = "dds.cryp.keymat";
@@ -97,7 +95,6 @@ impl From<BuiltinCryptoToken> for KeyMaterial_AES_GCM_GMAC {
     key_material
   }
 }
-
 
 /// Valid values for CryptoTransformKind from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
@@ -352,4 +349,3 @@ pub(super) struct EndpointInfo {
   pub crypto_handle: EndpointCryptoHandle,
   pub kind: EndpointKind,
 }
-

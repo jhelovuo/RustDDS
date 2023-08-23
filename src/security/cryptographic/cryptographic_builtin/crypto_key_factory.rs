@@ -10,9 +10,7 @@ use crate::{
   },
   security_error,
 };
-use super::aes_gcm_gmac::try_keygen;
-use super::builtin_key::*;
-use super::key_material::*;
+use super::{aes_gcm_gmac::try_keygen, builtin_key::*, key_material::*};
 
 impl CryptographicBuiltin {
   fn generate_crypto_handle(&mut self) -> CryptoHandle {
@@ -118,9 +116,7 @@ impl CryptographicBuiltin {
     KeyMaterial_AES_GCM_GMAC {
       transformation_kind,
       // TODO
-      master_salt: 
-        
-      Vec::new(),
+      master_salt: Vec::new(),
 
       sender_key_id: crypto_handle,
       master_sender_key,

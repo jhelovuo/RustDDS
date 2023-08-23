@@ -1,12 +1,12 @@
 mod aes_gcm_gmac;
+mod builtin_key;
 mod crypto_key_exchange;
 mod crypto_key_factory;
 mod crypto_transform;
 mod decode;
 mod encode;
-mod types;
-mod builtin_key;
 mod key_material;
+mod types;
 
 use std::collections::{HashMap, HashSet};
 
@@ -19,7 +19,6 @@ use crate::{
   },
   security_error,
 };
-
 use self::key_material::*;
 
 // A struct implementing the builtin Cryptographic plugin
