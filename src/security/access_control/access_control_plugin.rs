@@ -57,6 +57,15 @@ pub trait ParticipantAccessControl: Send {
     qos: &QosPolicies,
   ) -> SecurityResult<()>;
 
+  /// check_remote_participant: section 8.4.2.9.9 of the Security
+  /// specification.
+  fn check_remote_participant(
+    &self,
+    permissions_handle: PermissionsHandle,
+    domain_id: u16,
+    participant_data: &ParticipantBuiltinTopicDataSecure,
+  ) -> SecurityResult<()>;
+
   /// get_permissions_token: section 8.4.2.9.17 of the Security
   /// specification.
   fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken>;
@@ -116,25 +125,29 @@ pub trait LocalEntityAccessControl: Send {
     qos: &QosPolicies,
   ) -> SecurityResult<()>;
 
+  /*
   /// check_local_datawriter_register_instance: section 8.4.2.9.7 of the
   /// Security specification.
-  /// The function signature is not complete yet.
+  // Support for this is not yet implemented as the builtin plugin does not need it
   fn check_local_datawriter_register_instance(
     &self,
     permissions_handle: PermissionsHandle,
-    writer_todo: (),
-    key_todo: (),
+    writer: DataWriter,// Needs actual type definition
+    key: DynamicData,// Needs actual type definition
   ) -> SecurityResult<()>;
+  */
 
+  /*
   /// check_local_datawriter_register_instance: section 8.4.2.9.8 of the
   /// Security specification.
-  /// The function signature is not complete yet.
+  // Support for this is not yet implemented as the builtin plugin does not need it
   fn check_local_datawriter_dispose_instance(
     &self,
     permissions_handle: PermissionsHandle,
-    writer_todo: (),
-    key_todo: (),
+    writer: DataWriter,// Needs actual type definition
+    key: DynamicData,// Needs actual type definition
   ) -> SecurityResult<()>;
+  */
 
   /// get_topic_sec_attributes: section 8.4.2.9.23 of the Security
   /// specification.
@@ -167,15 +180,6 @@ pub trait LocalEntityAccessControl: Send {
 
 /// Group4 and Group5 in 8.8.3
 pub trait RemoteEntityAccessControl: Send {
-  /// check_remote_participant: section 8.4.2.9.9 of the Security
-  /// specification.
-  fn check_remote_participant(
-    &self,
-    permissions_handle: PermissionsHandle,
-    domain_id: u16,
-    participant_data: &ParticipantBuiltinTopicDataSecure,
-  ) -> SecurityResult<()>;
-
   /// check_remote_datawriter: section 8.4.2.9.10 of the Security
   /// specification.
   fn check_remote_datawriter(
@@ -192,8 +196,7 @@ pub trait RemoteEntityAccessControl: Send {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     subscription_data: &SubscriptionBuiltinTopicDataSecure,
-    relay_only: &mut bool,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /// check_remote_topic: section 8.4.2.9.12 of the Security
   /// specification.
@@ -204,8 +207,10 @@ pub trait RemoteEntityAccessControl: Send {
     topic_data: &TopicBuiltinTopicData,
   ) -> SecurityResult<()>;
 
+  /*
   /// check_local_datawriter_match: section 8.4.2.9.13 of the Security
   /// specification.
+  // Support for this is not yet implemented as the builtin plugin does not need it
   fn check_local_datawriter_match(
     &self,
     writer_permissions_handle: PermissionsHandle,
@@ -213,41 +218,51 @@ pub trait RemoteEntityAccessControl: Send {
     publication_data: &PublicationBuiltinTopicDataSecure,
     subscription_data: &SubscriptionBuiltinTopicDataSecure,
   ) -> SecurityResult<()>;
+  */
 
-  /// check_local_datareader_match: section 8.4.2.9.14 of the Security
-  /// specification.
-  /// The parameter subscriber_partition is omitted since RustDDS does not yet
-  /// support PartitionQoS.
-  fn check_local_datareader_match(
-    &self,
-    reader_permissions_handle: PermissionsHandle,
-    writer_permissions_handle: PermissionsHandle,
-    subscription_data: &SubscriptionBuiltinTopicDataSecure,
-    publication_data: &PublicationBuiltinTopicDataSecure,
-  ) -> SecurityResult<()>;
+  /*
+   /// check_local_datareader_match: section 8.4.2.9.14 of the Security
+   /// specification.
+   /// The parameter subscriber_partition is omitted since RustDDS does not yet
+   /// support PartitionQoS.
+   // Support for this is not yet implemented as the builtin plugin does not need it
+   fn check_local_datareader_match(
+     &self,
+     reader_permissions_handle: PermissionsHandle,
+     writer_permissions_handle: PermissionsHandle,
+     subscription_data: &SubscriptionBuiltinTopicDataSecure,
+     publication_data: &PublicationBuiltinTopicDataSecure,
+   ) -> SecurityResult<()>;
+  */
 
+  /*
   /// check_remote_datawriter_register_instance: section 8.4.2.9.15 of the
   /// Security specification.
-  /// TODO: The function signature is not complete yet.
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_remote_datawriter_register_instance(
     &self,
     permissions_handle: PermissionsHandle,
-    reader_todo: (),
-    publication_handle_todo: (),
-    key_todo: (),
-    instance_handle_todo: (),
+    reader: DataReader,                   // Needs actual type definition
+    publication_handle: InstanceHandle_t, // Needs actual type definition
+    key: DynamicData,                     // Needs actual type definition
+    instance_handle: InstanceHandle_t,    // Needs actual type definition
   ) -> SecurityResult<()>;
+  */
 
+  /*
   /// check_remote_datawriter_dispose_instance: section 8.4.2.9.16 of the
   /// Security specification.
-  /// TODO: The function signature is not complete yet.
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_remote_datawriter_dispose_instance(
     &self,
     permissions_handle: PermissionsHandle,
-    reader_todo: (),
-    publication_handle_todo: (),
-    key_todo: (),
+    reader: DataReader,                   // Needs actual type definition
+    publication_handle: InstanceHandle_t, // Needs actual type definition
+    key: DynamicData,                     // Needs actual type definition
   ) -> SecurityResult<()>;
+  */
 }
 
 // TODO: Can the different return methods (e.g. return_permissions_token) be

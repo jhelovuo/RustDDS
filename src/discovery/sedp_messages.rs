@@ -147,7 +147,7 @@ impl From<RtpsReaderProxy> for ReaderProxy {
 pub struct SubscriptionBuiltinTopicData {
   key: GUID,
   participant_key: Option<GUID>,
-  topic_name: String,
+  pub topic_name: String,
   type_name: String,
   durability: Option<Durability>,
   deadline: Option<Deadline>,

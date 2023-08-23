@@ -19,7 +19,6 @@
 // 9.4.1.3)
 
 use bytes::Bytes;
-use x509_certificate::certificate::CapturedX509Certificate;
 use cms::{
   attr::MessageDigest,
   signed_data::{EncapsulatedContentInfo, SignedData},
@@ -27,8 +26,12 @@ use cms::{
 use der::{Decode, Encode};
 use ring::{digest, signature};
 
-use super::domain_participant_permissions_document::{
-  config_error, to_config_error, to_config_error_simple, ConfigError,
+use super::{
+  config_error::{
+    other_config_error, pkcs7_config_error, to_config_error_other, to_config_error_pkcs7,
+    ConfigError,
+  },
+  permissions_ca_certificate::Certificate,
 };
 
 #[derive(Debug)]
@@ -41,7 +44,7 @@ pub struct SignedDocument {
 impl SignedDocument {
   pub fn from_bytes(input: &[u8]) -> Result<SignedDocument, ConfigError> {
     let parsed_mail =
-      mailparse::parse_mail(input).map_err(|e| to_config_error("S/MIME parse failure", e))?;
+      mailparse::parse_mail(input).map_err(to_config_error_other("S/MIME parse failure"))?;
 
     match parsed_mail.subparts.as_slice() {
       [doc_content, signature] => {
@@ -59,12 +62,12 @@ impl SignedDocument {
         // We need to reconstruct the line endings to get a correct hash value.
         let content = bytes_unix2dos(content)?.into();
         // Now `content` should be byte-for-byte the same as what was
-        // the orignal signing input.
+        // the original signing input.
 
         let signature_der = Bytes::from(
           signature
             .get_body_raw()
-            .map_err(|e| to_config_error("S/MIME signature read failure", e))?,
+            .map_err(to_config_error_other("S/MIME signature read failure"))?,
         );
 
         Ok(SignedDocument {
@@ -73,7 +76,7 @@ impl SignedDocument {
           signature_der,
         })
       }
-      parts => Err(config_error(&format!(
+      parts => Err(other_config_error(format!(
         "Expected 2-part S/MIME document, found {} parts.",
         parts.len()
       ))),
@@ -86,43 +89,38 @@ impl SignedDocument {
   // If successful, returns reference to the verified document.
   pub fn verify_signature(
     &self,
-    certificate_pem: impl AsRef<[u8]>,
+    certificate: &Certificate,
   ) -> Result<impl AsRef<[u8]>, ConfigError> {
-    // load certificate
-    let cert = CapturedX509Certificate::from_pem(certificate_pem.as_ref())
-      .map_err(|e| to_config_error("Cannot read X.509 Certificate", e))?;
-
-    // compute a digest of actual contents
-    let computed_contents_digest = digest::digest(&digest::SHA256, &self.content);
-
     // start parsing signature
     let signature_encap = EncapsulatedContentInfo::from_der(&self.signature_der)
-      .map_err(to_config_error_simple("Cannot parse PKCS#7 signature"))?;
+      .map_err(to_config_error_pkcs7("Cannot parse PKCS#7 signature"))?;
 
     // The SignedData type is defined in RFC 5652 Section 5.1.
     // OpenSSL calls this "pkcs7-signedData (1.2.840.113549.1.7.2)"
     if signature_encap.econtent_type
       != const_oid::ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.2")
     {
-      return Err(config_error("Expected to find SignedData object"));
+      return Err(pkcs7_config_error(
+        "Expected to find SignedData object".to_owned(),
+      ));
     }
 
     let signed_data = match signature_encap.econtent {
-      None => Err(config_error("SignedData: Empty container?")),
+      None => Err(pkcs7_config_error(
+        "SignedData: Empty container?".to_owned(),
+      )),
       Some(sig) => sig
         .decode_as::<SignedData>()
-        .map_err(to_config_error_simple("Cannot decode SignedData")),
+        .map_err(to_config_error_pkcs7("Cannot decode SignedData")),
     }?;
 
-    let signer_info = signed_data
-      .signer_infos
-      .0
-      .get(0)
-      .ok_or(config_error("SignerInfo list in SignedData is empty!"))?;
+    let signer_info = signed_data.signer_infos.0.get(0).ok_or(pkcs7_config_error(
+      "SignerInfo list in SignedData is empty!".to_owned(),
+    ))?;
 
     let (content_hash_in_signature, signed_attributes_der) = match &signer_info.signed_attrs {
-      None => Err(config_error(
-        "SignedData without signed attributes not implemented",
+      None => Err(pkcs7_config_error(
+        "SignedData without signed attributes not implemented".to_owned(),
       )),
       Some(sas) => {
         //println!("signed_attrs bytes={:02x?}\ndebug=\n{:?}",sas.to_der(), sas );
@@ -135,12 +133,12 @@ impl SignedDocument {
                 // id-messageDigest OBJECT IDENTIFIER ::= { iso(1) member-body(2)
                 // us(840) rsadsi(113549) pkcs(1) pkcs9(9) 4 }
                 {
-                    None => Err(config_error("SignedAttrs has no MessageDigest")),
+                    None => Err(pkcs7_config_error("SignedAttrs has no MessageDigest".to_owned())),
                     Some(attr) => {
                       let value_0 = attr.values.get(0)
-                        .ok_or(config_error("Empty Attribute"))?;
+                        .ok_or(pkcs7_config_error("Empty Attribute".to_owned()))?;
                       let digest = value_0.decode_as::<MessageDigest>()
-                        .map_err(to_config_error_simple("Cannot decode MessageDigest"))?;
+                        .map_err(to_config_error_pkcs7("Cannot decode MessageDigest"))?;
                       // Section 5.4.  Message Digest Calculation Process:
                       // "A separate encoding
                       // of the signedAttrs field is performed for message digest calculation.
@@ -149,7 +147,7 @@ impl SignedDocument {
                       //
                       // Simple re-encoding to DER will do the EXPLICIT re-tagging by default.
                       let sas_der = sas.to_der()
-                        .map_err(to_config_error_simple("Cannot re-encode signed attributes"))?;
+                        .map_err(to_config_error_pkcs7("Cannot re-encode signed attributes"))?;
 
                       Ok(( digest, sas_der ))
                     }
@@ -157,9 +155,12 @@ impl SignedDocument {
       }
     }?;
 
+    // compute a digest of actual contents
+    let computed_contents_digest = digest::digest(&digest::SHA256, &self.content);
+
     // Check that hash actually matches the content
     if content_hash_in_signature.as_bytes() != computed_contents_digest.as_ref() {
-      return Err(config_error(&format!(
+      return Err(pkcs7_config_error(format!(
         "Contents hash in signature does not match actual content.\nsignature: {:02x?}\ncontent: \
          {:02x?}",
         content_hash_in_signature, computed_contents_digest
@@ -171,56 +172,20 @@ impl SignedDocument {
     // digest of the complete DER encoding of the SignedAttrs value
     // contained in the signedAttrs field.
 
-    cert
+    certificate
       .verify_signed_data_with_algorithm(
         signed_attributes_der,
         signer_info.signature.as_bytes(),
         &signature::ECDSA_P256_SHA256_ASN1, // TODO: Hardwired algorithm
       )
-      .map_err(|e| to_config_error("SignedDocument: verification failure", e))
+      .map_err(ConfigError::Security)
       .map(|()| self.content.clone())
   }
-
-  // use std::{io::Write, process::Command};
-
-  // fn verify_with_openssl(&self, certificate_pem: impl AsRef<[u8]>) ->
-  // Result<Bytes, ConfigError> {   let mut doc_file =
-  //     tempfile::NamedTempFile::new().map_err(to_config_error_simple("Cannot
-  // open temp file 1"))?;   doc_file
-  //     .write_all(self.input_bytes.as_ref())
-  //     .map_err(|e| to_config_error("Cannot write temp file 1", e))?;
-
-  //   let mut cert_file =
-  //     tempfile::NamedTempFile::new().map_err(to_config_error_simple("Cannot
-  // open temp file 2"))?;   cert_file
-  //     .write_all(certificate_pem.as_ref())
-  //     .map_err(|e| to_config_error("Cannot write temp file 2", e))?;
-
-  //   let openssl_output = Command::new("openssl")
-  //     .args(["smime", "-verify", "-text", "-in"])
-  //     .arg(doc_file.path())
-  //     .arg("-CAfile")
-  //     .arg(cert_file.path())
-  //     .output()
-  //     .map_err(|e| to_config_error("Cannot execute openssl", e))?;
-
-  //   if openssl_output.status.success() {
-  //     Ok(self.content.clone())
-  //   } else {
-  //     Err(config_error("Signature verification failed"))
-  //   }
-  // }
-
-  // // This is for test use only.
-  // // Use `verify_signature()` to get contents in a more secure manner.
-  // pub fn get_content_unverified(&self) -> impl AsRef<[u8]> {
-  //   self.content.clone() // cheap Bytes clone
-  // }
 }
 
 fn bytes_unix2dos(unix: Vec<u8>) -> Result<Vec<u8>, ConfigError> {
   let string =
-    String::from_utf8(unix).map_err(|e| to_config_error("Input is not valid UTF-8", e))?;
+    String::from_utf8(unix).map_err(to_config_error_pkcs7("Input is not valid UTF-8"))?;
   Ok(Vec::from(
     newline_converter::unix2dos(&string).as_ref().as_bytes(),
   ))
@@ -229,7 +194,10 @@ fn bytes_unix2dos(unix: Vec<u8>) -> Result<Vec<u8>, ConfigError> {
 #[cfg(test)]
 mod tests {
   use super::{
-    super::{domain_governance_document::*, domain_participant_permissions_document::*},
+    super::{
+      domain_governance_document::*, domain_participant_permissions_document::*,
+      permissions_ca_certificate::*,
+    },
     *,
   };
 
@@ -237,7 +205,7 @@ mod tests {
   pub fn parse_example() {
     // How to generate test data:
     // Use
-    // * valid XML input file exmaple.xml
+    // * valid XML input file example.xml
     // * Signing certificate cert.pem
     // * Private key of certificate cert.key.pem
     //
@@ -353,10 +321,11 @@ zj0EAwIDSAAwRQIgEiyVGRc664+/TE/HImA4WNwsSi/alHqPYB58BWINj34CIQDD
 iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 -----END CERTIFICATE-----
 "#;
+    let cert = Certificate::from_pem(cert_pem).unwrap();
 
     let dpp_signed = SignedDocument::from_bytes(&mut document.as_bytes()).unwrap();
 
-    let verified_dpp_xml = dpp_signed.verify_signature(cert_pem).unwrap();
+    let verified_dpp_xml = dpp_signed.verify_signature(&cert).unwrap();
 
     let dpp =
       DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(verified_dpp_xml.as_ref()))
@@ -447,9 +416,11 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 -----END CERTIFICATE-----
 "#;
 
+    let cert = Certificate::from_pem(cert_pem).unwrap();
+
     let dgd_signed = SignedDocument::from_bytes(&mut document.as_bytes()).unwrap();
 
-    let verified_dgd_xml = dgd_signed.verify_signature(cert_pem).unwrap();
+    let verified_dgd_xml = dgd_signed.verify_signature(&cert).unwrap();
 
     let dgd =
       DomainGovernanceDocument::from_xml(&String::from_utf8_lossy(verified_dgd_xml.as_ref()))
@@ -458,5 +429,101 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
     // getting here with no panic is success
 
     //println!("{:?}", dgd);
+  }
+
+  #[test]
+  #[should_panic(expected = "signature does not match")]
+  pub fn parse_corrupt_dgd() {
+    let document = r#"MIME-Version: 1.0
+Content-Type: multipart/signed; protocol="application/x-pkcs7-signature"; micalg="sha-256"; boundary="----26B97E9080C33B5E9E82D8FDC0946E23"
+
+This is an S/MIME signed message
+
+------26B97E9080C33B5E9E82D8FDC0946E23
+Content-Type: text/plain
+
+<?xml version="1.0" encoding="utf-8"?>
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg_shared_ca_domain_governance.xsd">
+  <domain_access_rules>
+    <domain_rule>
+      <domains>
+        <id>0</id>
+      </domains>
+
+      <allow_unauthenticated_participants>false</allow_unauthenticated_participants>
+      <enable_join_access_control>true</enable_join_access_control>
+      <rtps_protection_kind>SIGN</rtps_protection_kind>
+      <discovery_protection_kind>SIGN</discovery_protection_kind>
+      <liveliness_protection_kind>SIGN</liveliness_protection_kind>
+
+      <topic_access_rules>
+        <topic_rule>
+          <topic_expression>*</topic_expression> <!-- evil hacker has been here -->
+          <enable_discovery_protection>true
+          </enable_discovery_protection>
+          <enable_liveliness_protection>false</enable_liveliness_protection>
+          <enable_read_access_control>true
+          </enable_read_access_control>
+          <enable_write_access_control>true
+          </enable_write_access_control>
+          <metadata_protection_kind>ENCRYPT
+          </metadata_protection_kind>
+          <data_protection_kind>ENCRYPT
+          </data_protection_kind>
+        </topic_rule>
+      </topic_access_rules>
+    </domain_rule>
+  </domain_access_rules>
+</dds>
+
+------26B97E9080C33B5E9E82D8FDC0946E23
+Content-Type: application/x-pkcs7-signature; name="smime.p7s"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="smime.p7s"
+
+MIIC+QYJKoZIhvcNAQcCoIIC6jCCAuYCAQExDzANBglghkgBZQMEAgEFADALBgkq
+hkiG9w0BBwGgggE/MIIBOzCB4qADAgECAhR361786/qVPfJWWDw4Wg5cmJUwBTAK
+BggqhkjOPQQDAjASMRAwDgYDVQQDDAdzcm9zMkNBMB4XDTIzMDcyMzA4MjgzNloX
+DTMzMDcyMTA4MjgzNlowEjEQMA4GA1UEAwwHc3JvczJDQTBZMBMGByqGSM49AgEG
+CCqGSM49AwEHA0IABMpvJQ/91ZqnmRRteTL2qaEFz2d7SGAQQk9PIhhZCV1tlLwY
+f/hI4xWLJaEv8FxJTjxXRGJ1U+/IqqqIvJVpWaSjFjAUMBIGA1UdEwEB/wQIMAYB
+Af8CAQEwCgYIKoZIzj0EAwIDSAAwRQIgEiyVGRc664+/TE/HImA4WNwsSi/alHqP
+YB58BWINj34CIQDDiHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqzGCAX4w
+ggF6AgEBMCowEjEQMA4GA1UEAwwHc3JvczJDQQIUd+te/Ov6lT3yVlg8OFoOXJiV
+MAUwDQYJYIZIAWUDBAIBBQCggeQwGAYJKoZIhvcNAQkDMQsGCSqGSIb3DQEHATAc
+BgkqhkiG9w0BCQUxDxcNMjMwODE0MDc1NDQxWjAvBgkqhkiG9w0BCQQxIgQgvAEn
+eveae5s8eNw0HdhAcxPkLpHI3cdiMLrX5U6hwNoweQYJKoZIhvcNAQkPMWwwajAL
+BglghkgBZQMEASowCwYJYIZIAWUDBAEWMAsGCWCGSAFlAwQBAjAKBggqhkiG9w0D
+BzAOBggqhkiG9w0DAgICAIAwDQYIKoZIhvcNAwICAUAwBwYFKw4DAgcwDQYIKoZI
+hvcNAwICASgwCgYIKoZIzj0EAwIERzBFAiAZQGxjfAoLlk99UWV5AYkHr1CGvOrn
+X/iBDEnMibF4NAIhAPB45KRXnnC8QmjYByycsOo4uGDrrUZ4K+tWLBfOv8v9
+
+------26B97E9080C33B5E9E82D8FDC0946E23--
+"#;
+    let cert_pem = r#"-----BEGIN CERTIFICATE-----
+MIIBOzCB4qADAgECAhR361786/qVPfJWWDw4Wg5cmJUwBTAKBggqhkjOPQQDAjAS
+MRAwDgYDVQQDDAdzcm9zMkNBMB4XDTIzMDcyMzA4MjgzNloXDTMzMDcyMTA4Mjgz
+NlowEjEQMA4GA1UEAwwHc3JvczJDQTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IA
+BMpvJQ/91ZqnmRRteTL2qaEFz2d7SGAQQk9PIhhZCV1tlLwYf/hI4xWLJaEv8FxJ
+TjxXRGJ1U+/IqqqIvJVpWaSjFjAUMBIGA1UdEwEB/wQIMAYBAf8CAQEwCgYIKoZI
+zj0EAwIDSAAwRQIgEiyVGRc664+/TE/HImA4WNwsSi/alHqPYB58BWINj34CIQDD
+iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
+-----END CERTIFICATE-----
+"#;
+
+    let cert = Certificate::from_pem(cert_pem).unwrap();
+
+    // Now evil hacker has modified DGD content
+    let dgd_signed = SignedDocument::from_bytes(&mut document.as_bytes()).unwrap();
+
+    // We expect this to fail
+    let verified_dgd_xml = dgd_signed.verify_signature(&cert).unwrap();
+
+    // It is an error if we get past .unwrap() above.
+    unreachable!();
+    // let dgd =
+    //   DomainGovernanceDocument::from_xml(&
+    // String::from_utf8_lossy(verified_dgd_xml.as_ref()))     .unwrap();
   }
 }

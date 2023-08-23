@@ -1,6 +1,6 @@
 use byteorder::BigEndian;
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
+use concat_arrays::concat_arrays; // macro
 
 use crate::{
   messages::submessages::elements::{
@@ -8,14 +8,15 @@ use crate::{
     crypto_footer::CryptoFooter,
     crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
-  security::{
-    cryptographic::EndpointCryptoHandle, BinaryProperty, DataHolder, SecurityError, SecurityResult,
-  },
+  security::{cryptographic::EndpointCryptoHandle, BinaryProperty, DataHolder, SecurityError},
   security_error,
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
 };
-use super::{CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId, CryptoTransformKind};
+use super::{
+  key_material::*, CryptoToken, CryptoTransformIdentifier, CryptoTransformKeyId,
+  CryptoTransformKind,
+};
 
 const CRYPTO_TOKEN_CLASS_ID: &str = "DDS:Crypto:AES_GCM_GMAC";
 const CRYPTO_TOKEN_KEY_MATERIAL_NAME: &str = "dds.cryp.keymat";
@@ -49,12 +50,12 @@ impl TryFrom<CryptoToken> for BuiltinCryptoToken {
         }
       }
 
-      (CRYPTO_TOKEN_CLASS_ID, [], bps) => Err(Self::Error {
+      (CRYPTO_TOKEN_CLASS_ID, [], _) => Err(Self::Error {
         msg: String::from(
           "CryptoToken has wrong binary_properties. Expected exactly 1 binary property.",
         ),
       }),
-      (CRYPTO_TOKEN_CLASS_ID, ps, _) => Err(Self::Error {
+      (CRYPTO_TOKEN_CLASS_ID, _, _) => Err(Self::Error {
         msg: String::from("CryptoToken has wrong properties. Expected properties to be empty."),
       }),
 
@@ -96,351 +97,11 @@ impl From<BuiltinCryptoToken> for KeyMaterial_AES_GCM_GMAC {
   }
 }
 
-/// KeyMaterial_AES_GCM_GMAC type from section 9.5.2.1.1 of the Security
-/// specification (v. 1.1)
-#[allow(non_camel_case_types)] // We use the name from the spec
-#[derive(Clone)]
-pub(super) struct KeyMaterial_AES_GCM_GMAC {
-  pub transformation_kind: BuiltinCryptoTransformationKind,
-  pub master_salt: Vec<u8>,
-  pub sender_key_id: CryptoTransformKeyId,
-  pub master_sender_key: BuiltinKey,
-  pub receiver_specific_key_id: CryptoTransformKeyId,
-  pub master_receiver_specific_key: BuiltinKey,
-}
-
-// Conversions from and into Bytes
-impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC {
-  type Error = SecurityError;
-  fn try_from(value: Bytes) -> Result<Self, Self::Error> {
-    // Deserialize CDR-formatted key material
-    Serializable_KeyMaterial_AES_GCM_GMAC::deserialize(&mut CdrDeserializer::<
-      BigEndian, /* TODO: What's the point of this constructor if we need to specify the byte
-                  * order anyway */
-    >::new_big_endian(value.as_ref()))
-    .map_err(
-      // Map deserialization error to SecurityError
-      |e| Self::Error {
-        msg: format!("Error deserializing KeyMaterial_AES_GCM_GMAC: {}", e),
-      },
-    )
-    .and_then(KeyMaterial_AES_GCM_GMAC::try_from)
-  }
-}
-impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
-  type Error = SecurityError;
-  fn try_from(key_material: KeyMaterial_AES_GCM_GMAC) -> Result<Self, Self::Error> {
-    // Convert the key material to the serializable structure
-    let serializable_key_material = Serializable_KeyMaterial_AES_GCM_GMAC::from(key_material);
-    // Serialize
-    to_bytes::<Serializable_KeyMaterial_AES_GCM_GMAC, BigEndian>(&serializable_key_material)
-      .map(Bytes::from)
-      .map_err(|e| Self::Error {
-        msg: format!("Error serializing KeyMaterial_AES_GCM_GMAC: {}", e),
-      })
-  }
-}
-
-// Conversions from and into CryptoToken
-impl TryFrom<CryptoToken> for KeyMaterial_AES_GCM_GMAC {
-  type Error = SecurityError;
-  fn try_from(token: CryptoToken) -> Result<Self, Self::Error> {
-    BuiltinCryptoToken::try_from(token).map(KeyMaterial_AES_GCM_GMAC::from)
-  }
-}
-impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoToken {
-  type Error = SecurityError;
-  fn try_from(key_material: KeyMaterial_AES_GCM_GMAC) -> Result<Self, Self::Error> {
-    BuiltinCryptoToken::from(key_material).try_into()
-  }
-}
-
-/// We need to refer to a sequence of key material structures for example in
-/// register_local_datawriter. Usually the sequence has one key material, but it
-/// can have two if different key materials is used for submessage and payload
-#[allow(non_camel_case_types)] // We use the name from the spec
-#[derive(Clone)]
-pub(super) enum KeyMaterial_AES_GCM_GMAC_seq {
-  One(KeyMaterial_AES_GCM_GMAC),
-  Two(KeyMaterial_AES_GCM_GMAC, KeyMaterial_AES_GCM_GMAC),
-}
-
-impl KeyMaterial_AES_GCM_GMAC_seq {
-  pub fn key_material(&self) -> &KeyMaterial_AES_GCM_GMAC {
-    match self {
-      Self::One(key_material) => key_material,
-      Self::Two(key_material, _) => key_material,
-    }
-  }
-
-  pub fn payload_key_material(&self) -> &KeyMaterial_AES_GCM_GMAC {
-    match self {
-      Self::One(key_material) => key_material,
-      Self::Two(_, payload_key_material) => payload_key_material,
-    }
-  }
-
-  pub fn modify_key_material<F>(self, f: F) -> KeyMaterial_AES_GCM_GMAC_seq
-  where
-    F: FnOnce(KeyMaterial_AES_GCM_GMAC) -> KeyMaterial_AES_GCM_GMAC,
-  {
-    match self {
-      Self::One(key_material) => Self::One(f(key_material)),
-      Self::Two(key_material, payload_key_material) => {
-        Self::Two(f(key_material), payload_key_material)
-      }
-    }
-  }
-
-  pub fn add_master_receiver_specific_key(
-    self,
-    receiver_specific_key_id: CryptoTransformKeyId,
-    master_receiver_specific_key: BuiltinKey,
-  ) -> KeyMaterial_AES_GCM_GMAC_seq {
-    self.modify_key_material(
-      |KeyMaterial_AES_GCM_GMAC {
-         transformation_kind,
-         master_salt,
-         master_sender_key,
-         sender_key_id,
-         ..
-       }| KeyMaterial_AES_GCM_GMAC {
-        transformation_kind,
-        master_salt,
-        master_sender_key,
-        sender_key_id,
-        receiver_specific_key_id,
-        master_receiver_specific_key,
-      },
-    )
-  }
-}
-
-impl TryFrom<Vec<KeyMaterial_AES_GCM_GMAC>> for KeyMaterial_AES_GCM_GMAC_seq {
-  type Error = SecurityError;
-  fn try_from(value: Vec<KeyMaterial_AES_GCM_GMAC>) -> Result<Self, Self::Error> {
-    match value.as_slice() {
-      [key_material] => Ok(KeyMaterial_AES_GCM_GMAC_seq::One(key_material.clone())),
-      [key_material, payload_key_material] => Ok(KeyMaterial_AES_GCM_GMAC_seq::Two(
-        key_material.clone(),
-        payload_key_material.clone(),
-      )),
-      [] => Ok(KeyMaterial_AES_GCM_GMAC_seq::One(
-        KeyMaterial_AES_GCM_GMAC {
-          transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
-          master_salt: Vec::new(),
-          sender_key_id: 0,
-          master_sender_key: Vec::new(),
-          receiver_specific_key_id: 0,
-          master_receiver_specific_key: Vec::new(),
-        },
-      )),
-      _ => Err(security_error!(
-        "Expected 1 or 2 key materials in KeyMaterial_AES_GCM_GMAC_seq, received {}",
-        value.len()
-      )),
-    }
-  }
-}
-impl From<KeyMaterial_AES_GCM_GMAC_seq> for Vec<KeyMaterial_AES_GCM_GMAC> {
-  fn from(key_materials: KeyMaterial_AES_GCM_GMAC_seq) -> Self {
-    match key_materials {
-      KeyMaterial_AES_GCM_GMAC_seq::One(key_material) => vec![key_material],
-      KeyMaterial_AES_GCM_GMAC_seq::Two(key_material, payload_key_material) => {
-        vec![key_material, payload_key_material]
-      }
-    }
-  }
-}
-
-// Conversions from and into Bytes for KeyMaterial_AES_GCM_GMAC_seq
-impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC_seq {
-  type Error = SecurityError;
-  fn try_from(value: Bytes) -> Result<Self, Self::Error> {
-    // Deserialize CDR-formatted key material
-    let serializable_key_materials =
-      Vec::<Serializable_KeyMaterial_AES_GCM_GMAC>::deserialize(&mut CdrDeserializer::<
-        BigEndian, /* TODO: What's the point of this constructor if we need to specify the byte
-                    * order anyway */
-      >::new_big_endian(
-        value.as_ref()
-      ))
-      .map_err(
-        // Map deserialization error to SecurityError
-        |e| Self::Error {
-          msg: format!("Error deserializing Vec<KeyMaterial_AES_GCM_GMAC>: {}", e),
-        },
-      )?;
-
-    serializable_key_materials
-      // Map transformation_kind to builtin for each keymat
-      .iter()
-      .map(|serializable_key_material| {
-        KeyMaterial_AES_GCM_GMAC::try_from(serializable_key_material.clone())
-      })
-      // Convert to Vec and dig out the Result
-      .collect::<Result<Vec<KeyMaterial_AES_GCM_GMAC>, Self::Error>>()
-      // Convert the Vec
-      .and_then(KeyMaterial_AES_GCM_GMAC_seq::try_from)
-  }
-}
-
-impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Bytes {
-  type Error = SecurityError;
-  fn try_from(key_materials: KeyMaterial_AES_GCM_GMAC_seq) -> Result<Self, Self::Error> {
-    // Convert the key material to the serializable structure
-    let serializable_key_materials = Vec::from(key_materials)
-      .iter()
-      .map(|key_material| Serializable_KeyMaterial_AES_GCM_GMAC::from(key_material.clone()))
-      .collect();
-
-    // Serialize
-    to_bytes::<Vec<Serializable_KeyMaterial_AES_GCM_GMAC>, BigEndian>(&serializable_key_materials)
-      .map(Bytes::from)
-      .map_err(|e| Self::Error {
-        msg: format!("Error serializing KeyMaterial_AES_GCM_GMAC_seq: {}", e),
-      })
-  }
-}
-
-impl KeyMaterial_AES_GCM_GMAC {
-  /// Checks that the key material matches the given common key material and
-  /// returns the receiver-specific material
-  pub fn receiver_key_material_for(
-    &self,
-    KeyMaterial_AES_GCM_GMAC {
-      transformation_kind,
-      master_salt,
-      sender_key_id,
-      master_sender_key,
-      ..
-    }: &KeyMaterial_AES_GCM_GMAC,
-  ) -> SecurityResult<ReceiverKeyMaterial> {
-    if !self.sender_key_id.eq(sender_key_id) {
-      Err(security_error!(
-        "The receiver-specific key material has a wrong sender_key_id: expected {:?}, received \
-         {:?}.",
-        sender_key_id,
-        self.sender_key_id
-      ))
-    } else if !self.transformation_kind.eq(transformation_kind) {
-      Err(security_error!(
-        "The receiver-specific key material has a wrong transformation_kind: expected {:?}, \
-         received {:?}.",
-        transformation_kind,
-        self.transformation_kind
-      ))
-    } else if !self.master_sender_key.eq(master_sender_key) {
-      Err(security_error!(
-        "The receiver-specific key has a wrong master_sender_key: expected {:?}, received {:?}.",
-        master_sender_key,
-        self.master_sender_key
-      ))
-    } else if !self.master_salt.eq(master_salt) {
-      Err(security_error!(
-        "The receiver-specific key has a wrong master_salt: expected {:?}, received {:?}.",
-        master_salt,
-        self.master_salt
-      ))
-    } else {
-      Ok(ReceiverKeyMaterial {
-        receiver_specific_key_id: self.receiver_specific_key_id,
-        master_receiver_specific_key: self.master_receiver_specific_key.clone(),
-      })
-    }
-  }
-}
-
-pub(super) struct ReceiverKeyMaterial {
-  pub receiver_specific_key_id: CryptoTransformKeyId,
-  pub master_receiver_specific_key: BuiltinKey,
-}
-
-// Conversions from and into Vec<CryptoToken> for KeyMaterial_AES_GCM_GMAC_seq
-impl TryFrom<Vec<CryptoToken>> for KeyMaterial_AES_GCM_GMAC_seq {
-  type Error = SecurityError;
-  fn try_from(tokens: Vec<CryptoToken>) -> Result<Self, Self::Error> {
-    tokens
-      .iter()
-      .map(|token| KeyMaterial_AES_GCM_GMAC::try_from(token.clone()))
-      .collect::<Result<Vec<KeyMaterial_AES_GCM_GMAC>, Self::Error>>()
-      // Convert the Vec
-      .and_then(KeyMaterial_AES_GCM_GMAC_seq::try_from)
-  }
-}
-impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Vec<CryptoToken> {
-  type Error = SecurityError;
-  fn try_from(key_materials: KeyMaterial_AES_GCM_GMAC_seq) -> Result<Self, Self::Error> {
-    Vec::from(key_materials)
-      .iter()
-      .map(|key_material| CryptoToken::try_from(key_material.clone()))
-      .collect()
-  }
-}
-//For (de)serialization
-#[allow(non_camel_case_types)] // We use the name from the spec
-#[derive(Deserialize, Serialize, PartialEq, Clone)]
-struct Serializable_KeyMaterial_AES_GCM_GMAC {
-  transformation_kind: CryptoTransformKind,
-  master_salt: Vec<u8>,
-  sender_key_id: CryptoTransformKeyId,
-  master_sender_key: BuiltinKey,
-  receiver_specific_key_id: CryptoTransformKeyId,
-  master_receiver_specific_key: BuiltinKey,
-}
-impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC {
-  type Error = SecurityError;
-  fn try_from(
-    Serializable_KeyMaterial_AES_GCM_GMAC {
-      transformation_kind,
-      master_salt,
-      sender_key_id,
-      master_sender_key,
-      receiver_specific_key_id,
-      master_receiver_specific_key,
-    }: Serializable_KeyMaterial_AES_GCM_GMAC,
-  ) -> Result<Self, Self::Error> {
-    // Map transformation_kind to builtin
-    BuiltinCryptoTransformationKind::try_from(transformation_kind)
-      // Construct a keymat
-      .map(|transformation_kind| Self {
-        transformation_kind,
-        master_salt,
-        sender_key_id,
-        master_sender_key,
-        receiver_specific_key_id,
-        master_receiver_specific_key,
-      })
-  }
-}
-impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
-  fn from(
-    KeyMaterial_AES_GCM_GMAC {
-      transformation_kind,
-      master_salt,
-      sender_key_id,
-      master_sender_key,
-      receiver_specific_key_id,
-      master_receiver_specific_key,
-    }: KeyMaterial_AES_GCM_GMAC,
-  ) -> Self {
-    Serializable_KeyMaterial_AES_GCM_GMAC {
-      // Serialize transformation_kind
-      transformation_kind: transformation_kind.into(),
-      master_salt,
-      sender_key_id,
-      master_sender_key,
-      receiver_specific_key_id,
-      master_receiver_specific_key,
-    }
-  }
-}
-
 /// Valid values for CryptoTransformKind from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the names from the spec
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub(super) enum BuiltinCryptoTransformationKind {
+pub(crate) enum BuiltinCryptoTransformationKind {
   CRYPTO_TRANSFORMATION_KIND_NONE,
   CRYPTO_TRANSFORMATION_KIND_AES128_GMAC,
   CRYPTO_TRANSFORMATION_KIND_AES128_GCM,
@@ -509,7 +170,50 @@ impl From<BuiltinCryptoTransformIdentifier> for CryptoTransformIdentifier {
 /// The plugin_crypto_header_extra contains the initialization vector, which
 /// consists of the session_id and initialization_vector_suffix. 9.5.2.3
 pub(super) const INITIALIZATION_VECTOR_LENGTH: usize = 12;
-pub(super) type BuiltinInitializationVector = [u8; INITIALIZATION_VECTOR_LENGTH];
+
+#[derive(Debug, Clone, Copy)]
+pub(super) struct BuiltinInitializationVector([u8; INITIALIZATION_VECTOR_LENGTH]);
+
+impl BuiltinInitializationVector {
+  pub(super) fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) -> Self {
+    BuiltinInitializationVector(concat_arrays!(session_id.0, initialization_vector_suffix))
+  }
+  pub(super) fn session_id(&self) -> SessionId {
+    // Succeeds as the slice length is 4
+    SessionId::new(<[u8; 4]>::try_from(&self.0[..4]).unwrap())
+  }
+  pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
+    // Succeeds as the slice length is 12-4=8
+    <[u8; 8]>::try_from(&self.0[4..]).unwrap()
+  }
+
+  pub fn try_from_slice(s: impl AsRef<[u8]>) -> Result<Self, std::array::TryFromSliceError> {
+    Ok(Self(<[u8; INITIALIZATION_VECTOR_LENGTH]>::try_from(
+      s.as_ref(),
+    )?))
+  }
+}
+
+impl From<BuiltinInitializationVector> for [u8; INITIALIZATION_VECTOR_LENGTH] {
+  fn from(value: BuiltinInitializationVector) -> [u8; INITIALIZATION_VECTOR_LENGTH] {
+    value.0
+  }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SessionId([u8; 4]);
+
+impl SessionId {
+  pub fn new(s: [u8; 4]) -> Self {
+    SessionId(s)
+  }
+
+  pub fn as_bytes(&self) -> &[u8] {
+    &self.0
+  }
+}
+
+#[derive(Debug, Clone, Copy)]
 pub(super) struct BuiltinCryptoHeaderExtra(pub(super) BuiltinInitializationVector);
 
 /// Methods for getting the contained data
@@ -517,13 +221,14 @@ impl BuiltinCryptoHeaderExtra {
   pub(super) fn initialization_vector(&self) -> BuiltinInitializationVector {
     self.0
   }
-  pub(super) fn session_id(&self) -> [u8; 4] {
-    // Succeeds as the slice length is 4
-    <[u8; 4]>::try_from(&self.0[..4]).unwrap()
+  pub(super) fn session_id(&self) -> SessionId {
+    self.0.session_id()
   }
   pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
-    // Succeeds as the slice length is 12-4=8
-    <[u8; 8]>::try_from(&self.0[4..]).unwrap()
+    self.0.initialization_vector_suffix()
+  }
+  pub fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) -> Self {
+    Self::from((session_id, initialization_vector_suffix))
   }
 }
 
@@ -532,27 +237,24 @@ impl From<BuiltinInitializationVector> for BuiltinCryptoHeaderExtra {
     Self(value)
   }
 }
+
 // Conversion from session_id and initialization_vector_suffix
-impl From<([u8; 4], [u8; 8])> for BuiltinCryptoHeaderExtra {
-  fn from((session_id, initialization_vector_suffix): ([u8; 4], [u8; 8])) -> Self {
-    Self::from(
-      // Succeeds as the vector length is 4+8=12
-      BuiltinInitializationVector::try_from(
-        [
-          Vec::from(session_id),
-          Vec::from(initialization_vector_suffix),
-        ]
-        .concat(),
-      )
-      .unwrap(),
-    )
+impl From<(SessionId, [u8; 8])> for BuiltinCryptoHeaderExtra {
+  fn from((session_id, initialization_vector_suffix): (SessionId, [u8; 8])) -> Self {
+    Self(BuiltinInitializationVector::new(
+      session_id,
+      initialization_vector_suffix,
+    ))
+    //Self( concat_arrays!(session_id.0, initialization_vector_suffix  ))
   }
 }
+
 impl From<BuiltinCryptoHeaderExtra> for PluginCryptoHeaderExtra {
   fn from(value: BuiltinCryptoHeaderExtra) -> Self {
-    Self::from(Vec::from(value.initialization_vector()))
+    Self::from(Vec::from(value.initialization_vector().0))
   }
 }
+
 impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
   type Error = SecurityError;
   fn try_from(
@@ -561,7 +263,7 @@ impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
     // Save the length for the error message
     let plugin_crypto_header_length = data.len();
     // Convert to fixed-length array
-    BuiltinInitializationVector::try_from(data)
+    BuiltinInitializationVector::try_from_slice(data)
       .map_err(|_| {
         security_error!(
           "plugin_crypto_header_extra was of length {}. Expected {}.",
@@ -689,30 +391,3 @@ pub(super) struct EndpointInfo {
   pub crypto_handle: EndpointCryptoHandle,
   pub kind: EndpointKind,
 }
-
-pub(super) const AES128_KEY_LENGTH: usize = 16;
-pub(super) type AES128Key = [u8; AES128_KEY_LENGTH];
-pub(super) const AES256_KEY_LENGTH: usize = 32;
-pub(super) type AES256Key = [u8; AES256_KEY_LENGTH];
-
-#[derive(Debug, Clone, Copy)]
-pub(super) enum KeyLength {
-  None = 0, // Mostly for testing and debugging
-  AES128 = AES128_KEY_LENGTH as isize,
-  AES256 = AES256_KEY_LENGTH as isize,
-}
-
-impl From<BuiltinCryptoTransformationKind> for KeyLength {
-  fn from(value: BuiltinCryptoTransformationKind) -> Self {
-    match value {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Self::None,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => Self::AES128,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => Self::AES128,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => Self::AES256,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => Self::AES256,
-    }
-  }
-}
-
-// The keys are given as byte sequences that can be empty or of length 16 or 32
-pub(super) type BuiltinKey = Vec<u8>;

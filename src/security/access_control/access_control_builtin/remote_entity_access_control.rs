@@ -1,32 +1,50 @@
+use std::ops::Not;
+
 use crate::{
-  discovery::sedp_messages::TopicBuiltinTopicData,
+  discovery::{
+    sedp_messages::TopicBuiltinTopicData, DiscoveredReaderData, DiscoveredWriterData,
+    PublicationBuiltinTopicData, SubscriptionBuiltinTopicData,
+  },
   security::{access_control::*, *},
+  security_error,
 };
-use super::AccessControlBuiltin;
+use super::{
+  domain_governance_document::TopicRule, domain_participant_permissions_document::Action,
+  types::Entity, AccessControlBuiltin,
+};
 
 impl RemoteEntityAccessControl for AccessControlBuiltin {
-  // Currently only mocked
-  fn check_remote_participant(
-    &self,
-    permissions_handle: PermissionsHandle,
-    domain_id: u16,
-    participant_data: &ParticipantBuiltinTopicDataSecure,
-  ) -> SecurityResult<()> {
-    // TODO: actual implementation
-
-    Ok(())
-  }
-
-  // Currently only mocked
   fn check_remote_datawriter(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     publication_data: &PublicationBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
-    // TODO: actual implementation
+    let partitions = &[]; // Partitions currently unsupported. TODO: get from publication_data
+    let data_tags = &[]; // Data tagging currently unsupported. TODO: get from publication_data
 
-    Ok(())
+    let PublicationBuiltinTopicDataSecure {
+      discovered_writer_data:
+        DiscoveredWriterData {
+          publication_topic_data: PublicationBuiltinTopicData { topic_name, .. },
+          ..
+        },
+      ..
+    } = publication_data;
+
+    // Move the following check to validate_remote_permissions from check_remote_
+    // methods, as there we have access to the tokens: "If the PluginClassName
+    // or the MajorVersion of the local permissions_token differ from those in
+    // the remote_permissions_token, the operation shall return FALSE."
+
+    self.check_entity(
+      permissions_handle,
+      domain_id,
+      topic_name,
+      partitions,
+      data_tags,
+      &Entity::Datawriter,
+    )
   }
 
   // Currently only mocked
@@ -35,71 +53,153 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     subscription_data: &SubscriptionBuiltinTopicDataSecure,
-    relay_only: &mut bool,
-  ) -> SecurityResult<()> {
-    // TODO: actual implementation
+  ) -> SecurityResult<bool> {
+    let partitions = &[]; // Partitions currently unsupported. TODO: get from publication_data
+    let data_tags = &[]; // Data tagging currently unsupported. TODO: get from publication_data
 
-    Ok(())
+    let SubscriptionBuiltinTopicDataSecure {
+      discovered_reader_data:
+        DiscoveredReaderData {
+          subscription_topic_data: SubscriptionBuiltinTopicData { topic_name, .. },
+          ..
+        },
+      ..
+    } = subscription_data;
+
+    // This method differs from the other similar ones because of the possibility of
+    // a relay only datareader
+
+    // TODO: remove after testing
+    if true {
+      return Ok(false);
+    }
+
+    let grant = self.get_grant(&permissions_handle)?;
+    let domain_rule = self.get_domain_rule(&permissions_handle)?;
+
+    let requested_access_is_unprotected = domain_rule
+      .find_topic_rule(topic_name)
+      .map(
+        |TopicRule {
+           enable_read_access_control,
+           ..
+         }| *enable_read_access_control,
+      )
+      .is_some_and(bool::not);
+
+    let participant_has_read_access = grant
+      .check_action(
+        Action::Subscribe,
+        domain_id,
+        topic_name,
+        partitions,
+        data_tags,
+      )
+      .into();
+
+    // Move the following check to validate_remote_permissions from check_remote_
+    // methods, as there we have access to the tokens: "If the PluginClassName
+    // or the MajorVersion of the local permissions_token differ from those in
+    // the remote_permissions_token, the operation shall return FALSE."
+
+    (requested_access_is_unprotected || participant_has_read_access)
+      .then_some(false)
+      // Check for relay only access
+      .or_else(|| {
+        bool::from(grant.check_action(Action::Relay, domain_id, topic_name, partitions, data_tags))
+          .then_some(true)
+      })
+      .ok_or_else(|| security_error!("The participant has no read nor relay access to the topic."))
   }
 
-  // Currently only mocked
   fn check_remote_topic(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_data: &TopicBuiltinTopicData,
   ) -> SecurityResult<()> {
-    // TODO: actual implementation
+    let partitions = &[]; // Partitions currently unsupported. TODO: get from publication_data
+    let data_tags = &[]; // Data tagging currently unsupported. TODO: get from publication_data
 
-    Ok(())
+    let TopicBuiltinTopicData { name, .. } = topic_data;
+
+    // Move the following check to validate_remote_permissions from check_remote_
+    // methods, as there we have access to the tokens: "If the PluginClassName
+    // or the MajorVersion of the local permissions_token differ from those in
+    // the remote_permissions_token, the operation shall return FALSE."
+
+    self.check_entity(
+      permissions_handle,
+      domain_id,
+      name,
+      partitions,
+      data_tags,
+      &Entity::Topic,
+    )
   }
 
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_local_datawriter_match(
     &self,
-    writer_permissions_handle: PermissionsHandle,
-    reader_permissions_handle: PermissionsHandle,
-    publication_data: &PublicationBuiltinTopicDataSecure,
-    subscription_data: &SubscriptionBuiltinTopicDataSecure,
+    _writer_permissions_handle: PermissionsHandle,
+    _reader_permissions_handle: PermissionsHandle,
+    _publication_data: &PublicationBuiltinTopicDataSecure,
+    _subscription_data: &SubscriptionBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
     Ok(())
   }
+  */
 
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_local_datareader_match(
     &self,
-    reader_permissions_handle: PermissionsHandle,
-    writer_permissions_handle: PermissionsHandle,
-    subscription_data: &SubscriptionBuiltinTopicDataSecure,
-    publication_data: &PublicationBuiltinTopicDataSecure,
+    _reader_permissions_handle: PermissionsHandle,
+    _writer_permissions_handle: PermissionsHandle,
+    _subscription_data: &SubscriptionBuiltinTopicDataSecure,
+    _publication_data: &PublicationBuiltinTopicDataSecure,
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
     Ok(())
   }
+  */
 
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_remote_datawriter_register_instance(
     &self,
-    permissions_handle: PermissionsHandle,
-    reader_todo: (),
-    publication_handle_todo: (),
-    key_todo: (),
-    instance_handle_todo: (),
+    _permissions_handle: PermissionsHandle,
+    _reader: DataReader,                   // Needs actual type definition
+    _publication_handle: InstanceHandle_t, // Needs actual type definition
+    _key: DynamicData,                     // Needs actual type definition
+    _instance_handle: InstanceHandle_t,    // Needs actual type definition
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
     Ok(())
   }
+  */
 
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_remote_datawriter_dispose_instance(
     &self,
     permissions_handle: PermissionsHandle,
-    reader_todo: (),
-    publication_handle_todo: (),
-    key_todo: (),
+    reader: DataReader,                   // Needs actual type definition
+    publication_handle: InstanceHandle_t, // Needs actual type definition
+    key: DynamicData,                     // Needs actual type definition
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
     Ok(())
   }
+  */
 }

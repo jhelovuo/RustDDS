@@ -18,8 +18,44 @@ use crate::{
     speedy_pl_cdr_helpers::*,
   },
   structure::{guid::GuidPrefix, parameter_id::ParameterId},
-  Keyed, RepresentationIdentifier, GUID,
+  Keyed, QosPolicies, RepresentationIdentifier, GUID,
 };
+
+// Result type with generic OK type. Error type is SecurityError.
+pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
+
+// Something like the SecurityException of the specification
+#[derive(Debug, thiserror::Error)]
+#[error("Security exception: {msg}")]
+pub struct SecurityError {
+  pub(crate) msg: String,
+}
+
+pub fn security_error(msg: &str) -> SecurityError {
+  SecurityError {
+    msg: msg.to_string(),
+  }
+}
+
+impl From<ring::error::Unspecified> for SecurityError {
+  fn from(_e: ring::error::Unspecified) -> Self {
+    SecurityError {
+      msg: "The ring crypto library gives 'Unspecified' error. That's all we are authorized to \
+            know. Sorry."
+        .to_string(),
+    }
+  }
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! security_error {
+  ($($arg:tt)*) => (
+      { log::error!($($arg)*);
+        SecurityError{ msg: format!($($arg)*) }
+      }
+    )
+}
 
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)] // for CDR in Discovery
@@ -74,6 +110,26 @@ impl Property {
 
   pub fn value(&self) -> String {
     self.value.clone()
+  }
+}
+
+fn get_property(properties: &[Property], property_name: &str) -> SecurityResult<String> {
+  properties
+    .iter()
+    .find(|Property { name, .. }| name.eq(property_name))
+    .map(|Property { value, .. }| value.clone())
+    .ok_or_else(|| security_error!("Could not find a property of the name {}.", property_name))
+}
+
+impl QosPolicies {
+  pub(super) fn get_property(&self, property_name: &str) -> SecurityResult<String> {
+    self
+      .property
+      .as_ref()
+      .ok_or_else(|| security_error!("The QosPolicies did not have any properties."))
+      .and_then(|properties_or_binary_properties| {
+        get_property(&properties_or_binary_properties.value, property_name)
+      })
   }
 }
 
@@ -278,6 +334,10 @@ impl DataHolder {
     }
   }
 
+  pub(super) fn get_property(&self, property_name: &str) -> SecurityResult<String> {
+    get_property(&self.properties, property_name)
+  }
+
   pub fn properties_as_map(&self) -> HashMap<String, &Property> {
     // Return a HashMap where keys are property names and values are
     // references to properties
@@ -336,28 +396,88 @@ impl<C: Context> Writable<C> for DataHolder {
   }
 }
 
+// In some cases the class_id of DataHolder is interpreted as consisting of a
+// PluginClassName, a MajorVersion and a MinorVersion. For example in 9.3.2.1:
+// "The value of the class_id shall be interpreted as composed of three parts: a
+// PluginClassName, a MajorVersion and a MinorVersion according to the following
+// format: <PluginClassName>:<MajorVersion>.<MinorVersion>. The PluginClassName
+// is separated from the MajorVersion by the last ':' character in the class_id.
+// The MajorVersion and MinorVersion are separated by a '.' character.
+// Accordingly this version of the specification has PluginClassName equal to
+// "DDS:Auth:PKI-DH", MajorVersion set to 1, and MinorVersion set to 0"
+pub(super) struct PluginClassId {
+  plugin_class_name: String,
+  major_version: String, // Can be changed to number if needed
+  minor_version: String, // Can be changed to number if needed
+}
+impl PluginClassId {
+  pub fn matches_up_to_major_version(
+    &self,
+    Self {
+      plugin_class_name: other_plugin_class_name,
+      major_version: other_major_version,
+      ..
+    }: &Self,
+  ) -> SecurityResult<()> {
+    self
+      .plugin_class_name
+      .eq(other_plugin_class_name)
+      .then_some(())
+      .ok_or_else(|| {
+        security_error!(
+          "Mismatched plugin class names: {} and {}",
+          self.plugin_class_name,
+          other_plugin_class_name
+        )
+      })
+      .and(
+        self
+          .major_version
+          .eq(other_major_version)
+          .then_some(())
+          .ok_or_else(|| {
+            security_error!(
+              "Mismatched plugin major versions: {} and {}",
+              self.major_version,
+              other_major_version
+            )
+          }),
+      )
+  }
+}
+impl TryFrom<String> for PluginClassId {
+  type Error = SecurityError;
+  fn try_from(value: String) -> Result<Self, Self::Error> {
+    value
+      .rsplit_once(':')
+      .ok_or_else(|| {
+        security_error!(
+          "Failed to parse the class_id {}. Expected PluginClassName:VersionNumber",
+          value
+        )
+      })
+      .and_then(|(plugin_class_name, version_number)| {
+        version_number
+          .split_once('.')
+          .ok_or_else(|| {
+            security_error!(
+              "Failed to parse the version number {} of class_id {}. Expected \
+               MajorVersion.MinorVersion",
+              version_number,
+              value
+            )
+          })
+          .map(|(major_version, minor_version)| Self {
+            plugin_class_name: plugin_class_name.into(),
+            major_version: major_version.into(),
+            minor_version: minor_version.into(),
+          })
+      })
+  }
+}
+
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
 pub type Token = DataHolder;
-
-// Result type with generic OK type. Error type is SecurityError.
-pub type SecurityResult<T> = std::result::Result<T, SecurityError>;
-
-// Something like the SecurityException of the specification
-#[derive(Debug, thiserror::Error)]
-#[error("Security exception: {msg}")]
-pub struct SecurityError {
-  pub(crate) msg: String,
-}
-
-#[doc(hidden)]
-#[macro_export]
-macro_rules! security_error {
-  ($($arg:tt)*) => (
-      { log::error!($($arg)*);
-        SecurityError{ msg: format!($($arg)*) }
-      }
-    )
-}
 
 // DDS Security spec v1.1 Section 7.2.7 ParticipantSecurityInfo
 // This is communicated over Discovery
