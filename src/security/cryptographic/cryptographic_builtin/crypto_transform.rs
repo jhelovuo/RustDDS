@@ -170,14 +170,14 @@ impl CryptoTransform for CryptographicBuiltin {
     plain_buffer: Vec<u8>,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
-    //TODO: this is only a mock implementation
 
     // Get the key material for encrypting serialized payloads
     let payload_key_material = self
       .get_encode_key_materials_(&sending_datawriter_crypto_handle)
       .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key_material)?;
 
-    // TODO proper session_id
+    // TODO: Generate proper session_id
+    // Session id [0,0,0,0] should work, but is less safe.
     let builtin_crypto_header_extra =
       BuiltinCryptoHeaderExtra::from(([0, 0, 0, 0], rand::random()));
 
@@ -196,14 +196,6 @@ impl CryptoTransform for CryptographicBuiltin {
 
     let (encoded_data, footer) = match payload_key_material.transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        // TODO this is mainly for testing and debugging
-        // encode_serialized_payload_gmac(
-        //   encode_key,
-        //   initialization_vector,
-        //   &plain_buffer,
-        // )?
-        // TODO switch to the following to avoid wrapping the
-        // `SerializedPayload` to `CryptoContent`
         return Ok((plain_buffer, ParameterList::new()));
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC |

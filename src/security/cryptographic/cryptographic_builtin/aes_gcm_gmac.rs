@@ -53,7 +53,7 @@ pub(super) fn try_keygen(key_length: Option<KeyLength>) -> BuiltinKey {
 }
 
 
-fn to_unbound_key(key: &BuiltinKey) -> UnboundKey {
+fn to_unbound_AES_GCM_key(key: &BuiltinKey) -> UnboundKey {
   match key {
     // unwraps should be safe, because builtin key lengths always match expected length
     BuiltinKey::AES128(key) => UnboundKey::new(&AES_128_GCM, key).unwrap(),
@@ -66,6 +66,15 @@ fn to_builtin_mac(tag: &Tag) -> BuiltinMAC {
   tag.as_ref().try_into().unwrap()   
 }
 
+
+// Section "9.5.3.3.4.2 Format of the CryptoContent Submessage Element" :
+// "Note that the cipher operations have 16-byte block-size and add padding when needed. 
+// Therefore the secure data.length (“N”) will always be a multiple of 16.""
+//
+// So we do not have to worry about adding padding here.
+// We DO have to assume the ciphertext may be longer than the plaintext.
+
+
 // Computes the message authentication code (MAC) for the given data
 pub(super) fn compute_mac(
   key: &BuiltinKey,
@@ -75,8 +84,13 @@ pub(super) fn compute_mac(
   // ring encrypts + tags (signs) in place, so we must create a buffer for that.
   let mut in_out_data = Vec::from(data);
 
+  // Section "9.5.3.3.4.4 Result from encode_serialized_payload" :
+  // 
+  // "The common_mac in the CryptoFooter is the authentication tag generated 
+  // by the same AES-GCM where the Additional Authenticated Data is empty."
+
   let mut sealing_key = 
-    SealingKey::new(to_unbound_key(key), TrivialNonceSequence::new(initialization_vector));
+    SealingKey::new(to_unbound_AES_GCM_key(key), TrivialNonceSequence::new(initialization_vector));
 
   let tag = sealing_key.seal_in_place_separate_tag(Aad::empty(), &mut in_out_data)?;
 
@@ -93,8 +107,9 @@ pub(super) fn encrypt(
   // ring encrypts + tags (signs) in place, so we must create a buffer for that.
   let mut in_out_data = Vec::from(plaintext);
 
+
   let mut sealing_key = 
-    SealingKey::new(to_unbound_key(key), TrivialNonceSequence::new(initialization_vector));
+    SealingKey::new(to_unbound_AES_GCM_key(key), TrivialNonceSequence::new(initialization_vector));
 
   let tag = sealing_key.seal_in_place_separate_tag(Aad::empty(), &mut in_out_data)?;
 
@@ -108,13 +123,12 @@ pub(super) fn validate_mac(
   data: &[u8],
   mac: BuiltinMAC,
 ) -> SecurityResult<()> {
-  // TODO: round data.len() up to block size
   let mut in_out = Vec::with_capacity( data.len() + MAC_LENGTH);
   in_out.extend_from_slice(data);
   in_out.extend_from_slice(&mac);
 
   let mut opening_key = 
-    OpeningKey::new(to_unbound_key(key), TrivialNonceSequence::new(initialization_vector));
+    OpeningKey::new(to_unbound_AES_GCM_key(key), TrivialNonceSequence::new(initialization_vector));
 
   // This will return `Err(..)` if verification fails
   let plaintext = opening_key.open_in_place(Aad::empty(), &mut in_out)?;
@@ -135,7 +149,7 @@ pub(super) fn decrypt(
   in_out.extend_from_slice(mac.as_ref());
 
   let mut opening_key = 
-    OpeningKey::new(to_unbound_key(key), TrivialNonceSequence::new(initialization_vector));
+    OpeningKey::new(to_unbound_AES_GCM_key(key), TrivialNonceSequence::new(initialization_vector));
 
   // This will return `Err(..)` if verification fails
   let plaintext = opening_key.open_in_place(Aad::empty(), &mut in_out)?;
