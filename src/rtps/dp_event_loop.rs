@@ -648,7 +648,9 @@ impl DPEventLoop {
           }
           Some(AuthenticationStatus::Authenticated) => {
             // Match all builtin endpoints
-            todo!();
+            readers_init_list.extend_from_slice(STANDARD_BUILTIN_READERS_INIT_LIST);
+            writers_init_list.extend_from_slice(STANDARD_BUILTIN_WRITERS_INIT_LIST);
+            // TODO: Add secure endpoints
           }
           Some(AuthenticationStatus::Unauthenticated) => {
             // Match only the regular builtin endpoints (see Security spec section 8.8.2.1)

@@ -844,6 +844,9 @@ impl Discovery {
               }
             }
           }
+          P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN => {
+            self.handle_participant_stateless_message_reader();
+          }
           CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN => {
             self.on_authentication_message_resend_triggered();
           }
@@ -1324,6 +1327,32 @@ impl Discovery {
               error!("Failed to writer ParticipantMessageData manual. {e:?}");
             }
           }
+        }
+      };
+    }
+  }
+
+  fn handle_participant_stateless_message_reader(&mut self) {
+    if let Some(security) = self.security_opt.as_mut() {
+      // Security enabled. Get messages from the stateless data reader & feed to
+      // Secure Discovery.
+      match self
+        .dcps_participant_stateless_message
+        .reader
+        .into_iterator()
+      {
+        Ok(dr_iter) => {
+          for msg in dr_iter {
+            security.participant_stateless_message_read(
+              &msg,
+              &self.discovery_db,
+              &self.discovery_updated_sender,
+              &self.dcps_participant_stateless_message.writer,
+            );
+          }
+        }
+        Err(e) => {
+          error!("handle_participant_stateless_message_reader: {e:?}");
         }
       };
     }

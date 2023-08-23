@@ -17,7 +17,7 @@ use crate::{
     },
     speedy_pl_cdr_helpers::*,
   },
-  structure::parameter_id::ParameterId,
+  structure::{guid::GuidPrefix, parameter_id::ParameterId},
   Keyed, RepresentationIdentifier, GUID,
 };
 
@@ -784,5 +784,11 @@ impl Keyed for ParticipantGenericMessage {
 
   fn key(&self) -> Self::K {
     self.source_endpoint_guid
+  }
+}
+
+impl ParticipantGenericMessage {
+  pub fn source_guid_prefix(&self) -> GuidPrefix {
+    self.message_identity.writer_guid.prefix
   }
 }

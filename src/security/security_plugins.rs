@@ -91,6 +91,19 @@ impl SecurityPlugins {
       .copied()
   }
 
+  fn get_handshake_handle(&self, remote_guidp: &GuidPrefix) -> SecurityResult<HandshakeHandle> {
+    self
+      .handshake_handle_cache_
+      .get(remote_guidp)
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find a HandshakeHandle for the GUID prefix {:?}",
+          remote_guidp
+        )
+      })
+      .copied()
+  }
+
   fn get_participant_crypto_handle(
     &self,
     guid_prefix: &GuidPrefix,
@@ -222,12 +235,12 @@ impl SecurityPlugins {
 
   pub fn begin_handshake_request(
     &mut self,
-    initiator_guidp: GuidPrefix,
-    replier_guidp: GuidPrefix,
+    local_guidp: GuidPrefix,
+    remote_guidp: GuidPrefix,
     serialized_local_participant_data: Vec<u8>,
-  ) -> SecurityResult<HandshakeMessageToken> {
-    let initiator_identity_handle = self.get_identity_handle(&initiator_guidp)?;
-    let replier_identity_handle = self.get_identity_handle(&replier_guidp)?;
+  ) -> SecurityResult<(ValidationOutcome, HandshakeMessageToken)> {
+    let initiator_identity_handle = self.get_identity_handle(&local_guidp)?;
+    let replier_identity_handle = self.get_identity_handle(&remote_guidp)?;
 
     let (outcome, handshake_handle, handshake_token) = self.auth.begin_handshake_request(
       initiator_identity_handle,
@@ -235,19 +248,50 @@ impl SecurityPlugins {
       serialized_local_participant_data,
     )?;
 
-    if let ValidationOutcome::PendingHandshakeMessage = outcome {
-      // This is the only expected OK outcome from builtin plugin
-      // Store handshake handle and return token
-      self
-        .handshake_handle_cache_
-        .insert(initiator_guidp, handshake_handle);
-      Ok(handshake_token)
-    } else {
-      Err(security_error!(
-        "Unexptected validation outcome from begin_handshake_request. Outcome: {:?}",
-        outcome
-      ))
-    }
+    // Store handshake handle
+    self
+      .handshake_handle_cache_
+      .insert(remote_guidp, handshake_handle);
+
+    Ok((outcome, handshake_token))
+  }
+
+  pub fn begin_handshake_reply(
+    &mut self,
+    local_participant_guidp: GuidPrefix,
+    remote_participant_guidp: GuidPrefix,
+    handshake_message_in: HandshakeMessageToken,
+    serialized_local_participant_data: Vec<u8>,
+  ) -> SecurityResult<(ValidationOutcome, HandshakeMessageToken)> {
+    let initiator_identity_handle = self.get_identity_handle(&remote_participant_guidp)?;
+    let replier_identity_handle = self.get_identity_handle(&local_participant_guidp)?;
+
+    let (outcome, handshake_handle, handshake_token) = self.auth.begin_handshake_reply(
+      handshake_message_in,
+      initiator_identity_handle,
+      replier_identity_handle,
+      serialized_local_participant_data,
+    )?;
+
+    // Store handshake handle
+    self
+      .handshake_handle_cache_
+      .insert(remote_participant_guidp, handshake_handle);
+
+    Ok((outcome, handshake_token))
+  }
+
+  pub fn process_handshake(
+    &mut self,
+    local_participant_guidp: GuidPrefix,
+    remote_participant_guidp: GuidPrefix,
+    handshake_message_in: HandshakeMessageToken,
+  ) -> SecurityResult<(ValidationOutcome, Option<HandshakeMessageToken>)> {
+    let handshake_handle = self.get_handshake_handle(&remote_participant_guidp)?;
+
+    self
+      .auth
+      .process_handshake(handshake_message_in, handshake_handle)
   }
 }
 

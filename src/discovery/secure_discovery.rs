@@ -17,7 +17,10 @@ use crate::{
   qos, rpc,
   security::{
     access_control::{ParticipantSecurityAttributes, PermissionsToken},
-    authentication::{HandshakeMessageToken, IdentityToken, ValidationOutcome},
+    authentication::{
+      authentication_builtin::BuiltinHandshakeState, HandshakeMessageToken, IdentityToken,
+      ValidationOutcome, GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+    },
     security_plugins::{SecurityPlugins, SecurityPluginsHandle},
     ParticipantGenericMessage, ParticipantSecurityInfo, ParticipantStatelessMessage, SecurityError,
     SecurityResult,
@@ -32,6 +35,16 @@ use crate::{
 };
 use super::{discovery_db::DiscoveryDB, Participant_GUID, SpdpDiscoveredParticipantData};
 
+// // Handshake states for running authentication handshake with built-in
+// // authentication plugin.
+// #[derive(Clone, Copy, PartialEq, Debug)]
+// enum BuiltinHandshakeState {
+//   PendingRequestMessage,
+//   PendingReplyMessage,
+//   PendingFinalMessage,
+//   CompletedWithFinalMessage,
+// }
+
 // Enum for authentication status of a remote participant
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum AuthenticationStatus {
@@ -42,16 +55,19 @@ pub(crate) enum AuthenticationStatus {
   Rejected, // Could not authenticate & should not communicate to
 }
 
-struct UnansweredAuthenticationMessage {
+// How many times an authentication message is resent if we don't get an answer
+const STORED_AUTH_MESSAGE_MAX_RESEND_COUNT: u8 = 10;
+
+struct StoredAuthenticationMessage {
   message: ParticipantStatelessMessage,
-  remaining_resend_times: u8,
+  remaining_resend_counter: u8,
 }
 
-impl UnansweredAuthenticationMessage {
+impl StoredAuthenticationMessage {
   pub fn new(message: ParticipantStatelessMessage) -> Self {
     Self {
       message,
-      remaining_resend_times: 10, // Message is resent at most 10 times
+      remaining_resend_counter: STORED_AUTH_MESSAGE_MAX_RESEND_COUNT,
     }
   }
 }
@@ -71,7 +87,13 @@ pub(crate) struct SecureDiscovery {
   pub local_dp_sec_attributes: ParticipantSecurityAttributes,
 
   stateless_message_helper: ParticipantStatelessMessageHelper,
-  unanswered_authentication_messages: HashMap<GuidPrefix, UnansweredAuthenticationMessage>,
+  // SecureDiscovery maintains states of handshake with remote participants.
+  // We use the same states as the built-in authentication plugin, since
+  // SecureDiscovery currently supports the built-in plugin only.
+  handshake_states: HashMap<GuidPrefix, BuiltinHandshakeState>,
+  // Here we store the latest authentication message that we've sent to each remote,
+  // in case they need to be sent again
+  stored_authentication_messages: HashMap<GuidPrefix, StoredAuthenticationMessage>,
 }
 
 impl SecureDiscovery {
@@ -149,7 +171,8 @@ impl SecureDiscovery {
       local_dp_property_qos: property_qos,
       local_dp_sec_attributes: security_attributes,
       stateless_message_helper: ParticipantStatelessMessageHelper::new(),
-      unanswered_authentication_messages: HashMap::new(),
+      handshake_states: HashMap::new(),
+      stored_authentication_messages: HashMap::new(),
     })
   }
 
@@ -232,17 +255,25 @@ impl SecureDiscovery {
           }
         }
       }
-      Some(auth_status) => {
-        // This participant already has an authentication status. Keep it unchanged.
-        // Just do some debug logging
-        if auth_status == AuthenticationStatus::Authenticated {
-          debug!(
-            "Received a non-secure DCPSParticipant message from an authenticated remote \
-             participant (supposedly). Ignoring the message. Remote guid prefix: {:?}",
-            guid_prefix
+      Some(AuthenticationStatus::Authenticating) => {
+        // We are authenticating.
+        // If we need to send this remote participant a handshake request but haven't
+        // managed to do so, retry
+        if let Some(BuiltinHandshakeState::PendingRequestSend) =
+          self.get_handshake_state(&guid_prefix)
+        {
+          self.try_sending_new_handshake_request_message(
+            guid_prefix,
+            discovery_db,
+            auth_msg_writer,
           );
         }
-        auth_status
+        // Otherwise keep the same authentication status
+        AuthenticationStatus::Authenticating
+      }
+      Some(other_status) => {
+        // Do nothing, just keep the same status
+        other_status
       }
     };
 
@@ -395,7 +426,7 @@ impl SecureDiscovery {
     discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
     auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
   ) -> AuthenticationStatus {
-    // First gather some needed items
+    // Gather some needed items
     let my_guid = self.local_participant_guid;
     let remote_guid = participant_data.participant_guid;
     let remote_identity_token = participant_data
@@ -403,6 +434,7 @@ impl SecureDiscovery {
       .clone()
       .expect("IdentityToken disappeared"); // Identity token is here since compatibility test passed
 
+    // First validate the remote identity
     let outcome: ValidationOutcome = match get_security_plugins(&self.security_plugins)
       .validate_remote_identity(
         my_guid.prefix,
@@ -449,93 +481,71 @@ impl SecureDiscovery {
     // DP event loop. This will result in matching the builtin
     // ParticipantStatelessMessage endpoints, which are used for exchanging
     // authentication messages.
-    self.add_participant_to_db_for_authentication_and_notify_dp(
-      participant_data,
+    discovery_db_write(discovery_db).update_participant(participant_data);
+    self.update_participant_authentication_status_and_notify_dp(
+      remote_guid.prefix,
+      AuthenticationStatus::Authenticating,
       discovery_db,
       discovery_updated_sender,
     );
 
     // What is the exact validation outcome?
-    // The returned authentication status is from this match-statement
+    // The returned authentication status is from this match statement
     match outcome {
       ValidationOutcome::PendingHandshakeRequest => {
         // We should send the handshake request
-        let request_message = match self.create_handshake_request_message(discovery_db, remote_guid)
-        {
-          Ok(message) => message,
-          Err(e) => {
-            error!(
-              "Failed to create a handshake request message. Reason: {}.",
-              e.msg
-            );
-            // TODO: return something other than Rejected, so that we attempt to create the
-            // handshake message later?
-            return AuthenticationStatus::Rejected;
-          }
-        };
-
-        // Add request message to cache of unanswered messages so that we'll try
-        // resending it later if needed
-        self.unanswered_authentication_messages.insert(
+        self.update_handshake_state(
           remote_guid.prefix,
-          UnansweredAuthenticationMessage::new(request_message.clone()),
+          BuiltinHandshakeState::PendingRequestSend,
+        );
+        self.try_sending_new_handshake_request_message(
+          remote_guid.prefix,
+          discovery_db,
+          auth_msg_writer,
         );
 
-        // Send the message
-        let _ = auth_msg_writer.write(request_message, None).map_err(|err| {
-          error!(
-            "Failed to send a handshake request message. Remote GUID: {:?}. Info: {}. Trying to \
-             resend the message later.",
-            remote_guid, err
-          );
-        });
-
-        debug!(
-          "Sent a handshake request message to remote with guid: {:?}",
-          remote_guid
-        );
         AuthenticationStatus::Authenticating // return value
       }
       ValidationOutcome::PendingHandshakeMessage => {
         // We should wait for the handshake request
+        self.update_handshake_state(
+          remote_guid.prefix,
+          BuiltinHandshakeState::PendingRequestMessage,
+        );
+
         debug!(
           "Waiting for a handshake request from remote with guid {:?}",
           remote_guid
         );
+
         AuthenticationStatus::Authenticating // return value
       }
       outcome => {
         // Other outcomes should not be possible
         error!(
-          "Got an unexpected outcome when validating remote identity. Validation outcome: {:?}.",
-          outcome
+          "Got an unexpected outcome when validating remote identity. Validation outcome: {:?}. \
+           Remote guid: {:?}",
+          outcome, remote_guid
         );
         AuthenticationStatus::Rejected // return value
       }
     }
   }
 
-  fn add_participant_to_db_for_authentication_and_notify_dp(
+  fn update_participant_authentication_status_and_notify_dp(
     &mut self,
-    participant_data: &SpdpDiscoveredParticipantData,
+    participant_guid_prefix: GuidPrefix,
+    new_status: AuthenticationStatus,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
     discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
   ) {
-    // Add the participant to DiscoveryDB with 'Authenticating' status
-    let remote_guid = participant_data.participant_guid;
-
     let mut db = discovery_db_write(discovery_db);
-    db.update_participant(participant_data);
-    db.update_authentication_status(remote_guid.prefix, AuthenticationStatus::Authenticating);
+    db.update_authentication_status(participant_guid_prefix, new_status);
 
-    // Send a notification to DP event loop to update the participant.
-    // Since the authentication status is 'Authenticating', DP event loop will match
-    // the DCPSParticipantStatelessMessage (and only that) which is the channel for
-    // authentication messages
     send_discovery_notification(
       discovery_updated_sender,
       DiscoveryNotificationType::ParticipantUpdated {
-        guid_prefix: remote_guid.prefix,
+        guid_prefix: participant_guid_prefix,
       },
     );
   }
@@ -543,60 +553,596 @@ impl SecureDiscovery {
   fn create_handshake_request_message(
     &mut self,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
-    remote_guid: GUID,
+    remote_guid_prefix: GuidPrefix,
   ) -> SecurityResult<ParticipantStatelessMessage> {
-    // First get our own participant data from DB & serialize it as needed.
-    // Data should always exist.
-    let my_ser_data = discovery_db_read(discovery_db)
-      .find_participant_proxy(self.local_participant_guid.prefix)
-      .expect("My own participant data disappeared from DiscoveryDB")
-      .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_BE)
-      .map_err(|e| security_error!("Serializing participant data failed: {e}"))?;
+    // First get our own serialized data
+    let my_ser_data = self.get_serialized_local_participant_data(discovery_db)?;
 
     // Get the handshake request token
-    let handshake_request_token = get_security_plugins(&self.security_plugins)
+    let (validation_outcome, request_token) = get_security_plugins(&self.security_plugins)
       .begin_handshake_request(
         self.local_participant_guid.prefix,
-        remote_guid.prefix,
-        my_ser_data.to_vec(),
+        remote_guid_prefix,
+        my_ser_data,
       )?;
 
-    Ok(self.stateless_message_helper.new_message(
+    if validation_outcome != ValidationOutcome::PendingHandshakeMessage {
+      // PendingHandshakeMessage is the only expected validation outcome
+      return Err(security_error!(
+        "Received an unexpected validation outcome from begin_handshake_request. Outcome: {:?}",
+        validation_outcome
+      ));
+    }
+
+    // Create the request message with the request token
+    let request_message = self.stateless_message_helper.new_message(
       self.local_participant_guid,
       None,
-      remote_guid,
-      "dds.sec.auth_request", // TODO: get this constant somewhere
-      handshake_request_token,
-    ))
+      remote_guid_prefix,
+      GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+      request_token,
+    );
+    Ok(request_message)
+  }
+
+  fn try_sending_new_handshake_request_message(
+    &mut self,
+    remote_guid_prefix: GuidPrefix,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+    auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
+  ) {
+    debug!(
+      "Send a handshake request message to remote with guid prefix: {:?}",
+      remote_guid_prefix
+    );
+
+    let request_message =
+      match self.create_handshake_request_message(discovery_db, remote_guid_prefix) {
+        Ok(message) => message,
+        Err(e) => {
+          error!(
+            "Failed to create a handshake request message. Reason: {}. Remote guid prefix: {:?}. \
+             Trying again later.",
+            e.msg, remote_guid_prefix
+          );
+          return;
+        }
+      };
+    // Request was created successfully
+
+    // Add the message to cache of unanswered messages so that we'll try
+    // resending it later if needed
+    self.stored_authentication_messages.insert(
+      remote_guid_prefix,
+      StoredAuthenticationMessage::new(request_message.clone()),
+    );
+
+    // Try to send the message
+    let _ = auth_msg_writer.write(request_message, None).map_err(|err| {
+      warn!(
+        "Failed to send a handshake request message. Remote GUID prefix: {:?}. Info: {}. Trying \
+         to resend the message later.",
+        remote_guid_prefix, err
+      );
+    });
+
+    // Update handshake state to pending reply message
+    self.update_handshake_state(
+      remote_guid_prefix,
+      BuiltinHandshakeState::PendingReplyMessage,
+    );
   }
 
   pub fn resend_unanswered_authentication_messages(
     &mut self,
     auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
   ) {
-    for (guid_prefix, unswered_message) in self.unanswered_authentication_messages.iter_mut() {
-      match auth_msg_writer.write(unswered_message.message.clone(), None) {
-        Ok(()) => {
-          unswered_message.remaining_resend_times -= 1;
-          debug!(
-            "Resent an unanswered authentication message to remote with guid prefix {:?}. \
-             Resending at most {} more times.",
-            guid_prefix, unswered_message.remaining_resend_times,
-          );
-        }
-        Err(err) => {
-          debug!(
-            "Failed to resend an unanswered authentication message to remote with guid prefix \
-             {:?}. Error: {}. Retrying later.",
-            guid_prefix, err
-          );
+    for (guid_prefix, stored_message) in self.stored_authentication_messages.iter_mut() {
+      // Resend the message unless it's a final message (which needs to be requested
+      // from us)
+      if self.handshake_states.get(guid_prefix)
+        != Some(&BuiltinHandshakeState::CompletedWithFinalMessageSent)
+      {
+        match auth_msg_writer.write(stored_message.message.clone(), None) {
+          Ok(()) => {
+            stored_message.remaining_resend_counter -= 1;
+            debug!(
+              "Resent an unanswered authentication message to remote with guid prefix {:?}. \
+               Resending at most {} more times.",
+              guid_prefix, stored_message.remaining_resend_counter,
+            );
+          }
+          Err(err) => {
+            debug!(
+              "Failed to resend an unanswered authentication message to remote with guid prefix \
+               {:?}. Error: {}. Retrying later.",
+              guid_prefix, err
+            );
+          }
         }
       }
     }
     // Remove messages with no more resends
     self
-      .unanswered_authentication_messages
-      .retain(|_guid_prefix, message| message.remaining_resend_times > 0);
+      .stored_authentication_messages
+      .retain(|_guid_prefix, message| message.remaining_resend_counter > 0);
+  }
+
+  fn reset_stored_message_resend_counter(&mut self, remote_guid_prefix: &GuidPrefix) {
+    if let Some(msg) = self
+      .stored_authentication_messages
+      .get_mut(remote_guid_prefix)
+    {
+      msg.remaining_resend_counter = STORED_AUTH_MESSAGE_MAX_RESEND_COUNT;
+    } else {
+      debug!(
+        "Did not find a stored message for remote with guid prefix {:?}",
+        remote_guid_prefix
+      );
+    }
+  }
+
+  pub fn participant_stateless_message_read(
+    &mut self,
+    message: &ParticipantStatelessMessage,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+    discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
+    auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
+  ) {
+    if !self.is_stateless_msg_for_local_participant(message) {
+      trace!("Ignoring a ParticipantStatelessMessage, since its not meant for me.");
+      return;
+    }
+
+    // Check that GenericMessageClassID is what we expect
+    if message.generic.message_class_id != GMCLASSID_SECURITY_AUTH_HANDSHAKE {
+      debug!(
+        "Received a ParticipantStatelessMessage with an unknown GenericMessageClassID: {}",
+        message.generic.message_class_id
+      );
+      return;
+    }
+
+    let remote_guid_prefix = message.generic.source_guid_prefix();
+    // What to do depends on the handshake state with the remote participant
+    match self.get_handshake_state(&remote_guid_prefix) {
+      None => {
+        trace!(
+          "Received a handshake message from remote with guid prefix {:?}. Ignoring, since no \
+           handshake going on.",
+          remote_guid_prefix
+        );
+      }
+      Some(BuiltinHandshakeState::PendingRequestSend) => {
+        // Haven't yet managed to create a handshake request for this remote
+        self.try_sending_new_handshake_request_message(
+          remote_guid_prefix,
+          discovery_db,
+          auth_msg_writer,
+        );
+      }
+      Some(BuiltinHandshakeState::PendingRequestMessage) => {
+        self.handshake_on_pending_request_message(message, discovery_db, auth_msg_writer);
+      }
+      Some(BuiltinHandshakeState::PendingReplyMessage) => {
+        self.handshake_on_pending_reply_message(
+          message,
+          discovery_db,
+          auth_msg_writer,
+          discovery_updated_sender,
+        );
+      }
+      Some(BuiltinHandshakeState::PendingFinalMessage) => {
+        self.handshake_on_pending_final_message(message, discovery_db, discovery_updated_sender);
+      }
+      Some(BuiltinHandshakeState::CompletedWithFinalMessageSent) => {
+        // Handshake with this remote has completed by us sending the final
+        // message. Send the message again in case the remote hasn't
+        // received it
+        debug!(
+          "Resending a final handshake message to remote with guid prefix {:?}",
+          remote_guid_prefix
+        );
+        self.resend_final_handshake_message(remote_guid_prefix, auth_msg_writer);
+      }
+      Some(BuiltinHandshakeState::CompletedWithFinalMessageReceived) => {
+        trace!(
+          "Received a handshake message from remote with guid prefix {:?}. Handshake with this \
+           participant has already been completed by receiving the final message. Nothing for us \
+           to do anymore.",
+          remote_guid_prefix
+        );
+      }
+    }
+  }
+
+  fn handshake_on_pending_request_message(
+    &mut self,
+    received_message: &ParticipantStatelessMessage,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+    auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
+  ) {
+    let remote_guid_prefix = received_message.generic.source_guid_prefix();
+    debug!(
+      "Received a handshake message from remote with guid prefix {:?}. Expecting a handshake \
+       request message.",
+      remote_guid_prefix
+    );
+    let local_guid_prefix = self.local_participant_guid.prefix;
+
+    // Get the token from the message
+    let handshake_token = match get_handshake_token_from_stateless_message(received_message) {
+      Some(token) => token,
+      None => {
+        error!(
+          "A ParticipantStatelessMessage does not contain a message token. Remote guid prefix: \
+           {:?}",
+          remote_guid_prefix
+        );
+        return;
+      }
+    };
+
+    // Get my own data serialized
+    let my_serialized_data =
+      if let Ok(data) = self.get_serialized_local_participant_data(discovery_db) {
+        data
+      } else {
+        error!(" Could not get serialized local participant data");
+        return;
+      };
+
+    // Now call the security functionality
+    match get_security_plugins(&self.security_plugins).begin_handshake_reply(
+      local_guid_prefix,
+      remote_guid_prefix,
+      handshake_token,
+      my_serialized_data,
+    ) {
+      Ok((ValidationOutcome::PendingHandshakeMessage, reply_token)) => {
+        // Request token was OK and we got a reply token to send back
+        // Create a ParticipantStatelessMessage with the token
+        let reply_message = self.stateless_message_helper.new_message(
+          self.local_participant_guid,
+          Some(received_message),
+          remote_guid_prefix,
+          GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+          reply_token,
+        );
+
+        debug!(
+          "Send a handshake reply message to participant with guid prefix {:?}",
+          remote_guid_prefix
+        );
+
+        // Send the token
+        let _ = auth_msg_writer
+          .write(reply_message.clone(), None)
+          .map_err(|err| {
+            error!(
+              "Failed to send a handshake reply message. Remote GUID prefix: {:?}. Info: {}. \
+               Trying to resend the message later.",
+              remote_guid_prefix, err
+            );
+          });
+
+        // Add request message to cache of unanswered messages so that we'll try
+        // resending it later if needed
+        self.stored_authentication_messages.insert(
+          remote_guid_prefix,
+          StoredAuthenticationMessage::new(reply_message),
+        );
+
+        // Set handshake state as pending final message
+        self.handshake_states.insert(
+          remote_guid_prefix,
+          BuiltinHandshakeState::PendingFinalMessage,
+        );
+      }
+      Ok((other_outcome, _reply_token)) => {
+        // Other outcomes should not be possible
+        error!(
+          "Unexpected validation outcome from begin_handshake_reply. Outcome: {:?}. Remote guid \
+           prefix: {:?}",
+          other_outcome, remote_guid_prefix
+        );
+      }
+      Err(e) => {
+        error!(
+          "Replying to a handshake request failed: {}. Remote guid prefix: {:?}",
+          e, remote_guid_prefix
+        );
+      }
+    }
+  }
+
+  fn handshake_on_pending_reply_message(
+    &mut self,
+    received_message: &ParticipantStatelessMessage,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+    auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
+    discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
+  ) {
+    let remote_guid_prefix = received_message.generic.source_guid_prefix();
+    debug!(
+      "Received a handshake message from remote with guid prefix {:?}. Expecting a handshake \
+       reply message.",
+      remote_guid_prefix
+    );
+
+    // Make sure that 'related message identity' in the received message matches
+    // the message that we have sent to the remote
+    if !self.check_is_stateless_msg_related_to_our_msg(received_message, remote_guid_prefix) {
+      warn!(
+        "Received handshake message that is not related to the message that we have sent. \
+         Ignoring. Remote guid prefix: {:?}",
+        remote_guid_prefix
+      );
+      return;
+    }
+
+    // Get the token from the message
+    let handshake_token = match get_handshake_token_from_stateless_message(received_message) {
+      Some(token) => token,
+      None => {
+        error!(
+          "A ParticipantStatelessMessage does not contain a message token. Ignoring the message. \
+           Remote guid prefix: {:?}",
+          remote_guid_prefix
+        );
+        return;
+      }
+    };
+
+    // Now call the security functionality
+    let result = get_security_plugins(&self.security_plugins).process_handshake(
+      self.local_participant_guid.prefix,
+      remote_guid_prefix,
+      handshake_token,
+    );
+    match result {
+      Ok((ValidationOutcome::OkFinalMessage, Some(final_message_token))) => {
+        // Everything went OK. Still need to send the final message to remote.
+        // Create a ParticipantStatelessMessage with the token
+        let final_message = self.stateless_message_helper.new_message(
+          self.local_participant_guid,
+          Some(received_message),
+          remote_guid_prefix,
+          GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+          final_message_token,
+        );
+
+        debug!(
+          "Send a final handshake message to participant with guid prefix {:?}",
+          remote_guid_prefix
+        );
+
+        // Send the token
+        let _ = auth_msg_writer
+          .write(final_message.clone(), None)
+          .map_err(|err| {
+            error!(
+              "Failed to send a final handshake message. Remote GUID prefix: {:?}. Info: {}. \
+               Trying to resend the message later.",
+              remote_guid_prefix, err
+            );
+          });
+
+        // Add final message to cache of unanswered messages so that we'll try
+        // resending it later if needed
+        self.stored_authentication_messages.insert(
+          remote_guid_prefix,
+          StoredAuthenticationMessage::new(final_message),
+        );
+
+        // Set handshake state as completed with final message
+        self.handshake_states.insert(
+          remote_guid_prefix,
+          BuiltinHandshakeState::CompletedWithFinalMessageSent,
+        );
+
+        // TODO: get shared secret
+
+        // Update participant status as Authenticated & notify dp
+        self.update_participant_authentication_status_and_notify_dp(
+          remote_guid_prefix,
+          AuthenticationStatus::Authenticated,
+          discovery_db,
+          discovery_updated_sender,
+        );
+
+        security_log!(
+          "Authenticated participant with GUID prefix {:?}",
+          remote_guid_prefix
+        );
+      }
+      Ok((other_outcome, _token_opt)) => {
+        // Expected only OkFinalMessage outcome
+        error!(
+          "Received an unexpted validation outcome from the security plugins. Outcome: {:?}. \
+           Remote guid prefix: {:?}",
+          other_outcome, remote_guid_prefix
+        );
+      }
+      Err(e) => {
+        error!(
+          "Validating handshake reply message failed. Error: {}. Remote guid prefix: {:?}",
+          e, remote_guid_prefix
+        );
+        // Reset stored message resend counter, so our resends can't be depleted by
+        // sending us incorrect messages
+        self.reset_stored_message_resend_counter(&remote_guid_prefix);
+      }
+    }
+  }
+
+  fn handshake_on_pending_final_message(
+    &mut self,
+    received_message: &ParticipantStatelessMessage,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+    discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
+  ) {
+    let remote_guid_prefix = received_message.generic.source_guid_prefix();
+    debug!(
+      "Received a handshake message from remote with guid prefix {:?}. Expecting a final \
+       handshake message",
+      remote_guid_prefix
+    );
+
+    // Make sure that 'related message identity' in the received message matches
+    // the message that we have sent to the remote
+    if !self.check_is_stateless_msg_related_to_our_msg(received_message, remote_guid_prefix) {
+      warn!(
+        "Received handshake message that is not related to the message that we have sent. \
+         Ignoring. Remote guid prefix: {:?}",
+        remote_guid_prefix
+      );
+      return;
+    }
+
+    // Get the token from the message
+    let handshake_token = match get_handshake_token_from_stateless_message(received_message) {
+      Some(token) => token,
+      None => {
+        error!(
+          "A ParticipantStatelessMessage does not contain a message token. Ignoring the message. \
+           Remote guid prefix: {:?}",
+          remote_guid_prefix
+        );
+        return;
+      }
+    };
+
+    // Now call the security functionality
+    let result = get_security_plugins(&self.security_plugins).process_handshake(
+      self.local_participant_guid.prefix,
+      remote_guid_prefix,
+      handshake_token,
+    );
+    match result {
+      Ok((ValidationOutcome::Ok, None)) => {
+        // Everything went OK
+
+        // Set handshake state as completed with final message
+        self.handshake_states.insert(
+          remote_guid_prefix,
+          BuiltinHandshakeState::CompletedWithFinalMessageReceived,
+        );
+
+        // TODO: get shared secret
+
+        // Update participant status as Authenticated & notify dp
+        self.update_participant_authentication_status_and_notify_dp(
+          remote_guid_prefix,
+          AuthenticationStatus::Authenticated,
+          discovery_db,
+          discovery_updated_sender,
+        );
+
+        // Remove the stored reply message so it won't be resent
+        self
+          .stored_authentication_messages
+          .remove(&remote_guid_prefix);
+
+        security_log!(
+          "Authenticated participant with GUID prefix {:?}",
+          remote_guid_prefix
+        );
+      }
+      Ok((other_outcome, _token_opt)) => {
+        // Expected only Ok outcome
+        error!(
+          "Received an unexpted validation outcome from the security plugins. Outcome: {:?}. \
+           Remote guid prefix: {:?}",
+          other_outcome, remote_guid_prefix
+        );
+      }
+      Err(e) => {
+        error!(
+          "Validating final handshake message failed. Error: {}. Remote guid prefix: {:?}",
+          e, remote_guid_prefix
+        );
+        // Reset stored message resend counter, so our resends can't be depleted by
+        // sending us incorrect messages
+        self.reset_stored_message_resend_counter(&remote_guid_prefix);
+      }
+    }
+  }
+
+  fn resend_final_handshake_message(
+    &self,
+    remote_guid_prefix: GuidPrefix,
+    auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
+  ) {
+    if let Some(stored_msg) = self.stored_authentication_messages.get(&remote_guid_prefix) {
+      let _ = auth_msg_writer
+        .write(stored_msg.message.clone(), None)
+        .map_err(|err| {
+          warn!(
+            "Failed to send a final handshake message. Remote GUID prefix: {:?}. Error: {}",
+            remote_guid_prefix, err
+          );
+        });
+    } else {
+      warn!(
+        "Did not find the final handshake request to send. Remote guid prefix: {:?}",
+        remote_guid_prefix
+      );
+    }
+  }
+
+  // Check if a ParticipantStatelessMessage is meant for the local participant.
+  // See section 7.4.3.4 of the security spec.
+  fn is_stateless_msg_for_local_participant(&self, message: &ParticipantStatelessMessage) -> bool {
+    let destination_participant_guid = message.generic.destination_participant_guid;
+    destination_participant_guid == self.local_participant_guid
+    // Accept also if destination guid == GUID_UNKNOWN?
+  }
+
+  // Check is the message related to our unanswered message
+  fn check_is_stateless_msg_related_to_our_msg(
+    &self,
+    message: &ParticipantStatelessMessage,
+    sender_guid_prefix: GuidPrefix,
+  ) -> bool {
+    // Get the message sent by us
+    let message_sent_by_us = match self.stored_authentication_messages.get(&sender_guid_prefix) {
+      Some(msg) => &msg.message,
+      None => {
+        debug!(
+          "Did not find an unanswered message for guid prefix {:?}",
+          sender_guid_prefix
+        );
+        return false;
+      }
+    };
+
+    message.generic.related_message_identity == message_sent_by_us.generic.message_identity
+  }
+
+  fn get_handshake_state(&self, remote_guid_prefix: &GuidPrefix) -> Option<BuiltinHandshakeState> {
+    self.handshake_states.get(remote_guid_prefix).copied()
+  }
+
+  fn update_handshake_state(
+    &mut self,
+    remote_guid_prefix: GuidPrefix,
+    state: BuiltinHandshakeState,
+  ) {
+    self.handshake_states.insert(remote_guid_prefix, state);
+  }
+
+  fn get_serialized_local_participant_data(
+    &self,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) -> SecurityResult<Vec<u8>> {
+    let my_ser_data = discovery_db_read(discovery_db)
+      .find_participant_proxy(self.local_participant_guid.prefix)
+      .expect("My own participant data disappeared from DiscoveryDB")
+      .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_BE)
+      .map_err(|e| security_error!("Serializing participant data failed: {e}"))?;
+
+    Ok(my_ser_data.to_vec())
   }
 }
 
@@ -630,7 +1176,26 @@ fn send_discovery_notification(
   }
 }
 
-// A helper to construct ParticipantStatelessMessages. Takes care of the
+fn get_handshake_token_from_stateless_message(
+  message: &ParticipantStatelessMessage,
+) -> Option<HandshakeMessageToken> {
+  let source_guid_prefix = message.generic.source_guid_prefix();
+  let message_data = &message.generic.message_data;
+
+  // We expect the message to contain only one dataholder
+  if message.generic.message_data.len() > 1 {
+    warn!(
+      "ParticipantStatelessMessage for handshake contains more than one dataholder. Using only \
+       the first one. Source guid prefix: {:?}",
+      source_guid_prefix
+    );
+  }
+  message_data
+    .get(0)
+    .map(|dataholder| HandshakeMessageToken::from(dataholder.clone()))
+}
+
+// A helper to construct/readParticipantStatelessMessages. Takes care of the
 // sequence numbering of the messages
 struct ParticipantStatelessMessageHelper {
   next_seqnum: SequenceNumber,
@@ -649,7 +1214,7 @@ impl ParticipantStatelessMessageHelper {
     &mut self,
     local_participant_guid: GUID,
     related_message_opt: Option<&ParticipantStatelessMessage>,
-    destination_participant_guid: GUID,
+    destination_guid_prefix: GuidPrefix,
     message_class_id: &str,
     handshake_token: HandshakeMessageToken,
   ) -> ParticipantStatelessMessage {
@@ -670,6 +1235,9 @@ impl ParticipantStatelessMessageHelper {
         sequence_number: SequenceNumber::zero(),
       }
     };
+
+    // Make sure destination GUID has correct EntityId
+    let destination_participant_guid = GUID::new(destination_guid_prefix, EntityId::PARTICIPANT);
 
     // Increment next sequence number
     self.next_seqnum = self.next_seqnum + SequenceNumber::new(1);

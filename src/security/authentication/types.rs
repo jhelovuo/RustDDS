@@ -3,11 +3,16 @@ use speedy::{Readable, Writable};
 
 use crate::security::types::DataHolder;
 
+// Some generic message class IDs for authentication (see section 7.4.3.5 of the
+// Security spec)
+pub const GMCLASSID_SECURITY_AUTH_REQUEST: &str = "dds.sec.auth_request";
+pub const GMCLASSID_SECURITY_AUTH_HANDSHAKE: &str = "dds.sec.auth";
+
 // ValidationOutcome is like ValidationResult_t in the the Security
 // specification v.1.1 (section 8.3.2.11.1), but does not contain
 // VALIDATION_FAILED. Failure is handled as an error in the result type
 // SecurityResult
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ValidationOutcome {
   Ok,
   // PendingRetry,  // Not included because builtin plugins never return this
