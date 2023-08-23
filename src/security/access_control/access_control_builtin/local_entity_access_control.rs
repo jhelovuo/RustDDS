@@ -119,28 +119,35 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
       &Entity::Topic,
     )
   }
-
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_local_datawriter_register_instance(
     &self,
     _permissions_handle: PermissionsHandle,
-    _writer_todo: (),
-    _key_todo: (),
+    _writer: DataWriter, // Needs actual type definition
+    _key: DynamicData,   // Needs actual type definition
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
     Ok(())
   }
+  */
 
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_local_datawriter_dispose_instance(
     &self,
     _permissions_handle: PermissionsHandle,
-    _writer_todo: (),
-    _key_todo: (),
+    _writer: DataWriter, // Needs actual type definition
+    _key: DynamicData,   // Needs actual type definition
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
     Ok(())
   }
+  */
 
   // Currently only mocked, but ready after removing the last line
   fn get_topic_sec_attributes(

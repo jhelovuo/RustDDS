@@ -138,6 +138,9 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     )
   }
 
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_local_datawriter_match(
     &self,
     _writer_permissions_handle: PermissionsHandle,
@@ -149,7 +152,11 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     // custom plugins
     Ok(())
   }
+  */
 
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_local_datareader_match(
     &self,
     _reader_permissions_handle: PermissionsHandle,
@@ -161,29 +168,38 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     // custom plugins
     Ok(())
   }
+  */
 
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_remote_datawriter_register_instance(
     &self,
     _permissions_handle: PermissionsHandle,
-    _reader_todo: (),
-    _publication_handle_todo: (),
-    _key_todo: (),
-    _instance_handle_todo: (),
+    _reader: DataReader,                   // Needs actual type definition
+    _publication_handle: InstanceHandle_t, // Needs actual type definition
+    _key: DynamicData,                     // Needs actual type definition
+    _instance_handle: InstanceHandle_t,    // Needs actual type definition
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
     Ok(())
   }
+  */
 
+  /*
+  // Support for this is not yet implemented as the builtin plugin does not need
+  // it
   fn check_remote_datawriter_dispose_instance(
     &self,
-    _permissions_handle: PermissionsHandle,
-    _reader_todo: (),
-    _publication_handle_todo: (),
-    _key_todo: (),
+    permissions_handle: PermissionsHandle,
+    reader: DataReader,                   // Needs actual type definition
+    publication_handle: InstanceHandle_t, // Needs actual type definition
+    key: DynamicData,                     // Needs actual type definition
   ) -> SecurityResult<()> {
     // According to 9.4.3 this actually just returns OK, probably reserved for
     // custom plugins
     Ok(())
   }
+  */
 }
