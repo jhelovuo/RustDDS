@@ -32,18 +32,20 @@ pub struct SecurityError {
 }
 
 pub fn security_error(msg: &str) -> SecurityError {
-  SecurityError{ msg: msg.to_string() }
+  SecurityError {
+    msg: msg.to_string(),
+  }
 }
 
 impl From<ring::error::Unspecified> for SecurityError {
   fn from(_e: ring::error::Unspecified) -> Self {
-    SecurityError{ msg: 
-      "The ring crypto library gives 'Unspecified' error. That's all we are authorized to know. Sorry."
-      .to_string()
+    SecurityError {
+      msg: "The ring crypto library gives 'Unspecified' error. That's all we are authorized to \
+            know. Sorry."
+        .to_string(),
     }
   }
 }
-
 
 #[doc(hidden)]
 #[macro_export]

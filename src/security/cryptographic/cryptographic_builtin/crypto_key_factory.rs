@@ -10,7 +10,7 @@ use crate::{
   },
   security_error,
 };
-use super::aes_gcm_gmac::{try_keygen};
+use super::aes_gcm_gmac::try_keygen;
 
 impl CryptographicBuiltin {
   fn generate_crypto_handle_(&mut self) -> CryptoHandle {
@@ -140,8 +140,13 @@ impl CryptographicBuiltin {
     crypto_handle: CryptoHandle,
   ) -> KeyMaterial_AES_GCM_GMAC_seq {
     if origin_authentication {
-      let master_receiver_specific_key =
-        try_keygen(key_materials.key_material().transformation_kind.try_into().ok());
+      let master_receiver_specific_key = try_keygen(
+        key_materials
+          .key_material()
+          .transformation_kind
+          .try_into()
+          .ok(),
+      );
       key_materials.add_master_receiver_specific_key(crypto_handle, master_receiver_specific_key)
     } else {
       key_materials.add_master_receiver_specific_key(0, BuiltinKey::ZERO)

@@ -6,8 +6,8 @@ use crate::{
 use super::{
   aes_gcm_gmac::{compute_mac, encrypt},
   types::{
-    BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinKey, BuiltinMAC, 
-    ReceiverKeyMaterial, ReceiverSpecificMAC,
+    BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinKey, BuiltinMAC, ReceiverKeyMaterial,
+    ReceiverSpecificMAC,
   },
 };
 
@@ -59,16 +59,12 @@ fn compute_receiver_specific_macs(
        master_receiver_specific_key,
      }| {
       // Compute MAC
-      compute_mac(
-        master_receiver_specific_key,
-        initialization_vector,
-        data,
-      )
-      // Combine with id
-      .map(|receiver_mac| ReceiverSpecificMAC {
-        receiver_mac_key_id: *receiver_specific_key_id,
-        receiver_mac,
-      })
+      compute_mac(master_receiver_specific_key, initialization_vector, data)
+        // Combine with id
+        .map(|receiver_mac| ReceiverSpecificMAC {
+          receiver_mac_key_id: *receiver_specific_key_id,
+          receiver_mac,
+        })
     },
   ))
   // Wrap in footer

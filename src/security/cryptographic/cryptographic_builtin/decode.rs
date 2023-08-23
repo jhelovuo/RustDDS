@@ -175,12 +175,8 @@ pub(super) fn decode_datawriter_submessage_gcm(
       }
 
       // Authenticated decryption
-      let mut plaintext = Bytes::copy_from_slice(&decrypt(
-        key,
-        initialization_vector,
-        &data,
-        common_mac,
-      )?);
+      let mut plaintext =
+        Bytes::copy_from_slice(&decrypt(key, initialization_vector, &data, common_mac)?);
 
       // Deserialize (submessage deserialization is a bit funky atm)
       match Submessage::read_from_buffer(&mut plaintext)
@@ -274,12 +270,8 @@ pub(super) fn decode_datareader_submessage_gcm(
       }
 
       // Authenticated decryption
-      let mut plaintext = Bytes::copy_from_slice(&decrypt(
-        key,
-        initialization_vector,
-        &data,
-        common_mac,
-      )?);
+      let mut plaintext =
+        Bytes::copy_from_slice(&decrypt(key, initialization_vector, &data, common_mac)?);
 
       // Deserialize (submessage deserialization is a bit funky atm)
       match Submessage::read_from_buffer(&mut plaintext)
@@ -390,12 +382,8 @@ pub(super) fn decode_rtps_message_gcm(
     }
 
     // Authenticated decryption
-    let mut plaintext = Bytes::copy_from_slice(&decrypt(
-      key,
-      initialization_vector,
-      data,
-      common_mac,
-    )?);
+    let mut plaintext =
+      Bytes::copy_from_slice(&decrypt(key, initialization_vector, data, common_mac)?);
 
     // We expect an InfoSource submessage followed by the original message
     let info_source = if let Some(Submessage {

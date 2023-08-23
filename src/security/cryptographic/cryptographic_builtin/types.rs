@@ -9,8 +9,8 @@ use crate::{
     crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
   security::{
-    cryptographic::EndpointCryptoHandle, BinaryProperty, DataHolder, 
-    SecurityError, SecurityResult, security_error,
+    cryptographic::EndpointCryptoHandle, security_error, BinaryProperty, DataHolder, SecurityError,
+    SecurityResult,
   },
   security_error,
   serialization::cdr_serializer::to_bytes,
@@ -385,15 +385,16 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Vec<CryptoToken> {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 struct Serializable_KeyMaterial_AES_GCM_GMAC {
   transformation_kind: CryptoTransformKind,
-  master_salt:  Vec<u8>, // sequence<octet, 32>
+  master_salt: Vec<u8>, // sequence<octet, 32>
   sender_key_id: CryptoTransformKeyId,
-  master_sender_key:  Vec<u8>, // sequence<octet, 32>
+  master_sender_key: Vec<u8>, // sequence<octet, 32>
   receiver_specific_key_id: CryptoTransformKeyId,
   master_receiver_specific_key: Vec<u8>, // sequence<octet, 32>
 }
 
 // The `sequence<octet, 32>` IDL type in the spec means variable-length
-// sequence. Vec<u8> is encoding-compatible, as long as we limit the length to 32.
+// sequence. Vec<u8> is encoding-compatible, as long as we limit the length to
+// 32.
 
 impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
@@ -408,8 +409,7 @@ impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC
     }: Serializable_KeyMaterial_AES_GCM_GMAC,
   ) -> Result<Self, Self::Error> {
     // Map generic transformation_kind to builtin
-    let transformation_kind = 
-      BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
+    let transformation_kind = BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
 
     let key_len = KeyLength::try_from(transformation_kind)?;
 
@@ -419,12 +419,10 @@ impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC
       sender_key_id,
       master_sender_key: BuiltinKey::from_bytes(key_len, &master_sender_key)?,
       receiver_specific_key_id,
-      master_receiver_specific_key:
-        BuiltinKey::from_bytes(key_len, &master_receiver_specific_key)?,
+      master_receiver_specific_key: BuiltinKey::from_bytes(key_len, &master_receiver_specific_key)?,
     })
   }
 }
-
 
 impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
   fn from(
@@ -439,7 +437,7 @@ impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
   ) -> Self {
     Serializable_KeyMaterial_AES_GCM_GMAC {
       transformation_kind: transformation_kind.into(),
-      master_salt, 
+      master_salt,
       sender_key_id,
       master_sender_key: master_sender_key.as_bytes().into(),
       receiver_specific_key_id,
@@ -717,10 +715,11 @@ pub(super) enum KeyLength {
 impl TryFrom<BuiltinCryptoTransformationKind> for KeyLength {
   type Error = SecurityError;
 
-  fn try_from(value: BuiltinCryptoTransformationKind) -> Result<Self,SecurityError> {
+  fn try_from(value: BuiltinCryptoTransformationKind) -> Result<Self, SecurityError> {
     match value {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => 
-        Err(security_error("No crypto transform requested, no key length")),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Err(security_error(
+        "No crypto transform requested, no key length",
+      )),
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC => Ok(Self::AES128),
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM => Ok(Self::AES128),
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => Ok(Self::AES256),
@@ -734,12 +733,12 @@ impl TryFrom<BuiltinCryptoTransformationKind> for KeyLength {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(super) enum BuiltinKey {
-  AES128([u8;AES128_KEY_LENGTH]),
-  AES256([u8;AES256_KEY_LENGTH]),
+  AES128([u8; AES128_KEY_LENGTH]),
+  AES256([u8; AES256_KEY_LENGTH]),
 }
 
 impl BuiltinKey {
-  pub const ZERO:Self = BuiltinKey::AES256([0;AES256_KEY_LENGTH]);
+  pub const ZERO: Self = BuiltinKey::AES256([0; AES256_KEY_LENGTH]);
 
   pub fn as_bytes(&self) -> &[u8] {
     match self {
@@ -748,15 +747,17 @@ impl BuiltinKey {
     }
   }
 
-  pub fn from_bytes(length:KeyLength, bytes:&[u8]) -> SecurityResult<Self> {
+  pub fn from_bytes(length: KeyLength, bytes: &[u8]) -> SecurityResult<Self> {
     let l = length as usize;
     match length {
       // unwraps will succeed, because we test for sufficient length just before.
-      KeyLength::AES128 if bytes.len() >= l 
-        => Ok(BuiltinKey::AES128( bytes[0..l].try_into().unwrap() )),
+      KeyLength::AES128 if bytes.len() >= l => {
+        Ok(BuiltinKey::AES128(bytes[0..l].try_into().unwrap()))
+      }
 
-      KeyLength::AES256 if bytes.len() >= l 
-        => Ok(BuiltinKey::AES256( bytes[0..l].try_into().unwrap() )),
+      KeyLength::AES256 if bytes.len() >= l => {
+        Ok(BuiltinKey::AES256(bytes[0..l].try_into().unwrap()))
+      }
 
       _ => Err(security_error("BuiltinKey: source material too short.")),
     }
@@ -771,8 +772,8 @@ impl BuiltinKey {
 
   // Rust `rand` library uses by default the 12-round chacha-algorithm, which is
   // "widely believed" to be secure.
-  // The library documentation states that the generator may be upgraded, if it is found
-  // to be insecure.
+  // The library documentation states that the generator may be upgraded, if it is
+  // found to be insecure.
   pub fn generate_random(key_len: KeyLength) -> Self {
     match key_len {
       KeyLength::AES128 => BuiltinKey::AES128(rand::random::<[u8; AES128_KEY_LENGTH]>()),

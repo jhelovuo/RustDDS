@@ -103,29 +103,25 @@ impl CryptographicBuiltin {
 
     let (encoded_submessage, crypto_footer) = match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        return Ok( EncodedSubmessage::Unencoded( plain_rtps_submessage ) )
+        return Ok(EncodedSubmessage::Unencoded(plain_rtps_submessage))
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        (
-          plain_rtps_submessage,
-          encode_gmac(
-            encode_key,
-            initialization_vector,
-            &plaintext,
-            &receiver_specific_key_materials,
-          )?,
-        )
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        encode_gcm(
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => (
+        plain_rtps_submessage,
+        encode_gmac(
           encode_key,
           initialization_vector,
           &plaintext,
           &receiver_specific_key_materials,
-        )?
-      }
+        )?,
+      ),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => encode_gcm(
+        encode_key,
+        initialization_vector,
+        &plaintext,
+        &receiver_specific_key_materials,
+      )?,
     };
 
     // Build crypto header and security prefix
@@ -158,7 +154,6 @@ impl CryptoTransform for CryptographicBuiltin {
     plain_buffer: Vec<u8>,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
-
     // Get the key material for encrypting serialized payloads
     let payload_key_material = self
       .get_encode_key_materials_(&sending_datawriter_crypto_handle)
@@ -186,21 +181,13 @@ impl CryptoTransform for CryptographicBuiltin {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         return Ok((plain_buffer, ParameterList::new()));
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        encode_serialized_payload_gmac(
-          encode_key,
-          initialization_vector,
-          &plain_buffer,
-        )?
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+        encode_serialized_payload_gmac(encode_key, initialization_vector, &plain_buffer)?
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        encode_serialized_payload_gcm(
-          encode_key,
-          initialization_vector,
-          &plain_buffer,
-        )?
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+        encode_serialized_payload_gcm(encode_key, initialization_vector, &plain_buffer)?
       }
     };
 
@@ -244,11 +231,13 @@ impl CryptoTransform for CryptographicBuiltin {
 
   fn encode_rtps_message(
     &self,
-    Message{ header, submessages }: Message,
+    Message {
+      header,
+      submessages,
+    }: Message,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
     receiving_participant_crypto_handle_list: Vec<ParticipantCryptoHandle>,
   ) -> SecurityResult<Message> {
-
     // Convert the header into an InfoSource submessage
     let info_source = InfoSource::from(header)
       .create_submessage(BitFlags::from_endianness(speedy::Endianness::BigEndian));
@@ -337,20 +326,18 @@ impl CryptoTransform for CryptographicBuiltin {
         /*  // TODO? switch to the following to avoid unnecessary pre/postfixes
         return Ok(EncodeResult::One(plain_rtps_message)); */
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        (
-          submessages_with_info_source,
-          encode_gmac(
-            encode_key,
-            initialization_vector,
-            &plaintext,
-            &receiver_specific_key_materials,
-          )?,
-        )
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => (
+        submessages_with_info_source,
+        encode_gmac(
+          encode_key,
+          initialization_vector,
+          &plaintext,
+          &receiver_specific_key_materials,
+        )?,
+      ),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
         // TODO: implement encryption
         encode_gcm(
           encode_key,
@@ -484,8 +471,8 @@ impl CryptoTransform for CryptographicBuiltin {
             receiver_specific_mac,
           )
         }
-        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC |
-        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+        | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
           decode_rtps_message_gmac(
             decode_key,
             receiver_specific_key,
@@ -495,8 +482,8 @@ impl CryptoTransform for CryptographicBuiltin {
             receiver_specific_mac,
           )
         }
-        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM |
-        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+        | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
           decode_rtps_message_gcm(
             decode_key,
             receiver_specific_key,
@@ -685,8 +672,8 @@ impl CryptoTransform for CryptographicBuiltin {
           receiver_specific_mac,
         )
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
         decode_datawriter_submessage_gmac(
           decode_key,
           receiver_specific_key,
@@ -696,8 +683,8 @@ impl CryptoTransform for CryptographicBuiltin {
           receiver_specific_mac,
         )
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
         decode_datawriter_submessage_gcm(
           decode_key,
           receiver_specific_key,
@@ -786,8 +773,8 @@ impl CryptoTransform for CryptographicBuiltin {
           receiver_specific_mac,
         )
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
         decode_datareader_submessage_gmac(
           decode_key,
           receiver_specific_key,
@@ -797,8 +784,8 @@ impl CryptoTransform for CryptographicBuiltin {
           receiver_specific_mac,
         )
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
         decode_datareader_submessage_gcm(
           decode_key,
           receiver_specific_key,
@@ -868,12 +855,12 @@ impl CryptoTransform for CryptographicBuiltin {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         decode_serialized_payload_gmac(decode_key, initialization_vector, data)
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
         decode_serialized_payload_gmac(decode_key, initialization_vector, data)
       }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM |
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
         decode_serialized_payload_gcm(decode_key, initialization_vector, data)
       }
     }
