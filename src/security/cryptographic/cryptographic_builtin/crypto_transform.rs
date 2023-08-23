@@ -103,19 +103,7 @@ impl CryptographicBuiltin {
 
     let (encoded_submessage, crypto_footer) = match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        // TODO this is mainly for testing and debugging
-        // (
-        //   plain_rtps_submessage,
-        //   encode_gmac(
-        //     encode_key,
-        //     KeyLength::None,
-        //     initialization_vector,
-        //     &plaintext,
-        //     &receiver_specific_key_materials,
-        //   )?,
-        // )
-        // TODO switch to the following to avoid unnecessary pre/postfixes
-        return Ok(EncodedSubmessage::Unencoded( plain_rtps_submessage ))
+        return Ok( EncodedSubmessage::Unencoded( plain_rtps_submessage ) )
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC |
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
@@ -234,8 +222,6 @@ impl CryptoTransform for CryptographicBuiltin {
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
     receiving_datareader_crypto_handle_list: Vec<DatareaderCryptoHandle>,
   ) -> SecurityResult<EncodedSubmessage> {
-    //TODO: this is only a mock implementation
-
     self.encode_submessage(
       plain_rtps_submessage,
       sending_datawriter_crypto_handle,
@@ -249,8 +235,6 @@ impl CryptoTransform for CryptographicBuiltin {
     sending_datareader_crypto_handle: DatareaderCryptoHandle,
     receiving_datawriter_crypto_handle_list: Vec<DatawriterCryptoHandle>,
   ) -> SecurityResult<EncodedSubmessage> {
-    //TODO: this is only a mock implementation
-
     self.encode_submessage(
       plain_rtps_submessage,
       sending_datareader_crypto_handle,
@@ -260,17 +244,10 @@ impl CryptoTransform for CryptographicBuiltin {
 
   fn encode_rtps_message(
     &self,
-    plain_rtps_message: Message,
+    Message{ header, submessages }: Message,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
     receiving_participant_crypto_handle_list: Vec<ParticipantCryptoHandle>,
   ) -> SecurityResult<Message> {
-    //TODO: this is only a mock implementation
-
-    // Destructure
-    let Message {
-      header,
-      submessages,
-    } = plain_rtps_message;
 
     // Convert the header into an InfoSource submessage
     let info_source = InfoSource::from(header)

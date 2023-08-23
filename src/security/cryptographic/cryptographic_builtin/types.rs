@@ -385,12 +385,16 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Vec<CryptoToken> {
 #[derive(Deserialize, Serialize, PartialEq, Clone)]
 struct Serializable_KeyMaterial_AES_GCM_GMAC {
   transformation_kind: CryptoTransformKind,
-  master_salt: [u8;32],
+  master_salt:  Vec<u8>, // sequence<octet, 32>
   sender_key_id: CryptoTransformKeyId,
-  master_sender_key: [u8;32],
+  master_sender_key:  Vec<u8>, // sequence<octet, 32>
   receiver_specific_key_id: CryptoTransformKeyId,
-  master_receiver_specific_key: [u8;32],
+  master_receiver_specific_key: Vec<u8>, // sequence<octet, 32>
 }
+
+// The `sequence<octet, 32>` IDL type in the spec means variable-length
+// sequence. Vec<u8> is encoding-compatible, as long as we limit the length to 32.
+
 impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
   fn try_from(
@@ -403,30 +407,24 @@ impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC
       master_receiver_specific_key,
     }: Serializable_KeyMaterial_AES_GCM_GMAC,
   ) -> Result<Self, Self::Error> {
-    // Map transformation_kind to builtin
+    // Map generic transformation_kind to builtin
     let transformation_kind = 
       BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
-    let (master_salt, master_sender_key, master_receiver_specific_key) =
-      match KeyLength::try_from(transformation_kind) {
-        Ok(key_len) => {
-          ( Vec::from(&master_salt[0..8]),
-            BuiltinKey::from_bytes(key_len, &master_sender_key)?,
-            BuiltinKey::from_bytes(key_len, &master_sender_key)? ) 
-        }
-        Err(_) => ( Vec::new(), BuiltinKey::ZERO, BuiltinKey::ZERO ),
-      };
+
+    let key_len = KeyLength::try_from(transformation_kind)?;
+
     Ok(Self {
       transformation_kind,
       master_salt,
       sender_key_id,
-      master_sender_key,
+      master_sender_key: BuiltinKey::from_bytes(key_len, &master_sender_key)?,
       receiver_specific_key_id,
-      master_receiver_specific_key,
+      master_receiver_specific_key:
+        BuiltinKey::from_bytes(key_len, &master_receiver_specific_key)?,
     })
   }
 }
 
-use std::io::Write;
 
 impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
   fn from(
@@ -439,24 +437,13 @@ impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
       master_receiver_specific_key,
     }: KeyMaterial_AES_GCM_GMAC,
   ) -> Self {
-    // The unwraps do not fail, because the source material is <= destination array
-    let mut ser_master_salt = [0_u8;32];
-    // ...except for master_salt. TODO: Enforce size statically. It is now Vec.
-    ser_master_salt.as_mut_slice().write_all(&master_salt).unwrap();
-    let mut ser_master_sender_key = [0_u8;32];
-    ser_master_sender_key.as_mut_slice().write_all(master_sender_key.as_bytes()).unwrap();
-    let mut ser_master_receiver_specific_key = [0_u8;32];
-    ser_master_receiver_specific_key.as_mut_slice()
-      .write_all(master_receiver_specific_key.as_bytes())
-      .unwrap();
-
     Serializable_KeyMaterial_AES_GCM_GMAC {
       transformation_kind: transformation_kind.into(),
-      master_salt: ser_master_salt,
+      master_salt, 
       sender_key_id,
-      master_sender_key: ser_master_sender_key,
+      master_sender_key: master_sender_key.as_bytes().into(),
       receiver_specific_key_id,
-      master_receiver_specific_key: ser_master_receiver_specific_key,
+      master_receiver_specific_key: master_receiver_specific_key.as_bytes().into(),
     }
   }
 }

@@ -52,7 +52,7 @@ pub(super) fn try_keygen(key_length: Option<KeyLength>) -> BuiltinKey {
   }
 }
 
-
+#[allow(non_snake_case)]
 fn to_unbound_AES_GCM_key(key: &BuiltinKey) -> UnboundKey {
   match key {
     // unwraps should be safe, because builtin key lengths always match expected length
