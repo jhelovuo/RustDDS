@@ -6,10 +6,11 @@ use crate::{
 use super::{
   aes_gcm_gmac::{compute_mac, encrypt},
   types::{
-    BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinKey, BuiltinMAC, ReceiverKeyMaterial,
-    ReceiverSpecificMAC,
+    BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinMAC, 
+    ReceiverKeyMaterial, ReceiverSpecificMAC,
   },
 };
+use super::builtin_key::*;
 
 pub(super) fn encode_serialized_payload_gmac(
   key: &BuiltinKey,

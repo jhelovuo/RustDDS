@@ -5,6 +5,7 @@ mod crypto_transform;
 mod decode;
 mod encode;
 mod types;
+mod builtin_key;
 
 use std::collections::{HashMap, HashSet};
 
