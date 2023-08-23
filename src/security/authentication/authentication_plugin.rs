@@ -1,7 +1,7 @@
 use crate::{
   dds::qos::QosPolicies,
   security::{access_control::*, SecurityResult},
-  structure::guid::GUID,
+  structure::guid::{GuidPrefix, GUID},
 };
 use super::*;
 
@@ -38,12 +38,16 @@ pub trait Authentication: Send {
   /// are also contained inside the Ok-variant, in addition to the validation
   /// outcome.
   fn validate_remote_identity(
-    &self,
-    remote_auth_request_token: AuthRequestMessageToken,
+    &mut self,
+    remote_auth_request_token: Option<AuthRequestMessageToken>,
     local_identity_handle: IdentityHandle,
     remote_identity_token: IdentityToken,
-    remote_participant_guid: GUID,
-  ) -> SecurityResult<(ValidationOutcome, IdentityHandle, AuthRequestMessageToken)>;
+    remote_participant_guidp: GuidPrefix,
+  ) -> SecurityResult<(
+    ValidationOutcome,
+    IdentityHandle,
+    Option<AuthRequestMessageToken>,
+  )>;
 
   /// begin_handshake_request: section 8.3.2.11.4 of the Security
   /// specification
@@ -51,7 +55,7 @@ pub trait Authentication: Send {
   /// The return values `handshake_handle` and `handshake_message` are also
   /// contained inside the Ok-variant, in addition to the validation outcome.
   fn begin_handshake_request(
-    &self,
+    &mut self,
     initiator_identity_handle: IdentityHandle,
     replier_identity_handle: IdentityHandle,
     serialized_local_participant_data: Vec<u8>,
@@ -63,7 +67,7 @@ pub trait Authentication: Send {
   /// The return values `handshake_handle` and `handshake_message_out` are also
   /// contained inside the Ok-variant, in addition to the validation outcome.
   fn begin_handshake_reply(
-    &self,
+    &mut self,
     handshake_message_in: HandshakeMessageToken,
     initiator_identity_handle: IdentityHandle,
     replier_identity_handle: IdentityHandle,
@@ -76,10 +80,10 @@ pub trait Authentication: Send {
   /// The return value `handshake_message_out` is also contained
   /// inside the Ok-variant, in addition to the validation outcome.
   fn process_handshake(
-    &self,
+    &mut self,
     handshake_message_in: HandshakeMessageToken,
     handshake_handle: HandshakeHandle,
-  ) -> SecurityResult<(ValidationOutcome, HandshakeMessageToken)>;
+  ) -> SecurityResult<(ValidationOutcome, Option<HandshakeMessageToken>)>;
 
   /// get_shared_secret: section 8.3.2.11.7 of the Security
   /// specification

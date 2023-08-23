@@ -34,7 +34,7 @@ use crate::{
 };
 use super::{
   builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
-  discovery::DiscoverySecurityItems,
+  secure_discovery::SecureDiscovery,
 };
 
 // This type is used by Discovery to communicate the presence and properties
@@ -130,7 +130,7 @@ impl SpdpDiscoveredParticipantData {
   pub(crate) fn from_local_participant(
     participant: &DomainParticipant,
     self_locators: &HashMap<Token, Vec<Locator>>,
-    security_items_opt: &Option<DiscoverySecurityItems>, // If present, security is enabled
+    secure_discovery_opt: &Option<SecureDiscovery>, // If present, security is enabled
     lease_duration: Duration,
   ) -> Self {
     let metatraffic_multicast_locators = self_locators
@@ -170,7 +170,7 @@ impl SpdpDiscoveredParticipantData {
     let mut property = None;
     let mut security_info = None;
 
-    if let Some(sec_items) = security_items_opt {
+    if let Some(secure_discovery) = secure_discovery_opt {
       // Security enabled, add needed data
       // Builtin security endpoints
       builtin_endpoints = builtin_endpoints
@@ -188,11 +188,11 @@ impl SpdpDiscoveredParticipantData {
         | BuiltinEndpointSet::PARTICIPANT_SECURE_READER;
 
       // Tokens and the rest
-      identity_token = Some(sec_items.local_dp_identity_token.clone());
-      permissions_token = Some(sec_items.local_dp_permissions_token.clone());
-      property = Some(sec_items.local_dp_property_qos.clone());
+      identity_token = Some(secure_discovery.local_dp_identity_token.clone());
+      permissions_token = Some(secure_discovery.local_dp_permissions_token.clone());
+      property = Some(secure_discovery.local_dp_property_qos.clone());
       security_info = Some(ParticipantSecurityInfo::from(
-        sec_items.local_dp_sec_attributes.clone(),
+        secure_discovery.local_dp_sec_attributes.clone(),
       ));
     }
 

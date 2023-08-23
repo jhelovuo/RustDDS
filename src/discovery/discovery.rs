@@ -14,7 +14,6 @@ use crate::{
   dds::{
     participant::DomainParticipantWeak,
     qos::{
-      self,
       policy::{
         Deadline, DestinationOrder, Durability, History, Liveliness, Ownership, Presentation,
         PresentationAccessScope, Reliability, TimeBasedFilter,
@@ -26,6 +25,7 @@ use crate::{
   },
   discovery::{
     discovery_db::{DiscoveredVia, DiscoveryDB},
+    secure_discovery::SecureDiscovery,
     sedp_messages::{
       DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, Endpoint_GUID,
       ParticipantMessageData, ParticipantMessageDataKind, PublicationBuiltinTopicData, ReaderProxy,
@@ -34,12 +34,7 @@ use crate::{
     spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
   network::constant::*,
-  security::{
-    access_control::{ParticipantSecurityAttributes, PermissionsToken},
-    authentication::IdentityToken,
-    security_plugins::SecurityPluginsHandle,
-    types::*,
-  },
+  security::{security_plugins::SecurityPluginsHandle, types::*},
   serialization::{
     cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter,
     pl_cdr_adapters::*,
@@ -188,9 +183,9 @@ pub(crate) struct Discovery {
   // DCPSParticipantMessage - used by participants to communicate liveness
   dcps_participant_message: with_key::DiscoveryTopicCDR<ParticipantMessageData>,
 
-  // If security is enabled, security_items contains the security plugins
-  // and local security data that discovery needs
-  security_items: Option<DiscoverySecurityItems>,
+  // If security is enabled, this field contains a SecureDiscovery struct, an appendix
+  // which is used for Secure functionality
+  security_opt: Option<SecureDiscovery>,
 
   // Following topics from DDS Security spec v1.1
 
@@ -233,6 +228,7 @@ impl Discovery {
   const SEND_WRITERS_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
   const SEND_TOPIC_INFO_PERIOD: StdDuration = StdDuration::from_secs(10);
   const CHECK_PARTICIPANT_MESSAGES: StdDuration = StdDuration::from_secs(1);
+  const AUTHENTICATION_MESSAGE_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
 
   pub(crate) const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
@@ -496,65 +492,13 @@ impl Discovery {
 
     // DDS Security
 
-    let security_items = if let Some(plugins_handle) = security_plugins_opt {
-      // Plugins is Some so security is enabled
-      // Run the Discovery-related initialization steps of DDS Security spec v1.1
-      // Section "8.8.1 Authentication and AccessControl behavior with local
-      // DomainParticipant"
-      let plugins = plugins_handle.lock().unwrap();
-
-      let participant_guid = domain_participant.guid();
-
-      let property_qos = domain_participant
-        .qos()
-        .property()
-        .expect("No property QoS defined even though security is enabled");
-
-      let identity_token = try_construct!(
-        plugins.get_identity_token(participant_guid),
-        "Could not get identity token. {:?}"
+    let security_opt = if let Some(plugins_handle) = security_plugins_opt {
+      // Plugins is Some so security is enabled. Initialize SecureDiscovery
+      let security = try_construct!(
+        SecureDiscovery::new(&domain_participant, plugins_handle),
+        "Could not initialize Secure Discovery. {:?}"
       );
-
-      let _identity_status_token = try_construct!(
-        plugins.get_identity_status_token(participant_guid),
-        "Could not get identity status token. {:?}"
-      );
-
-      let permissions_token = try_construct!(
-        plugins.get_permissions_token(participant_guid),
-        "Could not get permissions token. {:?}"
-      );
-
-      let credential_token = try_construct!(
-        plugins.get_permissions_credential_token(participant_guid),
-        "Could not get permissions credential token. {:?}"
-      );
-
-      try_construct!(
-        plugins.set_permissions_credential_and_token(
-          participant_guid,
-          credential_token,
-          permissions_token.clone(),
-        ),
-        "Could not set permission tokens. {:?}"
-      );
-
-      let security_attributes = try_construct!(
-        plugins.get_participant_sec_attributes(participant_guid),
-        "Could not get participant security attributes. {:?}"
-      );
-
-      // Construct security items which discovery needs
-      let security_items = DiscoverySecurityItems {
-        security_plugins: plugins_handle.clone(),
-        local_dp_identity_token: identity_token,
-        local_dp_permissions_token: permissions_token,
-        local_dp_property_qos: property_qos,
-        local_dp_sec_attributes: security_attributes,
-      };
-
-      // Return the security items to indicate security is enabled
-      Some(security_items)
+      Some(security)
     } else {
       // Return None to indicate no security
       None
@@ -624,7 +568,7 @@ impl Discovery {
       Self::CHECK_PARTICIPANT_MESSAGES,
       P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
     );
-    //TODO: NO_KEY topic
+    // p2p Participant stateless message, used for authentication
     let dcps_participant_stateless_message = construct_topic_and_poll!(
       CDR,
       no_key,
@@ -636,8 +580,8 @@ impl Discovery {
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
       P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
-      Self::CHECK_PARTICIPANT_MESSAGES,
-      P2P_PARTICIPANT_STATELESS_MESSAGE_TIMER_TOKEN,
+      Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD,
+      CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN,
     );
     //TODO: NO_KEY topic
     let dcps_participant_volatile_message_secure = construct_topic_and_poll!(
@@ -677,7 +621,7 @@ impl Discovery {
       topic_cleanup_timer,      // SEDP
       dcps_participant_message, // liveliness messages
 
-      security_items,
+      security_opt,
       dcps_participant_secure,
       dcps_publications_secure,
       dcps_subscriptions_secure,
@@ -823,7 +767,7 @@ impl Discovery {
             let data = SpdpDiscoveredParticipantData::from_local_participant(
               &strong_dp,
               &self.self_locators,
-              &self.security_items,
+              &self.security_opt,
               5.0 * Duration::from(Self::SEND_PARTICIPANT_INFO_PERIOD),
             );
 
@@ -900,6 +844,12 @@ impl Discovery {
               }
             }
           }
+          P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN => {
+            self.handle_participant_stateless_message_reader();
+          }
+          CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN => {
+            self.on_authentication_message_resend_triggered();
+          }
           other_token => {
             error!("discovery event loop got token: {:?}", other_token);
           }
@@ -925,7 +875,7 @@ impl Discovery {
     let participant_data = SpdpDiscoveredParticipantData::from_local_participant(
       &dp,
       &self.self_locators,
-      &self.security_items,
+      &self.security_opt,
       Duration::DURATION_INFINITE,
     );
 
@@ -1027,40 +977,59 @@ impl Discovery {
       let s = self.dcps_participant.reader.take_next_sample();
       debug!("handle_participant_reader read {:?}", &s);
       match s {
-        Ok(Some(d)) => match d.value {
-          Sample::Value(participant_data) => {
-            debug!(
-              "handle_participant_reader discovered {:?}",
-              &participant_data
-            );
-            let was_new = self
-              .discovery_db_write()
-              .update_participant(&participant_data);
-            let guid_prefix = participant_data.participant_guid.prefix;
-            self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated {
-              guid_prefix,
-            });
-            if was_new {
-              // This may be a rediscovery of a previously seen participant that
-              // was temporarily lost due to network outage. Check if we already know
-              // what it has (readers, writers, topics).
-              debug!("Participant rediscovery start");
-              self.handle_topic_reader(Some(guid_prefix));
-              self.handle_subscription_reader(Some(guid_prefix));
-              self.handle_publication_reader(Some(guid_prefix));
-              debug!("Participant rediscovery finished");
+        Ok(Some(ds)) => {
+          let allowed_to_use = if let Some(security) = self.security_opt.as_mut() {
+            // Security is enabled. Do a secure read, potentially starting the
+            // authentication protocol. The returned boolean tells if normal Discovery
+            // is allowed to process the message.
+            security.participant_read(
+              &ds,
+              &self.discovery_db,
+              &self.discovery_updated_sender,
+              &self.dcps_participant_stateless_message.writer,
+            )
+          } else {
+            // No security, always allowed
+            true
+          };
+
+          if allowed_to_use {
+            match ds.value {
+              Sample::Value(participant_data) => {
+                debug!(
+                  "handle_participant_reader discovered {:?}",
+                  &participant_data
+                );
+                let was_new = self
+                  .discovery_db_write()
+                  .update_participant(&participant_data);
+                let guid_prefix = participant_data.participant_guid.prefix;
+                self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated {
+                  guid_prefix,
+                });
+                if was_new {
+                  // This may be a rediscovery of a previously seen participant that
+                  // was temporarily lost due to network outage. Check if we already know
+                  // what it has (readers, writers, topics).
+                  debug!("Participant rediscovery start");
+                  self.handle_topic_reader(Some(guid_prefix));
+                  self.handle_subscription_reader(Some(guid_prefix));
+                  self.handle_publication_reader(Some(guid_prefix));
+                  debug!("Participant rediscovery finished");
+                }
+              }
+              // Sample::Dispose means that DomainParticipant was disposed
+              Sample::Dispose(participant_guid) => {
+                self
+                  .discovery_db_write()
+                  .remove_participant(participant_guid.0.prefix, true); // true = actively removed
+                self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
+                  guid_prefix: participant_guid.0.prefix,
+                });
+              }
             }
           }
-          // Sample::Dispose means that DomainParticipant was disposed
-          Sample::Dispose(participant_guid) => {
-            self
-              .discovery_db_write()
-              .remove_participant(participant_guid.0.prefix, true); // true = actively removed
-            self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
-              guid_prefix: participant_guid.0.prefix,
-            });
-          }
-        },
+        }
         Ok(None) => {
           trace!("handle_participant_reader: no more data");
           return;
@@ -1363,6 +1332,46 @@ impl Discovery {
     }
   }
 
+  fn handle_participant_stateless_message_reader(&mut self) {
+    if let Some(security) = self.security_opt.as_mut() {
+      // Security enabled. Get messages from the stateless data reader & feed to
+      // Secure Discovery.
+      match self
+        .dcps_participant_stateless_message
+        .reader
+        .into_iterator()
+      {
+        Ok(dr_iter) => {
+          for msg in dr_iter {
+            security.participant_stateless_message_read(
+              &msg,
+              &self.discovery_db,
+              &self.discovery_updated_sender,
+              &self.dcps_participant_stateless_message.writer,
+            );
+          }
+        }
+        Err(e) => {
+          error!("handle_participant_stateless_message_reader: {e:?}");
+        }
+      };
+    }
+  }
+
+  fn on_authentication_message_resend_triggered(&mut self) {
+    if let Some(security) = self.security_opt.as_mut() {
+      // Security is enabled
+      security
+        .resend_unanswered_authentication_messages(&self.dcps_participant_stateless_message.writer);
+
+      // Reset timer for resending authentication messages
+      self
+        .dcps_participant_stateless_message
+        .timer
+        .set_timeout(Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD, ());
+    }
+  }
+
   pub fn participant_cleanup(&self) {
     let removed_guid_prefixes = self.discovery_db_write().participant_cleanup();
     for guid_prefix in removed_guid_prefixes {
@@ -1517,18 +1526,6 @@ impl Discovery {
       Err(e) => error!("Failed to send DiscoveryNotification {e:?}"),
     }
   }
-}
-
-// This struct contains items which discovery needs to do security.
-// Some local tokens etc. which do not change during runtime are stored here
-// so they don't have to be fetched from security plugins every time when needed
-#[allow(dead_code)] // Remove when security_plugins is used
-pub(crate) struct DiscoverySecurityItems {
-  pub security_plugins: SecurityPluginsHandle,
-  pub local_dp_identity_token: IdentityToken,
-  pub local_dp_permissions_token: PermissionsToken,
-  pub local_dp_property_qos: qos::policy::Property,
-  pub local_dp_sec_attributes: ParticipantSecurityAttributes,
 }
 
 // -----------------------------------------------------------------------

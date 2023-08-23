@@ -116,7 +116,7 @@ impl DomainParticipantBuilder {
 
       if let Err(e) = security_plugins.validate_local_permissions(
         self.domain_id,
-        participant_guid,
+        participant_guid.prefix,
         &participant_qos,
       ) {
         return create_error_not_allowed_by_security!(
@@ -127,7 +127,7 @@ impl DomainParticipantBuilder {
 
       if let Err(e) = security_plugins.check_create_participant(
         self.domain_id,
-        participant_guid,
+        participant_guid.prefix,
         &participant_qos,
       ) {
         return create_error_not_allowed_by_security!(

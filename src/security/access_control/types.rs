@@ -34,6 +34,12 @@ pub struct PermissionsToken {
   pub data_holder: DataHolder,
 }
 
+impl PermissionsToken {
+  pub fn class_id(&self) -> String {
+    self.data_holder.class_id.clone()
+  }
+}
+
 impl From<DataHolder> for PermissionsToken {
   fn from(value: DataHolder) -> Self {
     Self { data_holder: value }

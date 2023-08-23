@@ -45,7 +45,6 @@ pub struct CryptographicBuiltin {
   //
   // TODO: The current session_id is just a constant. Implementing counting above requires
   // some access to shared mutable state from encryption/send operations.
-
   /// For each (local datawriter (/datareader), remote participant) pair, stores
   /// the matched remote datareader (/datawriter)
   matched_remote_endpoint:
@@ -208,10 +207,10 @@ impl CryptographicBuiltin {
 
   fn session_id(&self) -> SessionId {
     // TODO: This should change at times. See comment at struct definition.
-    SessionId::new( [1,3,3,7] )
+    SessionId::new([1, 3, 3, 7])
   }
 
   fn random_initialization_vector(&self) -> BuiltinInitializationVector {
-    BuiltinInitializationVector::new( self.session_id(), rand::random() )
+    BuiltinInitializationVector::new(self.session_id(), rand::random())
   }
 }

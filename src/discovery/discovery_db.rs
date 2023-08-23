@@ -21,6 +21,7 @@ use crate::{
   },
 };
 use super::{
+  secure_discovery::AuthenticationStatus,
   sedp_messages::{
     DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
     ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
@@ -41,6 +42,9 @@ pub(crate) struct DiscoveryDB {
   my_guid: GUID,
   participant_proxies: BTreeMap<GuidPrefix, SpdpDiscoveredParticipantData>,
   participant_last_life_signs: BTreeMap<GuidPrefix, Instant>,
+
+  // Authentication statuses of participants
+  authentication_statuses: BTreeMap<GuidPrefix, AuthenticationStatus>,
 
   // local writer proxies for topics (topic name acts as key)
   local_topic_writers: BTreeMap<GUID, DiscoveredWriterData>,
@@ -90,6 +94,7 @@ impl DiscoveryDB {
       my_guid,
       participant_proxies: BTreeMap::new(),
       participant_last_life_signs: BTreeMap::new(),
+      authentication_statuses: BTreeMap::new(),
       local_topic_writers: BTreeMap::new(),
       local_topic_readers: BTreeMap::new(),
       external_topic_readers: BTreeMap::new(),
@@ -184,6 +189,7 @@ impl DiscoveryDB {
     info!("removing participant {:?}", guid_prefix);
     self.participant_proxies.remove(&guid_prefix);
     self.participant_last_life_signs.remove(&guid_prefix);
+    self.authentication_statuses.remove(&guid_prefix);
 
     if active_disposal {
       self.remove_topic_reader_with_prefix(guid_prefix);
@@ -675,6 +681,18 @@ impl DiscoveryDB {
       .external_topic_writers
       .range_mut(prefix.range())
       .for_each(|(_guid, p)| p.last_updated = now);
+  }
+
+  pub fn get_authentication_status(&self, guid_prefix: GuidPrefix) -> Option<AuthenticationStatus> {
+    self.authentication_statuses.get(&guid_prefix).copied()
+  }
+
+  pub fn update_authentication_status(
+    &mut self,
+    guid_prefix: GuidPrefix,
+    status: AuthenticationStatus,
+  ) {
+    self.authentication_statuses.insert(guid_prefix, status);
   }
 }
 

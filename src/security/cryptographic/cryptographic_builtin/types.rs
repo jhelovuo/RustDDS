@@ -2,7 +2,6 @@ use byteorder::BigEndian;
 use serde::{Deserialize, Serialize};
 use concat_arrays::concat_arrays; // macro
 
-
 use crate::{
   messages::submessages::elements::{
     crypto_content::CryptoContent,
@@ -172,40 +171,41 @@ impl From<BuiltinCryptoTransformIdentifier> for CryptoTransformIdentifier {
 /// consists of the session_id and initialization_vector_suffix. 9.5.2.3
 pub(super) const INITIALIZATION_VECTOR_LENGTH: usize = 12;
 
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(super) struct BuiltinInitializationVector([u8; INITIALIZATION_VECTOR_LENGTH]);
 
 impl BuiltinInitializationVector {
-  pub(super) fn new(session_id:SessionId, initialization_vector_suffix:[u8; 8]) -> Self {
-    BuiltinInitializationVector( concat_arrays!(session_id.0, initialization_vector_suffix ) )
+  pub(super) fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) -> Self {
+    BuiltinInitializationVector(concat_arrays!(session_id.0, initialization_vector_suffix))
   }
   pub(super) fn session_id(&self) -> SessionId {
     // Succeeds as the slice length is 4
-    SessionId::new( <[u8; 4]>::try_from(&self.0[..4]).unwrap() )
+    SessionId::new(<[u8; 4]>::try_from(&self.0[..4]).unwrap())
   }
   pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
     // Succeeds as the slice length is 12-4=8
     <[u8; 8]>::try_from(&self.0[4..]).unwrap()
   }
 
-  pub fn try_from_slice(s: impl AsRef<[u8]>) -> Result<Self,std::array::TryFromSliceError> {
-    Ok(Self( <[u8;INITIALIZATION_VECTOR_LENGTH]>::try_from(s.as_ref())? ))
+  pub fn try_from_slice(s: impl AsRef<[u8]>) -> Result<Self, std::array::TryFromSliceError> {
+    Ok(Self(<[u8; INITIALIZATION_VECTOR_LENGTH]>::try_from(
+      s.as_ref(),
+    )?))
   }
 }
 
-impl From<BuiltinInitializationVector> for [u8;INITIALIZATION_VECTOR_LENGTH] {
-  fn from(value:BuiltinInitializationVector) -> [u8;INITIALIZATION_VECTOR_LENGTH] {
+impl From<BuiltinInitializationVector> for [u8; INITIALIZATION_VECTOR_LENGTH] {
+  fn from(value: BuiltinInitializationVector) -> [u8; INITIALIZATION_VECTOR_LENGTH] {
     value.0
   }
 }
 
-
-#[derive(Debug,Clone,Copy)]
-pub(crate) struct SessionId( [u8;4] );
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SessionId([u8; 4]);
 
 impl SessionId {
-  pub fn new( s:[u8;4] ) -> Self {
-    SessionId( s )
+  pub fn new(s: [u8; 4]) -> Self {
+    SessionId(s)
   }
 
   pub fn as_bytes(&self) -> &[u8] {
@@ -213,8 +213,7 @@ impl SessionId {
   }
 }
 
-
-#[derive(Debug,Clone,Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(super) struct BuiltinCryptoHeaderExtra(pub(super) BuiltinInitializationVector);
 
 /// Methods for getting the contained data
@@ -228,10 +227,9 @@ impl BuiltinCryptoHeaderExtra {
   pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
     self.0.initialization_vector_suffix()
   }
-  pub fn new(session_id:SessionId, initialization_vector_suffix:[u8; 8]) -> Self {
+  pub fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) -> Self {
     Self::from((session_id, initialization_vector_suffix))
   }
-
 }
 
 impl From<BuiltinInitializationVector> for BuiltinCryptoHeaderExtra {
@@ -243,7 +241,10 @@ impl From<BuiltinInitializationVector> for BuiltinCryptoHeaderExtra {
 // Conversion from session_id and initialization_vector_suffix
 impl From<(SessionId, [u8; 8])> for BuiltinCryptoHeaderExtra {
   fn from((session_id, initialization_vector_suffix): (SessionId, [u8; 8])) -> Self {
-    Self( BuiltinInitializationVector::new(session_id, initialization_vector_suffix ))
+    Self(BuiltinInitializationVector::new(
+      session_id,
+      initialization_vector_suffix,
+    ))
     //Self( concat_arrays!(session_id.0, initialization_vector_suffix  ))
   }
 }

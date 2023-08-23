@@ -17,7 +17,7 @@ use crate::{
     },
     speedy_pl_cdr_helpers::*,
   },
-  structure::parameter_id::ParameterId,
+  structure::{guid::GuidPrefix, parameter_id::ParameterId},
   Keyed, QosPolicies, RepresentationIdentifier, GUID,
 };
 
@@ -484,8 +484,8 @@ pub type Token = DataHolder;
 
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
 pub struct ParticipantSecurityInfo {
-  participant_security_attributes: ParticipantSecurityAttributesMask,
-  plugin_participant_security_attributes: PluginParticipantSecurityAttributesMask,
+  pub(crate) participant_security_attributes: ParticipantSecurityAttributesMask,
+  pub(crate) plugin_participant_security_attributes: PluginParticipantSecurityAttributesMask,
 }
 
 impl From<ParticipantSecurityAttributes> for ParticipantSecurityInfo {
@@ -518,6 +518,14 @@ pub enum ParticipantSecurityAttributesMaskFlags {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct ParticipantSecurityAttributesMask(pub BitFlags<ParticipantSecurityAttributesMaskFlags>);
+
+impl ParticipantSecurityAttributesMask {
+  pub fn is_valid(&self) -> bool {
+    let Self(value) = self;
+    value.contains(ParticipantSecurityAttributesMaskFlags::IsValid)
+  }
+}
+
 impl<'a, C: Context> Readable<'a, C> for ParticipantSecurityAttributesMask {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let underlying_value: u32 = reader.read_value()?;
@@ -580,6 +588,14 @@ pub enum EndpointSecurityAttributesMaskFlags {
 }
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub struct EndpointSecurityAttributesMask(pub BitFlags<EndpointSecurityAttributesMaskFlags>);
+
+impl EndpointSecurityAttributesMask {
+  pub fn is_valid(&self) -> bool {
+    let Self(value) = self;
+    value.contains(EndpointSecurityAttributesMaskFlags::IsValid)
+  }
+}
+
 impl<'a, C: Context> Readable<'a, C> for EndpointSecurityAttributesMask {
   fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
     let underlying_value: u32 = reader.read_value()?;
@@ -617,7 +633,7 @@ pub type PluginEndpointSecurityAttributesMask = PluginSecurityAttributesMask;
 pub struct PluginSecurityAttributesMask(pub u32);
 
 impl PluginSecurityAttributesMask {
-  fn is_valid(self) -> bool {
+  pub fn is_valid(self) -> bool {
     let Self(value) = self;
     value >= 0x8000_0000 // Check whether the most significant bit is set
   }
@@ -819,9 +835,9 @@ impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
 
 // ParticipantStatelessMessage from section 7.4.3.3 of the Security
 // specification
-#[derive(Serialize, Deserialize)]
-pub struct ParticipantStatelessMessage {
-  generic: ParticipantGenericMessage,
+#[derive(Clone, Serialize, Deserialize)]
+pub(crate) struct ParticipantStatelessMessage {
+  pub generic: ParticipantGenericMessage,
 }
 // The specification defines and uses the following specific values for the
 // GenericMessageClassId:
@@ -870,7 +886,7 @@ use super::access_control::ParticipantSecurityAttributes;
 // This is the transport (message) type for specialized versions above.
 // DDS Security Spec v1.1
 // Section 7.2.6 ParticipantGenericMessage
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct ParticipantGenericMessage {
   pub message_identity: rpc::SampleIdentity,
   pub related_message_identity: rpc::SampleIdentity,
@@ -888,5 +904,11 @@ impl Keyed for ParticipantGenericMessage {
 
   fn key(&self) -> Self::K {
     self.source_endpoint_guid
+  }
+}
+
+impl ParticipantGenericMessage {
+  pub fn source_guid_prefix(&self) -> GuidPrefix {
+    self.message_identity.writer_guid.prefix
   }
 }
