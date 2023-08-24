@@ -24,6 +24,7 @@ use crate::{
   security_error,
 };
 use super::{
+  builtin_key::*,
   decode::{
     decode_datareader_submessage_gcm, decode_datareader_submessage_gmac,
     decode_datawriter_submessage_gcm, decode_datawriter_submessage_gmac,
@@ -33,7 +34,6 @@ use super::{
     encode_gcm, encode_gmac, encode_serialized_payload_gcm, encode_serialized_payload_gmac,
   },
   key_material::*,
-  builtin_key::*,
 };
 
 impl CryptographicBuiltin {
@@ -94,7 +94,6 @@ impl CryptographicBuiltin {
 
     let initialization_vector = self.random_initialization_vector();
 
-
     let encode_key = {
       // "9.5.3.3.3 Computation of SessionKey and SessionReceiverSpecificKey"
       //
@@ -103,12 +102,17 @@ impl CryptographicBuiltin {
       use ring::hmac;
 
       let master_key = hmac::Key::new(hmac::HMAC_SHA256, master_sender_key.as_bytes());
-      let digest = hmac::sign(&master_key, &[ 
-        b"SessionKey", 
-        master_salt.as_slice(), 
-        initialization_vector.session_id().as_bytes() ].concat());
+      let digest = hmac::sign(
+        &master_key,
+        &[
+          b"SessionKey",
+          master_salt.as_slice(),
+          initialization_vector.session_id().as_bytes(),
+        ]
+        .concat(),
+      );
 
-      BuiltinKey::from_bytes( KeyLength::try_from(transformation_kind)? , digest.as_ref())?
+      BuiltinKey::from_bytes(KeyLength::try_from(transformation_kind)?, digest.as_ref())?
     };
 
     // Compute encoded submessage and footer
