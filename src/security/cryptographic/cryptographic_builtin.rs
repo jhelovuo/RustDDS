@@ -240,8 +240,8 @@ impl CryptographicBuiltin {
     BuiltinKey::from_bytes( KeyLength::try_from(transformation_kind)? , digest.as_ref())  
   }
 
-  fn sender_session_crypto_materials(&self, handle: EndpointCryptoHandle, 
-    receiver_specific_crypto_handles: &[EndpointCryptoHandle]) 
+  fn sender_session_crypto_materials(&self, handle: CryptoHandle, 
+    receiver_specific_crypto_handles: &[CryptoHandle]) 
     -> SecurityResult<SessionCryptoMaterials> 
   {
     let endpoint_key_material = self
