@@ -20,6 +20,7 @@ use crate::{
   security_error,
 };
 use self::key_material::*;
+use self::builtin_key::*;
 
 // A struct implementing the builtin Cryptographic plugin
 // See sections 8.5 and 9.5 of the Security specification (v. 1.1)
@@ -213,4 +214,96 @@ impl CryptographicBuiltin {
   fn random_initialization_vector(&self) -> BuiltinInitializationVector {
     BuiltinInitializationVector::new(self.session_id(), rand::random())
   }
+
+  fn compute_session_key(transformation_kind: BuiltinCryptoTransformationKind, 
+    rec_spec: ReceiverSpecific,
+    master_key: &BuiltinKey, 
+    master_salt: &[u8], iv: BuiltinInitializationVector) 
+    -> SecurityResult<BuiltinKey>
+  {
+    // "9.5.3.3.3 Computation of SessionKey and SessionReceiverSpecificKey"
+    //
+    // TODO: Extract this block to a separate function and reuse in
+    // other transform functions below.
+    use ring::hmac;
+
+    let magic_prefix = match rec_spec {
+      ReceiverSpecific::No => b"SessionKey".as_ref(),
+      ReceiverSpecific::Yes => b"SessionReceiverKey".as_ref(),
+    };
+
+    let ring_master_key = hmac::Key::new(hmac::HMAC_SHA256, master_key.as_bytes());
+    let digest = hmac::sign(
+      &ring_master_key, 
+      &[ magic_prefix, master_salt, iv.session_id().as_bytes() ].concat() );
+
+    BuiltinKey::from_bytes( KeyLength::try_from(transformation_kind)? , digest.as_ref())  
+  }
+
+  fn sender_session_crypto_materials(&self, handle: EndpointCryptoHandle, 
+    receiver_specific_crypto_handles: &[EndpointCryptoHandle]) 
+    -> SecurityResult<SessionCryptoMaterials> 
+  {
+    let endpoint_key_material = self
+      .get_encode_key_materials(&handle)
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
+
+    let KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      ..
+    } = endpoint_key_material;
+
+    let transformation_kind = *transformation_kind;
+
+    let initialization_vector = self.random_initialization_vector();
+
+    let session_key = 
+      Self::compute_session_key(transformation_kind, ReceiverSpecific::No,
+        master_sender_key, &master_salt, initialization_vector)?;
+
+        // Get the key materials for computing receiver-specific MACs
+    let receiver_specific_key_materials = SecurityResult::<Vec<ReceiverSpecificKeyMaterial>>::from_iter(
+      // Iterate over receiver handles
+      receiver_specific_crypto_handles
+        .iter()
+        .map(|receiver_crypto_handle| {
+          self
+            .get_encode_key_materials(receiver_crypto_handle)
+            .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
+            // Compare to the common key material and get the receiver specific key material
+            .and_then(|receiver_key_material| {
+              receiver_key_material.receiver_key_material_for(&endpoint_key_material)
+            })
+            // Map to session keys
+            .and_then( |rec_spec_key_material| {
+                let session_key = Self::compute_session_key(transformation_kind, ReceiverSpecific::Yes,
+                    &rec_spec_key_material.key, master_salt, initialization_vector )?;
+                Ok(ReceiverSpecificKeyMaterial {key_id: rec_spec_key_material.key_id , key: session_key })
+              }
+            )
+        }),
+    )?;
+
+
+    Ok(SessionCryptoMaterials{
+      key_id: *sender_key_id,
+      transformation_kind,
+      session_key,
+      initialization_vector,
+      receiver_specific_key_materials, 
+    })
+  }
+
+}
+
+
+struct SessionCryptoMaterials {
+  key_id: CryptoTransformKeyId, // key identifier over the wire
+  transformation_kind: BuiltinCryptoTransformationKind, // encrypt/sign/none
+  session_key: BuiltinKey,  // session-specific AES-GCM key
+  initialization_vector: BuiltinInitializationVector, // AES-GCM also needs init vector (shared, but not secret)
+  receiver_specific_key_materials: Vec<ReceiverSpecificKeyMaterial>,
 }

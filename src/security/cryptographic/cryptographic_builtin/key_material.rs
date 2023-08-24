@@ -232,7 +232,7 @@ impl KeyMaterial_AES_GCM_GMAC {
       master_sender_key,
       ..
     }: &KeyMaterial_AES_GCM_GMAC,
-  ) -> SecurityResult<ReceiverKeyMaterial> {
+  ) -> SecurityResult<ReceiverSpecificKeyMaterial> {
     if !self.sender_key_id.eq(sender_key_id) {
       Err(security_error!(
         "The receiver-specific key material has a wrong sender_key_id: expected {:?}, received \
@@ -260,17 +260,23 @@ impl KeyMaterial_AES_GCM_GMAC {
         self.master_salt
       ))
     } else {
-      Ok(ReceiverKeyMaterial {
-        receiver_specific_key_id: self.receiver_specific_key_id,
-        master_receiver_specific_key: self.master_receiver_specific_key.clone(),
+      Ok(ReceiverSpecificKeyMaterial {
+        key_id: self.receiver_specific_key_id,
+        key: self.master_receiver_specific_key.clone(),
       })
     }
   }
 }
 
-pub(crate) struct ReceiverKeyMaterial {
-  pub receiver_specific_key_id: CryptoTransformKeyId,
-  pub master_receiver_specific_key: BuiltinKey,
+pub(crate) struct ReceiverSpecificKeyMaterial {
+  pub key_id: CryptoTransformKeyId,
+  pub key: BuiltinKey,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum ReceiverSpecific {
+  No, 
+  Yes,
 }
 
 // Conversions from and into Vec<CryptoToken> for KeyMaterial_AES_GCM_GMAC_seq

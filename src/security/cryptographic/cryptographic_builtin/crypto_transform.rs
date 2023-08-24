@@ -34,6 +34,7 @@ use super::{
     encode_gcm, encode_gmac, encode_serialized_payload_gcm, encode_serialized_payload_gmac,
   },
   key_material::*,
+  //builtin_key::*,
 };
 
 impl CryptographicBuiltin {
@@ -43,77 +44,18 @@ impl CryptographicBuiltin {
     sending_endpoint_crypto_handle: EndpointCryptoHandle,
     receiving_endpoint_crypto_handle_list: &[EndpointCryptoHandle],
   ) -> SecurityResult<EncodedSubmessage> {
-    //TODO: this is only a mock implementation
 
     // Serialize plaintext
     let plaintext = plain_rtps_submessage
       .write_to_vec()
       .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
 
-    // Get the key material for encoding
-    let sender_key_material = self
-      .get_encode_key_materials(&sending_endpoint_crypto_handle)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
-      .cloned()?;
-
-    // Get the key materials for computing receiver-specific MACs
-    let receiver_specific_key_materials = SecurityResult::<Vec<ReceiverKeyMaterial>>::from_iter(
-      // Iterate over receiver handles
-      receiving_endpoint_crypto_handle_list
-        .iter()
-        .map(|receiver_crypto_handle| {
-          // Get the encode key material
-          self
-            .get_encode_key_materials(receiver_crypto_handle)
-            .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
-            // Compare to the common key material and get the receiver specific key material
-            .and_then(|receiver_key_material| {
-              receiver_key_material.receiver_key_material_for(&sender_key_material)
-            })
-            // TODO use session keys
-            .map(
-              |ReceiverKeyMaterial {
-                 receiver_specific_key_id,
-                 master_receiver_specific_key,
-               }| ReceiverKeyMaterial {
-                receiver_specific_key_id,
-                master_receiver_specific_key,
-              },
-            )
-        }),
-    )?;
-
-    // Destructure the common key material
-    let KeyMaterial_AES_GCM_GMAC {
-      transformation_kind,
-      master_salt,
-      sender_key_id,
-      master_sender_key,
-      ..
-    } = sender_key_material;
-
-    let initialization_vector = self.random_initialization_vector();
-
-    let encode_key = {
-      // "9.5.3.3.3 Computation of SessionKey and SessionReceiverSpecificKey"
-      //
-      // TODO: Extract this block to a separate function and reuse in
-      // other transform functions below.
-      use ring::hmac;
-
-      let master_key = hmac::Key::new(hmac::HMAC_SHA256, master_sender_key.as_bytes());
-      let digest = hmac::sign(
-        &master_key,
-        &[
-          b"SessionKey",
-          master_salt.as_slice(),
-          initialization_vector.session_id().as_bytes(),
-        ]
-        .concat(),
-      );
-
-      BuiltinKey::from_bytes(KeyLength::try_from(transformation_kind)?, digest.as_ref())?
-    };
+    // // Get the key material for encoding
+    let SessionCryptoMaterials {
+      key_id, transformation_kind, session_key, initialization_vector, 
+      receiver_specific_key_materials
+    } = self.sender_session_crypto_materials(sending_endpoint_crypto_handle, 
+        receiving_endpoint_crypto_handle_list)?;
 
     // Compute encoded submessage and footer
 
@@ -125,7 +67,7 @@ impl CryptographicBuiltin {
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => (
         plain_rtps_submessage,
         encode_gmac(
-          &encode_key,
+          &session_key,
           initialization_vector,
           &plaintext,
           &receiver_specific_key_materials,
@@ -133,7 +75,7 @@ impl CryptographicBuiltin {
       ),
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => encode_gcm(
-        &encode_key,
+        &session_key,
         initialization_vector,
         &plaintext,
         &receiver_specific_key_materials,
@@ -145,7 +87,7 @@ impl CryptographicBuiltin {
       crypto_header: CryptoHeader::from(BuiltinCryptoHeader {
         transform_identifier: BuiltinCryptoTransformIdentifier {
           transformation_kind,
-          transformation_key_id: sender_key_id,
+          transformation_key_id: key_id,
         },
         builtin_crypto_header_extra: initialization_vector.into(),
       }),
@@ -170,35 +112,31 @@ impl CryptoTransform for CryptographicBuiltin {
     plain_buffer: Vec<u8>,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
-    // Get the key material for encrypting serialized payloads
-    let payload_key_material = self
-      .get_encode_key_materials(&sending_datawriter_crypto_handle)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key_material)?;
 
-    let initialization_vector = self.random_initialization_vector();
+    // Get the key material for encrypting serialized payloads
+    let SessionCryptoMaterials {
+      key_id, transformation_kind, session_key, initialization_vector, ..
+    } = self.sender_session_crypto_materials(sending_datawriter_crypto_handle, &[])?;
 
     let header = BuiltinCryptoHeader {
       transform_identifier: BuiltinCryptoTransformIdentifier {
-        transformation_kind: payload_key_material.transformation_kind,
-        transformation_key_id: payload_key_material.sender_key_id,
+        transformation_kind,
+        transformation_key_id: key_id,
       },
       builtin_crypto_header_extra: initialization_vector.into(),
     };
 
-    // TODO use session key
-    let encode_key = &payload_key_material.master_sender_key;
-
-    let (encoded_data, footer) = match payload_key_material.transformation_kind {
+    let (encoded_data, footer) = match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         return Ok((plain_buffer, ParameterList::new()));
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        encode_serialized_payload_gmac(encode_key, initialization_vector, &plain_buffer)?
+        encode_serialized_payload_gmac(&session_key, initialization_vector, &plain_buffer)?
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        encode_serialized_payload_gcm(encode_key, initialization_vector, &plain_buffer)?
+        encode_serialized_payload_gcm(&session_key, initialization_vector, &plain_buffer)?
       }
     };
 
@@ -277,7 +215,7 @@ impl CryptoTransform for CryptographicBuiltin {
       .cloned()?;
 
     // Get the keys materials for computing receiver-specific MACs
-    let receiver_specific_key_materials = SecurityResult::<Vec<ReceiverKeyMaterial>>::from_iter(
+    let receiver_specific_key_materials = SecurityResult::<Vec<ReceiverSpecificKeyMaterial>>::from_iter(
       // Iterate over receiver handles
       receiving_participant_crypto_handle_list
         .iter()
@@ -292,12 +230,12 @@ impl CryptoTransform for CryptographicBuiltin {
             })
             // TODO use session keys
             .map(
-              |ReceiverKeyMaterial {
-                 receiver_specific_key_id,
-                 master_receiver_specific_key,
-               }| ReceiverKeyMaterial {
-                receiver_specific_key_id,
-                master_receiver_specific_key,
+              |ReceiverSpecificKeyMaterial {
+                 key_id,
+                 key,
+               }| ReceiverSpecificKeyMaterial {
+                key_id,
+                key,
               },
             )
         }),
