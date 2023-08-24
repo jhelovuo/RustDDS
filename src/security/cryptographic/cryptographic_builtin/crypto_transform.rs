@@ -24,7 +24,6 @@ use crate::{
   security_error,
 };
 use super::{
-  builtin_key::*,
   decode::{
     decode_datareader_submessage_gcm, decode_datareader_submessage_gmac,
     decode_datawriter_submessage_gcm, decode_datawriter_submessage_gmac,
@@ -34,7 +33,6 @@ use super::{
     encode_gcm, encode_gmac, encode_serialized_payload_gcm, encode_serialized_payload_gmac,
   },
   key_material::*,
-  //builtin_key::*,
 };
 
 impl CryptographicBuiltin {

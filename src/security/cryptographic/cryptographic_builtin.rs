@@ -6,7 +6,7 @@ mod crypto_transform;
 mod decode;
 mod encode;
 mod key_material;
-mod types;
+pub(crate) mod types;
 
 use std::collections::{HashMap, HashSet};
 

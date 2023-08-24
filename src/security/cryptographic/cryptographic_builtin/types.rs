@@ -214,7 +214,7 @@ impl SessionId {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(super) struct BuiltinCryptoHeaderExtra(pub(super) BuiltinInitializationVector);
+pub(crate) struct BuiltinCryptoHeaderExtra(pub(super) BuiltinInitializationVector);
 
 /// Methods for getting the contained data
 impl BuiltinCryptoHeaderExtra {
@@ -229,6 +229,10 @@ impl BuiltinCryptoHeaderExtra {
   }
   pub fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) -> Self {
     Self::from((session_id, initialization_vector_suffix))
+  }
+
+  pub fn serialized_len() -> usize {
+    INITIALIZATION_VECTOR_LENGTH
   }
 }
 
