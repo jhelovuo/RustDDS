@@ -35,16 +35,6 @@ use crate::{
 };
 use super::{discovery_db::DiscoveryDB, Participant_GUID, SpdpDiscoveredParticipantData};
 
-// // Handshake states for running authentication handshake with built-in
-// // authentication plugin.
-// #[derive(Clone, Copy, PartialEq, Debug)]
-// enum BuiltinHandshakeState {
-//   PendingRequestMessage,
-//   PendingReplyMessage,
-//   PendingFinalMessage,
-//   CompletedWithFinalMessage,
-// }
-
 // Enum for authentication status of a remote participant
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum AuthenticationStatus {
