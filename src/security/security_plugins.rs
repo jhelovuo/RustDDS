@@ -292,6 +292,17 @@ impl SecurityPlugins {
       .auth
       .process_handshake(handshake_message_in, handshake_handle)
   }
+
+  pub fn get_authenticated_peer_credential_token(
+    &self,
+    remote_participant_guidp: GuidPrefix,
+  ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
+    let handshake_handle = self.get_handshake_handle(&remote_participant_guidp)?;
+
+    self
+      .auth
+      .get_authenticated_peer_credential_token(handshake_handle)
+  }
 }
 
 /// Interface for using the Access control plugin
@@ -315,6 +326,30 @@ impl SecurityPlugins {
     Ok(())
   }
 
+  pub fn validate_remote_permissions(
+    &mut self,
+    local_participant_guidp: GuidPrefix,
+    remote_participant_guidp: GuidPrefix,
+    remote_permissions_token: &PermissionsToken,
+    remote_credential_token: &AuthenticatedPeerCredentialToken,
+  ) -> SecurityResult<()> {
+    let local_id_handle = self.get_identity_handle(&local_participant_guidp)?;
+    let remote_id_handle = self.get_identity_handle(&remote_participant_guidp)?;
+
+    let permissions_handle = self.access.validate_remote_permissions(
+      &*self.auth,
+      local_id_handle,
+      remote_id_handle,
+      remote_permissions_token,
+      remote_credential_token,
+    )?;
+
+    self
+      .permissions_handle_cache
+      .insert(remote_participant_guidp, permissions_handle);
+    Ok(())
+  }
+
   pub fn check_create_participant(
     &self,
     domain_id: u16,
@@ -323,6 +358,17 @@ impl SecurityPlugins {
   ) -> SecurityResult<()> {
     let handle = self.get_permissions_handle(&participant_guidp)?;
     self.access.check_create_participant(handle, domain_id, qos)
+  }
+
+  pub fn check_remote_participant(
+    &self,
+    domain_id: u16,
+    participant_guidp: GuidPrefix,
+  ) -> SecurityResult<()> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    self
+      .access
+      .check_remote_participant(handle, domain_id, None)
   }
 
   pub fn get_permissions_token(

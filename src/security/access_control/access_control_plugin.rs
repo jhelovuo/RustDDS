@@ -44,8 +44,8 @@ pub trait ParticipantAccessControl: Send {
     auth_plugin: &dyn Authentication,
     local_identity_handle: IdentityHandle,
     remote_identity_handle: IdentityHandle,
-    remote_permissions_token: PermissionsToken,
-    remote_credential_token: AuthenticatedPeerCredentialToken,
+    remote_permissions_token: &PermissionsToken,
+    remote_credential_token: &AuthenticatedPeerCredentialToken,
   ) -> SecurityResult<PermissionsHandle>;
 
   /// check_create_participant: section 8.4.2.9.3 of the Security

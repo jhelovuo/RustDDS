@@ -397,7 +397,7 @@ impl DomainParticipant {
   }
 
   pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
-    DomainParticipantWeak::new(self, self.guid(), self.qos())
+    DomainParticipantWeak::new(self)
   }
 
   pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
@@ -440,17 +440,19 @@ impl PartialEq for DomainParticipant {
 #[derive(Clone)]
 pub struct DomainParticipantWeak {
   dpi: Weak<Mutex<DomainParticipantDisc>>,
-  // This struct caches the GUID and qos to avoid construction deadlocks
+  // This struct caches some items to avoid construction deadlocks
+  domain_id: u16,
   guid: GUID,
   qos: QosPolicies,
 }
 
 impl DomainParticipantWeak {
-  pub fn new(dp: &DomainParticipant, guid: GUID, qos: QosPolicies) -> Self {
+  pub fn new(dp: &DomainParticipant) -> Self {
     Self {
       dpi: Arc::downgrade(&dp.dpi),
-      guid,
-      qos,
+      domain_id: dp.domain_id(),
+      guid: dp.guid(),
+      qos: dp.qos(),
     }
   }
 
@@ -472,6 +474,10 @@ impl DomainParticipantWeak {
         reason: "DomainParticipant".to_string(),
       })
       .and_then(|dpi| dpi.lock()?.create_subscriber(self, qos))
+  }
+
+  pub fn domain_id(&self) -> u16 {
+    self.domain_id
   }
 
   pub fn qos(&self) -> QosPolicies {

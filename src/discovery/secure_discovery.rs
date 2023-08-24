@@ -21,6 +21,7 @@ use crate::{
       authentication_builtin::BuiltinHandshakeState, HandshakeMessageToken, IdentityToken,
       ValidationOutcome, GMCLASSID_SECURITY_AUTH_HANDSHAKE,
     },
+    security_error,
     security_plugins::{SecurityPlugins, SecurityPluginsHandle},
     ParticipantGenericMessage, ParticipantSecurityInfo, ParticipantStatelessMessage, SecurityError,
     SecurityResult,
@@ -70,6 +71,7 @@ impl StoredAuthenticationMessage {
 // they don't have to be fetched from security plugins every time when needed
 pub(crate) struct SecureDiscovery {
   pub security_plugins: SecurityPluginsHandle,
+  pub domain_id: u16,
   pub local_participant_guid: GUID,
   pub local_dp_identity_token: IdentityToken,
   pub local_dp_permissions_token: PermissionsToken,
@@ -155,6 +157,7 @@ impl SecureDiscovery {
 
     Ok(Self {
       security_plugins,
+      domain_id: domain_participant.domain_id(),
       local_participant_guid: domain_participant.guid(),
       local_dp_identity_token: identity_token,
       local_dp_permissions_token: permissions_token,
@@ -928,19 +931,10 @@ impl SecureDiscovery {
           BuiltinHandshakeState::CompletedWithFinalMessageSent,
         );
 
-        // TODO: get shared secret
-
-        // Update participant status as Authenticated & notify dp
-        self.update_participant_authentication_status_and_notify_dp(
+        self.on_remote_participant_authenticated(
           remote_guid_prefix,
-          AuthenticationStatus::Authenticated,
           discovery_db,
           discovery_updated_sender,
-        );
-
-        security_log!(
-          "Authenticated participant with GUID prefix {:?}",
-          remote_guid_prefix
         );
       }
       Ok((other_outcome, _token_opt)) => {
@@ -1013,24 +1007,15 @@ impl SecureDiscovery {
           BuiltinHandshakeState::CompletedWithFinalMessageReceived,
         );
 
-        // TODO: get shared secret
-
-        // Update participant status as Authenticated & notify dp
-        self.update_participant_authentication_status_and_notify_dp(
-          remote_guid_prefix,
-          AuthenticationStatus::Authenticated,
-          discovery_db,
-          discovery_updated_sender,
-        );
-
         // Remove the stored reply message so it won't be resent
         self
           .stored_authentication_messages
           .remove(&remote_guid_prefix);
 
-        security_log!(
-          "Authenticated participant with GUID prefix {:?}",
-          remote_guid_prefix
+        self.on_remote_participant_authenticated(
+          remote_guid_prefix,
+          discovery_db,
+          discovery_updated_sender,
         );
       }
       Ok((other_outcome, _token_opt)) => {
@@ -1051,6 +1036,101 @@ impl SecureDiscovery {
         self.reset_stored_message_resend_counter(&remote_guid_prefix);
       }
     }
+  }
+
+  fn on_remote_participant_authenticated(
+    &mut self,
+    remote_guid_prefix: GuidPrefix,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+    discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
+  ) {
+    security_log!(
+      "Authenticated participant with GUID prefix {:?}",
+      remote_guid_prefix
+    );
+
+    // Call the required access control methods
+    // (see Security spec. section "8.8.6 AccessControl behavior with remote
+    // participant discovery")
+    match self.validate_remote_participant_permissions(remote_guid_prefix, discovery_db) {
+      Ok(()) => {
+        debug!(
+          "Validated permissions for remote with guid prefix {:?}",
+          remote_guid_prefix
+        );
+      }
+      Err(e) => {
+        security_log!(
+          "Validating permissions for remote failed: {}. Rejecting the remote. Guid prefix: {:?}",
+          e,
+          remote_guid_prefix
+        );
+        discovery_db_write(discovery_db)
+          .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+        return;
+      }
+    }
+
+    // If needed, check is remote allowed to join the domain
+    if self.local_dp_sec_attributes.is_access_protected {
+      match get_security_plugins(&self.security_plugins)
+        .check_remote_participant(self.domain_id, remote_guid_prefix)
+      {
+        Ok(()) => {
+          debug!(
+            "Allowing remote participant to join the domain. Remote guid prefix {:?}",
+            remote_guid_prefix
+          );
+        }
+        Err(e) => {
+          security_log!(
+            "Remote participant is not allowed to join the domain: {}. Rejecting the remote. Guid \
+             prefix: {:?}",
+            e,
+            remote_guid_prefix
+          );
+          discovery_db_write(discovery_db)
+            .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+          return;
+        }
+      }
+    }
+    // Permission checks OK
+
+    // Update participant status as Authenticated & notify dp
+    self.update_participant_authentication_status_and_notify_dp(
+      remote_guid_prefix,
+      AuthenticationStatus::Authenticated,
+      discovery_db,
+      discovery_updated_sender,
+    );
+
+    // TODO: get shared secret
+  }
+
+  fn validate_remote_participant_permissions(
+    &mut self,
+    remote_guid_prefix: GuidPrefix,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) -> SecurityResult<()> {
+    let mut sec_plugins = get_security_plugins(&self.security_plugins);
+
+    // Get PermissionsToken
+    let permissions_token = discovery_db_read(discovery_db)
+      .find_participant_proxy(remote_guid_prefix)
+      .and_then(|data| data.permissions_token.clone())
+      .ok_or_else(|| security_error("Could not get PermissionsToken from DiscoveryDB"))?;
+
+    // Get AuthenticatedPeerCredentialToken
+    let auth_credential_token =
+      sec_plugins.get_authenticated_peer_credential_token(remote_guid_prefix)?;
+
+    sec_plugins.validate_remote_permissions(
+      self.local_participant_guid.prefix,
+      remote_guid_prefix,
+      &permissions_token,
+      &auth_credential_token,
+    )
   }
 
   fn resend_final_handshake_message(

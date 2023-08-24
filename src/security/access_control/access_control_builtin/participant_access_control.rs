@@ -198,8 +198,8 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     _auth_plugin: &dyn Authentication,
     local_identity_handle: IdentityHandle,
     _remote_identity_handle: IdentityHandle,
-    remote_permissions_token: PermissionsToken,
-    remote_credential_token: AuthenticatedPeerCredentialToken,
+    remote_permissions_token: &PermissionsToken,
+    remote_credential_token: &AuthenticatedPeerCredentialToken,
   ) -> SecurityResult<PermissionsHandle> {
     // TODO: actual implementation
 
@@ -220,7 +220,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
         PluginClassId::try_from(local_permissions_token.data_holder.class_id)
       })
       .and_then(|local_plugin_class_id| {
-        PluginClassId::try_from(remote_permissions_token.data_holder.class_id).and_then(
+        PluginClassId::try_from(remote_permissions_token.data_holder.class_id.clone()).and_then(
           |remote_plugin_class_id| {
             local_plugin_class_id.matches_up_to_major_version(&remote_plugin_class_id)
           },
