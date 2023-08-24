@@ -1,5 +1,6 @@
 use byteorder::BigEndian;
 use serde::{Deserialize, Serialize};
+use speedy::Readable;
 use concat_arrays::concat_arrays; // macro
 
 use crate::{
@@ -100,7 +101,7 @@ impl From<BuiltinCryptoToken> for KeyMaterial_AES_GCM_GMAC {
 /// Valid values for CryptoTransformKind from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the names from the spec
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Readable)]
 pub(crate) enum BuiltinCryptoTransformationKind {
   CRYPTO_TRANSFORMATION_KIND_NONE,
   CRYPTO_TRANSFORMATION_KIND_AES128_GMAC,
@@ -137,6 +138,7 @@ impl From<BuiltinCryptoTransformationKind> for CryptoTransformKind {
 
 /// CryptoTransformIdentifier type from section 9.5.2.2 of the Security
 /// specification (v. 1.1)
+#[derive(Readable)]
 pub(super) struct BuiltinCryptoTransformIdentifier {
   pub transformation_kind: BuiltinCryptoTransformationKind,
   pub transformation_key_id: CryptoTransformKeyId,
@@ -171,7 +173,7 @@ impl From<BuiltinCryptoTransformIdentifier> for CryptoTransformIdentifier {
 /// consists of the session_id and initialization_vector_suffix. 9.5.2.3
 pub(super) const INITIALIZATION_VECTOR_LENGTH: usize = 12;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Readable)]
 pub(super) struct BuiltinInitializationVector([u8; INITIALIZATION_VECTOR_LENGTH]);
 
 impl BuiltinInitializationVector {
@@ -213,7 +215,7 @@ impl SessionId {
   }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Readable)]
 pub(crate) struct BuiltinCryptoHeaderExtra(pub(super) BuiltinInitializationVector);
 
 /// Methods for getting the contained data
@@ -282,10 +284,12 @@ impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
 
 /// CryptoHeader type from section 9.5.2.3 of the Security specification (v.
 /// 1.1)
+#[derive(Readable)]
 pub(super) struct BuiltinCryptoHeader {
   pub transform_identifier: BuiltinCryptoTransformIdentifier,
   pub builtin_crypto_header_extra: BuiltinCryptoHeaderExtra,
 }
+
 impl TryFrom<CryptoHeader> for BuiltinCryptoHeader {
   type Error = SecurityError;
   fn try_from(
@@ -302,6 +306,7 @@ impl TryFrom<CryptoHeader> for BuiltinCryptoHeader {
     })
   }
 }
+
 impl From<BuiltinCryptoHeader> for CryptoHeader {
   fn from(
     BuiltinCryptoHeader {
@@ -325,7 +330,7 @@ pub(super) type BuiltinMAC = [u8; MAC_LENGTH];
 
 /// CryptoFooter type from section 9.5.2.5 of the Security specification (v.
 /// 1.1)
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Readable)]
 pub(super) struct BuiltinCryptoFooter {
   pub common_mac: BuiltinMAC,
   pub receiver_specific_macs: Vec<ReceiverSpecificMAC>,
@@ -370,7 +375,7 @@ impl TryFrom<BuiltinCryptoFooter> for CryptoFooter {
 
 /// ReceiverSpecificMAC type from section 9.5.2.5 of the Security specification
 /// (v. 1.1)
-#[derive(Deserialize, Serialize, PartialEq)]
+#[derive(Deserialize, Serialize, PartialEq, Readable)]
 pub(super) struct ReceiverSpecificMAC {
   pub receiver_mac_key_id: CryptoTransformKeyId,
   pub receiver_mac: BuiltinMAC,

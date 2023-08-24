@@ -240,6 +240,7 @@ impl CryptographicBuiltin {
     BuiltinKey::from_bytes( KeyLength::try_from(transformation_kind)? , digest.as_ref())  
   }
 
+  // Get materials needed for encrypting
   fn sender_session_crypto_materials(&self, handle: CryptoHandle, 
     receiver_specific_crypto_handles: &[CryptoHandle]) 
     -> SecurityResult<SessionCryptoMaterials> 
@@ -287,13 +288,43 @@ impl CryptographicBuiltin {
         }),
     )?;
 
-
     Ok(SessionCryptoMaterials{
       key_id: *sender_key_id,
       transformation_kind,
       session_key,
       initialization_vector,
       receiver_specific_key_materials, 
+    })
+  }
+
+  // Get materials needed for encrypting
+  fn receiver_session_crypto_materials(&self, handle: CryptoHandle) 
+    -> SecurityResult<SessionCryptoMaterials> 
+  {
+    let endpoint_key_material = self
+      .get_decode_key_materials(&handle)
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
+
+    let KeyMaterial_AES_GCM_GMAC {
+      transformation_kind,
+      master_salt,
+      sender_key_id,
+      master_sender_key,
+      ..
+    } = endpoint_key_material;
+
+    let transformation_kind = *transformation_kind;
+    let initialization_vector = self.random_initialization_vector();
+    let session_key = 
+      Self::compute_session_key(transformation_kind, ReceiverSpecific::No,
+        master_sender_key, &master_salt, initialization_vector)?;
+
+    Ok(SessionCryptoMaterials{
+      key_id: *sender_key_id,
+      transformation_kind,
+      session_key,
+      initialization_vector,
+      receiver_specific_key_materials: Vec::new(), 
     })
   }
 

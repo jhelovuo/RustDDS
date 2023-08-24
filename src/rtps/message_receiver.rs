@@ -540,6 +540,16 @@ impl MessageReceiver {
       encoded_payload,
       ..
     } = data.clone();
+
+    // TODO:
+    // How does the logic below detect if incoming Data submessage has
+    // CryptoContent or normal SerializedPayload?
+    // The plugin functtion `decode_serialized_payload` already assumes
+    // content is encrypted. Even if security is configured,
+    // we could have plain RTPS topics with no security.
+    //
+    // See spec "8.5.1.9.9 Operation: decode_serialized_payload".
+
     encoded_payload
       // If there is an encoded_payload, decode it
       .map(|encoded_payload| {

@@ -148,6 +148,41 @@ pub(super) fn decode_datawriter_submessage_gmac(
     )),
   }
 }
+pub(super) fn decode_datareader_submessage_gmac(
+  key: &BuiltinKey,
+  receiver_specific_key: &BuiltinKey,
+  initialization_vector: BuiltinInitializationVector,
+  encoded_submessage: Submessage,
+  common_mac: BuiltinMAC,
+  receiver_specific_mac: Option<BuiltinMAC>,
+) -> SecurityResult<ReaderSubmessage> {
+  // Serialize
+  let data = encoded_submessage
+    .write_to_vec()
+    .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
+
+  // Validate the common MAC
+  validate_mac(key, initialization_vector, &data, common_mac)?;
+  // Validate the receiver-specific MAC if one exists
+  if let Some(receiver_specific_mac) = receiver_specific_mac {
+    validate_mac(
+      receiver_specific_key,
+      initialization_vector,
+      &data,
+      receiver_specific_mac,
+    )?;
+  }
+
+  // Check that the submessage is a ReaderSubmessage
+  match encoded_submessage.body {
+    SubmessageBody::Reader(reader_submessage) => Ok(reader_submessage),
+    other => Err(security_error!(
+      "When transformation kind is NONE or GMAC, decode_datareader_submessage expects a \
+       ReaderSubmessage, received {:?}",
+      other
+    )),
+  }
+}
 
 pub(super) fn decode_datawriter_submessage_gcm(
   key: &BuiltinKey,
@@ -208,41 +243,6 @@ pub(super) fn decode_datawriter_submessage_gcm(
   }
 }
 
-pub(super) fn decode_datareader_submessage_gmac(
-  key: &BuiltinKey,
-  receiver_specific_key: &BuiltinKey,
-  initialization_vector: BuiltinInitializationVector,
-  encoded_submessage: Submessage,
-  common_mac: BuiltinMAC,
-  receiver_specific_mac: Option<BuiltinMAC>,
-) -> SecurityResult<ReaderSubmessage> {
-  // Serialize
-  let data = encoded_submessage
-    .write_to_vec()
-    .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
-
-  // Validate the common MAC
-  validate_mac(key, initialization_vector, &data, common_mac)?;
-  // Validate the receiver-specific MAC if one exists
-  if let Some(receiver_specific_mac) = receiver_specific_mac {
-    validate_mac(
-      receiver_specific_key,
-      initialization_vector,
-      &data,
-      receiver_specific_mac,
-    )?;
-  }
-
-  // Check that the submessage is a ReaderSubmessage
-  match encoded_submessage.body {
-    SubmessageBody::Reader(reader_submessage) => Ok(reader_submessage),
-    other => Err(security_error!(
-      "When transformation kind is NONE or GMAC, decode_datareader_submessage expects a \
-       ReaderSubmessage, received {:?}",
-      other
-    )),
-  }
-}
 
 pub(super) fn decode_datareader_submessage_gcm(
   key: &BuiltinKey,

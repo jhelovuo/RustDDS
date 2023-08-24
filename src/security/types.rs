@@ -47,6 +47,13 @@ impl From<ring::error::Unspecified> for SecurityError {
   }
 }
 
+impl From<speedy::Error> for SecurityError {
+  fn from(e: speedy::Error) -> Self {
+    SecurityError { msg: format!("Serialization/deserialization error: {e:?}") }
+  }
+}
+
+
 #[doc(hidden)]
 #[macro_export]
 macro_rules! security_error {

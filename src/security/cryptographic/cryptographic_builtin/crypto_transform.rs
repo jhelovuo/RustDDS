@@ -505,7 +505,6 @@ impl CryptoTransform for CryptographicBuiltin {
     _receiving_datareader_crypto_handle: DatareaderCryptoHandle,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<WriterSubmessage> {
-    //TODO: this is only a mock implementation
 
     // Destructure header and footer
     let (SecurePrefix { crypto_header }, encoded_submessage, SecurePostfix { crypto_footer }) =
@@ -708,11 +707,14 @@ impl CryptoTransform for CryptographicBuiltin {
     _receiving_datareader_crypto_handle: DatareaderCryptoHandle,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<Vec<u8>> {
-    //TODO: this is only a mock implementation
+    use std::io;
 
-    // Deserialize crypto header
-    let (read_result, bytes_consumed) = CryptoHeader::read_with_length_from_buffer(&encoded_buffer);
-    let data = encoded_buffer.split_at(bytes_consumed).1;
+    // Deserialize crypto header, content and footer
+    let mut encoded_stream = io::Cursor::new(&encoded_buffer);
+    let header = BuiltinCryptoHeader::read_from_stream_unbuffered(&mut encoded_stream)?;
+    let crypto_content = CryptoContent::read_from_stream_unbuffered(&mut encoded_stream)?;
+    let footer = BuiltinCryptoFooter::read_from_stream_unbuffered(&mut encoded_stream)?;
+
     let BuiltinCryptoHeader {
       transform_identifier:
         BuiltinCryptoTransformIdentifier {
@@ -720,23 +722,20 @@ impl CryptoTransform for CryptographicBuiltin {
           transformation_key_id,
         },
       builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
-    } = read_result
-      .map_err(|e| security_error!("Error while deserializing CryptoHeader: {}", e))
-      .and_then(BuiltinCryptoHeader::try_from)?;
+    } = header;
 
     // Get the payload decode key material
-    let decode_key_material = self
-      .get_decode_key_materials(&sending_datawriter_crypto_handle)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::payload_key_material)?;
+    let decode_key_material = 
+      self.receiver_session_crypto_materials(sending_datawriter_crypto_handle)?;
 
     // Check that the key IDs match
-    if decode_key_material.sender_key_id != transformation_key_id {
+    if decode_key_material.key_id != transformation_key_id {
       return Err(security_error!(
         "Mismatched decode key IDs: the decoded CryptoHeader has {}, but the key associated with \
          the sending datawriter {} has {}.",
         transformation_key_id,
         sending_datawriter_crypto_handle,
-        decode_key_material.sender_key_id
+        decode_key_material.key_id
       ));
     }
 
@@ -751,8 +750,8 @@ impl CryptoTransform for CryptographicBuiltin {
       ));
     }
 
-    // TODO use session key?
-    let decode_key = &decode_key_material.master_sender_key;
+    let decode_key = &decode_key_material.session_key;
+    let data = &crypto_content.data;
 
     match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
