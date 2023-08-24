@@ -2,6 +2,7 @@ use chrono::Utc;
 
 use crate::{
   dds::qos::QosPolicies,
+  discovery::SpdpDiscoveredParticipantData,
   security::{
     access_control::{
       access_control_builtin::{
@@ -290,7 +291,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
-    _participant_data: &ParticipantBuiltinTopicDataSecure,
+    _participant_data: Option<&SpdpDiscoveredParticipantData>,
   ) -> SecurityResult<()> {
     // Move the following check to validate_remote_permissions from check_remote_
     // methods, as there we have access to the tokens: "If the PluginClassName

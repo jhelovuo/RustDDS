@@ -1,6 +1,6 @@
 use crate::{
   dds::qos::QosPolicies,
-  discovery::sedp_messages::TopicBuiltinTopicData,
+  discovery::{sedp_messages::TopicBuiltinTopicData, SpdpDiscoveredParticipantData},
   security::{authentication::*, *},
 };
 use super::*;
@@ -63,7 +63,7 @@ pub trait ParticipantAccessControl: Send {
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
-    participant_data: &ParticipantBuiltinTopicDataSecure,
+    participant_data: Option<&SpdpDiscoveredParticipantData>,
   ) -> SecurityResult<()>;
 
   /// get_permissions_token: section 8.4.2.9.17 of the Security
