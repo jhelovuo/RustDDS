@@ -132,9 +132,17 @@ impl CryptographicBuiltin {
 
   fn get_decode_key_materials(
     &self,
-    crypto_handle: &CryptoHandle,
+    crypto_handle: CryptoHandle,
+    _key_id: CryptoTransformKeyId
   ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
-    self.decode_key_materials.get(crypto_handle).ok_or_else(|| {
+    // TODO:
+    // Received packet is specifying key_id used to encrypt, but
+    // we just ignore that and assume the key_id is uniquely determined by
+    // crypto handle. 
+    // So implement storing multiple keys per handle, distinguished by key_id.
+    // See "9.5.3.3.5 Computation of plaintext from ciphertext"
+
+    self.decode_key_materials.get(&crypto_handle).ok_or_else(|| {
       security_error!(
         "Could not find decode key materials for the CryptoHandle {}",
         crypto_handle
@@ -298,23 +306,24 @@ impl CryptographicBuiltin {
   }
 
   // Get materials needed for encrypting
-  fn receiver_session_crypto_materials(&self, handle: CryptoHandle) 
+  fn receiver_session_crypto_materials(&self, 
+    sender_handle: CryptoHandle, 
+    header_key_id: CryptoTransformKeyId, // what key id was specified on incoming header
+    initialization_vector: BuiltinInitializationVector, // as received in header
+    ) 
     -> SecurityResult<SessionCryptoMaterials> 
   {
-    let endpoint_key_material = self
-      .get_decode_key_materials(&handle)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
-
     let KeyMaterial_AES_GCM_GMAC {
       transformation_kind,
       master_salt,
       sender_key_id,
       master_sender_key,
       ..
-    } = endpoint_key_material;
+    } = self
+      .get_decode_key_materials(sender_handle, header_key_id)
+      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
 
     let transformation_kind = *transformation_kind;
-    let initialization_vector = self.random_initialization_vector();
     let session_key = 
       Self::compute_session_key(transformation_kind, ReceiverSpecific::No,
         master_sender_key, &master_salt, initialization_vector)?;

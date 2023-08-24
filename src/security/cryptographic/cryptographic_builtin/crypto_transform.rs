@@ -333,7 +333,7 @@ impl CryptoTransform for CryptographicBuiltin {
         receiver_specific_key_id,
         master_receiver_specific_key,
       } = self
-        .get_decode_key_materials(&sending_participant_crypto_handle)
+        .get_decode_key_materials(sending_participant_crypto_handle, transformation_key_id)
         // Get the one for submessages (not only payload)
         .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
 
@@ -533,7 +533,7 @@ impl CryptoTransform for CryptographicBuiltin {
       receiver_specific_key_id,
       master_receiver_specific_key,
     } = self
-      .get_decode_key_materials(&sending_datawriter_crypto_handle)
+      .get_decode_key_materials(sending_datawriter_crypto_handle, transformation_key_id)
       // Get the one for submessages (not only payload)
       .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
 
@@ -634,7 +634,7 @@ impl CryptoTransform for CryptographicBuiltin {
       receiver_specific_key_id,
       master_receiver_specific_key,
     } = self
-      .get_decode_key_materials(&sending_datareader_crypto_handle)
+      .get_decode_key_materials(sending_datareader_crypto_handle, transformation_key_id)
       // Get the one for submessages (not only payload)
       .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
 
@@ -726,7 +726,8 @@ impl CryptoTransform for CryptographicBuiltin {
 
     // Get the payload decode key material
     let decode_key_material = 
-      self.receiver_session_crypto_materials(sending_datawriter_crypto_handle)?;
+      self.receiver_session_crypto_materials(sending_datawriter_crypto_handle, 
+        transformation_key_id, initialization_vector)?;
 
     // Check that the key IDs match
     if decode_key_material.key_id != transformation_key_id {
