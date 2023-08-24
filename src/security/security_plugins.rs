@@ -283,7 +283,6 @@ impl SecurityPlugins {
 
   pub fn process_handshake(
     &mut self,
-    local_participant_guidp: GuidPrefix,
     remote_participant_guidp: GuidPrefix,
     handshake_message_in: HandshakeMessageToken,
   ) -> SecurityResult<(ValidationOutcome, Option<HandshakeMessageToken>)> {

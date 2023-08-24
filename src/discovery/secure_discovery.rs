@@ -885,11 +885,8 @@ impl SecureDiscovery {
     };
 
     // Now call the security functionality
-    let result = get_security_plugins(&self.security_plugins).process_handshake(
-      self.local_participant_guid.prefix,
-      remote_guid_prefix,
-      handshake_token,
-    );
+    let result = get_security_plugins(&self.security_plugins)
+      .process_handshake(remote_guid_prefix, handshake_token);
     match result {
       Ok((ValidationOutcome::OkFinalMessage, Some(final_message_token))) => {
         // Everything went OK. Still need to send the final message to remote.
@@ -1004,11 +1001,8 @@ impl SecureDiscovery {
     };
 
     // Now call the security functionality
-    let result = get_security_plugins(&self.security_plugins).process_handshake(
-      self.local_participant_guid.prefix,
-      remote_guid_prefix,
-      handshake_token,
-    );
+    let result = get_security_plugins(&self.security_plugins)
+      .process_handshake(remote_guid_prefix, handshake_token);
     match result {
       Ok((ValidationOutcome::Ok, None)) => {
         // Everything went OK
