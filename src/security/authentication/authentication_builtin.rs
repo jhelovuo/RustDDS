@@ -7,7 +7,8 @@ use crate::{
   GUID,
 };
 use super::{
-  HandshakeHandle, HandshakeMessageToken, IdentityHandle, IdentityToken, ValidationOutcome,
+  HandshakeHandle, HandshakeMessageToken, IdentityHandle, IdentityToken, SharedSecret,
+  ValidationOutcome,
 };
 
 mod authentication;
@@ -48,6 +49,7 @@ struct RemoteParticipantInfo {
 struct HandshakeInfo {
   state: BuiltinHandshakeState,
   latest_sent_message: Option<HandshakeMessageToken>,
+  shared_secret: Option<SharedSecret>,
 }
 
 // A struct implementing the builtin Authentication plugin
@@ -150,6 +152,7 @@ impl AuthenticationBuiltin {
     // handshake_message_in
 
     // TODO: Compute the shared secret
+    let shared_secret = SharedSecret::default();
 
     // TODO: Create proper HandshakeFinalMessageToken
     let final_message_token = HandshakeMessageToken::dummy();
@@ -157,6 +160,7 @@ impl AuthenticationBuiltin {
     // Change handshake state to Completed & save the final message token
     remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageSent;
     remote_info.handshake.latest_sent_message = Some(final_message_token.clone());
+    remote_info.handshake.shared_secret = Some(shared_secret);
 
     Ok((ValidationOutcome::OkFinalMessage, final_message_token))
   }
@@ -179,9 +183,11 @@ impl AuthenticationBuiltin {
     // TODO: verify the digital signature
 
     // TODO: compute the shared secret
+    let shared_secret = SharedSecret::default();
 
     // Change handshake state to Completed
     remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageReceived;
+    remote_info.handshake.shared_secret = Some(shared_secret);
 
     Ok(ValidationOutcome::Ok)
   }

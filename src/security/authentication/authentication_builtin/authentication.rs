@@ -136,6 +136,7 @@ impl Authentication for AuthenticationBuiltin {
       handshake: HandshakeInfo {
         state: handshake_state,
         latest_sent_message: None,
+        shared_secret: None,
       },
     };
     self
@@ -289,14 +290,19 @@ impl Authentication for AuthenticationBuiltin {
     }
   }
 
-  // Currently only mocked
   fn get_shared_secret(
     &self,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<SharedSecretHandle> {
-    // TODO: actual implementation
+    let identity_handle = self.handshake_handle_to_identity_handle(&handshake_handle)?;
+    let remote_info = self.get_remote_participant_info(identity_handle)?;
 
-    Ok(SharedSecretHandle::default())
+    let shared_secret = remote_info
+      .handshake
+      .shared_secret
+      .ok_or_else(|| security_error("Shared secret not found"))?;
+
+    Ok(SharedSecretHandle { shared_secret })
   }
 
   // Currently only mocked

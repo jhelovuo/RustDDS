@@ -1097,6 +1097,38 @@ impl SecureDiscovery {
     }
     // Permission checks OK
 
+    // Register remote to crypto plugin with the shared secret which resulted from
+    // the successful handshake
+    let mut sec_plugins = get_security_plugins(&self.security_plugins);
+    match sec_plugins
+      .get_shared_secret(remote_guid_prefix)
+      .and_then(|shared_secret| {
+        sec_plugins.register_matched_remote_participant(
+          self.local_participant_guid.prefix,
+          remote_guid_prefix,
+          shared_secret,
+        )
+      }) {
+      Ok(()) => {
+        debug!(
+          "Registered remote participant with the crypto plugin. Remote guid prefix {:?}",
+          remote_guid_prefix
+        );
+      }
+      Err(e) => {
+        security_log!(
+          "Failed to register remote participant with the crypto plugin: {}. Rejecting the \
+           remote. Guid prefix: {:?}",
+          e,
+          remote_guid_prefix
+        );
+        discovery_db_write(discovery_db)
+          .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+        return;
+      }
+    }
+    drop(sec_plugins);
+
     // Update participant status as Authenticated & notify dp
     self.update_participant_authentication_status_and_notify_dp(
       remote_guid_prefix,
@@ -1104,8 +1136,6 @@ impl SecureDiscovery {
       discovery_db,
       discovery_updated_sender,
     );
-
-    // TODO: get shared secret
   }
 
   fn validate_remote_participant_permissions(

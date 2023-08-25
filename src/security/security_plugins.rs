@@ -11,6 +11,7 @@ use crate::{
     secure_prefix::SecurePrefix,
     submessage::{ReaderSubmessage, WriterSubmessage},
   },
+  qos,
   rtps::{Message, Submessage},
   security_error,
   structure::guid::GuidPrefix,
@@ -303,6 +304,14 @@ impl SecurityPlugins {
       .auth
       .get_authenticated_peer_credential_token(handshake_handle)
   }
+
+  pub fn get_shared_secret(
+    &self,
+    remote_participant_guidp: GuidPrefix,
+  ) -> SecurityResult<SharedSecretHandle> {
+    let handle = self.get_handshake_handle(&remote_participant_guidp)?;
+    self.auth.get_shared_secret(handle)
+  }
 }
 
 /// Interface for using the Access control plugin
@@ -393,6 +402,58 @@ impl SecurityPlugins {
   ) -> SecurityResult<ParticipantSecurityAttributes> {
     let handle: PermissionsHandle = self.get_permissions_handle(&participant_guidp)?;
     self.access.get_participant_sec_attributes(handle)
+  }
+}
+
+/// Interface for using the CryptoKeyFactory of the Cryptographic plugin
+impl SecurityPlugins {
+  pub fn register_local_participant(
+    &mut self,
+    participant_guidp: GuidPrefix,
+    participant_properties: Option<qos::policy::Property>,
+    participant_security_attributes: ParticipantSecurityAttributes,
+  ) -> SecurityResult<()> {
+    let identity_handle = self.get_identity_handle(&participant_guidp)?;
+    let permissions_handle = self.get_permissions_handle(&participant_guidp)?;
+
+    let properties = participant_properties
+      .map(|prop| prop.value)
+      .unwrap_or_default();
+
+    let crypto_handle = self.crypto.register_local_participant(
+      identity_handle,
+      permissions_handle,
+      &properties,
+      participant_security_attributes,
+    )?;
+
+    self
+      .participant_crypto_handle_cache
+      .insert(participant_guidp, crypto_handle);
+    Ok(())
+  }
+
+  pub fn register_matched_remote_participant(
+    &mut self,
+    local_participant_guip: GuidPrefix,
+    remote_participant_guidp: GuidPrefix,
+    shared_secret: SharedSecretHandle,
+  ) -> SecurityResult<()> {
+    let local_crypto = self.get_participant_crypto_handle(&local_participant_guip)?;
+    let remote_identity = self.get_identity_handle(&remote_participant_guidp)?;
+    let remote_permissions = self.get_permissions_handle(&remote_participant_guidp)?;
+
+    let remote_crypto_handle = self.crypto.register_matched_remote_participant(
+      local_crypto,
+      remote_identity,
+      remote_permissions,
+      shared_secret,
+    )?;
+
+    self
+      .participant_crypto_handle_cache
+      .insert(remote_participant_guidp, remote_crypto_handle);
+    Ok(())
   }
 }
 

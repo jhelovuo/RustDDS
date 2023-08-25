@@ -26,7 +26,12 @@ pub enum ValidationOutcome {
 // specification)
 pub type IdentityHandle = u32;
 pub type HandshakeHandle = u32;
-pub type SharedSecretHandle = u32;
+
+// Shared secret resulting from successful handshake
+pub type SharedSecret = u32;
+pub struct SharedSecretHandle {
+  pub shared_secret: SharedSecret,
+}
 
 // IdentityToken: section 8.3.2.1 of the Security specification (v. 1.1)
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]

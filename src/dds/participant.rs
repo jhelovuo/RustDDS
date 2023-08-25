@@ -15,7 +15,8 @@ use mio_06::Token;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  create_error_not_allowed_by_security, create_error_out_of_resources, create_error_poisoned,
+  create_error_internal, create_error_not_allowed_by_security, create_error_out_of_resources,
+  create_error_poisoned,
   dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
@@ -135,6 +136,23 @@ impl DomainParticipantBuilder {
           e.msg
         );
       }
+
+      // Register participant with the crypto plugin
+      if let Err(e) = security_plugins
+        .get_participant_sec_attributes(participant_guid.prefix)
+        .and_then(|sec_attr| {
+          security_plugins.register_local_participant(
+            participant_guid.prefix,
+            participant_qos.property.clone(),
+            sec_attr,
+          )
+        })
+      {
+        return create_error_internal!(
+          "Could not register participant with crypto plugin {}",
+          e.msg
+        );
+      };
     };
 
     trace!("DomainParticipant construct start");
