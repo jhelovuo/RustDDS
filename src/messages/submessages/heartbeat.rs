@@ -63,6 +63,7 @@ impl Heartbeat {
         content_length: submessage_len,
       },
       body: SubmessageBody::Writer(WriterSubmessage::Heartbeat(self, flags)),
+      original_bytes: None,
     })
   }
 }

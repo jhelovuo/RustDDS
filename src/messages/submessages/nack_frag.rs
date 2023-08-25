@@ -59,6 +59,7 @@ impl NackFrag {
         content_length: self.len_serialized() as u16,
       },
       body: SubmessageBody::Reader(ReaderSubmessage::NackFrag(self, flags)),
+      original_bytes: None,
     }
   }
 

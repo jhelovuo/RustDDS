@@ -56,6 +56,7 @@ impl Gap {
         content_length: submessage_len,
       },
       body: SubmessageBody::Writer(WriterSubmessage::Gap(self, flags)),
+      original_bytes: None,
     })
   }
 }

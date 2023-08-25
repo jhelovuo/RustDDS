@@ -129,6 +129,7 @@ impl MessageBuilder {
         InfoDestination { guid_prefix },
         flags,
       )),
+      original_bytes: None,
     };
 
     self.submessages.push(dst_submessage);
@@ -161,6 +162,7 @@ impl MessageBuilder {
         InfoTimestamp { timestamp },
         flags,
       )),
+      original_bytes: None,
     };
 
     self.submessages.push(submsg);
@@ -305,6 +307,7 @@ impl MessageBuilder {
         content_length: data_message.len_serialized() as u16, // TODO: Handle overflow?
       },
       body: SubmessageBody::Writer(WriterSubmessage::Data(data_message, flags)),
+      original_bytes: None,
     });
     self
   }
@@ -452,6 +455,7 @@ impl MessageBuilder {
         content_length: data_message.len_serialized() as u16, // TODO: Handle overflow
       },
       body: SubmessageBody::Writer(WriterSubmessage::DataFrag(data_message, flags)),
+      original_bytes: None,
     });
     self
   }

@@ -43,14 +43,12 @@ pub(super) fn decode_submessage_gmac(
   common_mac: BuiltinMAC,
   receiver_specific_key_and_mac: Option<(BuiltinKey, BuiltinMAC)>,
 ) -> SecurityResult<()> {
-  // Serialize
-  let data = encoded_submessage
-    .write_to_vec()
-    .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
-  // TODO: This is insane.
+  
+  let data = encoded_submessage.original_bytes.as_ref()
+    .ok_or_else(|| security_error!("The dog ate my submessage bytes."))?;
 
   // Validate the common MAC
-  validate_mac(key, initialization_vector, &data, common_mac)?;
+  validate_mac(key, initialization_vector, data, common_mac)?;
 
   // Validate the receiver-specific MAC if one exists
   if let Some((receiver_specific_key, receiver_specific_mac)) = receiver_specific_key_and_mac {
@@ -76,11 +74,7 @@ pub(super) fn decode_submessage_gcm(
   // Destructure to get the data
   match &encoded_submessage.body {
     SubmessageBody::Security(SecuritySubmessage::SecureBody(
-      SecureBody {
-        crypto_content: CryptoContent { data },
-      },
-      _,
-    )) => {
+      SecureBody { crypto_content: CryptoContent { data } }, _, )) => {
       // Validate the receiver-specific MAC if one exists
       if let Some((receiver_specific_key, receiver_specific_mac)) = receiver_specific_key_and_mac {
         validate_mac(

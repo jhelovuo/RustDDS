@@ -56,6 +56,7 @@ impl AckNack {
         content_length: self.len_serialized() as u16,
       },
       body: SubmessageBody::Reader(ReaderSubmessage::AckNack(self, flags)),
+      original_bytes: None,
     }
   }
 
