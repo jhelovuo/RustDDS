@@ -1,12 +1,12 @@
 use bytes::Bytes;
-use speedy::{Writable};
+use speedy::Writable;
 
 use crate::{
   messages::submessages::{
-    elements::{crypto_content::CryptoContent,},
+    elements::crypto_content::CryptoContent,
     info_source::InfoSource,
     secure_body::SecureBody,
-    submessage::{InterpreterSubmessage, SecuritySubmessage, },
+    submessage::{InterpreterSubmessage, SecuritySubmessage},
   },
   rtps::{Submessage, SubmessageBody},
   security::{SecurityError, SecurityResult},
@@ -16,10 +16,7 @@ use super::{
   aes_gcm_gmac::{decrypt, validate_mac},
   builtin_key::*,
   key_material::ReceiverSpecificKeyMaterial,
-  types::{
-    BuiltinInitializationVector, BuiltinMAC,
-    ReceiverSpecificMAC, 
-  },
+  types::{BuiltinInitializationVector, BuiltinMAC, ReceiverSpecificMAC},
 };
 
 pub(super) fn find_receiver_specific_mac(
@@ -27,16 +24,16 @@ pub(super) fn find_receiver_specific_mac(
   receiver_specific_macs: &[ReceiverSpecificMAC],
 ) -> SecurityResult<Option<(BuiltinKey, BuiltinMAC)>> {
   // If the key is None, we are not expecting a receiver-specific MAC
-  receiver_specific_key.map( |ReceiverSpecificKeyMaterial{ key_id, key }|
+  receiver_specific_key
+    .map(|ReceiverSpecificKeyMaterial{ key_id, key }|
     // Find the receiver-specific map by ID
     receiver_specific_macs
       .iter()
       .find( |ReceiverSpecificMAC { receiver_mac_key_id, .. }| *receiver_mac_key_id == key_id )
       .map(|ReceiverSpecificMAC { receiver_mac, .. }| ( key.clone() , *receiver_mac ) )
       // We are expecting to find a MAC, so reject if we do not
-      .ok_or_else(|| security_error!( "No MAC found for receiver_specific_key_id {key_id}"))
-  )
-  .transpose()
+      .ok_or_else(|| security_error!( "No MAC found for receiver_specific_key_id {key_id}")))
+    .transpose()
 }
 
 pub(super) fn decode_submessage_gmac(
@@ -51,7 +48,6 @@ pub(super) fn decode_submessage_gmac(
     .write_to_vec()
     .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
   // TODO: This is insane.
-
 
   // Validate the common MAC
   validate_mac(key, initialization_vector, &data, common_mac)?;
@@ -113,10 +109,10 @@ pub(super) fn decode_submessage_gcm(
 
     other => Err(security_error!(
       "When transformation kind is GCM, decode_datawriter_submessage expects a SecureBody, \
-       received {other:?}")),
+       received {other:?}"
+    )),
   }
 }
-
 
 pub(super) fn decode_rtps_message_gmac(
   key: &BuiltinKey,

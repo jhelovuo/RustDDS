@@ -1,7 +1,6 @@
 use byteorder::BigEndian;
 use serde::{Deserialize, Serialize};
 use speedy::Readable;
-use concat_arrays::concat_arrays; // macro
 
 use crate::{
   messages::submessages::elements::{
@@ -178,7 +177,16 @@ pub(super) struct BuiltinInitializationVector([u8; INITIALIZATION_VECTOR_LENGTH]
 
 impl BuiltinInitializationVector {
   pub(super) fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) -> Self {
-    BuiltinInitializationVector(concat_arrays!(session_id.0, initialization_vector_suffix))
+    BuiltinInitializationVector(
+      // Concatenate
+      [
+        Vec::from(session_id.0),
+        Vec::from(initialization_vector_suffix),
+      ]
+      .concat()
+      .try_into()
+      .unwrap(), // 4+8=12
+    )
   }
   pub(super) fn session_id(&self) -> SessionId {
     // Succeeds as the slice length is 4
@@ -251,7 +259,6 @@ impl From<(SessionId, [u8; 8])> for BuiltinCryptoHeaderExtra {
       session_id,
       initialization_vector_suffix,
     ))
-    //Self( concat_arrays!(session_id.0, initialization_vector_suffix  ))
   }
 }
 
@@ -287,12 +294,12 @@ impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
 #[derive(Readable)]
 pub(super) struct BuiltinCryptoHeader {
   pub transform_identifier: BuiltinCryptoTransformIdentifier, // 4+4 bytes
-  pub builtin_crypto_header_extra: BuiltinCryptoHeaderExtra, // 4+8 bytes
+  pub builtin_crypto_header_extra: BuiltinCryptoHeaderExtra,  // 4+8 bytes
 }
 
 impl BuiltinCryptoHeader {
   pub fn serialized_len() -> usize {
-    4+4+4+8
+    4 + 4 + 4 + 8
   }
 }
 
@@ -345,7 +352,7 @@ pub(super) struct BuiltinCryptoFooter {
 impl BuiltinCryptoFooter {
   pub fn minimal_serialized_len() -> usize {
     MAC_LENGTH  // common_mac
-    + 4         // receiver_specific_macs = Vec::new()
+    + 4 // receiver_specific_macs = Vec::new()
   }
 }
 
