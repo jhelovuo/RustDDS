@@ -33,6 +33,7 @@ impl SecureRTPSPrefix {
           content_length: bytes.len() as u16,
         },
         body: SubmessageBody::Security(SecuritySubmessage::SecureRTPSPrefix(self, flags)),
+        original_bytes: None,
       })
       .map_err(|e| {
         security_error!(

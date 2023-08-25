@@ -26,13 +26,11 @@ use crate::{
 };
 use super::{
   decode::{
-    decode_submessage_gcm,
-    decode_submessage_gmac,
-    //decode_serialized_payload_gcm, decode_serialized_payload_gmac,
+    decode_submessage_gcm, decode_submessage_gmac,
     find_receiver_specific_mac,
   },
   encode::{
-    encode_gcm, encode_gmac, encode_serialized_payload_gcm, encode_serialized_payload_gmac,
+    encode_gcm, encode_gmac,
   },
   key_material::*,
 };
@@ -238,11 +236,13 @@ impl CryptoTransform for CryptographicBuiltin {
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        encode_serialized_payload_gmac(&session_key, initialization_vector, &plain_buffer)?
+        let mac = aes_gcm_gmac::compute_mac(&session_key, initialization_vector, &plain_buffer)?;
+        ( plain_buffer, BuiltinCryptoFooter::only_common_mac(mac) )
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        encode_serialized_payload_gcm(&session_key, initialization_vector, &plain_buffer)?
+        let (ciphertext, mac) = aes_gcm_gmac::encrypt(&session_key, initialization_vector, &plain_buffer)?;
+        ( ciphertext, BuiltinCryptoFooter::only_common_mac(mac) )
       }
     };
 
@@ -745,22 +745,16 @@ impl CryptoTransform for CryptographicBuiltin {
           "decode_serialized_payload with crypto transformation kind = none. Does not make sense."
         );
         Ok(content_bytes.to_vec())
-        //decode_serialized_payload_gmac(decode_key, initialization_vector,
-        // data)
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
         aes_gcm_gmac::validate_mac(decode_key, initialization_vector, content_bytes, common_mac)
-          .map(|()| Vec::from(content_bytes))
-        //decode_serialized_payload_gmac(decode_key, initialization_vector,
-        // data)
+          // if validate_mac succeeds, then map result to content bytes
+          .map(|()| Vec::from(content_bytes) )
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
         aes_gcm_gmac::decrypt(decode_key, initialization_vector, content_bytes, common_mac)
-
-        //decode_serialized_payload_gcm(decode_key, initialization_vector,
-        // data)
       }
     }
   }

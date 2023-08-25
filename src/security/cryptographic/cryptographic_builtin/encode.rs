@@ -10,39 +10,6 @@ use super::{
   types::{BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinMAC, ReceiverSpecificMAC},
 };
 
-pub(super) fn encode_serialized_payload_gmac(
-  key: &BuiltinKey,
-  initialization_vector: BuiltinInitializationVector,
-  data: &[u8],
-) -> SecurityResult<(Vec<u8>, BuiltinCryptoFooter)> {
-  // Compute MAC and return it in the footer along the plaintext
-  compute_mac(key, initialization_vector, data).map(|common_mac| {
-    (
-      Vec::from(data),
-      BuiltinCryptoFooter {
-        common_mac,
-        receiver_specific_macs: Vec::new(),
-      },
-    )
-  })
-}
-
-pub(super) fn encode_serialized_payload_gcm(
-  key: &BuiltinKey,
-  initialization_vector: BuiltinInitializationVector,
-  data: &[u8],
-) -> SecurityResult<(Vec<u8>, BuiltinCryptoFooter)> {
-  // Compute ciphertext and MAC and return them with MAC wrapped in footer
-  encrypt(key, initialization_vector, data).map(|(ciphertext, common_mac)| {
-    (
-      ciphertext,
-      BuiltinCryptoFooter {
-        common_mac,
-        receiver_specific_macs: Vec::new(),
-      },
-    )
-  })
-}
 
 fn compute_receiver_specific_macs(
   initialization_vector: BuiltinInitializationVector,

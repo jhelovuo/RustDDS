@@ -36,6 +36,7 @@ use crate::{
 pub struct Submessage {
   pub header: SubmessageHeader,
   pub body: SubmessageBody,
+  pub original_bytes: Option<Bytes>,
 }
 
 // We implement this instead of Speedy trait Readable, because
@@ -82,32 +83,41 @@ impl Submessage {
 
     // split first submessage to new buffer
     let mut sub_buffer = buffer.split_to(sub_header_length + sub_content_length);
-    // split tail part (content) to new buffer
+    let original_submessage_bytes = sub_buffer.clone();
+    // split tail part (submessage body) to new buffer
     let sub_content_buffer = sub_buffer.split_off(sub_header_length);
 
     let e = endianness_flag(sub_header.flags);
+    let original_bytes = Some(original_submessage_bytes.clone());
     let mk_w_subm = move |s: WriterSubmessage| {
       io::Result::<Option<Self>>::Ok(Some(Submessage {
         header: sub_header,
         body: SubmessageBody::Writer(s),
+        original_bytes,
       }))
     };
+    let original_bytes = Some(original_submessage_bytes.clone());
     let mk_r_subm = move |s: ReaderSubmessage| {
       io::Result::<Option<Self>>::Ok(Some(Submessage {
         header: sub_header,
         body: SubmessageBody::Reader(s),
+        original_bytes,
       }))
     };
+    let original_bytes = Some(original_submessage_bytes.clone());
     let mk_s_subm = move |s: SecuritySubmessage| {
       io::Result::<Option<Self>>::Ok(Some(Submessage {
         header: sub_header,
         body: SubmessageBody::Security(s),
+        original_bytes,
       }))
     };
+    let original_bytes = Some(original_submessage_bytes.clone());
     let mk_i_subm = move |s: InterpreterSubmessage| {
       io::Result::<Option<Self>>::Ok(Some(Submessage {
         header: sub_header,
         body: SubmessageBody::Interpreter(s),
+        original_bytes,
       }))
     };
 

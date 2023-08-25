@@ -33,6 +33,7 @@ impl SecurePrefix {
           content_length: bytes.len() as u16,
         },
         body: SubmessageBody::Security(SecuritySubmessage::SecurePrefix(self, flags)),
+        original_bytes: None,
       })
       .map_err(|e| {
         security_error!(
