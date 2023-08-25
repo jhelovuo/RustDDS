@@ -55,7 +55,7 @@ pub(super) fn decode_submessage_gmac(
     validate_mac(
       &receiver_specific_key,
       initialization_vector,
-      &data,
+      data,
       receiver_specific_mac,
     )?;
   }

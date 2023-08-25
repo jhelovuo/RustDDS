@@ -354,6 +354,10 @@ impl BuiltinCryptoFooter {
     MAC_LENGTH  // common_mac
     + 4 // receiver_specific_macs = Vec::new()
   }
+
+  pub fn only_common_mac(common_mac: BuiltinMAC) -> Self {
+    BuiltinCryptoFooter { common_mac, receiver_specific_macs: Vec::new() }
+  }
 }
 
 impl TryFrom<Vec<u8>> for BuiltinCryptoFooter {
