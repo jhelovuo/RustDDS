@@ -243,7 +243,6 @@ pub(super) fn decode_datawriter_submessage_gcm(
   }
 }
 
-
 pub(super) fn decode_datareader_submessage_gcm(
   key: &BuiltinKey,
   receiver_specific_key: &BuiltinKey,

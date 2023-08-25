@@ -275,7 +275,7 @@ pub(crate) struct ReceiverSpecificKeyMaterial {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(crate) enum ReceiverSpecific {
-  No, 
+  No,
   Yes,
 }
 

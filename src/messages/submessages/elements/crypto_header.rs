@@ -1,8 +1,9 @@
-use speedy::{Readable, Writable, Writer, Reader, Context,};
+use speedy::{Context, Readable, Reader, Writable, Writer};
 
-use crate::security::cryptographic::types::CryptoTransformIdentifier;
-use crate::security::cryptographic::cryptographic_builtin::types::
- {BuiltinCryptoTransformationKind, BuiltinCryptoHeaderExtra,};
+use crate::security::cryptographic::{
+  cryptographic_builtin::types::{BuiltinCryptoHeaderExtra, BuiltinCryptoTransformationKind},
+  types::CryptoTransformIdentifier,
+};
 
 /// CryptoHeader: section 7.3.6.2.3 of the Security specification (v.
 /// 1.1)
@@ -24,21 +25,23 @@ impl<'a, C: Context> Readable<'a, C> for CryptoHeader {
     let transformation_id = CryptoTransformIdentifier::read_from(reader)?;
 
     // now let's see if we recognize what this is
-    if BuiltinCryptoTransformationKind::try_from(transformation_id.transformation_kind)
-      .is_ok() {
-      let header_extra_data = reader.read_vec(BuiltinCryptoHeaderExtra::serialized_len() )?;
+    if BuiltinCryptoTransformationKind::try_from(transformation_id.transformation_kind).is_ok() {
+      let header_extra_data = reader.read_vec(BuiltinCryptoHeaderExtra::serialized_len())?;
       Ok(CryptoHeader {
         transformation_id,
         plugin_crypto_header_extra: header_extra_data.into(),
       })
     } else {
-      Err(speedy::Error::custom(format!(
-        "Unknown CryptoTransformationKind {:?} in CryptoHeader.",
-        transformation_id.transformation_kind)).into())
+      Err(
+        speedy::Error::custom(format!(
+          "Unknown CryptoTransformationKind {:?} in CryptoHeader.",
+          transformation_id.transformation_kind
+        ))
+        .into(),
+      )
     }
   }
 }
-
 
 /// Should be interpreted by the plugin based on `transformation_id`
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -58,4 +61,3 @@ impl<C: Context> Writable<C> for PluginCryptoHeaderExtra {
     writer.write_bytes(&self.data)
   }
 }
-

@@ -42,7 +42,6 @@ impl CryptographicBuiltin {
     sending_endpoint_crypto_handle: EndpointCryptoHandle,
     receiving_endpoint_crypto_handle_list: &[EndpointCryptoHandle],
   ) -> SecurityResult<EncodedSubmessage> {
-
     // Serialize plaintext
     let plaintext = plain_rtps_submessage
       .write_to_vec()
@@ -50,10 +49,15 @@ impl CryptographicBuiltin {
 
     // Get the key material for encoding
     let SessionCryptoMaterials {
-      key_id, transformation_kind, session_key, initialization_vector, 
-      receiver_specific_key_materials
-    } = self.sender_session_crypto_materials(sending_endpoint_crypto_handle, 
-        receiving_endpoint_crypto_handle_list)?;
+      key_id,
+      transformation_kind,
+      session_key,
+      initialization_vector,
+      receiver_specific_key_materials,
+    } = self.sender_session_crypto_materials(
+      sending_endpoint_crypto_handle,
+      receiving_endpoint_crypto_handle_list,
+    )?;
 
     // Compute encoded submessage and footer
 
@@ -110,10 +114,13 @@ impl CryptoTransform for CryptographicBuiltin {
     plain_buffer: Vec<u8>,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
-
     // Get the key material for encrypting serialized payloads
     let SessionCryptoMaterials {
-      key_id, transformation_kind, session_key, initialization_vector, ..
+      key_id,
+      transformation_kind,
+      session_key,
+      initialization_vector,
+      ..
     } = self.sender_session_crypto_materials(sending_datawriter_crypto_handle, &[])?;
 
     let header = BuiltinCryptoHeader {
@@ -208,11 +215,15 @@ impl CryptoTransform for CryptographicBuiltin {
 
     // Get the key material for encoding
     let SessionCryptoMaterials {
-      key_id, transformation_kind, session_key, initialization_vector, 
-      receiver_specific_key_materials
-    } = self.sender_session_crypto_materials(sending_participant_crypto_handle, 
-        &receiving_participant_crypto_handle_list)?;
-
+      key_id,
+      transformation_kind,
+      session_key,
+      initialization_vector,
+      receiver_specific_key_materials,
+    } = self.sender_session_crypto_materials(
+      sending_participant_crypto_handle,
+      &receiving_participant_crypto_handle_list,
+    )?;
 
     // Compute encoded submessages and footer
     let (encoded_submessages, crypto_footer) = match transformation_kind {
@@ -505,7 +516,6 @@ impl CryptoTransform for CryptographicBuiltin {
     _receiving_datareader_crypto_handle: DatareaderCryptoHandle,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<WriterSubmessage> {
-
     // Destructure header and footer
     let (SecurePrefix { crypto_header }, encoded_submessage, SecurePostfix { crypto_footer }) =
       encoded_rtps_submessage;
@@ -725,9 +735,11 @@ impl CryptoTransform for CryptographicBuiltin {
     } = header;
 
     // Get the payload decode key material
-    let decode_key_material = 
-      self.receiver_session_crypto_materials(sending_datawriter_crypto_handle, 
-        transformation_key_id, initialization_vector)?;
+    let decode_key_material = self.receiver_session_crypto_materials(
+      sending_datawriter_crypto_handle,
+      transformation_key_id,
+      initialization_vector,
+    )?;
 
     // Check that the key IDs match
     if decode_key_material.key_id != transformation_key_id {
