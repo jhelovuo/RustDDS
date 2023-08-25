@@ -1,9 +1,9 @@
 use bytes::Bytes;
-use speedy::{Readable, Writable};
+use speedy::{Writable};
 
 use crate::{
   messages::submessages::{
-    elements::{crypto_content::CryptoContent, crypto_footer::CryptoFooter},
+    elements::{crypto_content::CryptoContent,},
     info_source::InfoSource,
     secure_body::SecureBody,
     submessage::{InterpreterSubmessage, SecuritySubmessage, },
@@ -17,8 +17,8 @@ use super::{
   builtin_key::*,
   key_material::ReceiverSpecificKeyMaterial,
   types::{
-    BuiltinCryptoContent, BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinMAC,
-    ReceiverSpecificMAC, MAC_LENGTH,
+    BuiltinInitializationVector, BuiltinMAC,
+    ReceiverSpecificMAC, 
   },
 };
 
@@ -37,67 +37,6 @@ pub(super) fn find_receiver_specific_mac(
       .ok_or_else(|| security_error!( "No MAC found for receiver_specific_key_id {key_id}"))
   )
   .transpose()
-}
-
-pub(super) fn decode_serialized_payload_gmac(
-  key: &BuiltinKey,
-  initialization_vector: BuiltinInitializationVector,
-  data: &[u8],
-) -> SecurityResult<Vec<u8>> {
-  // The next submessage element should be the plaintext SerializedPayload,
-  // followed by a CryptoFooter. However, serialized SerializedPayload
-  // does not know its own length, but we know by 9.5.3.3.1 that the CryptoFooter
-  // cannot have receiver-specific MACs in the case of encode_serialized_payload,
-  // so the length of the footer is constant.
-  // By 9.5.3.3.4.3 the footer consists of the common_mac, which is 16 bytes long,
-  // and the length (0) of the reader-specific MAC sequence, which itself is a
-  // 4-byte number, so the CDR-serialized length is
-  let footer_length = MAC_LENGTH + 4;
-  let serialized_payload_length = data
-    .len()
-    .checked_sub(footer_length)
-    .ok_or(security_error!(
-      "Bad data: the encoded buffer was too short to include a CryptoFooter."
-    ))?;
-  let (serialized_payload_data, crypto_footer_data) = data.split_at(serialized_payload_length);
-  // Deserialize the footer to check its validity
-  let BuiltinCryptoFooter { common_mac, .. } = CryptoFooter::read_from_buffer(crypto_footer_data)
-    .map_err(|e| security_error!("Failed to deserialize the CryptoFooter: {}", e))
-    .and_then(BuiltinCryptoFooter::try_from)?;
-
-  // Validate MAC and deserialize serialized payload
-  validate_mac(
-    key,
-    initialization_vector,
-    serialized_payload_data,
-    common_mac,
-  )
-  .and(Ok(Vec::from(serialized_payload_data)))
-}
-
-pub(super) fn decode_serialized_payload_gcm(
-  key: &BuiltinKey,
-  initialization_vector: BuiltinInitializationVector,
-  data: &[u8],
-) -> SecurityResult<Vec<u8>> {
-  // The next submessage element should be the CryptoContent containing the
-  // encrypted SerializedPayload, followed by a CryptoFooter.
-
-  // Deserialize crypto header
-  let (read_result, bytes_consumed) = BuiltinCryptoContent::read_with_length_from_buffer(data);
-  let footer_data = data.split_at(bytes_consumed).1;
-
-  // Deserialize CryptoContent
-  let BuiltinCryptoContent { data } =
-    read_result.map_err(|e| security_error!("Error while deserializing CryptoContent: {}", e))?;
-
-  // Deserialize CryptoFooter
-  let BuiltinCryptoFooter { common_mac, .. } = CryptoFooter::read_from_buffer(footer_data)
-    .map_err(|e| security_error!("Error while deserializing CryptoFooter: {}", e))
-    .and_then(BuiltinCryptoFooter::try_from)?;
-
-  // Decrypt serialized payload
-  decrypt(key, initialization_vector, &data, common_mac)
 }
 
 pub(super) fn decode_submessage_gmac(

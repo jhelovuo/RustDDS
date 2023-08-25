@@ -286,8 +286,14 @@ impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
 /// 1.1)
 #[derive(Readable)]
 pub(super) struct BuiltinCryptoHeader {
-  pub transform_identifier: BuiltinCryptoTransformIdentifier,
-  pub builtin_crypto_header_extra: BuiltinCryptoHeaderExtra,
+  pub transform_identifier: BuiltinCryptoTransformIdentifier, // 4+4 bytes
+  pub builtin_crypto_header_extra: BuiltinCryptoHeaderExtra, // 4+8 bytes
+}
+
+impl BuiltinCryptoHeader {
+  pub fn serialized_len() -> usize {
+    4+4+4+8
+  }
 }
 
 impl TryFrom<CryptoHeader> for BuiltinCryptoHeader {
@@ -335,6 +341,14 @@ pub(super) struct BuiltinCryptoFooter {
   pub common_mac: BuiltinMAC,
   pub receiver_specific_macs: Vec<ReceiverSpecificMAC>,
 }
+
+impl BuiltinCryptoFooter {
+  pub fn minimal_serialized_len() -> usize {
+    MAC_LENGTH  // common_mac
+    + 4         // receiver_specific_macs = Vec::new()
+  }
+}
+
 impl TryFrom<Vec<u8>> for BuiltinCryptoFooter {
   type Error = SecurityError;
   fn try_from(data: Vec<u8>) -> Result<Self, Self::Error> {

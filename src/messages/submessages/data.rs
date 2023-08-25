@@ -39,7 +39,8 @@ pub struct Data {
   pub inline_qos: Option<ParameterList>,
 
   /// Depending on the payload transformation kind, contains the serialized
-  /// CryptoContent or SerializedPayload as bytes, so that the
+  /// CryptoHeader + CryptoContent + CryptoFooter, or 
+  /// SerializedPayload as bytes, so that the
   /// submessage can be deserialized without knowing which type to expect,
   /// after which the payload can be decoded.
   ///
