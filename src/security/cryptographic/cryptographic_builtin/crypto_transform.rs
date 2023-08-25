@@ -1,5 +1,6 @@
 use enumflags2::BitFlags;
 use speedy::{Readable, Writable};
+use log::warn;
 
 use crate::{
   messages::submessages::{
@@ -25,8 +26,7 @@ use crate::{
 };
 use super::{
   decode::{
-    decode_datareader_submessage_gcm, decode_datareader_submessage_gmac,
-    decode_datawriter_submessage_gcm, decode_datawriter_submessage_gmac,
+    decode_submessage_gcm, decode_submessage_gmac,
     decode_serialized_payload_gcm, decode_serialized_payload_gmac, find_receiver_specific_mac,
   },
   encode::{
@@ -42,22 +42,18 @@ impl CryptographicBuiltin {
     sending_endpoint_crypto_handle: EndpointCryptoHandle,
     receiving_endpoint_crypto_handle_list: &[EndpointCryptoHandle],
   ) -> SecurityResult<EncodedSubmessage> {
+
     // Serialize plaintext
     let plaintext = plain_rtps_submessage
       .write_to_vec()
       .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
 
     // Get the key material for encoding
-    let SessionCryptoMaterials {
-      key_id,
-      transformation_kind,
-      session_key,
-      initialization_vector,
-      receiver_specific_key_materials,
-    } = self.sender_session_crypto_materials(
-      sending_endpoint_crypto_handle,
-      receiving_endpoint_crypto_handle_list,
-    )?;
+    let EncryptSessionMaterials {
+      key_id, transformation_kind, session_key, initialization_vector, 
+      receiver_specific_keys
+    } = self.sender_session_crypto_materials(sending_endpoint_crypto_handle, false,
+        receiving_endpoint_crypto_handle_list)?;
 
     // Compute encoded submessage and footer
 
@@ -72,7 +68,7 @@ impl CryptographicBuiltin {
           &session_key,
           initialization_vector,
           &plaintext,
-          &receiver_specific_key_materials,
+          &receiver_specific_keys,
         )?,
       ),
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
@@ -80,7 +76,7 @@ impl CryptographicBuiltin {
         &session_key,
         initialization_vector,
         &plaintext,
-        &receiver_specific_key_materials,
+        &receiver_specific_keys,
       )?,
     };
 
@@ -106,6 +102,93 @@ impl CryptographicBuiltin {
       postfix.create_submessage(speedy::Endianness::BigEndian)?, // 9.5.2.5 use BigEndian
     ))
   }
+
+  fn decode_submessage(
+    &self,
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
+    receiving_endpoint_crypto_handle: DatareaderCryptoHandle,
+    sending_endpoint_crypto_handle: DatawriterCryptoHandle,
+  ) -> SecurityResult<SubmessageBody> {
+
+    // Destructure header and footer
+    let (SecurePrefix { crypto_header }, encoded_submessage, SecurePostfix { crypto_footer }) =
+      encoded_rtps_submessage;
+
+    let BuiltinCryptoHeader {
+      transform_identifier:
+        BuiltinCryptoTransformIdentifier {
+          transformation_kind: header_transformation_kind,
+          transformation_key_id,
+        },
+      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
+    } = BuiltinCryptoHeader::try_from(crypto_header)?;
+
+    let BuiltinCryptoFooter {
+      common_mac,
+      receiver_specific_macs,
+    } = BuiltinCryptoFooter::try_from(crypto_footer)?;
+
+    // Get decode key material
+    let decode_key_material = 
+      self.receiver_session_crypto_materials(receiving_endpoint_crypto_handle, 
+        transformation_key_id, false, initialization_vector)?;
+
+    // Check that the key id matches the header. This should be redundant if the
+    // method is called after preprocess_secure_submessage
+    if transformation_key_id != decode_key_material.key_id {
+      Err(security_error!(
+        "The key IDs do not match. The key material has sender_key_id {}, while the header has \
+         transformation_key_id {}",
+        decode_key_material.key_id,
+        transformation_key_id
+      ))?;
+    } else if header_transformation_kind != decode_key_material.transformation_kind {
+      Err(security_error!(
+        "The transformation_kind do not match. The key material has {:?}, while the header has {:?}",
+        decode_key_material.transformation_kind,
+        header_transformation_kind
+      ))?;
+    }
+
+    // Get the receiver-specific MAC if one is expected
+    let receiver_specific_key_and_mac = find_receiver_specific_mac(
+      decode_key_material.receiver_specific_key, 
+      &receiver_specific_macs)?;
+
+    let decode_key = decode_key_material.session_key;
+
+    match decode_key_material.transformation_kind {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+        // Does this even make sense?
+        warn!("Decode submessage success, but crypto transfomration kind is none.");
+        Ok(encoded_submessage.body)
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+        decode_submessage_gmac(
+          &decode_key,
+          initialization_vector,
+          &encoded_submessage,
+          common_mac,
+          receiver_specific_key_and_mac,
+        )?; // return verify error here, or continue
+
+        Ok(encoded_submessage.body) // it was plaintext anyway.
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+        decode_submessage_gcm(
+          &decode_key,
+          initialization_vector,
+          &encoded_submessage,
+          common_mac,
+          receiver_specific_key_and_mac,
+        )
+      }
+    }
+
+  }
+
 }
 
 impl CryptoTransform for CryptographicBuiltin {
@@ -114,14 +197,21 @@ impl CryptoTransform for CryptographicBuiltin {
     plain_buffer: Vec<u8>,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
+
     // Get the key material for encrypting serialized payloads
-    let SessionCryptoMaterials {
+    let EncryptSessionMaterials {
       key_id,
       transformation_kind,
       session_key,
       initialization_vector,
       ..
-    } = self.sender_session_crypto_materials(sending_datawriter_crypto_handle, &[])?;
+    } = self.sender_session_crypto_materials(sending_datawriter_crypto_handle, true, &[])?;
+
+    // Receiver specific (signing) keys are not used.
+    //
+    // DDS Security spec, Section9.5.3.3.1 Overview, Table 72:
+    // [The encode_serialized_payload] operation shall always set the receiver_specific_macs 
+    // attribute in the CryptoFooter to the empty sequence.
 
     let header = BuiltinCryptoHeader {
       transform_identifier: BuiltinCryptoTransformIdentifier {
@@ -154,6 +244,9 @@ impl CryptoTransform for CryptographicBuiltin {
         .write_to_vec()
         .map_err(|e| security_error!("Error serializing CryptoContent: {e:?}"))?,
       ParameterList::new(),
+      // TODO: If the payload was not data but key, then construct a key_hash
+      // and return that to be appended to the InlineQoS of the outgoing DATA Submessage.
+      // Encrypted payloads must have their key sent as hash only (in InlineQoS), never plaintext.
     ))
   }
 
@@ -214,16 +307,12 @@ impl CryptoTransform for CryptographicBuiltin {
     .concat();
 
     // Get the key material for encoding
-    let SessionCryptoMaterials {
-      key_id,
-      transformation_kind,
-      session_key,
-      initialization_vector,
-      receiver_specific_key_materials,
-    } = self.sender_session_crypto_materials(
-      sending_participant_crypto_handle,
-      &receiving_participant_crypto_handle_list,
-    )?;
+    let EncryptSessionMaterials {
+      key_id, transformation_kind, session_key, initialization_vector, 
+      receiver_specific_keys
+    } = self.sender_session_crypto_materials(sending_participant_crypto_handle, false,
+        &receiving_participant_crypto_handle_list)?;
+
 
     // Compute encoded submessages and footer
     let (encoded_submessages, crypto_footer) = match transformation_kind {
@@ -235,7 +324,7 @@ impl CryptoTransform for CryptographicBuiltin {
             &session_key,
             initialization_vector,
             &plaintext,
-            &receiver_specific_key_materials,
+            &receiver_specific_keys,
           )?,
         )
         /*  // TODO? switch to the following to avoid unnecessary pre/postfixes
@@ -248,7 +337,7 @@ impl CryptoTransform for CryptographicBuiltin {
           &session_key,
           initialization_vector,
           &plaintext,
-          &receiver_specific_key_materials,
+          &receiver_specific_keys,
         )?,
       ),
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
@@ -257,7 +346,7 @@ impl CryptoTransform for CryptographicBuiltin {
           &session_key,
           initialization_vector,
           &plaintext,
-          &receiver_specific_key_materials,
+          &receiver_specific_keys,
         )
         // Wrap the submessage in Vec
         .map(|(secure_body_submessage, footer)| (vec![secure_body_submessage], footer))?
@@ -366,8 +455,9 @@ impl CryptoTransform for CryptographicBuiltin {
       }
 
       // Get the receiver-specific MAC if one is expected
-      let receiver_specific_mac =
-        find_receiver_specific_mac(*receiver_specific_key_id, &receiver_specific_macs)?;
+      let receiver_specific_mac = None;
+      // TODO
+        //find_receiver_specific_mac(*receiver_specific_key_id, &receiver_specific_macs)?;
 
       // TODO use session key?
       let decode_key = master_sender_key;
@@ -510,205 +600,40 @@ impl CryptoTransform for CryptographicBuiltin {
     ))
   }
 
-  fn decode_datawriter_submessage(
+  
+fn decode_datawriter_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    _receiving_datareader_crypto_handle: DatareaderCryptoHandle,
-    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
-  ) -> SecurityResult<WriterSubmessage> {
-    // Destructure header and footer
-    let (SecurePrefix { crypto_header }, encoded_submessage, SecurePostfix { crypto_footer }) =
-      encoded_rtps_submessage;
-
-    let BuiltinCryptoHeader {
-      transform_identifier:
-        BuiltinCryptoTransformIdentifier {
-          transformation_kind: header_transformation_kind,
-          transformation_key_id,
-        },
-      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
-    } = BuiltinCryptoHeader::try_from(crypto_header)?;
-
-    let BuiltinCryptoFooter {
-      common_mac,
-      receiver_specific_macs,
-    } = BuiltinCryptoFooter::try_from(crypto_footer)?;
-
-    // Get decode key material
-    let KeyMaterial_AES_GCM_GMAC {
-      transformation_kind: key_material_transformation_kind,
-      master_salt,
-      sender_key_id,
-      master_sender_key,
-      receiver_specific_key_id,
-      master_receiver_specific_key,
-    } = self
-      .get_decode_key_materials(sending_datawriter_crypto_handle, transformation_key_id)
-      // Get the one for submessages (not only payload)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
-
-    // Check that the key id matches the header. This should be redundant if the
-    // method is called after preprocess_secure_submessage
-    if !transformation_key_id.eq(sender_key_id) {
-      Err(security_error!(
-        "The key IDs don't match. The key material has sender_key_id {}, while the header has \
-         transformation_key_id {}",
-        sender_key_id,
-        transformation_key_id
-      ))?;
-    } else if !header_transformation_kind.eq(key_material_transformation_kind) {
-      Err(security_error!(
-        "The transformation_kind don't match. The key material has {:?}, while the header has {:?}",
-        key_material_transformation_kind,
-        header_transformation_kind
-      ))?;
-    }
-
-    // Get the receiver-specific MAC if one is expected
-    let receiver_specific_mac =
-      find_receiver_specific_mac(*receiver_specific_key_id, &receiver_specific_macs)?;
-
-    // TODO use session key?
-    let decode_key = master_sender_key;
-    // TODO use session key?
-    let receiver_specific_key = master_receiver_specific_key;
-
-    match key_material_transformation_kind {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        decode_datawriter_submessage_gmac(
-          decode_key,
-          receiver_specific_key,
-          initialization_vector,
-          encoded_submessage,
-          common_mac,
-          receiver_specific_mac,
-        )
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
-      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        decode_datawriter_submessage_gmac(
-          decode_key,
-          receiver_specific_key,
-          initialization_vector,
-          encoded_submessage,
-          common_mac,
-          receiver_specific_mac,
-        )
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
-      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        decode_datawriter_submessage_gcm(
-          decode_key,
-          receiver_specific_key,
-          initialization_vector,
-          encoded_submessage,
-          common_mac,
-          receiver_specific_mac,
-        )
-      }
+    receiving_datareader_crypto_handle: DatawriterCryptoHandle,
+    sending_datawriter_crypto_handle: DatareaderCryptoHandle,
+  ) -> SecurityResult<WriterSubmessage>
+{
+  match self.decode_submessage(encoded_rtps_submessage, receiving_datareader_crypto_handle,
+    sending_datawriter_crypto_handle)? {
+    SubmessageBody::Writer(subm) => Ok(subm),
+    other => {
+      warn!("Expected WriterSubmessage, but decoded as {other:?}");
+      Err(security_error("decode_datawriter_submessage: Decode result was not WriterSubmessage"))
     }
   }
-
+}
+  
   fn decode_datareader_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    _receiving_datawriter_crypto_handle: DatawriterCryptoHandle,
+    receiving_datawriter_crypto_handle: DatawriterCryptoHandle,
     sending_datareader_crypto_handle: DatareaderCryptoHandle,
   ) -> SecurityResult<ReaderSubmessage> {
-    //TODO: this is only a mock implementation
-
-    // Destructure header and footer
-    let (SecurePrefix { crypto_header }, encoded_submessage, SecurePostfix { crypto_footer }) =
-      encoded_rtps_submessage;
-
-    let BuiltinCryptoHeader {
-      transform_identifier:
-        BuiltinCryptoTransformIdentifier {
-          transformation_kind: header_transformation_kind,
-          transformation_key_id,
-        },
-      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
-    } = BuiltinCryptoHeader::try_from(crypto_header)?;
-
-    let BuiltinCryptoFooter {
-      common_mac,
-      receiver_specific_macs,
-    } = BuiltinCryptoFooter::try_from(crypto_footer)?;
-
-    // Get decode key material
-    let KeyMaterial_AES_GCM_GMAC {
-      transformation_kind: key_material_transformation_kind,
-      master_salt,
-      sender_key_id,
-      master_sender_key,
-      receiver_specific_key_id,
-      master_receiver_specific_key,
-    } = self
-      .get_decode_key_materials(sending_datareader_crypto_handle, transformation_key_id)
-      // Get the one for submessages (not only payload)
-      .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
-
-    // Check that the key material matches the header. This should be redundant if
-    // the method is called after preprocess_secure_submessage
-    if !transformation_key_id.eq(sender_key_id) {
-      Err(security_error!(
-        "The key IDs don't match. The key has sender_key_id {}, while the header has \
-         transformation_key_id {}",
-        sender_key_id,
-        transformation_key_id
-      ))?;
-    } else if !header_transformation_kind.eq(key_material_transformation_kind) {
-      Err(security_error!(
-        "The transformation_kind don't match. The key material has {:?}, while the header has {:?}",
-        key_material_transformation_kind,
-        header_transformation_kind
-      ))?;
-    }
-
-    // Get the receiver-specific MAC if one is expected
-    let receiver_specific_mac =
-      find_receiver_specific_mac(*receiver_specific_key_id, &receiver_specific_macs)?;
-
-    // TODO use session key?
-    let decode_key = master_sender_key;
-    // TODO use session key?
-    let receiver_specific_key = master_receiver_specific_key;
-
-    match key_material_transformation_kind {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        decode_datareader_submessage_gmac(
-          decode_key,
-          receiver_specific_key,
-          initialization_vector,
-          encoded_submessage,
-          common_mac,
-          receiver_specific_mac,
-        )
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
-      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        decode_datareader_submessage_gmac(
-          decode_key,
-          receiver_specific_key,
-          initialization_vector,
-          encoded_submessage,
-          common_mac,
-          receiver_specific_mac,
-        )
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
-      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        decode_datareader_submessage_gcm(
-          decode_key,
-          receiver_specific_key,
-          initialization_vector,
-          encoded_submessage,
-          common_mac,
-          receiver_specific_mac,
-        )
+    match self.decode_submessage(encoded_rtps_submessage, receiving_datawriter_crypto_handle,
+      sending_datareader_crypto_handle)? {
+      SubmessageBody::Reader(subm) => Ok(subm),
+      other => {
+        warn!("Expected ReaderSubmessage, but decoded as {other:?}");
+        Err(security_error("decode_datareader_submessage: Decode result was not ReaderSubmessage"))
       }
     }
   }
+
 
   fn decode_serialized_payload(
     &self,
@@ -735,11 +660,9 @@ impl CryptoTransform for CryptographicBuiltin {
     } = header;
 
     // Get the payload decode key material
-    let decode_key_material = self.receiver_session_crypto_materials(
-      sending_datawriter_crypto_handle,
-      transformation_key_id,
-      initialization_vector,
-    )?;
+    let decode_key_material = 
+      self.receiver_session_crypto_materials(sending_datawriter_crypto_handle, 
+        transformation_key_id, true, initialization_vector)?;
 
     // Check that the key IDs match
     if decode_key_material.key_id != transformation_key_id {

@@ -6,15 +6,16 @@ use crate::{
     elements::{crypto_content::CryptoContent, crypto_footer::CryptoFooter},
     info_source::InfoSource,
     secure_body::SecureBody,
-    submessage::{InterpreterSubmessage, ReaderSubmessage, SecuritySubmessage, WriterSubmessage},
+    submessage::{InterpreterSubmessage, SecuritySubmessage, },
   },
   rtps::{Submessage, SubmessageBody},
-  security::{cryptographic::CryptoTransformKeyId, SecurityError, SecurityResult},
+  security::{SecurityError, SecurityResult},
   security_error,
 };
 use super::{
   aes_gcm_gmac::{decrypt, validate_mac},
   builtin_key::*,
+  key_material::ReceiverSpecificKeyMaterial,
   types::{
     BuiltinCryptoContent, BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinMAC,
     ReceiverSpecificMAC, MAC_LENGTH,
@@ -22,33 +23,19 @@ use super::{
 };
 
 pub(super) fn find_receiver_specific_mac(
-  receiver_specific_key_id: CryptoTransformKeyId,
+  receiver_specific_key: Option<ReceiverSpecificKeyMaterial>,
   receiver_specific_macs: &[ReceiverSpecificMAC],
-) -> SecurityResult<Option<BuiltinMAC>> {
-  // If the ID is 0, we are not expecting a receiver-specific MAC
-  if receiver_specific_key_id == 0 {
-    None
-  } else {
-    Some(
-      // Find the receiver-specific map by ID
-      receiver_specific_macs
-        .iter()
-        .find(
-          |ReceiverSpecificMAC {
-             receiver_mac_key_id,
-             ..
-           }| receiver_specific_key_id.eq(receiver_mac_key_id),
-        )
-        .map(|ReceiverSpecificMAC { receiver_mac, .. }| *receiver_mac)
-        // We are expecting to find a MAC, so reject if we don't
-        .ok_or_else(|| {
-          security_error!(
-            "No MAC found for receiver_specific_key_id {}",
-            receiver_specific_key_id
-          )
-        }),
-    )
-  }
+) -> SecurityResult<Option<(BuiltinKey, BuiltinMAC)>> {
+  // If the key is None, we are not expecting a receiver-specific MAC
+  receiver_specific_key.map( |ReceiverSpecificKeyMaterial{ key_id, key }|
+    // Find the receiver-specific map by ID
+    receiver_specific_macs
+      .iter()
+      .find( |ReceiverSpecificMAC { receiver_mac_key_id, .. }| *receiver_mac_key_id == key_id )
+      .map(|ReceiverSpecificMAC { receiver_mac, .. }| ( key.clone() , *receiver_mac ) )
+      // We are expecting to find a MAC, so reject if we do not
+      .ok_or_else(|| security_error!( "No MAC found for receiver_specific_key_id {key_id}"))
+  )
   .transpose()
 }
 
@@ -113,87 +100,46 @@ pub(super) fn decode_serialized_payload_gcm(
   decrypt(key, initialization_vector, &data, common_mac)
 }
 
-pub(super) fn decode_datawriter_submessage_gmac(
+pub(super) fn decode_submessage_gmac(
   key: &BuiltinKey,
-  receiver_specific_key: &BuiltinKey,
   initialization_vector: BuiltinInitializationVector,
-  encoded_submessage: Submessage,
+  encoded_submessage: &Submessage,
   common_mac: BuiltinMAC,
-  receiver_specific_mac: Option<BuiltinMAC>,
-) -> SecurityResult<WriterSubmessage> {
+  receiver_specific_key_and_mac: Option<(BuiltinKey, BuiltinMAC)>,
+) -> SecurityResult<()> {
   // Serialize
   let data = encoded_submessage
     .write_to_vec()
     .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
+  // TODO: This is insane.
+
 
   // Validate the common MAC
   validate_mac(key, initialization_vector, &data, common_mac)?;
+
   // Validate the receiver-specific MAC if one exists
-  if let Some(receiver_specific_mac) = receiver_specific_mac {
+  if let Some((receiver_specific_key, receiver_specific_mac)) = receiver_specific_key_and_mac {
     validate_mac(
-      receiver_specific_key,
+      &receiver_specific_key,
       initialization_vector,
       &data,
       receiver_specific_mac,
     )?;
   }
 
-  // Check that the submessage is a WriterSubmessage
-  match encoded_submessage.body {
-    SubmessageBody::Writer(writer_submessage) => Ok(writer_submessage),
-    other => Err(security_error!(
-      "When transformation kind is NONE or GMAC, decode_datawriter_submessage expects a \
-       WriterSubmessage, received {:?}",
-      other
-    )),
-  }
-}
-pub(super) fn decode_datareader_submessage_gmac(
-  key: &BuiltinKey,
-  receiver_specific_key: &BuiltinKey,
-  initialization_vector: BuiltinInitializationVector,
-  encoded_submessage: Submessage,
-  common_mac: BuiltinMAC,
-  receiver_specific_mac: Option<BuiltinMAC>,
-) -> SecurityResult<ReaderSubmessage> {
-  // Serialize
-  let data = encoded_submessage
-    .write_to_vec()
-    .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
-
-  // Validate the common MAC
-  validate_mac(key, initialization_vector, &data, common_mac)?;
-  // Validate the receiver-specific MAC if one exists
-  if let Some(receiver_specific_mac) = receiver_specific_mac {
-    validate_mac(
-      receiver_specific_key,
-      initialization_vector,
-      &data,
-      receiver_specific_mac,
-    )?;
-  }
-
-  // Check that the submessage is a ReaderSubmessage
-  match encoded_submessage.body {
-    SubmessageBody::Reader(reader_submessage) => Ok(reader_submessage),
-    other => Err(security_error!(
-      "When transformation kind is NONE or GMAC, decode_datareader_submessage expects a \
-       ReaderSubmessage, received {:?}",
-      other
-    )),
-  }
+  // both validations passed
+  Ok(())
 }
 
-pub(super) fn decode_datawriter_submessage_gcm(
+pub(super) fn decode_submessage_gcm(
   key: &BuiltinKey,
-  receiver_specific_key: &BuiltinKey,
   initialization_vector: BuiltinInitializationVector,
-  encoded_submessage: Submessage,
+  encoded_submessage: &Submessage,
   common_mac: BuiltinMAC,
-  receiver_specific_mac: Option<BuiltinMAC>,
-) -> SecurityResult<WriterSubmessage> {
+  receiver_specific_key_and_mac: Option<(BuiltinKey, BuiltinMAC)>,
+) -> SecurityResult<SubmessageBody> {
   // Destructure to get the data
-  match encoded_submessage.body {
+  match &encoded_submessage.body {
     SubmessageBody::Security(SecuritySubmessage::SecureBody(
       SecureBody {
         crypto_content: CryptoContent { data },
@@ -201,33 +147,24 @@ pub(super) fn decode_datawriter_submessage_gcm(
       _,
     )) => {
       // Validate the receiver-specific MAC if one exists
-      if let Some(receiver_specific_mac) = receiver_specific_mac {
+      if let Some((receiver_specific_key, receiver_specific_mac)) = receiver_specific_key_and_mac {
         validate_mac(
-          receiver_specific_key,
+          &receiver_specific_key,
           initialization_vector,
-          &data,
+          data,
           receiver_specific_mac,
         )?;
       }
 
       // Authenticated decryption
       let mut plaintext =
-        Bytes::copy_from_slice(&decrypt(key, initialization_vector, &data, common_mac)?);
+        Bytes::copy_from_slice(&decrypt(key, initialization_vector, data, common_mac)?);
 
       // Deserialize (submessage deserialization is a bit funky atm)
       match Submessage::read_from_buffer(&mut plaintext)
         .map_err(|e| security_error!("Failed to deserialize the plaintext: {}", e))?
       {
-        Some(Submessage {
-          body: SubmessageBody::Writer(writer_submessage),
-          ..
-        }) => Ok(writer_submessage),
-        Some(Submessage {
-          body: other_body, ..
-        }) => Err(security_error!(
-          "Expected the plaintext to deserialize into a WriterSubmessage, got {:?}",
-          other_body
-        )),
+        Some(Submessage { body, .. }) => Ok(body),
         None => Err(security_error!(
           "Failed to deserialize the plaintext into a submessage. It could have been PAD or \
            vendor-specific or otherwise unrecognized submessage kind."
@@ -237,70 +174,10 @@ pub(super) fn decode_datawriter_submessage_gcm(
 
     other => Err(security_error!(
       "When transformation kind is GCM, decode_datawriter_submessage expects a SecureBody, \
-       received {:?}",
-      other
-    )),
+       received {other:?}")),
   }
 }
 
-pub(super) fn decode_datareader_submessage_gcm(
-  key: &BuiltinKey,
-  receiver_specific_key: &BuiltinKey,
-  initialization_vector: BuiltinInitializationVector,
-  encoded_submessage: Submessage,
-  common_mac: BuiltinMAC,
-  receiver_specific_mac: Option<BuiltinMAC>,
-) -> SecurityResult<ReaderSubmessage> {
-  // Destructure to get the data
-  match encoded_submessage.body {
-    SubmessageBody::Security(SecuritySubmessage::SecureBody(
-      SecureBody {
-        crypto_content: CryptoContent { data },
-      },
-      _,
-    )) => {
-      // Validate the receiver-specific MAC if one exists
-      if let Some(receiver_specific_mac) = receiver_specific_mac {
-        validate_mac(
-          receiver_specific_key,
-          initialization_vector,
-          &data,
-          receiver_specific_mac,
-        )?;
-      }
-
-      // Authenticated decryption
-      let mut plaintext =
-        Bytes::copy_from_slice(&decrypt(key, initialization_vector, &data, common_mac)?);
-
-      // Deserialize (submessage deserialization is a bit funky atm)
-      match Submessage::read_from_buffer(&mut plaintext)
-        .map_err(|e| security_error!("Failed to deserialize the plaintext: {}", e))?
-      {
-        Some(Submessage {
-          body: SubmessageBody::Reader(reader_submessage),
-          ..
-        }) => Ok(reader_submessage),
-        Some(Submessage {
-          body: other_body, ..
-        }) => Err(security_error!(
-          "Expected the plaintext to deserialize into a ReaderSubmessage, got {:?}",
-          other_body
-        )),
-        None => Err(security_error!(
-          "Failed to deserialize the plaintext into a submessage. It could have been PAD or \
-           vendor-specific or otherwise unrecognized submessage kind."
-        )),
-      }
-    }
-
-    other => Err(security_error!(
-      "When transformation kind is GCM, decode_datareader_submessage expects a SecureBody, \
-       received {:?}",
-      other
-    )),
-  }
-}
 
 pub(super) fn decode_rtps_message_gmac(
   key: &BuiltinKey,
