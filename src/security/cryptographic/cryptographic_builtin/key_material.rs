@@ -367,3 +367,14 @@ impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
     }
   }
 }
+
+// Local participants and normal local endpoints each have a common encode key
+// material, that is used for encoding for all receivers, and possibly multiple
+// receiver-specific key materials that are used for computing receiver-specific
+// macs. Conversely, volatile endpoints only have receiver-specific payload
+// encryption key materials.
+#[derive(Clone)]
+pub(super) enum CommonEncodeKeyMaterials {
+  Some(KeyMaterial_AES_GCM_GMAC_seq),
+  Volatile(bool), // bool is for use_256_bit_key
+}

@@ -58,7 +58,7 @@ impl CryptographicBuiltin {
       session_key,
       initialization_vector,
       receiver_specific_keys,
-    } = self.sender_session_crypto_materials(
+    } = self.session_encoding_materials(
       sending_endpoint_crypto_handle,
       false,
       receiving_endpoint_crypto_handle_list,
@@ -137,7 +137,7 @@ impl CryptographicBuiltin {
     } = BuiltinCryptoFooter::try_from(crypto_footer)?;
 
     // Get decode key material
-    let decode_key_material = self.receiver_session_crypto_materials(
+    let decode_key_material = self.session_decode_crypto_materials(
       receiving_endpoint_crypto_handle,
       transformation_key_id,
       false,
@@ -215,7 +215,7 @@ impl CryptoTransform for CryptographicBuiltin {
       session_key,
       initialization_vector,
       ..
-    } = self.sender_session_crypto_materials(sending_datawriter_crypto_handle, true, &[])?;
+    } = self.session_encoding_materials(sending_datawriter_crypto_handle, true, &[])?;
 
     // Receiver specific (signing) keys are not used.
     //
@@ -324,7 +324,7 @@ impl CryptoTransform for CryptographicBuiltin {
       session_key,
       initialization_vector,
       receiver_specific_keys,
-    } = self.sender_session_crypto_materials(
+    } = self.session_encoding_materials(
       sending_participant_crypto_handle,
       false,
       &receiving_participant_crypto_handle_list,
@@ -708,7 +708,7 @@ impl CryptoTransform for CryptographicBuiltin {
       BuiltinCryptoFooter::read_from_buffer(footer_bytes)?;
 
     // Get the payload decode key material
-    let decode_key_material = self.receiver_session_crypto_materials(
+    let decode_key_material = self.session_decode_crypto_materials(
       sending_datawriter_crypto_handle,
       transformation_key_id,
       true,

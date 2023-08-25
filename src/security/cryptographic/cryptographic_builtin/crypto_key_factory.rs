@@ -1,3 +1,5 @@
+use bytes::Bytes;
+
 use crate::{
   security::{
     access_control::{
@@ -82,6 +84,62 @@ impl CryptographicBuiltin {
       })
   }
 
+  // TODO
+  // 9.5.2.1.2
+  fn derive_volatile_key_materials(
+    challenge1: Bytes,
+    challenge2: Bytes,
+    shared_secret: Bytes,
+    use_256_bit_key: bool,
+  ) -> SecurityResult<KeyMaterial_AES_GCM_GMAC_seq> {
+    use ring::hmac;
+    let salt_cookie: &[u8] = b"keyexchange salt".as_ref();
+    let key_cookie: &[u8] = b"key exchange key".as_ref();
+
+    let salt_hmac_key = [challenge1.as_ref(), salt_cookie, challenge2.as_ref()].concat(); // TODO sha256 this
+    let key_hmac_key = [challenge2.as_ref(), key_cookie, challenge1.as_ref()].concat(); // TODO sha256 this
+
+    let salt_hmac_key = hmac::Key::new(hmac::HMAC_SHA256, &salt_hmac_key);
+    let key_hmac_key = hmac::Key::new(hmac::HMAC_SHA256, &key_hmac_key);
+    let salt_digest = hmac::sign(&salt_hmac_key, &shared_secret);
+    let key_digest = hmac::sign(&key_hmac_key, &shared_secret);
+    // TODO truncate to key_length
+
+    let transformation_kind = if use_256_bit_key {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM
+    } else {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+    };
+
+    Ok(KeyMaterial_AES_GCM_GMAC_seq::Two(
+      KeyMaterial_AES_GCM_GMAC {
+        transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+        master_salt: Vec::new(),
+        sender_key_id: 0,
+        master_sender_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
+                                              * sequence */
+        receiver_specific_key_id: 0,
+        master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
+                                                         * sequence */
+      },
+      KeyMaterial_AES_GCM_GMAC {
+        transformation_kind,
+        // TODO
+        master_salt: salt_digest.as_ref().into(),
+
+        sender_key_id: 0,
+        master_sender_key: BuiltinKey::from_bytes(
+          KeyLength::try_from(transformation_kind)?,
+          key_digest.as_ref(),
+        )?,
+        // Leave receiver-specific key empty initially
+        receiver_specific_key_id: 0,
+        master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
+                                                         * sequence */
+      },
+    ))
+  }
+
   fn use_256_bit_key(properties: &[Property]) -> bool {
     properties
       .iter()
@@ -122,7 +180,8 @@ impl CryptographicBuiltin {
       master_sender_key,
       // Leave receiver-specific key empty initially
       receiver_specific_key_id: 0,
-      master_receiver_specific_key: BuiltinKey::ZERO,
+      master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
+                                                       * sequence */
     }
   }
 
@@ -155,7 +214,12 @@ impl CryptographicBuiltin {
 
   fn unregister_endpoint(&mut self, endpoint_info: EndpointInfo) {
     let endpoint_crypto_handle = endpoint_info.crypto_handle;
-    self.encode_key_materials.remove(&endpoint_crypto_handle);
+    self
+      .common_encode_key_materials
+      .remove(&endpoint_crypto_handle);
+    self
+      .receiver_specific_encode_key_materials
+      .remove(&endpoint_crypto_handle);
     self.decode_key_materials.remove(&endpoint_crypto_handle);
     self
       .endpoint_encrypt_options
@@ -224,9 +288,9 @@ impl CryptoKeyFactory for CryptographicBuiltin {
       ),
     );
     self
-      .insert_encode_key_materials(
+      .insert_common_encode_key_materials(
         crypto_handle,
-        KeyMaterial_AES_GCM_GMAC_seq::One(key_material),
+        CommonEncodeKeyMaterials::Some(KeyMaterial_AES_GCM_GMAC_seq::One(key_material)),
       )
       .and(self.insert_participant_attributes(crypto_handle, participant_security_attributes))
       .and(Ok(crypto_handle))
@@ -242,8 +306,18 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     //TODO: this is only a mock implementation
 
     let local_participant_key_materials = self
-      .get_encode_key_materials(&local_participant_crypto_handle)
-      .cloned()?;
+      .get_common_encode_key_materials(&local_participant_crypto_handle)
+      .cloned()
+      .and_then(
+        |common_encode_key_materials| match common_encode_key_materials {
+          CommonEncodeKeyMaterials::Some(value) => Ok(value),
+          CommonEncodeKeyMaterials::Volatile(_) => Err(security_error!(
+            "The local_participant_crypto_handle {} points to volatile, but a participant cannot \
+             be volatile",
+            local_participant_crypto_handle
+          )),
+        },
+      )?;
 
     let is_rtps_origin_authenticated = self
       .participant_encrypt_options
@@ -271,7 +345,10 @@ impl CryptoKeyFactory for CryptographicBuiltin {
       remote_participant_crypto_handle,
     );
 
-    self.insert_encode_key_materials(remote_participant_crypto_handle, key_materials)?;
+    self.insert_receiver_specific_encode_key_materials(
+      remote_participant_crypto_handle,
+      key_materials,
+    )?;
 
     Ok(remote_participant_crypto_handle)
   }
@@ -289,14 +366,16 @@ impl CryptoKeyFactory for CryptographicBuiltin {
 
     let local_datawriter_crypto_handle = self.generate_crypto_handle();
 
+    let use_256_bit_key = Self::use_256_bit_key(datawriter_properties);
+
+    // The key material for volatile datawriter is derived from the shared secret in
+    // register_matched_remote_datareader
     if Self::is_volatile(datawriter_properties) {
-      // By 8.8.8.3
-      Err(security_error!(
-        "register_local_datawriter should not be called 
-        for BuiltinParticipantVolatileMessageSecureWriter"
-      ))
+      self.insert_common_encode_key_materials(
+        local_datawriter_crypto_handle,
+        CommonEncodeKeyMaterials::Volatile(use_256_bit_key),
+      )?;
     } else {
-      let use_256_bit_key = Self::use_256_bit_key(datawriter_properties);
       let submessage_transformation_kind = Self::transformation_kind(
         datawriter_security_attributes.is_submessage_protected,
         plugin_endpoint_security_attributes.is_submessage_encrypted,
@@ -323,26 +402,29 @@ impl CryptoKeyFactory for CryptographicBuiltin {
           Self::generate_key_material(self.generate_crypto_handle(), payload_transformation_kind),
         )
       };
-      self.insert_encode_key_materials(local_datawriter_crypto_handle, key_materials)?;
-
-      self.insert_endpoint_attributes(
+      self.insert_common_encode_key_materials(
         local_datawriter_crypto_handle,
-        datawriter_security_attributes,
+        CommonEncodeKeyMaterials::Some(key_materials),
       )?;
-
-      self.insert_endpoint_info(
-        participant_crypto,
-        EndpointInfo {
-          crypto_handle: local_datawriter_crypto_handle,
-          kind: EndpointKind::DataWriter,
-        },
-      );
-      self
-        .endpoint_to_participant
-        .insert(local_datawriter_crypto_handle, participant_crypto);
-
-      SecurityResult::Ok(local_datawriter_crypto_handle)
     }
+
+    self.insert_endpoint_attributes(
+      local_datawriter_crypto_handle,
+      datawriter_security_attributes,
+    )?;
+
+    self.insert_endpoint_info(
+      participant_crypto,
+      EndpointInfo {
+        crypto_handle: local_datawriter_crypto_handle,
+        kind: EndpointKind::DataWriter,
+      },
+    );
+    self
+      .endpoint_to_participant
+      .insert(local_datawriter_crypto_handle, participant_crypto);
+
+    SecurityResult::Ok(local_datawriter_crypto_handle)
   }
 
   fn register_matched_remote_datareader(
@@ -353,27 +435,9 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     relay_only: bool,
   ) -> SecurityResult<DatareaderCryptoHandle> {
     //TODO: this is only a mock implementation
-    let local_datawriter_key_materials: KeyMaterial_AES_GCM_GMAC_seq = self
-      .get_encode_key_materials(&local_datawriter_crypto_handle)
+    let common_encode_key_materials = self
+      .get_common_encode_key_materials(&local_datawriter_crypto_handle)
       .cloned()?;
-
-    let is_submessage_origin_authenticated = self
-      .endpoint_encrypt_options
-      .get(&local_datawriter_crypto_handle)
-      .ok_or_else(|| {
-        security_error!(
-          "Datawriter encrypt options not found for the DatawriterCryptoHandle {}",
-          local_datawriter_crypto_handle
-        )
-      })
-      .and_then(|datawriter_security_attributes| {
-        BuiltinPluginEndpointSecurityAttributes::try_from(
-          datawriter_security_attributes.plugin_endpoint_attributes,
-        )
-      })
-      .map(|plugin_datawriter_attributes| {
-        plugin_datawriter_attributes.is_submessage_origin_authenticated
-      })?;
 
     // Find a handle for the remote datareader corresponding to the (remote
     // participant, local datawriter) pair, or generate a new one
@@ -383,11 +447,46 @@ impl CryptoKeyFactory for CryptographicBuiltin {
         local_datawriter_crypto_handle,
       );
 
-    if false
-    /* use derived key */
-    {
-      todo!();
-    }
+    let receiver_specific_encode_key_materials = match common_encode_key_materials {
+      CommonEncodeKeyMaterials::Volatile(use_256_bit_key) => {
+        Self::derive_volatile_key_materials(
+          Bytes::new(),
+          Bytes::new(),
+          Bytes::new(),
+          use_256_bit_key,
+        )? // TODO use shared secret and the challenges
+      }
+      CommonEncodeKeyMaterials::Some(common_encode_key_materials) => {
+        let is_submessage_origin_authenticated = self
+          .endpoint_encrypt_options
+          .get(&local_datawriter_crypto_handle)
+          .ok_or_else(|| {
+            security_error!(
+              "Datawriter encrypt options not found for the DatawriterCryptoHandle {}",
+              local_datawriter_crypto_handle
+            )
+          })
+          .and_then(|datawriter_security_attributes| {
+            BuiltinPluginEndpointSecurityAttributes::try_from(
+              datawriter_security_attributes.plugin_endpoint_attributes,
+            )
+          })
+          .map(|plugin_datawriter_attributes| {
+            plugin_datawriter_attributes.is_submessage_origin_authenticated
+          })?;
+
+        self.generate_receiver_specific_key(
+          common_encode_key_materials,
+          is_submessage_origin_authenticated,
+          remote_datareader_crypto_handle,
+        )
+      }
+    };
+
+    self.insert_receiver_specific_encode_key_materials(
+      remote_datareader_crypto_handle,
+      receiver_specific_encode_key_materials,
+    )?;
 
     // Add endpoint info
     self.insert_endpoint_info(
@@ -409,14 +508,6 @@ impl CryptoKeyFactory for CryptographicBuiltin {
         .insert(remote_datareader_crypto_handle, attributes);
     }
 
-    let key_materials = self.generate_receiver_specific_key(
-      local_datawriter_key_materials,
-      is_submessage_origin_authenticated,
-      remote_datareader_crypto_handle,
-    );
-
-    self.insert_encode_key_materials(remote_datareader_crypto_handle, key_materials)?;
-
     Ok(remote_datareader_crypto_handle)
   }
 
@@ -432,43 +523,46 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     )?;
 
     let local_datareader_crypto_handle = self.generate_crypto_handle();
+
+    let use_256_bit_key = Self::use_256_bit_key(datareader_properties);
+    // The key material for volatile datareader is derived from the shared secret in
+    // register_matched_remote_datawriter
     if Self::is_volatile(datareader_properties) {
-      // By 8.8.8.3
-      Err(security_error!(
-        "register_local_datareader should not be called 
-        for BuiltinParticipantVolatileMessageSecureReader"
-      ))
-    } else {
-      // TODO check datareader_security_attributes.is_submessage_protected
-      self.insert_encode_key_materials(
+      self.insert_common_encode_key_materials(
         local_datareader_crypto_handle,
-        KeyMaterial_AES_GCM_GMAC_seq::One(Self::generate_key_material(
-          local_datareader_crypto_handle,
-          Self::transformation_kind(
-            datareader_security_attributes.is_submessage_protected,
-            plugin_endpoint_security_attributes.is_submessage_encrypted,
-            Self::use_256_bit_key(datareader_properties),
+        CommonEncodeKeyMaterials::Volatile(use_256_bit_key),
+      )?;
+    } else {
+      self.insert_common_encode_key_materials(
+        local_datareader_crypto_handle,
+        CommonEncodeKeyMaterials::Some(KeyMaterial_AES_GCM_GMAC_seq::One(
+          Self::generate_key_material(
+            local_datareader_crypto_handle,
+            Self::transformation_kind(
+              datareader_security_attributes.is_submessage_protected,
+              plugin_endpoint_security_attributes.is_submessage_encrypted,
+              use_256_bit_key,
+            ),
           ),
         )),
       )?;
-
-      self.insert_endpoint_attributes(
-        local_datareader_crypto_handle,
-        datareader_security_attributes,
-      )?;
-
-      self.insert_endpoint_info(
-        participant_crypto_handle,
-        EndpointInfo {
-          crypto_handle: local_datareader_crypto_handle,
-          kind: EndpointKind::DataReader,
-        },
-      );
-      self
-        .endpoint_to_participant
-        .insert(local_datareader_crypto_handle, participant_crypto_handle);
-      SecurityResult::Ok(local_datareader_crypto_handle)
     }
+    self.insert_endpoint_attributes(
+      local_datareader_crypto_handle,
+      datareader_security_attributes,
+    )?;
+
+    self.insert_endpoint_info(
+      participant_crypto_handle,
+      EndpointInfo {
+        crypto_handle: local_datareader_crypto_handle,
+        kind: EndpointKind::DataReader,
+      },
+    );
+    self
+      .endpoint_to_participant
+      .insert(local_datareader_crypto_handle, participant_crypto_handle);
+    SecurityResult::Ok(local_datareader_crypto_handle)
   }
 
   fn register_matched_remote_datawriter(
@@ -478,27 +572,9 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     shared_secret: SharedSecretHandle,
   ) -> SecurityResult<DatawriterCryptoHandle> {
     //TODO: this is only a mock implementation
-    let local_datareader_key_materials = self
-      .get_encode_key_materials(&local_datareader_crypto_handle)
+    let common_encode_key_materials = self
+      .get_common_encode_key_materials(&local_datareader_crypto_handle)
       .cloned()?;
-
-    let is_submessage_origin_authenticated = self
-      .endpoint_encrypt_options
-      .get(&local_datareader_crypto_handle)
-      .ok_or_else(|| {
-        security_error!(
-          "Datareader encrypt options not found for the handle {}",
-          local_datareader_crypto_handle
-        )
-      })
-      .and_then(|datareader_security_attributes| {
-        BuiltinPluginEndpointSecurityAttributes::try_from(
-          datareader_security_attributes.plugin_endpoint_attributes,
-        )
-      })
-      .map(|plugin_datareader_attributes| {
-        plugin_datareader_attributes.is_submessage_origin_authenticated
-      })?;
 
     // Find a handle for the remote datawriter corresponding to the (remote
     // participant, local datareader) pair, or generate a new one
@@ -508,11 +584,44 @@ impl CryptoKeyFactory for CryptographicBuiltin {
         local_datareader_crypto_handle,
       );
 
-    if false
-    /* use derived key */
-    {
-      todo!();
-    }
+    let receiver_specific_encode_key_materials = match common_encode_key_materials {
+      CommonEncodeKeyMaterials::Volatile(use_256_bit_key) => {
+        Self::derive_volatile_key_materials(
+          Bytes::new(),
+          Bytes::new(),
+          Bytes::new(),
+          use_256_bit_key,
+        )? // TODO use shared secret and the challenges
+      }
+      CommonEncodeKeyMaterials::Some(common_encode_key_materials) => {
+        let is_submessage_origin_authenticated = self
+          .endpoint_encrypt_options
+          .get(&local_datareader_crypto_handle)
+          .ok_or_else(|| {
+            security_error!(
+              "Datareader encrypt options not found for the handle {}",
+              local_datareader_crypto_handle
+            )
+          })
+          .and_then(|datareader_security_attributes| {
+            BuiltinPluginEndpointSecurityAttributes::try_from(
+              datareader_security_attributes.plugin_endpoint_attributes,
+            )
+          })
+          .map(|plugin_datareader_attributes| {
+            plugin_datareader_attributes.is_submessage_origin_authenticated
+          })?;
+        self.generate_receiver_specific_key(
+          common_encode_key_materials,
+          is_submessage_origin_authenticated,
+          remote_datawriter_crypto_handle,
+        )
+      }
+    };
+    self.insert_receiver_specific_encode_key_materials(
+      remote_datawriter_crypto_handle,
+      receiver_specific_encode_key_materials,
+    )?;
 
     // Add endpoint info
     self.insert_endpoint_info(
@@ -534,14 +643,6 @@ impl CryptoKeyFactory for CryptographicBuiltin {
         .insert(remote_datawriter_crypto_handle, attributes);
     }
 
-    let key_materials = self.generate_receiver_specific_key(
-      local_datareader_key_materials,
-      is_submessage_origin_authenticated,
-      remote_datawriter_crypto_handle,
-    );
-
-    self.insert_encode_key_materials(remote_datawriter_crypto_handle, key_materials)?;
-
     Ok(remote_datawriter_crypto_handle)
   }
 
@@ -561,6 +662,13 @@ impl CryptoKeyFactory for CryptographicBuiltin {
         self.unregister_endpoint(endpoint_info);
       }
     }
+    self
+      .common_encode_key_materials
+      .remove(&participant_crypto_handle);
+    self
+      .receiver_specific_encode_key_materials
+      .remove(&participant_crypto_handle);
+    self.decode_key_materials.remove(&participant_crypto_handle);
     Ok(())
   }
 

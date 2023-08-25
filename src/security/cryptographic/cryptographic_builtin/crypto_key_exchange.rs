@@ -9,7 +9,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
   ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
     //TODO: this is only a mock implementation (or is it?)
     self
-      .get_encode_key_materials(&remote_participant_crypto_handle)
+      .get_receiver_specific_encode_key_materials(&remote_participant_crypto_handle)
       .cloned()
       // Convert to CryptoTokens
       .and_then(Vec::<DatawriterCryptoToken>::try_from)
@@ -35,7 +35,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
     //TODO: this is only a mock implementation (or is it?)
 
     self
-      .get_encode_key_materials(&remote_datareader_crypto_handle)
+      .get_receiver_specific_encode_key_materials(&remote_datareader_crypto_handle)
       .cloned()
       // Convert to CryptoTokens
       .and_then(Vec::<DatawriterCryptoToken>::try_from)
@@ -61,7 +61,7 @@ impl CryptoKeyExchange for CryptographicBuiltin {
     //TODO: this is only a mock implementation (or is it?)
 
     self
-      .get_encode_key_materials(&remote_datawriter_crypto_handle)
+      .get_receiver_specific_encode_key_materials(&remote_datawriter_crypto_handle)
       .cloned()
       // Convert to CryptoTokens
       .and_then(Vec::<DatawriterCryptoToken>::try_from)
