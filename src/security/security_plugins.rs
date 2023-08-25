@@ -403,6 +403,28 @@ impl SecurityPlugins {
     let handle: PermissionsHandle = self.get_permissions_handle(&participant_guidp)?;
     self.access.get_participant_sec_attributes(handle)
   }
+
+  pub fn get_reader_sec_attributes(
+    &self,
+    reader_guid: GUID,
+    topic_name: String,
+  ) -> SecurityResult<EndpointSecurityAttributes> {
+    let handle = self.get_permissions_handle(&reader_guid.prefix)?;
+    self
+      .access
+      .get_datareader_sec_attributes(handle, topic_name)
+  }
+
+  pub fn get_writer_sec_attributes(
+    &self,
+    writer_guid: GUID,
+    topic_name: String,
+  ) -> SecurityResult<EndpointSecurityAttributes> {
+    let handle = self.get_permissions_handle(&writer_guid.prefix)?;
+    self
+      .access
+      .get_datawriter_sec_attributes(handle, topic_name)
+  }
 }
 
 /// Interface for using the CryptoKeyFactory of the Cryptographic plugin
@@ -433,6 +455,50 @@ impl SecurityPlugins {
     Ok(())
   }
 
+  pub fn register_local_reader(
+    &mut self,
+    reader_guid: GUID,
+    reader_properties: Option<qos::policy::Property>,
+    reader_security_attributes: EndpointSecurityAttributes,
+  ) -> SecurityResult<()> {
+    let participant_crypto_handle = self.get_participant_crypto_handle(&reader_guid.prefix)?;
+
+    let properties = reader_properties.map(|prop| prop.value).unwrap_or_default();
+
+    let crypto_handle = self.crypto.register_local_datareader(
+      participant_crypto_handle,
+      &properties,
+      reader_security_attributes,
+    )?;
+
+    self
+      .local_endpoint_crypto_handle_cache
+      .insert(reader_guid, crypto_handle);
+    Ok(())
+  }
+
+  pub fn register_local_writer(
+    &mut self,
+    writer_guid: GUID,
+    writer_properties: Option<qos::policy::Property>,
+    writer_security_attributes: EndpointSecurityAttributes,
+  ) -> SecurityResult<()> {
+    let participant_crypto_handle = self.get_participant_crypto_handle(&writer_guid.prefix)?;
+
+    let properties = writer_properties.map(|prop| prop.value).unwrap_or_default();
+
+    let crypto_handle = self.crypto.register_local_datawriter(
+      participant_crypto_handle,
+      &properties,
+      writer_security_attributes,
+    )?;
+
+    self
+      .local_endpoint_crypto_handle_cache
+      .insert(writer_guid, crypto_handle);
+    Ok(())
+  }
+
   pub fn register_matched_remote_participant(
     &mut self,
     local_participant_guip: GuidPrefix,
@@ -454,6 +520,16 @@ impl SecurityPlugins {
       .participant_crypto_handle_cache
       .insert(remote_participant_guidp, remote_crypto_handle);
     Ok(())
+  }
+
+  pub fn unregister_local_reader(&mut self, reader_guid: &GUID) -> SecurityResult<()> {
+    let handle = self.get_local_endpoint_crypto_handle(reader_guid)?;
+    self.crypto.unregister_datareader(handle)
+  }
+
+  pub fn unregister_local_writer(&mut self, writer_guid: &GUID) -> SecurityResult<()> {
+    let handle = self.get_local_endpoint_crypto_handle(writer_guid)?;
+    self.crypto.unregister_datawriter(handle)
   }
 }
 
@@ -654,6 +730,13 @@ impl SecurityPluginsHandle {
         // TODO: Send signal to exit RTPS thread, as there is no way to
         // recover.
       })
+  }
+
+  pub(crate) fn get_plugins(handle: &SecurityPluginsHandle) -> MutexGuard<SecurityPlugins> {
+    handle.lock().unwrap_or_else(|e| {
+      security_error!("Security plugins are poisoned! {}", e);
+      panic!("Security plugins are poisoned!");
+    })
   }
 }
 

@@ -21,6 +21,7 @@ use crate::{
   messages::submessages::submessages::AckSubmessage,
   network::{constant::*, udp_listener::UDPListener, udp_sender::UDPSender},
   rtps::{
+    constant::*,
     message_receiver::MessageReceiver,
     reader::{Reader, ReaderIngredients},
     rtps_reader_proxy::RtpsReaderProxy,
@@ -782,6 +783,12 @@ impl DPEventLoop {
         PollOpt::edge(),
       )
       .expect("Reader timer channel registration failed!");
+
+    // Clone these before handing ingredients to Reader builder
+    let reader_guid = reader_ing.guid;
+    let reader_property_qos = reader_ing.qos_policy.property();
+    let topic_name = reader_ing.topic_name.clone();
+
     let mut new_reader = Reader::new(reader_ing, self.udp_sender.clone(), timer);
 
     // Non-timed action polling
@@ -794,6 +801,32 @@ impl DPEventLoop {
         PollOpt::edge(),
       )
       .expect("Reader command channel registration failed!!!");
+
+    if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+      // Security is enabled. Register Reader to crypto plugin if needed
+      // TODO: add correct should_be_registered for application-data readers
+      let should_be_registered = SECURE_BUILTIN_READER_ENTITY_IDS.contains(&reader_guid.entity_id);
+      if should_be_registered {
+        let mut sec_plugins = SecurityPluginsHandle::get_plugins(plugins_handle);
+
+        if let Err(e) = sec_plugins
+          .get_reader_sec_attributes(reader_guid, topic_name)
+          .and_then(|attributes| {
+            sec_plugins.register_local_reader(reader_guid, reader_property_qos, attributes)
+          })
+        {
+          error!(
+            "Failed to register reader to crypto plugin: {} . GUID: {:?}",
+            e, reader_guid
+          );
+        } else {
+          info!(
+            "Registered reader to crypto plugin. GUID: {:?}",
+            reader_guid
+          );
+        }
+      }
+    }
 
     new_reader.set_requested_deadline_check_timer();
     trace!("Add reader: {:?}", new_reader);
@@ -812,6 +845,15 @@ impl DPEventLoop {
         .unwrap_or_else(|e| {
           error!("Cannot deregister data_reader_command_receiver: {e:?}");
         });
+
+      if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+        // Security is enabled. Unregister the reader with the crypto plugin.
+        // Currently the unregister method is called for every reader, and errors are
+        // ignored. If this is inconvenient, add a check if the reader has been
+        // registered/is secure, and unregister only if it is so
+        let _ =
+          SecurityPluginsHandle::get_plugins(plugins_handle).unregister_local_reader(&reader_guid);
+      }
     } else {
       warn!("Tried to remove nonexistent Reader {reader_guid:?}");
     }
@@ -828,6 +870,12 @@ impl DPEventLoop {
         PollOpt::edge(),
       )
       .expect("Writer heartbeat timer channel registration failed!!");
+
+    // Clone these before handing ingredients to Writer builder
+    let writer_guid = writer_ing.guid;
+    let writer_property_qos = writer_ing.qos_policies.property();
+    let topic_name = writer_ing.topic_name.clone();
+
     let new_writer = Writer::new(writer_ing, self.udp_sender.clone(), timer);
 
     self
@@ -839,6 +887,33 @@ impl DPEventLoop {
         PollOpt::edge(),
       )
       .expect("Writer command channel registration failed!!");
+
+    if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+      // Security is enabled. Register Writer to crypto plugin if needed
+      // TODO: add correct should_be_registered for application-data writers
+      let should_be_registered = SECURE_BUILTIN_WRITER_ENTITY_IDS.contains(&writer_guid.entity_id);
+      if should_be_registered {
+        let mut sec_plugins = SecurityPluginsHandle::get_plugins(plugins_handle);
+
+        if let Err(e) = sec_plugins
+          .get_writer_sec_attributes(writer_guid, topic_name)
+          .and_then(|attributes| {
+            sec_plugins.register_local_writer(writer_guid, writer_property_qos, attributes)
+          })
+        {
+          error!(
+            "Failed to register writer to crypto plugin: {} . GUID: {:?}",
+            e, writer_guid
+          );
+        } else {
+          info!(
+            "Registered writer to crypto plugin. GUID: {:?}",
+            writer_guid
+          );
+        }
+      }
+    }
+
     self.writers.insert(new_writer.guid().entity_id, new_writer);
   }
 
@@ -852,6 +927,15 @@ impl DPEventLoop {
         .poll
         .deregister(&w.timed_event_timer)
         .unwrap_or_else(|e| error!("Deregister fail (writer timer) {e:?}"));
+
+      if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+        // Security is enabled. Unregister the writer with the crypto plugin.
+        // Currently the unregister method is called for every writer, and errors are
+        // ignored. If this is inconvenient, add a check if the writer has been
+        // registered/is secure, and unregister only if it is so
+        let _ =
+          SecurityPluginsHandle::get_plugins(plugins_handle).unregister_local_writer(writer_guid);
+      }
     }
   }
 }
