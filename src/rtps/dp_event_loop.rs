@@ -465,50 +465,12 @@ impl DPEventLoop {
       ADD_READER_TOKEN => {
         trace!("add reader(s)");
         while let Ok(new_reader_ing) = self.add_reader_receiver.receiver.try_recv() {
-          let timer = mio_extras::timer::Builder::default().num_slots(8).build();
-          self
-            .poll
-            .register(
-              &timer,
-              new_reader_ing.alt_entity_token(),
-              Ready::readable(),
-              PollOpt::edge(),
-            )
-            .expect("Reader timer channel registration failed!");
-          let mut new_reader = Reader::new(new_reader_ing, self.udp_sender.clone(), timer);
-
-          // Non-timed action polling
-          self
-            .poll
-            .register(
-              &new_reader.data_reader_command_receiver,
-              new_reader.entity_token(),
-              Ready::readable(),
-              PollOpt::edge(),
-            )
-            .expect("Reader command channel registration failed!!!");
-
-          new_reader.set_requested_deadline_check_timer();
-          trace!("Add reader: {:?}", new_reader);
-          self.message_receiver.add_reader(new_reader);
+          self.add_reader(new_reader_ing);
         }
       }
       REMOVE_READER_TOKEN => {
         while let Ok(old_reader_guid) = self.remove_reader_receiver.receiver.try_recv() {
-          if let Some(old_reader) = self.message_receiver.remove_reader(old_reader_guid) {
-            self
-              .poll
-              .deregister(&old_reader.timed_event_timer)
-              .unwrap_or_else(|e| error!("Cannot deregister Reader timed_event_timer: {e:?}"));
-            self
-              .poll
-              .deregister(&old_reader.data_reader_command_receiver)
-              .unwrap_or_else(|e| {
-                error!("Cannot deregister data_reader_command_receiver: {e:?}");
-              });
-          } else {
-            warn!("Tried to remove nonexistent Reader {old_reader_guid:?}");
-          }
+          self.remove_reader(old_reader_guid);
         }
       }
       _ => {}
@@ -519,42 +481,12 @@ impl DPEventLoop {
     match event.token() {
       ADD_WRITER_TOKEN => {
         while let Ok(new_writer_ingredients) = self.add_writer_receiver.receiver.try_recv() {
-          let timer = mio_extras::timer::Builder::default().num_slots(8).build();
-          self
-            .poll
-            .register(
-              &timer,
-              new_writer_ingredients.alt_entity_token(),
-              Ready::readable(),
-              PollOpt::edge(),
-            )
-            .expect("Writer heartbeat timer channel registration failed!!");
-          let new_writer = Writer::new(new_writer_ingredients, self.udp_sender.clone(), timer);
-
-          self
-            .poll
-            .register(
-              &new_writer.writer_command_receiver,
-              new_writer.entity_token(),
-              Ready::readable(),
-              PollOpt::edge(),
-            )
-            .expect("Writer command channel registration failed!!");
-          self.writers.insert(new_writer.guid().entity_id, new_writer);
+          self.add_writer(new_writer_ingredients);
         }
       }
       REMOVE_WRITER_TOKEN => {
         while let Ok(writer_guid) = &self.remove_writer_receiver.receiver.try_recv() {
-          if let Some(w) = self.writers.remove(&writer_guid.entity_id) {
-            self
-              .poll
-              .deregister(&w.writer_command_receiver)
-              .unwrap_or_else(|e| error!("Deregister fail (writer command rec) {e:?}"));
-            self
-              .poll
-              .deregister(&w.timed_event_timer)
-              .unwrap_or_else(|e| error!("Deregister fail (writer timer) {e:?}"));
-          }
+          self.remove_writer(writer_guid);
         }
       }
       other => error!("Expected writer action token, got {:?}", other),
@@ -836,6 +768,90 @@ impl DPEventLoop {
   fn remote_writer_lost(&mut self, writer_guid: GUID) {
     for reader in self.message_receiver.available_readers.values_mut() {
       reader.remove_writer_proxy(writer_guid);
+    }
+  }
+
+  fn add_reader(&mut self, reader_ing: ReaderIngredients) {
+    let timer = mio_extras::timer::Builder::default().num_slots(8).build();
+    self
+      .poll
+      .register(
+        &timer,
+        reader_ing.alt_entity_token(),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Reader timer channel registration failed!");
+    let mut new_reader = Reader::new(reader_ing, self.udp_sender.clone(), timer);
+
+    // Non-timed action polling
+    self
+      .poll
+      .register(
+        &new_reader.data_reader_command_receiver,
+        new_reader.entity_token(),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Reader command channel registration failed!!!");
+
+    new_reader.set_requested_deadline_check_timer();
+    trace!("Add reader: {:?}", new_reader);
+    self.message_receiver.add_reader(new_reader);
+  }
+
+  fn remove_reader(&mut self, reader_guid: GUID) {
+    if let Some(old_reader) = self.message_receiver.remove_reader(reader_guid) {
+      self
+        .poll
+        .deregister(&old_reader.timed_event_timer)
+        .unwrap_or_else(|e| error!("Cannot deregister Reader timed_event_timer: {e:?}"));
+      self
+        .poll
+        .deregister(&old_reader.data_reader_command_receiver)
+        .unwrap_or_else(|e| {
+          error!("Cannot deregister data_reader_command_receiver: {e:?}");
+        });
+    } else {
+      warn!("Tried to remove nonexistent Reader {reader_guid:?}");
+    }
+  }
+
+  fn add_writer(&mut self, writer_ing: WriterIngredients) {
+    let timer = mio_extras::timer::Builder::default().num_slots(8).build();
+    self
+      .poll
+      .register(
+        &timer,
+        writer_ing.alt_entity_token(),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Writer heartbeat timer channel registration failed!!");
+    let new_writer = Writer::new(writer_ing, self.udp_sender.clone(), timer);
+
+    self
+      .poll
+      .register(
+        &new_writer.writer_command_receiver,
+        new_writer.entity_token(),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Writer command channel registration failed!!");
+    self.writers.insert(new_writer.guid().entity_id, new_writer);
+  }
+
+  fn remove_writer(&mut self, writer_guid: &GUID) {
+    if let Some(w) = self.writers.remove(&writer_guid.entity_id) {
+      self
+        .poll
+        .deregister(&w.writer_command_receiver)
+        .unwrap_or_else(|e| error!("Deregister fail (writer command rec) {e:?}"));
+      self
+        .poll
+        .deregister(&w.timed_event_timer)
+        .unwrap_or_else(|e| error!("Deregister fail (writer timer) {e:?}"));
     }
   }
 }
