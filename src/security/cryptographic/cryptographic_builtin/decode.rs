@@ -1,12 +1,11 @@
 use bytes::Bytes;
-use speedy::Writable;
+
 
 use crate::{
   messages::submessages::{
     elements::crypto_content::CryptoContent,
-    info_source::InfoSource,
     secure_body::SecureBody,
-    submessage::{InterpreterSubmessage, SecuritySubmessage},
+    submessage::{SecuritySubmessage},
   },
   rtps::{Submessage, SubmessageBody},
   security::{SecurityError, SecurityResult},
@@ -105,107 +104,5 @@ pub(super) fn decode_submessage_gcm(
       "When transformation kind is GCM, decode_datawriter_submessage expects a SecureBody, \
        received {other:?}"
     )),
-  }
-}
-
-pub(super) fn decode_rtps_message_gmac(
-  key: &BuiltinKey,
-  initialization_vector: BuiltinInitializationVector,
-  submessages_with_info_source: &[Submessage],
-  common_mac: BuiltinMAC,
-  receiver_specific_key_and_mac: Option<(BuiltinKey,BuiltinMAC)>,
-) -> SecurityResult<(Vec<Submessage>, InfoSource)> {
-  // We expect an InfoSource submessage followed by the original message
-  if let 
-    [ Submessage { body: SubmessageBody::Interpreter(
-        InterpreterSubmessage::InfoSource(info_source, _)), .. }, 
-      submessages @ ..  // this is all the rest of the submessages
-    ] = submessages_with_info_source
-  {
-    // Serialize data for MAC validation
-    SecurityResult::<Vec<Vec<u8>>>::from_iter(submessages_with_info_source.iter().map(
-      |submessage| {
-        submessage
-          .write_to_vec()
-          .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))
-      },
-    ))
-    .and_then(|serialized_submessages| {
-      let data = serialized_submessages.concat();
-      // Validate the common MAC
-      validate_mac(key, initialization_vector, &data, common_mac)
-        // Validate the receiver-specific MAC if one exists
-        .and_then( |()|
-          // common mac was ok, let's see if there is receiveer-specific MAC
-          receiver_specific_key_and_mac
-            .map(|(key,mac)| validate_mac( &key,initialization_vector, &data, mac ) )
-            // this is :Option<SecurityResult<()>>
-            .transpose(),
-            // to SecurityResult<Option<()>>, so we catch Err, if any. 
-          )
-      })
-      // If the MACs are ok, return
-      .map(|_| (Vec::from(submessages), *info_source))
-  } else {
-    Err(security_error!(
-      "Expected the first submessage to be InfoSource."
-    ))
-  }
-}
-
-pub(super) fn decode_rtps_message_gcm(
-  key: &BuiltinKey,
-  initialization_vector: BuiltinInitializationVector,
-  encrypted_submessages: &[Submessage],
-  common_mac: BuiltinMAC,
-  receiver_specific_key_and_mac: Option<(BuiltinKey,BuiltinMAC)>,
-) -> SecurityResult<(Vec<Submessage>, InfoSource)> {
-  // We expect a SecureBody submessage containing the encrypted message
-  if let [Submessage {
-    body:
-      SubmessageBody::Security(SecuritySubmessage::SecureBody(
-        SecureBody {
-          crypto_content: CryptoContent { data },
-        },
-        _,
-      )),
-    ..
-  }] = encrypted_submessages
-  {
-    // Validate the receiver-specific MAC if one exists, and exit on error
-    if let Some((key,mac)) = receiver_specific_key_and_mac {
-      validate_mac( &key, initialization_vector, data, mac)?
-    }
-
-    // Authenticated decryption
-    let mut plaintext =
-      Bytes::copy_from_slice(&decrypt(key, initialization_vector, data, common_mac)?);
-
-    // We expect an InfoSource submessage followed by the original message
-    let info_source = if let Some(Submessage {
-      body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoSource(info_source, _)),
-      ..
-    }) = Submessage::read_from_buffer(&mut plaintext)
-      .map_err(|e| security_error!("Failed to deserialize the plaintext: {}", e))?
-    {
-      info_source
-    } else {
-      Err(security_error!(
-        "Expected the first decrypted submessage to be InfoSource."
-      ))?
-    };
-
-    let mut submessages = Vec::<Submessage>::new();
-    while !plaintext.is_empty() {
-      if let Some(submessage) = Submessage::read_from_buffer(&mut plaintext)
-        .map_err(|e| security_error!("Failed to deserialize the plaintext: {}", e))?
-      {
-        submessages.push(submessage);
-      }
-    }
-
-    Ok((submessages, info_source))
-  } else {
-    Err(security_error!("Expected only a SecureBody submessage."))
   }
 }

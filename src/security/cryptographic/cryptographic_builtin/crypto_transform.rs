@@ -1,3 +1,4 @@
+use bytes::Bytes;
 use enumflags2::BitFlags;
 use speedy::{Readable, Writable};
 use log::warn;
@@ -9,17 +10,17 @@ use crate::{
       parameter_list::ParameterList,
     },
     info_source::InfoSource,
+    secure_body::SecureBody,
     secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
     secure_rtps_postfix::SecureRTPSPostfix,
     secure_rtps_prefix::SecureRTPSPrefix,
     submessage::SecuritySubmessage,
     submessage_flag::FromEndianness,
-    submessages::{ReaderSubmessage, WriterSubmessage},
+    submessages::{ReaderSubmessage, WriterSubmessage, InterpreterSubmessage},
   },
   rtps::{Message, Submessage, SubmessageBody},
   security::cryptographic::cryptographic_builtin::{
-    decode::{decode_rtps_message_gcm, decode_rtps_message_gmac},
     *,
   },
   security_error,
@@ -476,23 +477,79 @@ impl CryptoTransform for CryptographicBuiltin {
             warn!("decode_serialized_payload with crypto transformation kind = none. \
               Does not make sense, but validating MAC anyway.");
           }
-          decode_rtps_message_gmac(
-            &decode_key,
-            initialization_vector,
-            encoded_content,
-            common_mac,
-            receiver_specific_key_and_mac,
-          )
-        }
+          let submessages_with_info_source = encoded_content; // rename for clarity
+          // We expect an InfoSource submessage followed by the original message
+          if let 
+            [ Submessage { body: SubmessageBody::Interpreter(
+                InterpreterSubmessage::InfoSource(info_source, _)), .. }, 
+              submessages @ ..  // this is all the rest of the submessages
+            ] = submessages_with_info_source
+          {
+            // Get original serialized data for submessage sequence: Concatenate original_bytes.
+            let serialized_submessages = submessages_with_info_source.iter()
+              .fold(Vec::<u8>::with_capacity(512), move |mut a,s| { 
+                a.extend_from_slice(s.original_bytes.as_ref().unwrap_or(&Bytes::new()).as_ref()); a } 
+              );
+            // Validate the common MAC
+            aes_gcm_gmac::validate_mac(&decode_key, initialization_vector, &serialized_submessages, common_mac)
+              // Validate the receiver-specific MAC if one exists
+              .and_then( |()|
+                // common mac was ok, let's see if there is receiveer-specific MAC
+                receiver_specific_key_and_mac
+                  .map(|(key,mac)| 
+                    aes_gcm_gmac::validate_mac( &key,initialization_vector, &serialized_submessages, mac ) )
+                  // this is :Option<SecurityResult<()>>
+                  .transpose(),
+                  // to SecurityResult<Option<()>>, so we catch Err, if any.
+                  // Value Some(()) means receiver-specific mac was ok, None means it was not required
+                )
+              // If the MACs are ok, return content. 
+              .map( |_| (Vec::from(submessages), *info_source))
+          } else {
+            Err(security_error!("Expected the first submessage to be InfoSource."))
+          } 
+        } 
         BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
         | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-          decode_rtps_message_gcm(
-            &decode_key,
-            initialization_vector,
-            encoded_content,
-            common_mac,
-            receiver_specific_key_and_mac,
-          )
+          // We expect a SecureBody submessage containing the encrypted message
+          if let [ Submessage { body: SubmessageBody::Security(SecuritySubmessage::SecureBody(
+                    SecureBody { crypto_content: CryptoContent { data: ciphertext },}, _ )), ..  }
+            ] = encoded_content 
+          {
+            // Validate the receiver-specific MAC if one exists, and exit on error
+            if let Some((key,mac)) = receiver_specific_key_and_mac {
+              aes_gcm_gmac::validate_mac( &key, initialization_vector, ciphertext, mac)?
+            }
+            // Authenticated decryption, or exit on failure
+            let mut plaintext =
+              Bytes::copy_from_slice(
+                &aes_gcm_gmac::decrypt(&decode_key, initialization_vector, ciphertext, common_mac)?);
+
+            // We expect an InfoSource submessage followed by the original submessage sequence
+            let info_source = 
+              if let Some(Submessage {body: SubmessageBody::Interpreter(
+                    InterpreterSubmessage::InfoSource(info_source, _)), .. }) 
+                  = Submessage::read_from_buffer(&mut plaintext)
+                      .map_err(|e| security_error!("Failed to deserialize the plaintext: {e}"))?
+              {
+                info_source
+              } else {
+                Err(security_error!("Expected the first decrypted submessage to be InfoSource."))?
+              };
+
+            let mut submessages = Vec::<Submessage>::new();
+            while !plaintext.is_empty() {
+              if let Some(submessage) = Submessage::read_from_buffer(&mut plaintext)
+                .map_err(|e| security_error!("Failed to deserialize the plaintext: {e}"))?
+              {
+                submessages.push(submessage);
+              }
+            }
+
+            Ok((submessages, info_source))
+          } else {
+            Err(security_error!("Expected only a SecureBody submessage."))
+          }
         }
       }
       .and_then( |(submessages, info_source)| {
