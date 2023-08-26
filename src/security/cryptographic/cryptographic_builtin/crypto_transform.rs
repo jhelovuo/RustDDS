@@ -399,25 +399,21 @@ impl CryptoTransform for CryptographicBuiltin {
 
   fn decode_rtps_message(
     &self,
-    encoded_message: Message,
+    Message { header: rtps_header, submessages }: Message,
     _receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<Message> {
-    //TODO: this is only a mock implementation
-
-    let Message {
-      header,
-      submessages,
-    } = encoded_message;
-
-    if let [Submessage {
-      body:
+    // TODO: This does not handle mac-only case
+    // we expect SecureRTPSPRefix + 
+    if let [
+      Submessage { body:
         SubmessageBody::Security(SecuritySubmessage::SecureRTPSPrefix(
           SecureRTPSPrefix { crypto_header, .. },
           _,
         )),
-      ..
-    }, encoded_content @ .., Submessage {
+      ..}, 
+      encoded_content @ .., 
+      Submessage {
       body:
         SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(
           SecureRTPSPostfix { crypto_footer },
@@ -515,18 +511,13 @@ impl CryptoTransform for CryptographicBuiltin {
           )
         }
       }
-      .and_then(|(submessages, info_source)| {
-        if InfoSource::from(header).eq(&info_source) {
-          Ok(Message {
-            header,
-            submessages,
-          })
+      .and_then( |(submessages, info_source)| {
+        if InfoSource::from(rtps_header) == info_source {
+          Ok(Message { header: rtps_header, submessages })
         } else {
           Err(security_error!(
             "The RTPS header did not match the MACed InfoSource: {:?} expected to match {:?}",
-            info_source,
-            header
-          ))
+            info_source, rtps_header))
         }
       })
     } else {

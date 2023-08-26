@@ -50,35 +50,15 @@ impl InfoSource {
 }
 
 impl From<Header> for InfoSource {
-  fn from(
-    Header {
-      protocol_version,
-      vendor_id,
-      guid_prefix,
-      ..
-    }: Header,
-  ) -> Self {
-    InfoSource {
-      protocol_version,
-      vendor_id,
-      guid_prefix,
-    }
+  fn from( Header { protocol_version, vendor_id, guid_prefix, .. }: Header ) -> Self {
+    InfoSource { protocol_version, vendor_id, guid_prefix }
   }
 }
 
 impl From<InfoSource> for Header {
-  fn from(
-    InfoSource {
-      protocol_version,
-      vendor_id,
-      guid_prefix,
-    }: InfoSource,
-  ) -> Self {
-    Header {
-      protocol_id: ProtocolId::PROTOCOL_RTPS,
-      protocol_version,
-      vendor_id,
-      guid_prefix,
+  fn from( InfoSource { protocol_version, vendor_id, guid_prefix }: InfoSource ) -> Self {
+    Header { protocol_id: ProtocolId::PROTOCOL_RTPS,
+      protocol_version, vendor_id, guid_prefix,
     }
   }
 }
