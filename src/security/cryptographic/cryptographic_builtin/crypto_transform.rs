@@ -136,7 +136,7 @@ impl CryptographicBuiltin {
 
     // Get decode key material
     let decode_key_material = self.session_decode_crypto_materials(
-      receiving_endpoint_crypto_handle,
+      sending_endpoint_crypto_handle,
       transformation_key_id,
       false,
       initialization_vector,
@@ -403,24 +403,19 @@ impl CryptoTransform for CryptographicBuiltin {
     _receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<Message> {
-    // TODO: This does not handle mac-only case
-    // we expect SecureRTPSPRefix + 
-    if let [
-      Submessage { body:
-        SubmessageBody::Security(SecuritySubmessage::SecureRTPSPrefix(
-          SecureRTPSPrefix { crypto_header, .. },
-          _,
-        )),
-      ..}, 
-      encoded_content @ .., 
-      Submessage {
-      body:
-        SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(
-          SecureRTPSPostfix { crypto_footer },
-          _,
-        )),
-      ..
-    }] = submessages.as_slice()
+    // we expect SecureRTPSPRefix + some submessages + SecureRTPSPostfix
+    if let 
+      [ Submessage { body:
+          SubmessageBody::Security(SecuritySubmessage::SecureRTPSPrefix(
+            SecureRTPSPrefix { crypto_header, .. }, _, )), .. },
+
+        encoded_content @ .., 
+        // ^ Note: This is a "rest" pattern! Matches all submessages between first and last,
+
+        Submessage { body:
+          SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(
+            SecureRTPSPostfix { crypto_footer }, _, )), .. }
+      ] = submessages.as_slice()
     {
       let BuiltinCryptoHeader {
         transform_identifier:
@@ -431,83 +426,71 @@ impl CryptoTransform for CryptographicBuiltin {
         builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
       } = BuiltinCryptoHeader::try_from(crypto_header.clone())?;
 
-      let BuiltinCryptoFooter {
-        common_mac,
-        receiver_specific_macs,
-      } = BuiltinCryptoFooter::try_from(crypto_footer.clone())?;
+      let BuiltinCryptoFooter { common_mac, receiver_specific_macs } 
+        = BuiltinCryptoFooter::try_from(crypto_footer.clone())?;
 
       // Get decode key material
-      let KeyMaterial_AES_GCM_GMAC {
-        transformation_kind: key_material_transformation_kind,
-        master_salt,
-        sender_key_id,
-        master_sender_key,
-        receiver_specific_key_id,
-        master_receiver_specific_key,
-      } = self
-        .get_decode_key_materials(sending_participant_crypto_handle, transformation_key_id)
-        // Get the one for submessages (not only payload)
-        .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)?;
+      let decode_key_material = self.session_decode_crypto_materials(
+        sending_participant_crypto_handle,
+        transformation_key_id,
+        false,
+        initialization_vector,
+      )?;
 
       // Check that the key id matches the header
-      if !transformation_key_id.eq(sender_key_id) {
+      if transformation_key_id != decode_key_material.key_id {
         Err(security_error!(
           "The key IDs don't match. The key material has sender_key_id {}, while the header has \
            transformation_key_id {}",
-          sender_key_id,
+          decode_key_material.key_id,
           transformation_key_id
         ))?;
-      } else if !header_transformation_kind.eq(key_material_transformation_kind) {
+      } else if header_transformation_kind != decode_key_material.transformation_kind {
         Err(security_error!(
           "The transformation_kind don't match. The key material has {:?}, while the header has \
            {:?}",
-          key_material_transformation_kind,
+          decode_key_material.transformation_kind,
           header_transformation_kind
         ))?;
       }
 
       // Get the receiver-specific MAC if one is expected
-      let receiver_specific_mac = None;
-      // TODO
-      //find_receiver_specific_mac(*receiver_specific_key_id,
-      // &receiver_specific_macs)?;
+      let receiver_specific_key_and_mac = find_receiver_specific_mac(
+        decode_key_material.receiver_specific_key,
+        &receiver_specific_macs,
+      )?;
 
-      // TODO use session key?
-      let decode_key = master_sender_key;
-      // TODO use session key?
-      let receiver_specific_key = master_receiver_specific_key;
+      let decode_key = decode_key_material.session_key;
 
-      match key_material_transformation_kind {
+      match decode_key_material.transformation_kind {
         BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+          // Does this case make even any sense?
           decode_rtps_message_gmac(
-            decode_key,
-            receiver_specific_key,
+            &decode_key,
             initialization_vector,
             encoded_content,
             common_mac,
-            receiver_specific_mac,
+            receiver_specific_key_and_mac,
           )
         }
         BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
         | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
           decode_rtps_message_gmac(
-            decode_key,
-            receiver_specific_key,
+            &decode_key,
             initialization_vector,
             encoded_content,
             common_mac,
-            receiver_specific_mac,
+            receiver_specific_key_and_mac,
           )
         }
         BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
         | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
           decode_rtps_message_gcm(
-            decode_key,
-            receiver_specific_key,
+            &decode_key,
             initialization_vector,
             encoded_content,
             common_mac,
-            receiver_specific_mac,
+            receiver_specific_key_and_mac,
           )
         }
       }
