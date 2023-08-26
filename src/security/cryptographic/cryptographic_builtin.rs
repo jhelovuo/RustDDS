@@ -290,16 +290,14 @@ impl CryptographicBuiltin {
   }
 
   fn compute_session_key(
-    transformation_kind: BuiltinCryptoTransformationKind,
     rec_spec: ReceiverSpecific,
     master_key: &BuiltinKey,
     master_salt: &[u8],
     iv: BuiltinInitializationVector,
-  ) -> SecurityResult<BuiltinKey> {
-    // "9.5.3.3.3 Computation of SessionKey and SessionReceiverSpecificKey"
-    //
-    // TODO: Extract this block to a separate function and reuse in
-    // other transform functions below.
+  ) -> BuiltinKey {
+    // This is the algorithm given in
+    // DDS Security spec v1.1 
+    // Section "9.5.3.3.3 Computation of SessionKey and SessionReceiverSpecificKey"
     use ring::hmac;
 
     let magic_prefix = match rec_spec {
@@ -313,7 +311,9 @@ impl CryptographicBuiltin {
       &[magic_prefix, master_salt, iv.session_id().as_bytes()].concat(),
     );
 
-    BuiltinKey::from_bytes(KeyLength::try_from(transformation_kind)?, digest.as_ref())
+    // .unwrap() will succeed, because digest has is 256 bits, which
+    // is long enough for both 128- and 256-bit keys.
+    BuiltinKey::from_bytes(master_key.key_length(), digest.as_ref()).unwrap()
   }
 
   // Get materials needed for encoding
@@ -362,12 +362,11 @@ impl CryptographicBuiltin {
     let initialization_vector = self.random_initialization_vector();
 
     let session_key = Self::compute_session_key(
-      transformation_kind,
       ReceiverSpecific::No,
       master_sender_key,
       master_salt,
       initialization_vector,
-    )?;
+    );
 
     // Get the keys for computing receiver-specific MACs
     let receiver_specific_keys = SecurityResult::<Vec<ReceiverSpecificKeyMaterial>>::from_iter(
@@ -385,12 +384,11 @@ impl CryptographicBuiltin {
             // Map to session keys
             .and_then(|rec_spec_key_material| {
               let session_key = Self::compute_session_key(
-                transformation_kind,
                 ReceiverSpecific::Yes,
                 &rec_spec_key_material.key,
                 master_salt,
                 initialization_vector,
-              )?;
+              );
               Ok(ReceiverSpecificKeyMaterial {
                 key_id: rec_spec_key_material.key_id,
                 key: session_key,
@@ -435,23 +433,21 @@ impl CryptographicBuiltin {
 
     let transformation_kind = *transformation_kind;
     let session_key = Self::compute_session_key(
-      transformation_kind,
       ReceiverSpecific::No,
       master_sender_key,
       master_salt,
       initialization_vector,
-    )?;
+    );
 
     let receiver_specific_key = if *receiver_specific_key_id == 0 {
       None // does not exist
     } else {
       let session_key = Self::compute_session_key(
-        transformation_kind,
         ReceiverSpecific::Yes,
         master_receiver_specific_key,
         master_salt,
         initialization_vector,
-      )?;
+      );
       Some(ReceiverSpecificKeyMaterial {
         key_id: *receiver_specific_key_id,
         key: session_key,

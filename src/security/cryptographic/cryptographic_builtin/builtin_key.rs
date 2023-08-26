@@ -40,6 +40,14 @@ impl BuiltinKey {
     }
   }
 
+  pub fn key_length(&self) -> KeyLength {
+    match self {
+      BuiltinKey::AES128(_) => KeyLength::AES128,
+      BuiltinKey::AES256(_) => KeyLength::AES256,
+    }
+  }
+
+
   // Rust `rand` library uses by default the 12-round chacha-algorithm, which is
   // "widely believed" to be secure.
   // The library documentation states that the generator may be upgraded, if it is
