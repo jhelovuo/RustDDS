@@ -82,7 +82,23 @@ pub(crate) enum KeyMaterial_AES_GCM_GMAC_seq {
   Two(KeyMaterial_AES_GCM_GMAC, KeyMaterial_AES_GCM_GMAC),
 }
 
+#[derive(Debug,Clone,Copy,Eq,PartialEq)]
+pub enum KeyMaterialScope {
+  PayloadAndMetadata,
+  PayloadOnly,
+}
+
 impl KeyMaterial_AES_GCM_GMAC_seq {
+  pub fn get(&self, scope:KeyMaterialScope) -> &KeyMaterial_AES_GCM_GMAC {
+    match (self, scope) {
+      (Self::One(key_material), _ )  => key_material, // This is all we have
+      (Self::Two(key_material, _), KeyMaterialScope::PayloadAndMetadata) => key_material,
+      (Self::Two(_, payload_key_material), KeyMaterialScope::PayloadOnly) => payload_key_material,
+    }
+
+  }
+
+  // TODO: Remove this function and use ".get()" above
   pub fn key_material(&self) -> &KeyMaterial_AES_GCM_GMAC {
     match self {
       Self::One(key_material) => key_material,
@@ -90,6 +106,7 @@ impl KeyMaterial_AES_GCM_GMAC_seq {
     }
   }
 
+  // TODO: Remove this function and use ".get()" above
   pub fn payload_key_material(&self) -> &KeyMaterial_AES_GCM_GMAC {
     match self {
       Self::One(key_material) => key_material,
