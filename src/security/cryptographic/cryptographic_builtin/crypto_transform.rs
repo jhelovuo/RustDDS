@@ -231,11 +231,14 @@ impl CryptoTransform for CryptographicBuiltin {
     };
 
     let (encoded_data, footer) = match transformation_kind {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        return Ok((plain_buffer, ParameterList::new()));
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+        if transformation_kind == 
+          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
+          warn!("decode_serialized_payload with crypto transformation kind = none. \
+            Does not make sense, but validating MAC anyway.");
+        }
         let mac = aes_gcm_gmac::compute_mac(&session_key, initialization_vector, &plain_buffer)?;
         ( plain_buffer, BuiltinCryptoFooter::only_common_mac(mac) )
       }
@@ -410,7 +413,7 @@ impl CryptoTransform for CryptographicBuiltin {
             SecureRTPSPrefix { crypto_header, .. }, _, )), .. },
 
         encoded_content @ .., 
-        // ^ Note: This is a "rest" pattern! Matches all submessages between first and last,
+        // ^ Note: This `..` is a "rest" pattern! Matches all submessages between first and last,
 
         Submessage { body:
           SubmessageBody::Security(SecuritySubmessage::SecureRTPSPostfix(
@@ -463,18 +466,16 @@ impl CryptoTransform for CryptographicBuiltin {
       let decode_key = decode_key_material.session_key;
 
       match decode_key_material.transformation_kind {
-        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-          // Does this case make even any sense?
-          decode_rtps_message_gmac(
-            &decode_key,
-            initialization_vector,
-            encoded_content,
-            common_mac,
-            receiver_specific_key_and_mac,
-          )
-        }
-        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE
+        | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
         | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+          // Validate signature even if it is not requested to avoid
+          // unauthorized data injection attack.
+          if decode_key_material.transformation_kind == 
+            BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
+            warn!("decode_serialized_payload with crypto transformation kind = none. \
+              Does not make sense, but validating MAC anyway.");
+          }
           decode_rtps_message_gmac(
             &decode_key,
             initialization_vector,
@@ -499,7 +500,7 @@ impl CryptoTransform for CryptographicBuiltin {
           Ok(Message { header: rtps_header, submessages })
         } else {
           Err(security_error!(
-            "The RTPS header did not match the MACed InfoSource: {:?} expected to match {:?}",
+            "The RTPS header did not match the encoded InfoSource: {:?} expected to match {:?}",
             info_source, rtps_header))
         }
       })
@@ -714,14 +715,15 @@ impl CryptoTransform for CryptographicBuiltin {
     let decode_key = &decode_key_material.session_key;
 
     match transformation_kind {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        warn!(
-          "decode_serialized_payload with crypto transformation kind = none. Does not make sense."
-        );
-        Ok(content_bytes.to_vec())
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+        // Validate signature even if it is not requested to avoid
+        // unauthorized data injection attack.
+        if transformation_kind == BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
+          warn!("decode_serialized_payload with crypto transformation kind = none. \
+            Does not make sense, but validating MAC anyway.");
+        }
         aes_gcm_gmac::validate_mac(decode_key, initialization_vector, content_bytes, common_mac)
           // if validate_mac succeeds, then map result to content bytes
           .map(|()| Vec::from(content_bytes) )
