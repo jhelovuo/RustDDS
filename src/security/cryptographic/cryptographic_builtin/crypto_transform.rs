@@ -734,7 +734,8 @@ impl CryptoTransform for CryptographicBuiltin {
         },
       builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
     } = BuiltinCryptoHeader::read_from_buffer(header_bytes)?;
-    //TODO: Should this be read_from_buffer_with_ctx() to account for endianness?
+    // .read_from_buffer() does not need endianness, because BuiltinCryptoHeader
+    // only contains byte-oriented data, which is insensitive to endianness.
 
     let BuiltinCryptoFooter { common_mac, .. } =
       BuiltinCryptoFooter::read_from_buffer(footer_bytes)?;

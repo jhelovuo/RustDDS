@@ -165,9 +165,9 @@ impl TryFrom<Vec<KeyMaterial_AES_GCM_GMAC>> for KeyMaterial_AES_GCM_GMAC_seq {
         KeyMaterial_AES_GCM_GMAC {
           transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
           master_salt: Vec::new(),
-          sender_key_id: 0,
+          sender_key_id: CryptoTransformKeyId::ZERO,
           master_sender_key: BuiltinKey::ZERO,
-          receiver_specific_key_id: 0,
+          receiver_specific_key_id: CryptoTransformKeyId::ZERO,
           master_receiver_specific_key: BuiltinKey::ZERO,
         },
       )),

@@ -115,10 +115,10 @@ impl CryptographicBuiltin {
       KeyMaterial_AES_GCM_GMAC {
         transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
         master_salt: Vec::new(),
-        sender_key_id: 0,
+        sender_key_id: CryptoTransformKeyId::ZERO,
         master_sender_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
                                               * sequence */
-        receiver_specific_key_id: 0,
+        receiver_specific_key_id: CryptoTransformKeyId::ZERO,
         master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
                                                          * sequence */
       },
@@ -127,13 +127,13 @@ impl CryptographicBuiltin {
         // TODO
         master_salt: salt_digest.as_ref().into(),
 
-        sender_key_id: 0,
+        sender_key_id: CryptoTransformKeyId::ZERO,
         master_sender_key: BuiltinKey::from_bytes(
           KeyLength::try_from(transformation_kind)?,
           key_digest.as_ref(),
         )?,
         // Leave receiver-specific key empty initially
-        receiver_specific_key_id: 0,
+        receiver_specific_key_id: CryptoTransformKeyId::ZERO,
         master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
                                                          * sequence */
       },
@@ -176,10 +176,10 @@ impl CryptographicBuiltin {
       // TODO
       master_salt: Vec::new(),
 
-      sender_key_id: crypto_handle,
+      sender_key_id: CryptoTransformKeyId::ZERO, // TODO
       master_sender_key,
       // Leave receiver-specific key empty initially
-      receiver_specific_key_id: 0,
+      receiver_specific_key_id: CryptoTransformKeyId::ZERO,
       master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
                                                        * sequence */
     }
@@ -206,9 +206,10 @@ impl CryptographicBuiltin {
           .try_into()
           .ok(),
       );
-      key_materials.add_master_receiver_specific_key(crypto_handle, master_receiver_specific_key)
+      let key_id = key_materials.key_material().sender_key_id; // TODO: Is this correct?
+      key_materials.add_master_receiver_specific_key(key_id, master_receiver_specific_key)
     } else {
-      key_materials.add_master_receiver_specific_key(0, BuiltinKey::ZERO)
+      key_materials.add_master_receiver_specific_key(CryptoTransformKeyId::ZERO, BuiltinKey::ZERO)
     }
   }
 

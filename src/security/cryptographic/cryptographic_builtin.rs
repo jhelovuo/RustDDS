@@ -430,7 +430,7 @@ impl CryptographicBuiltin {
       initialization_vector,
     );
 
-    let receiver_specific_key = if *receiver_specific_key_id == 0 {
+    let receiver_specific_key = if receiver_specific_key_id.is_zero() {
       None // does not exist
     } else {
       let session_key = Self::compute_session_key(
