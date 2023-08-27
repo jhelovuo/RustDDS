@@ -320,19 +320,14 @@ impl CryptographicBuiltin {
   fn session_encoding_materials(
     &self,
     sending_local_entity_crypto_handle: CryptoHandle,
-    payload_only: bool,
+    key_material_scope: KeyMaterialScope,
     receiving_remote_entity_crypto_handles: &[CryptoHandle],
   ) -> SecurityResult<EncryptSessionMaterials> {
-    let key_material_selector = if payload_only {
-      KeyMaterial_AES_GCM_GMAC_seq::payload_key_material
-    } else {
-      KeyMaterial_AES_GCM_GMAC_seq::key_material
-    };
 
     let common_encode_key_materials =
       self.get_common_encode_key_materials(&sending_local_entity_crypto_handle)?;
 
-    let common_encode_key_material = key_material_selector(match common_encode_key_materials {
+    let common_encode_key_material = match common_encode_key_materials {
       CommonEncodeKeyMaterials::Some(common_encode_key_materials) => common_encode_key_materials,
       CommonEncodeKeyMaterials::Volatile(_) => {
         if let [receiving_remote_volatile_endpoint_crypto_handle] =
@@ -347,7 +342,8 @@ impl CryptographicBuiltin {
           ))
         }?
       }
-    });
+    }
+    .select(key_material_scope);
 
     let KeyMaterial_AES_GCM_GMAC {
       transformation_kind,
@@ -376,23 +372,23 @@ impl CryptographicBuiltin {
         .map(|receiver_crypto_handle| {
           self
             .get_receiver_specific_encode_key_materials(receiver_crypto_handle)
-            .map(key_material_selector)
+            .map(|m| m.select(key_material_scope))
             // Compare to the common key material and get the receiver specific key material
             .and_then(|receiver_key_material| {
               receiver_key_material.receiver_key_material_for(common_encode_key_material)
             })
             // Map to session keys
-            .and_then(|rec_spec_key_material| {
+            .map(|rec_spec_key_material| {
               let session_key = Self::compute_session_key(
                 ReceiverSpecific::Yes,
                 &rec_spec_key_material.key,
                 master_salt,
                 initialization_vector,
               );
-              Ok(ReceiverSpecificKeyMaterial {
+              ReceiverSpecificKeyMaterial {
                 key_id: rec_spec_key_material.key_id,
                 key: session_key,
-              })
+              }
             })
         }),
     )?;
@@ -411,14 +407,9 @@ impl CryptographicBuiltin {
     &self,
     remote_sender_handle: CryptoHandle,
     header_key_id: CryptoTransformKeyId, // what key id was specified on incoming header
-    payload_only: bool,
+    key_material_scope: KeyMaterialScope,
     initialization_vector: BuiltinInitializationVector, // as received in header
   ) -> SecurityResult<DecryptSessionMaterials> {
-    let key_material_selector = if payload_only {
-      KeyMaterial_AES_GCM_GMAC_seq::payload_key_material
-    } else {
-      KeyMaterial_AES_GCM_GMAC_seq::key_material
-    };
 
     let KeyMaterial_AES_GCM_GMAC {
       transformation_kind,
@@ -428,8 +419,8 @@ impl CryptographicBuiltin {
       receiver_specific_key_id,
       master_receiver_specific_key,
     } = self
-      .get_decode_key_materials(remote_sender_handle, header_key_id)
-      .map(key_material_selector)?;
+      .get_decode_key_materials(remote_sender_handle, header_key_id)?
+      .select(key_material_scope);
 
     let transformation_kind = *transformation_kind;
     let session_key = Self::compute_session_key(

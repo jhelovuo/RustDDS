@@ -436,6 +436,7 @@ pub(crate) fn create_rtps_data_message<D: PlCdrSerialize>(
   let submessage: Submessage = Submessage {
     header: submessage_header,
     body: SubmessageBody::Writer(WriterSubmessage::Data(data_message, sub_flags)),
+    original_bytes: None, // constructed submessage, not parsed
   };
   rtps_message.add_submessage(submessage);
 
@@ -486,6 +487,7 @@ pub(crate) fn create_cdr_pl_rtps_data_message<D: PlCdrSerialize>(
   let submessage: Submessage = Submessage {
     header: submessage_header,
     body: SubmessageBody::Writer(WriterSubmessage::Data(data_message, sub_flags)),
+    original_bytes: None,
   };
   rtps_message.add_submessage(submessage);
 

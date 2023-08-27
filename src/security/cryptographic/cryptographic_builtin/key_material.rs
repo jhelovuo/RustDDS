@@ -74,7 +74,9 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoToken {
 
 /// We need to refer to a sequence of key material structures for example in
 /// register_local_datawriter. Usually the sequence has one key material, but it
-/// can have two if different key materials is used for submessage and payload
+/// can have two, if different key materials is used for submessage and payload.
+/// In case of Two, the first one is for metadata(headers) and payload and 
+/// the second for payload only.
 #[allow(non_camel_case_types)] // We use the name from the spec
 #[derive(Clone)]
 pub(crate) enum KeyMaterial_AES_GCM_GMAC_seq {
@@ -89,7 +91,7 @@ pub enum KeyMaterialScope {
 }
 
 impl KeyMaterial_AES_GCM_GMAC_seq {
-  pub fn get(&self, scope:KeyMaterialScope) -> &KeyMaterial_AES_GCM_GMAC {
+  pub fn select(&self, scope:KeyMaterialScope) -> &KeyMaterial_AES_GCM_GMAC {
     match (self, scope) {
       (Self::One(key_material), _ )  => key_material, // This is all we have
       (Self::Two(key_material, _), KeyMaterialScope::PayloadAndMetadata) => key_material,

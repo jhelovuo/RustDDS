@@ -36,7 +36,9 @@ use crate::{
 pub struct Submessage {
   pub header: SubmessageHeader,
   pub body: SubmessageBody,
-  pub original_bytes: Option<Bytes>,
+  pub original_bytes: Option<Bytes>, 
+  // original_bytes contains the original bytes if Submessage was created by parsing from Bytes.
+  // If mesasge was constructed from components instead, it is None.
 }
 
 // We implement this instead of Speedy trait Readable, because
@@ -319,6 +321,7 @@ mod tests {
     let sub = Submessage {
       header,
       body: SubmessageBody::Writer(WriterSubmessage::Data(suba, flags)),
+      original_bytes: Some(serialized_data_submessage.clone()),
     };
     info!("{:?}", sub);
 
@@ -344,6 +347,7 @@ mod tests {
     let sub = Submessage {
       header,
       body: SubmessageBody::Writer(WriterSubmessage::Heartbeat(suba, flags)),
+      original_bytes: Some(serialized_heartbeat_message.clone().into()),
     };
     info!("{:?}", sub);
 
@@ -368,6 +372,7 @@ mod tests {
     let sub = Submessage {
       header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(suba, flags)),
+      original_bytes: Some(serialized_info_dst_message.clone().into()),
     };
     info!("{:?}", sub);
 

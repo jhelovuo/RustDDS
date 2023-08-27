@@ -1308,6 +1308,7 @@ mod tests {
     let s: Submessage = Submessage {
       header: sub_header,
       body: SubmessageBody::Reader(ReaderSubmessage::AckNack(a, flags)),
+      original_bytes: None,
     };
     let h = Header {
       protocol_id: ProtocolId::default(),

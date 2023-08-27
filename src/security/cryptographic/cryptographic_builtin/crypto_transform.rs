@@ -59,7 +59,7 @@ impl CryptographicBuiltin {
       receiver_specific_keys,
     } = self.session_encoding_materials(
       sending_endpoint_crypto_handle,
-      false,
+      KeyMaterialScope::PayloadAndMetadata,
       receiving_endpoint_crypto_handle_list,
     )?;
 
@@ -139,7 +139,7 @@ impl CryptographicBuiltin {
     let decode_key_material = self.session_decode_crypto_materials(
       sending_endpoint_crypto_handle,
       transformation_key_id,
-      false,
+      KeyMaterialScope::PayloadAndMetadata,
       initialization_vector,
     )?;
 
@@ -214,7 +214,7 @@ impl CryptoTransform for CryptographicBuiltin {
       session_key,
       initialization_vector,
       ..
-    } = self.session_encoding_materials(sending_datawriter_crypto_handle, true, &[])?;
+    } = self.session_encoding_materials(sending_datawriter_crypto_handle, KeyMaterialScope::PayloadOnly , &[])?;
 
     // Receiver specific (signing) keys are not used.
     //
@@ -330,7 +330,7 @@ impl CryptoTransform for CryptographicBuiltin {
       receiver_specific_keys,
     } = self.session_encoding_materials(
       sending_participant_crypto_handle,
-      false,
+      KeyMaterialScope::PayloadAndMetadata,
       &receiving_participant_crypto_handle_list,
     )?;
 
@@ -437,7 +437,7 @@ impl CryptoTransform for CryptographicBuiltin {
       let decode_key_material = self.session_decode_crypto_materials(
         sending_participant_crypto_handle,
         transformation_key_id,
-        false,
+        KeyMaterialScope::PayloadAndMetadata,
         initialization_vector,
       )?;
 
@@ -518,7 +518,7 @@ impl CryptoTransform for CryptographicBuiltin {
           {
             // Validate the receiver-specific MAC if one exists, and exit on error
             if let Some((key,mac)) = receiver_specific_key_and_mac {
-              aes_gcm_gmac::validate_mac( &key, initialization_vector, ciphertext, mac)?
+              aes_gcm_gmac::validate_mac( &key, initialization_vector, ciphertext, mac)?;
             }
             // Authenticated decryption, or exit on failure
             let mut plaintext =
@@ -743,7 +743,7 @@ impl CryptoTransform for CryptographicBuiltin {
     let decode_key_material = self.session_decode_crypto_materials(
       sending_datawriter_crypto_handle,
       transformation_key_id,
-      true,
+      KeyMaterialScope::PayloadOnly,
       initialization_vector,
     )?;
 
