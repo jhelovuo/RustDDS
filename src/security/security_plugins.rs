@@ -139,7 +139,7 @@ impl SecurityPlugins {
   fn get_remote_endpoint_crypto_handle(
     &self,
     (local_endpoint_guid, proxy_guid): (&GUID, &GUID),
-  ) -> SecurityResult<ParticipantCryptoHandle> {
+  ) -> SecurityResult<EndpointCryptoHandle> {
     let local_and_proxy_guid_pair = (*local_endpoint_guid, *proxy_guid);
     self
       .remote_endpoint_crypto_handle_cache
@@ -152,6 +152,17 @@ impl SecurityPlugins {
         )
       })
       .copied()
+  }
+
+  fn store_remote_endpoint_crypto_handle(
+    &mut self,
+    (local_endpoint_guid, remote_endpoint_guid): (GUID, GUID),
+    remote_crypto_handle: EndpointCryptoHandle,
+  ) {
+    let local_and_remote_guid_pair = (local_endpoint_guid, remote_endpoint_guid);
+    self
+      .remote_endpoint_crypto_handle_cache
+      .insert(local_and_remote_guid_pair, remote_crypto_handle);
   }
 }
 
@@ -519,6 +530,58 @@ impl SecurityPlugins {
     self
       .participant_crypto_handle_cache
       .insert(remote_participant_guidp, remote_crypto_handle);
+    Ok(())
+  }
+
+  pub fn register_matched_remote_reader(
+    &mut self,
+    remote_reader_guid: GUID,
+    local_writer_guid: GUID,
+    relay_only: bool,
+  ) -> SecurityResult<()> {
+    // First get the secret shared by the participants
+    let shared_secret = self.get_shared_secret(remote_reader_guid.prefix)?;
+
+    let local_writer_crypto = self.get_local_endpoint_crypto_handle(&local_writer_guid)?;
+    let remote_participant_crypto =
+      self.get_participant_crypto_handle(&remote_reader_guid.prefix)?;
+
+    let remote_reader_crypto = self.crypto.register_matched_remote_datareader(
+      local_writer_crypto,
+      remote_participant_crypto,
+      shared_secret,
+      relay_only,
+    )?;
+
+    self.store_remote_endpoint_crypto_handle(
+      (local_writer_guid, remote_reader_guid),
+      remote_reader_crypto,
+    );
+    Ok(())
+  }
+
+  pub fn register_matched_remote_writer(
+    &mut self,
+    remote_writer_guid: GUID,
+    local_reader_guid: GUID,
+  ) -> SecurityResult<()> {
+    // First get the secret shared by the participants
+    let shared_secret = self.get_shared_secret(remote_writer_guid.prefix)?;
+
+    let local_reader_crypto = self.get_local_endpoint_crypto_handle(&local_reader_guid)?;
+    let remote_participant_crypto =
+      self.get_participant_crypto_handle(&remote_writer_guid.prefix)?;
+
+    let remote_writer_crypto = self.crypto.register_matched_remote_datawriter(
+      local_reader_crypto,
+      remote_participant_crypto,
+      shared_secret,
+    )?;
+
+    self.store_remote_endpoint_crypto_handle(
+      (local_reader_guid, remote_writer_guid),
+      remote_writer_crypto,
+    );
     Ok(())
   }
 

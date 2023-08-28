@@ -12,7 +12,6 @@ use mio_extras::channel as mio_channel;
 use crate::{
   dds::{qos::policy, typedesc::TypeDesc},
   discovery::{
-    builtin_endpoint::BuiltinEndpointSet,
     discovery::Discovery,
     discovery_db::DiscoveryDB,
     secure_discovery::AuthenticationStatus,
@@ -46,80 +45,6 @@ pub(crate) enum EventLoopCommand {
   Stop,
   PrepareStop,
 }
-
-pub const PREEMPTIVE_ACKNACK_PERIOD: Duration = Duration::from_secs(5);
-
-// RTPS spec Section 8.4.7.1.1  "Default Timing-Related Values"
-pub const NACK_RESPONSE_DELAY: Duration = Duration::from_millis(200);
-pub const NACK_SUPPRESSION_DURATION: Duration = Duration::from_millis(0);
-
-const STANDARD_BUILTIN_READERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[
-  (
-    EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
-    EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-    BuiltinEndpointSet::PARTICIPANT_DETECTOR,
-  ),
-  (
-    EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
-    EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-    BuiltinEndpointSet::SUBSCRIPTIONS_DETECTOR,
-  ),
-  (
-    EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
-    EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
-    BuiltinEndpointSet::PUBLICATIONS_DETECTOR,
-  ),
-  (
-    EntityId::SEDP_BUILTIN_TOPIC_WRITER,
-    EntityId::SEDP_BUILTIN_TOPIC_READER,
-    BuiltinEndpointSet::TOPICS_DETECTOR,
-  ),
-  (
-    EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-    EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-    BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_READER,
-  ),
-];
-
-const STANDARD_BUILTIN_WRITERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[
-  (
-    EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
-    EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-    BuiltinEndpointSet::PARTICIPANT_ANNOUNCER,
-  ),
-  (
-    EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
-    EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-    BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
-  ),
-  (
-    EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
-    EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
-    BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
-  ),
-  (
-    EntityId::SEDP_BUILTIN_TOPIC_WRITER,
-    EntityId::SEDP_BUILTIN_TOPIC_READER,
-    BuiltinEndpointSet::TOPICS_ANNOUNCER,
-  ),
-  (
-    EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-    EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-    BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_WRITER,
-  ),
-];
-
-const AUTHENTICATION_BUILTIN_READERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[(
-  EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
-  EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
-  BuiltinEndpointSet::PARTICIPANT_STATELESS_MESSAGE_READER,
-)];
-
-const AUTHENTICATION_BUILTIN_WRITERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[(
-  EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
-  EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
-  BuiltinEndpointSet::PARTICIPANT_STATELESS_MESSAGE_WRITER,
-)];
 
 pub struct DPEventLoop {
   domain_info: DomainInfo,
@@ -583,7 +508,8 @@ impl DPEventLoop {
             // Match all builtin endpoints
             readers_init_list.extend_from_slice(STANDARD_BUILTIN_READERS_INIT_LIST);
             writers_init_list.extend_from_slice(STANDARD_BUILTIN_WRITERS_INIT_LIST);
-            // TODO: Add secure endpoints
+            readers_init_list.extend_from_slice(SECURE_BUILTIN_READERS_INIT_LIST);
+            writers_init_list.extend_from_slice(SECURE_BUILTIN_WRITERS_INIT_LIST);
           }
           Some(AuthenticationStatus::Unauthenticated) => {
             // Match only the regular builtin endpoints (see Security spec section 8.8.2.1)
@@ -641,6 +567,32 @@ impl DPEventLoop {
           }
 
           // common processing for all builtin topics
+          if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+            // Security enabled
+            // If reader is one of the secure built-in readers, it needs to be registered
+            if SECURE_BUILTIN_READER_ENTITY_IDS.contains(reader_eid) {
+              let remote_reader_guid = reader_proxy.remote_reader_guid;
+              let local_writer_guid = self
+                .domain_info
+                .domain_participant_guid
+                .from_prefix(*writer_eid);
+
+              if let Err(e) = SecurityPluginsHandle::get_plugins(plugins_handle)
+                .register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
+              {
+                error!(
+                  "Failed to register remote reader with the crypto plugin: {} GUID: {:?}",
+                  e, remote_reader_guid
+                );
+              } else {
+                info!(
+                  "Registered remote reader with the crypto plugin. GUID: {:?}",
+                  remote_reader_guid
+                );
+              }
+            }
+          }
+
           writer.update_reader_proxy(&reader_proxy, &qos);
           debug!(
             "update_discovery writer - endpoint {:?} - {:?}",
@@ -670,6 +622,32 @@ impl DPEventLoop {
           .available_builtin_endpoints
           .contains(*endpoint)
         {
+          if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+            // Security enabled
+            // If writer is one of the secure built-in writers, it needs to be registered
+            if SECURE_BUILTIN_WRITER_ENTITY_IDS.contains(writer_eid) {
+              let remote_writer_guid = wp.remote_writer_guid;
+              let local_reader_guid = self
+                .domain_info
+                .domain_participant_guid
+                .from_prefix(*reader_eid);
+
+              if let Err(e) = SecurityPluginsHandle::get_plugins(plugins_handle)
+                .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
+              {
+                error!(
+                  "Failed to register remote writer with the crypto plugin: {} GUID: {:?}",
+                  e, remote_writer_guid
+                );
+              } else {
+                info!(
+                  "Registered remote writer with the crypto plugin. GUID: {:?}",
+                  remote_writer_guid
+                );
+              }
+            }
+          }
+
           reader.update_writer_proxy(wp, &qos);
           debug!(
             "update_discovery_reader - endpoint {:?} - {:?}",
