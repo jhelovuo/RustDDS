@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
+use bytes::Bytes;
 
 use crate::security::types::DataHolder;
 
@@ -31,6 +32,8 @@ pub type HandshakeHandle = u32;
 pub type SharedSecret = u32;
 pub struct SharedSecretHandle {
   pub shared_secret: SharedSecret,
+  pub challenge1: Bytes,
+  pub challenge2: Bytes,
 }
 
 // IdentityToken: section 8.3.2.1 of the Security specification (v. 1.1)

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use bytes::Bytes;
+
 use crate::{
   security::{SecurityError, SecurityResult},
   security_error,
@@ -49,6 +51,8 @@ struct RemoteParticipantInfo {
 struct HandshakeInfo {
   state: BuiltinHandshakeState,
   latest_sent_message: Option<HandshakeMessageToken>,
+  challenge1: Option<Bytes>,
+  challenge2: Option<Bytes>,
   shared_secret: Option<SharedSecret>,
 }
 
@@ -153,6 +157,8 @@ impl AuthenticationBuiltin {
 
     // TODO: Compute the shared secret
     let shared_secret = SharedSecret::default();
+    let challenge1 = Bytes::default();
+    let challenge2 = Bytes::default();
 
     // TODO: Create proper HandshakeFinalMessageToken
     let final_message_token = HandshakeMessageToken::dummy();
@@ -160,6 +166,8 @@ impl AuthenticationBuiltin {
     // Change handshake state to Completed & save the final message token
     remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageSent;
     remote_info.handshake.latest_sent_message = Some(final_message_token.clone());
+    remote_info.handshake.challenge1 = Some(challenge1);
+    remote_info.handshake.challenge2 = Some(challenge2);
     remote_info.handshake.shared_secret = Some(shared_secret);
 
     Ok((ValidationOutcome::OkFinalMessage, final_message_token))
@@ -184,9 +192,13 @@ impl AuthenticationBuiltin {
 
     // TODO: compute the shared secret
     let shared_secret = SharedSecret::default();
+    let challenge1 = Bytes::default();
+    let challenge2 = Bytes::default();
 
     // Change handshake state to Completed
     remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageReceived;
+    remote_info.handshake.challenge1 = Some(challenge1);
+    remote_info.handshake.challenge2 = Some(challenge2);
     remote_info.handshake.shared_secret = Some(shared_secret);
 
     Ok(ValidationOutcome::Ok)

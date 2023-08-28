@@ -136,6 +136,8 @@ impl Authentication for AuthenticationBuiltin {
       handshake: HandshakeInfo {
         state: handshake_state,
         latest_sent_message: None,
+        challenge1: None,
+        challenge2: None,
         shared_secret: None,
       },
     };
@@ -302,7 +304,23 @@ impl Authentication for AuthenticationBuiltin {
       .shared_secret
       .ok_or_else(|| security_error("Shared secret not found"))?;
 
-    Ok(SharedSecretHandle { shared_secret })
+    let challenge1 = remote_info
+      .handshake
+      .challenge1
+      .clone()
+      .ok_or_else(|| security_error("challenge1 not found"))?;
+
+    let challenge2 = remote_info
+      .handshake
+      .challenge2
+      .clone()
+      .ok_or_else(|| security_error("challenge2 not found"))?;
+
+    Ok(SharedSecretHandle {
+      shared_secret,
+      challenge1,
+      challenge2,
+    })
   }
 
   // Currently only mocked
