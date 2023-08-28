@@ -101,93 +101,93 @@ impl CryptographicBuiltin {
 
   fn insert_common_encode_key_materials(
     &mut self,
-    crypto_handle: CryptoHandle,
+    local_entity_crypto_handle: CryptoHandle,
     key_materials: CommonEncodeKeyMaterials,
   ) -> SecurityResult<()> {
     match self
       .common_encode_key_materials
-      .insert(crypto_handle, key_materials)
+      .insert(local_entity_crypto_handle, key_materials)
     {
       None => SecurityResult::Ok(()),
       Some(old_key_materials) => {
         self
           .common_encode_key_materials
-          .insert(crypto_handle, old_key_materials);
+          .insert(local_entity_crypto_handle, old_key_materials);
         SecurityResult::Err(security_error!(
           "The CryptoHandle {} was already associated with common encode key materials",
-          crypto_handle
+          local_entity_crypto_handle
         ))
       }
     }
   }
   fn get_common_encode_key_materials(
     &self,
-    crypto_handle: &CryptoHandle,
+    local_entity_crypto_handle: &CryptoHandle,
   ) -> SecurityResult<&CommonEncodeKeyMaterials> {
     self
       .common_encode_key_materials
-      .get(crypto_handle)
+      .get(local_entity_crypto_handle)
       .ok_or_else(|| {
         security_error!(
           "Could not find common encode key materials for the CryptoHandle {}",
-          crypto_handle
+          local_entity_crypto_handle
         )
       })
   }
 
   fn insert_receiver_specific_encode_key_materials(
     &mut self,
-    crypto_handle: CryptoHandle,
+    remote_entity_crypto_handle: CryptoHandle,
     key_materials: KeyMaterial_AES_GCM_GMAC_seq,
   ) -> SecurityResult<()> {
     match self
       .receiver_specific_encode_key_materials
-      .insert(crypto_handle, key_materials)
+      .insert(remote_entity_crypto_handle, key_materials)
     {
       None => SecurityResult::Ok(()),
       Some(old_key_materials) => {
         self
           .receiver_specific_encode_key_materials
-          .insert(crypto_handle, old_key_materials);
+          .insert(remote_entity_crypto_handle, old_key_materials);
         SecurityResult::Err(security_error!(
           "The CryptoHandle {} was already associated with receiver-specific encode key materials",
-          crypto_handle
+          remote_entity_crypto_handle
         ))
       }
     }
   }
   fn get_receiver_specific_encode_key_materials(
     &self,
-    crypto_handle: &CryptoHandle,
+    remote_entity_crypto_handle: &CryptoHandle,
   ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
     self
       .receiver_specific_encode_key_materials
-      .get(crypto_handle)
+      .get(remote_entity_crypto_handle)
       .ok_or_else(|| {
         security_error!(
           "Could not find receiver-specific encode key materials for the CryptoHandle {}",
-          crypto_handle
+          remote_entity_crypto_handle
         )
       })
   }
 
   fn insert_decode_key_materials(
     &mut self,
-    crypto_handle: CryptoHandle,
+    remote_entity_crypto_handle: CryptoHandle,
     key_materials: KeyMaterial_AES_GCM_GMAC_seq,
   ) -> SecurityResult<()> {
     match self
       .decode_key_materials
-      .insert(crypto_handle, key_materials)
+      .insert(remote_entity_crypto_handle, key_materials)
     {
       None => SecurityResult::Ok(()),
       Some(old_key_materials) => {
         self
           .decode_key_materials
-          .insert(crypto_handle, old_key_materials);
+          .insert(remote_entity_crypto_handle, old_key_materials);
         SecurityResult::Err(security_error!(
           "The CryptoHandle {} was already associated with decode key material",
-          crypto_handle
+          remote_entity_crypto_handle
         ))
       }
     }
@@ -195,7 +195,7 @@ impl CryptographicBuiltin {
 
   fn get_decode_key_materials(
     &self,
-    crypto_handle: CryptoHandle,
+    remote_entity_crypto_handle: CryptoHandle,
     _key_id: CryptoTransformKeyId,
   ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
     // TODO:
@@ -207,11 +207,11 @@ impl CryptographicBuiltin {
 
     self
       .decode_key_materials
-      .get(&crypto_handle)
+      .get(&remote_entity_crypto_handle)
       .ok_or_else(|| {
         security_error!(
           "Could not find decode key materials for the CryptoHandle {}",
-          crypto_handle
+          remote_entity_crypto_handle
         )
       })
   }

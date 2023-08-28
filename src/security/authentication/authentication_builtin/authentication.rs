@@ -302,6 +302,7 @@ impl Authentication for AuthenticationBuiltin {
     let shared_secret = remote_info
       .handshake
       .shared_secret
+      .clone()
       .ok_or_else(|| security_error("Shared secret not found"))?;
 
     let challenge1 = remote_info

@@ -392,6 +392,8 @@ impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
 // macs. Conversely, volatile endpoints only have receiver-specific payload
 // encryption key materials.
 #[derive(Clone)]
+// The small variant appears only 2 times per participant
+#[allow(clippy::large_enum_variant)]
 pub(super) enum CommonEncodeKeyMaterials {
   Some(KeyMaterial_AES_GCM_GMAC_seq),
   Volatile(bool), // bool is for use_256_bit_key

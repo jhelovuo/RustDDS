@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use ring::{digest, hmac};
 
 use crate::{
   security::{
@@ -84,34 +85,52 @@ impl CryptographicBuiltin {
       })
   }
 
-  // TODO
   // 9.5.2.1.2
   fn derive_volatile_key_materials(
-    challenge1: Bytes,
-    challenge2: Bytes,
-    shared_secret: Bytes,
+    SharedSecretHandle {
+      shared_secret,
+      challenge1,
+      challenge2,
+    }: &SharedSecretHandle,
     use_256_bit_key: bool,
   ) -> SecurityResult<KeyMaterial_AES_GCM_GMAC_seq> {
-    use ring::hmac;
-    let salt_cookie: &[u8] = b"keyexchange salt".as_ref();
-    let key_cookie: &[u8] = b"key exchange key".as_ref();
-
-    let salt_hmac_key = [challenge1.as_ref(), salt_cookie, challenge2.as_ref()].concat(); // TODO sha256 this
-    let key_hmac_key = [challenge2.as_ref(), key_cookie, challenge1.as_ref()].concat(); // TODO sha256 this
-
-    let salt_hmac_key = hmac::Key::new(hmac::HMAC_SHA256, &salt_hmac_key);
-    let key_hmac_key = hmac::Key::new(hmac::HMAC_SHA256, &key_hmac_key);
-    let salt_digest = hmac::sign(&salt_hmac_key, &shared_secret);
-    let key_digest = hmac::sign(&key_hmac_key, &shared_secret);
-    // TODO truncate to key_length
-
     let transformation_kind = if use_256_bit_key {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM
     } else {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
     };
 
+    let salt_cookie: &[u8] = b"keyexchange salt".as_ref();
+    let key_cookie: &[u8] = b"key exchange key".as_ref();
+
+    let master_salt = Self::hash_shared_secret(
+      [challenge1.as_ref(), salt_cookie, challenge2.as_ref()],
+      shared_secret,
+      use_256_bit_key,
+    );
+
+    let master_sender_key = BuiltinKey::from_bytes(
+      KeyLength::try_from(transformation_kind)?,
+      Self::hash_shared_secret(
+        [challenge2.as_ref(), key_cookie, challenge1.as_ref()],
+        shared_secret,
+        use_256_bit_key,
+      )
+      .as_ref(),
+    )?;
+
     Ok(KeyMaterial_AES_GCM_GMAC_seq::Two(
+      KeyMaterial_AES_GCM_GMAC {
+        transformation_kind,
+        master_salt,
+        sender_key_id: CryptoTransformKeyId::ZERO,
+        master_sender_key,
+        // Leave receiver-specific key empty
+        receiver_specific_key_id: CryptoTransformKeyId::ZERO,
+        master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
+                                                         * sequence */
+      },
+      // The volatile topic has no payload protection
       KeyMaterial_AES_GCM_GMAC {
         transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
         master_salt: Vec::new(),
@@ -122,22 +141,27 @@ impl CryptographicBuiltin {
         master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
                                                          * sequence */
       },
-      KeyMaterial_AES_GCM_GMAC {
-        transformation_kind,
-        // TODO
-        master_salt: salt_digest.as_ref().into(),
-
-        sender_key_id: CryptoTransformKeyId::ZERO,
-        master_sender_key: BuiltinKey::from_bytes(
-          KeyLength::try_from(transformation_kind)?,
-          key_digest.as_ref(),
-        )?,
-        // Leave receiver-specific key empty initially
-        receiver_specific_key_id: CryptoTransformKeyId::ZERO,
-        master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
-                                                         * sequence */
-      },
     ))
+  }
+
+  // Creates a hmac key out of the challenges and cookie and uses it to hash the
+  // secret according to 9.5.2.1.2
+  fn hash_shared_secret(
+    hmac_key_plain: [&[u8]; 3],
+    shared_secret: &Bytes,
+    use_256_bit_key: bool,
+  ) -> Vec<u8> {
+    let hmac_key = hmac::Key::new(
+      hmac::HMAC_SHA256,
+      digest::digest(&digest::SHA256, hmac_key_plain.concat().as_ref()).as_ref(),
+    );
+    let hashed_secret = hmac::sign(&hmac_key, shared_secret);
+    // Truncate
+    if use_256_bit_key {
+      hashed_secret.as_ref().into()
+    } else {
+      hashed_secret.as_ref()[..AES128_KEY_LENGTH].into()
+    }
   }
 
   fn use_256_bit_key(properties: &[Property]) -> bool {
@@ -450,12 +474,16 @@ impl CryptoKeyFactory for CryptographicBuiltin {
 
     let receiver_specific_encode_key_materials = match common_encode_key_materials {
       CommonEncodeKeyMaterials::Volatile(use_256_bit_key) => {
-        Self::derive_volatile_key_materials(
-          Bytes::new(),
-          Bytes::new(),
-          Bytes::new(),
-          use_256_bit_key,
-        )? // TODO use shared secret and the challenges
+        let volatile_key_materials =
+          Self::derive_volatile_key_materials(&shared_secret, use_256_bit_key)?; // TODO use shared secret and the challenges
+
+        // Instead of sending keys over the network like in other topics, the same key
+        // material is used for decoding
+        self.insert_decode_key_materials(
+          remote_datareader_crypto_handle,
+          volatile_key_materials.clone(),
+        )?;
+        volatile_key_materials
       }
       CommonEncodeKeyMaterials::Some(common_encode_key_materials) => {
         let is_submessage_origin_authenticated = self
@@ -587,12 +615,16 @@ impl CryptoKeyFactory for CryptographicBuiltin {
 
     let receiver_specific_encode_key_materials = match common_encode_key_materials {
       CommonEncodeKeyMaterials::Volatile(use_256_bit_key) => {
-        Self::derive_volatile_key_materials(
-          Bytes::new(),
-          Bytes::new(),
-          Bytes::new(),
-          use_256_bit_key,
-        )? // TODO use shared secret and the challenges
+        let volatile_key_materials =
+          Self::derive_volatile_key_materials(&shared_secret, use_256_bit_key)?; // TODO use shared secret and the challenges
+
+        // Instead of sending keys over the network like in other topics, the same key
+        // material is used for decoding
+        self.insert_decode_key_materials(
+          remote_datawriter_crypto_handle,
+          volatile_key_materials.clone(),
+        )?;
+        volatile_key_materials
       }
       CommonEncodeKeyMaterials::Some(common_encode_key_materials) => {
         let is_submessage_origin_authenticated = self

@@ -29,7 +29,7 @@ pub type IdentityHandle = u32;
 pub type HandshakeHandle = u32;
 
 // Shared secret resulting from successful handshake
-pub type SharedSecret = u32;
+pub type SharedSecret = Bytes;
 pub struct SharedSecretHandle {
   pub shared_secret: SharedSecret,
   pub challenge1: Bytes,
