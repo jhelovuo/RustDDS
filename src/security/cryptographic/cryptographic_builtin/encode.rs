@@ -10,7 +10,6 @@ use super::{
   types::{BuiltinCryptoFooter, BuiltinInitializationVector, BuiltinMAC, ReceiverSpecificMAC},
 };
 
-
 fn compute_receiver_specific_macs(
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],

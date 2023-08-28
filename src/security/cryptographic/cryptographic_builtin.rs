@@ -296,7 +296,7 @@ impl CryptographicBuiltin {
     iv: BuiltinInitializationVector,
   ) -> BuiltinKey {
     // This is the algorithm given in
-    // DDS Security spec v1.1 
+    // DDS Security spec v1.1
     // Section "9.5.3.3.3 Computation of SessionKey and SessionReceiverSpecificKey"
     use ring::hmac;
 
@@ -323,7 +323,6 @@ impl CryptographicBuiltin {
     key_material_scope: KeyMaterialScope,
     receiving_remote_entity_crypto_handles: &[CryptoHandle],
   ) -> SecurityResult<EncryptSessionMaterials> {
-
     let common_encode_key_materials =
       self.get_common_encode_key_materials(&sending_local_entity_crypto_handle)?;
 
@@ -410,7 +409,6 @@ impl CryptographicBuiltin {
     key_material_scope: KeyMaterialScope,
     initialization_vector: BuiltinInitializationVector, // as received in header
   ) -> SecurityResult<DecryptSessionMaterials> {
-
     let KeyMaterial_AES_GCM_GMAC {
       transformation_kind,
       master_salt,

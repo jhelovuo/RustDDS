@@ -17,22 +17,15 @@ use crate::{
     secure_rtps_prefix::SecureRTPSPrefix,
     submessage::SecuritySubmessage,
     submessage_flag::FromEndianness,
-    submessages::{ReaderSubmessage, WriterSubmessage, InterpreterSubmessage},
+    submessages::{InterpreterSubmessage, ReaderSubmessage, WriterSubmessage},
   },
   rtps::{Message, Submessage, SubmessageBody},
-  security::cryptographic::cryptographic_builtin::{
-    *,
-  },
+  security::cryptographic::cryptographic_builtin::*,
   security_error,
 };
 use super::{
-  decode::{
-    decode_submessage_gcm, decode_submessage_gmac,
-    find_receiver_specific_mac,
-  },
-  encode::{
-    encode_gcm, encode_gmac,
-  },
+  decode::{decode_submessage_gcm, decode_submessage_gmac, find_receiver_specific_mac},
+  encode::{encode_gcm, encode_gmac},
   key_material::*,
 };
 
@@ -214,7 +207,11 @@ impl CryptoTransform for CryptographicBuiltin {
       session_key,
       initialization_vector,
       ..
-    } = self.session_encoding_materials(sending_datawriter_crypto_handle, KeyMaterialScope::PayloadOnly , &[])?;
+    } = self.session_encoding_materials(
+      sending_datawriter_crypto_handle,
+      KeyMaterialScope::PayloadOnly,
+      &[],
+    )?;
 
     // Receiver specific (signing) keys are not used.
     //
@@ -235,18 +232,20 @@ impl CryptoTransform for CryptographicBuiltin {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        if transformation_kind == 
-          BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
-          warn!("decode_serialized_payload with crypto transformation kind = none. \
-            Does not make sense, but validating MAC anyway.");
+        if transformation_kind == BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
+          warn!(
+            "decode_serialized_payload with crypto transformation kind = none. Does not make \
+             sense, but validating MAC anyway."
+          );
         }
         let mac = aes_gcm_gmac::compute_mac(&session_key, initialization_vector, &plain_buffer)?;
-        ( plain_buffer, BuiltinCryptoFooter::only_common_mac(mac) )
+        (plain_buffer, BuiltinCryptoFooter::only_common_mac(mac))
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        let (ciphertext, mac) = aes_gcm_gmac::encrypt(&session_key, initialization_vector, &plain_buffer)?;
-        ( ciphertext, BuiltinCryptoFooter::only_common_mac(mac) )
+        let (ciphertext, mac) =
+          aes_gcm_gmac::encrypt(&session_key, initialization_vector, &plain_buffer)?;
+        (ciphertext, BuiltinCryptoFooter::only_common_mac(mac))
       }
     };
 
@@ -403,17 +402,20 @@ impl CryptoTransform for CryptographicBuiltin {
 
   fn decode_rtps_message(
     &self,
-    Message { header: rtps_header, submessages }: Message,
+    Message {
+      header: rtps_header,
+      submessages,
+    }: Message,
     _receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<Message> {
     // we expect SecureRTPSPRefix + some submessages + SecureRTPSPostfix
-    if let 
+    if let
       [ Submessage { body:
           SubmessageBody::Security(SecuritySubmessage::SecureRTPSPrefix(
             SecureRTPSPrefix { crypto_header, .. }, _, )), .. },
 
-        encoded_content @ .., 
+        encoded_content @ ..,
         // ^ Note: This `..` is a "rest" pattern! Matches all submessages between first and last,
 
         Submessage { body:
@@ -430,7 +432,7 @@ impl CryptoTransform for CryptographicBuiltin {
         builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
       } = BuiltinCryptoHeader::try_from(crypto_header.clone())?;
 
-      let BuiltinCryptoFooter { common_mac, receiver_specific_macs } 
+      let BuiltinCryptoFooter { common_mac, receiver_specific_macs }
         = BuiltinCryptoFooter::try_from(crypto_footer.clone())?;
 
       // Get decode key material
@@ -472,23 +474,23 @@ impl CryptoTransform for CryptographicBuiltin {
         | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
           // Validate signature even if it is not requested to avoid
           // unauthorized data injection attack.
-          if decode_key_material.transformation_kind == 
+          if decode_key_material.transformation_kind ==
             BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
             warn!("decode_serialized_payload with crypto transformation kind = none. \
               Does not make sense, but validating MAC anyway.");
           }
           let submessages_with_info_source = encoded_content; // rename for clarity
           // We expect an InfoSource submessage followed by the original message
-          if let 
+          if let
             [ Submessage { body: SubmessageBody::Interpreter(
-                InterpreterSubmessage::InfoSource(info_source, _)), .. }, 
+                InterpreterSubmessage::InfoSource(info_source, _)), .. },
               submessages @ ..  // this is all the rest of the submessages
             ] = submessages_with_info_source
           {
             // Get original serialized data for submessage sequence: Concatenate original_bytes.
             let serialized_submessages = submessages_with_info_source.iter()
-              .fold(Vec::<u8>::with_capacity(512), move |mut a,s| { 
-                a.extend_from_slice(s.original_bytes.as_ref().unwrap_or(&Bytes::new()).as_ref()); a } 
+              .fold(Vec::<u8>::with_capacity(512), move |mut a,s| {
+                a.extend_from_slice(s.original_bytes.as_ref().unwrap_or(&Bytes::new()).as_ref()); a }
               );
             // Validate the common MAC
             aes_gcm_gmac::validate_mac(&decode_key, initialization_vector, &serialized_submessages, common_mac)
@@ -496,7 +498,7 @@ impl CryptoTransform for CryptographicBuiltin {
               .and_then( |()|
                 // common mac was ok, let's see if there is receiveer-specific MAC
                 receiver_specific_key_and_mac
-                  .map(|(key,mac)| 
+                  .map(|(key,mac)|
                     aes_gcm_gmac::validate_mac( &key,initialization_vector, &serialized_submessages, mac ) )
                   // this is :Option<SecurityResult<()>>
                   .transpose(),
@@ -507,14 +509,14 @@ impl CryptoTransform for CryptographicBuiltin {
               .map( |_| (Vec::from(submessages), *info_source))
           } else {
             Err(security_error!("Expected the first submessage to be InfoSource."))
-          } 
-        } 
+          }
+        }
         BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
         | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
           // We expect a SecureBody submessage containing the encrypted message
           if let [ Submessage { body: SubmessageBody::Security(SecuritySubmessage::SecureBody(
                     SecureBody { crypto_content: CryptoContent { data: ciphertext },}, _ )), ..  }
-            ] = encoded_content 
+            ] = encoded_content
           {
             // Validate the receiver-specific MAC if one exists, and exit on error
             if let Some((key,mac)) = receiver_specific_key_and_mac {
@@ -526,9 +528,9 @@ impl CryptoTransform for CryptographicBuiltin {
                 &aes_gcm_gmac::decrypt(&decode_key, initialization_vector, ciphertext, common_mac)?);
 
             // We expect an InfoSource submessage followed by the original submessage sequence
-            let info_source = 
+            let info_source =
               if let Some(Submessage {body: SubmessageBody::Interpreter(
-                    InterpreterSubmessage::InfoSource(info_source, _)), .. }) 
+                    InterpreterSubmessage::InfoSource(info_source, _)), .. })
                   = Submessage::read_from_buffer(&mut plaintext)
                       .map_err(|e| security_error!("Failed to deserialize the plaintext: {e}"))?
               {
@@ -779,12 +781,14 @@ impl CryptoTransform for CryptographicBuiltin {
         // Validate signature even if it is not requested to avoid
         // unauthorized data injection attack.
         if transformation_kind == BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
-          warn!("decode_serialized_payload with crypto transformation kind = none. \
-            Does not make sense, but validating MAC anyway.");
+          warn!(
+            "decode_serialized_payload with crypto transformation kind = none. Does not make \
+             sense, but validating MAC anyway."
+          );
         }
         aes_gcm_gmac::validate_mac(decode_key, initialization_vector, content_bytes, common_mac)
           // if validate_mac succeeds, then map result to content bytes
-          .map(|()| Vec::from(content_bytes) )
+          .map(|()| Vec::from(content_bytes))
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {

@@ -741,7 +741,9 @@ mod tests {
     let data_submessage = match &rtps.submessages[2] {
       Submessage {
         header: _,
-        body: SubmessageBody::Writer(WriterSubmessage::Data(d, _flags)), .. } => d,
+        body: SubmessageBody::Writer(WriterSubmessage::Data(d, _flags)),
+        ..
+      } => d,
       wtf => panic!("Unexpected message structure {wtf:?}"),
     };
 

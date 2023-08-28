@@ -36,7 +36,7 @@ use crate::{
 pub struct Submessage {
   pub header: SubmessageHeader,
   pub body: SubmessageBody,
-  pub original_bytes: Option<Bytes>, 
+  pub original_bytes: Option<Bytes>,
   // original_bytes contains the original bytes if Submessage was created by parsing from Bytes.
   // If mesasge was constructed from components instead, it is None.
 }

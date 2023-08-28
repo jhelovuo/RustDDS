@@ -1,8 +1,6 @@
-use serde::Serialize;
-use serde::Deserialize;
-use std::fmt;
-use std::convert::From;
+use std::{convert::From, fmt};
 
+use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
 use crate::{rtps::Submessage, security::types::DataHolder};
@@ -52,29 +50,27 @@ pub type CryptoTransformKind = [u8; 4];
 /// transformation_key_id: section 8.5.1.5.2 of the Security specification (v.
 /// 1.1)
 #[derive(Debug, Clone, Copy, Eq, PartialEq, Readable, Writable, Serialize, Deserialize)]
-pub struct CryptoTransformKeyId([u8;4]);
+pub struct CryptoTransformKeyId([u8; 4]);
 
 impl CryptoTransformKeyId {
-  pub const ZERO:Self = CryptoTransformKeyId([0,0,0,0]);
+  pub const ZERO: Self = CryptoTransformKeyId([0, 0, 0, 0]);
 
   pub fn is_zero(&self) -> bool {
     *self == Self::ZERO
-  } 
+  }
 }
 
-impl From<[u8;4]> for CryptoTransformKeyId {
-  fn from(b:[u8;4]) -> Self {
+impl From<[u8; 4]> for CryptoTransformKeyId {
+  fn from(b: [u8; 4]) -> Self {
     Self(b)
   }
 }
 
 impl fmt::Display for CryptoTransformKeyId {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-      write!(f, "{:02x?}", self.0)
+    write!(f, "{:02x?}", self.0)
   }
 }
-
-
 
 /// SecureSubmessageCategory_t: section 8.5.1.6 of the Security specification
 /// (v. 1.1)

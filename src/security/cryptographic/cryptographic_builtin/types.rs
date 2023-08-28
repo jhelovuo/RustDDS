@@ -356,7 +356,10 @@ impl BuiltinCryptoFooter {
   }
 
   pub fn only_common_mac(common_mac: BuiltinMAC) -> Self {
-    BuiltinCryptoFooter { common_mac, receiver_specific_macs: Vec::new() }
+    BuiltinCryptoFooter {
+      common_mac,
+      receiver_specific_macs: Vec::new(),
+    }
   }
 }
 

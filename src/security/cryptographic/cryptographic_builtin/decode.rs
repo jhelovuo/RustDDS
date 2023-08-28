@@ -1,11 +1,9 @@
 use bytes::Bytes;
 
-
 use crate::{
   messages::submessages::{
-    elements::crypto_content::CryptoContent,
-    secure_body::SecureBody,
-    submessage::{SecuritySubmessage},
+    elements::crypto_content::CryptoContent, secure_body::SecureBody,
+    submessage::SecuritySubmessage,
   },
   rtps::{Submessage, SubmessageBody},
   security::{SecurityError, SecurityResult},
@@ -42,8 +40,9 @@ pub(super) fn decode_submessage_gmac(
   common_mac: BuiltinMAC,
   receiver_specific_key_and_mac: Option<(BuiltinKey, BuiltinMAC)>,
 ) -> SecurityResult<()> {
-  
-  let data = encoded_submessage.original_bytes.as_ref()
+  let data = encoded_submessage
+    .original_bytes
+    .as_ref()
     .ok_or_else(|| security_error!("The dog ate my submessage bytes."))?;
 
   // Validate the common MAC
@@ -73,7 +72,11 @@ pub(super) fn decode_submessage_gcm(
   // Destructure to get the data
   match &encoded_submessage.body {
     SubmessageBody::Security(SecuritySubmessage::SecureBody(
-      SecureBody { crypto_content: CryptoContent { data } }, _, )) => {
+      SecureBody {
+        crypto_content: CryptoContent { data },
+      },
+      _,
+    )) => {
       // Validate the receiver-specific MAC if one exists
       if let Some((receiver_specific_key, receiver_specific_mac)) = receiver_specific_key_and_mac {
         validate_mac(

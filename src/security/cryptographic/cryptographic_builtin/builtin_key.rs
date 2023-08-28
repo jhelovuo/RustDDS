@@ -47,7 +47,6 @@ impl BuiltinKey {
     }
   }
 
-
   // Rust `rand` library uses by default the 12-round chacha-algorithm, which is
   // "widely believed" to be secure.
   // The library documentation states that the generator may be upgraded, if it is
