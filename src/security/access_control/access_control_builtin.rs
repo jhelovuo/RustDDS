@@ -1,25 +1,25 @@
 use std::{collections::HashMap, ops::Not};
 
 use chrono::Utc;
-use bytes::Bytes;
 
 use crate::{
+  security::certificate::{Certificate, DistinguishedName},
   security::{authentication::IdentityHandle, SecurityError, SecurityResult},
+  //security::config::{other_config_error, parse_config_error, to_config_error_other,
+  // ConfigError},
   security_error,
 };
 use self::{
-  config_error::{other_config_error, parse_config_error, to_config_error_other, ConfigError},
   domain_governance_document::{DomainRule, TopicRule},
   domain_participant_permissions_document::{Action, DomainParticipantPermissions, Grant},
-  permissions_ca_certificate::{Certificate, DistinguishedName},
   types::Entity,
 };
 use super::{AccessControl, PermissionsHandle};
 
-mod config_error;
+//mod config_error; --> crate::security::config
 mod domain_governance_document;
 mod domain_participant_permissions_document;
-mod permissions_ca_certificate;
+//mod permissions_ca_certificate; --> crate::security::certificate
 mod s_mime_config_parser;
 
 mod local_entity_access_control;
@@ -205,20 +205,5 @@ impl AccessControlBuiltin {
           }
         )
       })
-  }
-}
-
-fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
-  match uri.split_once(':') {
-    Some(("data", content)) => Ok(Bytes::copy_from_slice(content.as_bytes())),
-    Some(("pkcs11", _)) => Err(other_config_error(
-      "Config URI schema 'pkcs11:' not implemented.".to_owned(),
-    )),
-    Some(("file", path)) => std::fs::read(path)
-      .map_err(to_config_error_other(&format!("I/O error reading {path}")))
-      .map(Bytes::from),
-    _ => Err(parse_config_error(
-      "Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned(),
-    )),
   }
 }

@@ -4,6 +4,8 @@ use crate::{
   security::{
     access_control::*,
     authentication::{authentication_builtin::HandshakeInfo, *},
+    certificate::*,
+    config::*,
     Authentication, *,
   },
   security_error,
@@ -14,6 +16,14 @@ use super::{
   AuthenticationBuiltin, BuiltinHandshakeState, LocalParticipantInfo, RemoteParticipantInfo,
 };
 
+// DDS Security spec v1.1
+// Section "9.3.1 Configuration" , Table 44
+
+const QOS_IDENTITY_CA_PROPERTY_NAME: &str = "dds.sec.auth.identity_ca";
+const QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME: &str = "dds.sec.auth.identity_certificate";
+const QOS_PRIVATE_KEY_PROPERTY_NAME: &str = "dds.sec.auth.private_key";
+const QOS_PASSWORD_PROPERTY_NAME: &str = "dds.sec.auth.password";
+
 impl Authentication for AuthenticationBuiltin {
   // Currently only mocked
   fn validate_local_identity(
@@ -23,6 +33,85 @@ impl Authentication for AuthenticationBuiltin {
     candidate_participant_guid: GUID,
   ) -> SecurityResult<(ValidationOutcome, IdentityHandle, GUID)> {
     // TODO 1: Verify identity certificate from PropertyQosPolicy
+    //
+    // Steps: (spec Table 52, row 1)
+    //
+    // Load config files from URI's given in PropertyQosPolicy
+    // * identity_ca - This is the authority that verifies the authenticity of
+    // remote (and our) permissions documents
+    // * private_key - Private half of the key that we use to authenticate
+    // our identity to others. Others have similar keys.
+    // * password - used for decrypting private key, if it is stored encrypted.
+    // * identity_certificate - document that contains our subject_name,
+    // public half of our identity authentication public key. This is signed by the
+    // identity_ca. The purpose of the signature is that, when we send our identity
+    // certificate to other Participants, they can verify (with their copy of the CA
+    // certificate) that the given public key and subject name belong together.
+    // The Domain Governance document gives permissions to subject names, and
+    // this binding confirms that the permissions are applicable to he holder of
+    // certain public-private-key pair holders.
+    //
+    // Validate signature of our identity_certificate with identity_ca.
+    // If it does not pass, our identity certificate is useless,
+    // because others would not accept it either.
+    //
+    // (Should also check if the certificate has been revoked.
+    // The CA certificate may have a revocation list and/or check an on-line OCSP
+    // server.)
+    //
+    // The returned IdentityHandle must be capable of
+    // * reading this participant's public key (from identity_certificate)
+    // * performing verify and sign operations with this participant's private key
+    // * accessing the participant GUID (candidate or adjusted??)
+
+    //TODO: These loading code snippets are too cut-and-paste. Copied from access
+    // control.
+    let identity_ca = participant_qos
+      .get_property(QOS_IDENTITY_CA_PROPERTY_NAME)
+      .and_then(|certificate_uri| {
+        read_uri(&certificate_uri).map_err(|conf_err| {
+          security_error!(
+            "Failed to read the identity CA certificate from {}: {:?}",
+            certificate_uri,
+            conf_err
+          )
+        })
+      })
+      .and_then(|certificate_contents_pem| {
+        Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
+      })?;
+
+    let identity_certificate = participant_qos
+      .get_property(QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME)
+      .and_then(|certificate_uri| {
+        read_uri(&certificate_uri).map_err(|conf_err| {
+          security_error!(
+            "Failed to read the DomainParticipant identity certificate from {}: {:?}",
+            certificate_uri,
+            conf_err
+          )
+        })
+      })
+      .and_then(|certificate_contents_pem| {
+        Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
+      })?;
+
+    /*
+      let private_key = participant_qos
+        .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
+        .and_then(|pem_uri| {
+          self.read_uri(&pem_uri).map_err(|conf_err| {
+            security_error!(
+              "Failed to read the DomainParticipant identity private key from {}: {:?}",
+              certificate_uri,
+              conf_err
+            )
+          })
+        })
+        .and_then(|private_key_pem| {
+          PrivateKey::from_pem(private_key_pem).map_err(|e| security_error!("{e:?}"))
+        })?;
+    */
 
     // TODO 2: Compute the new adjusted GUID
     let adjusted_guid = candidate_participant_guid;
@@ -283,7 +372,7 @@ impl Authentication for AuthenticationBuiltin {
         Ok((outcome, None))
       }
       other_state => {
-        // Unexptected state
+        // Unexpected state
         Err(security_error!(
           "Unexpected handshake state: {:?}",
           other_state

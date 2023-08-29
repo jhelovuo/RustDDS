@@ -8,7 +8,6 @@ use crate::{
       access_control_builtin::{
         domain_governance_document::DomainGovernanceDocument,
         domain_participant_permissions_document::DomainParticipantPermissions,
-        permissions_ca_certificate::{Certificate, DistinguishedName},
       },
       *,
     },
@@ -19,13 +18,14 @@ use crate::{
       },
       *,
     },
+    certificate::{Certificate, DistinguishedName},
+    config::*,
     *,
   },
   security_error,
 };
 use super::{
   domain_governance_document::{DomainRule, TopicRule},
-  read_uri,
   s_mime_config_parser::SignedDocument,
   types::{
     BuiltinPermissionsCredentialToken, BuiltinPermissionsToken,

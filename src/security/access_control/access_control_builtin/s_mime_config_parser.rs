@@ -26,12 +26,12 @@ use cms::{
 use der::{Decode, Encode};
 use ring::{digest, signature};
 
-use super::{
-  config_error::{
+use crate::security::{
+  certificate::Certificate,
+  config::{
     other_config_error, pkcs7_config_error, to_config_error_other, to_config_error_pkcs7,
     ConfigError,
   },
-  permissions_ca_certificate::Certificate,
 };
 
 #[derive(Debug)]
@@ -207,12 +207,10 @@ fn bytes_unix2dos(unix: Vec<u8>) -> Result<Vec<u8>, ConfigError> {
 #[cfg(test)]
 mod tests {
   use super::{
-    super::{
-      domain_governance_document::*, domain_participant_permissions_document::*,
-      permissions_ca_certificate::*,
-    },
+    super::{domain_governance_document::*, domain_participant_permissions_document::*},
     *,
   };
+  use crate::security::certificate::*;
 
   #[test]
   pub fn parse_example() {

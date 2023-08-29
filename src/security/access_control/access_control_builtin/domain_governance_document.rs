@@ -2,7 +2,8 @@ use serde_xml_rs::from_str;
 use glob::*;
 pub use xml::{BasicProtectionKind, ProtectionKind};
 
-use super::{config_error::ConfigError, domain_participant_permissions_document::DomainIds};
+use crate::security::config::ConfigError;
+use super::domain_participant_permissions_document::DomainIds;
 
 // This module provides access (parsing and query) to Domain Governance
 // Document as specified in Section "9.4.1.2 Domain Governance Document" of

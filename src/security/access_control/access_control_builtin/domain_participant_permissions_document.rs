@@ -3,9 +3,9 @@ use std::fmt::Debug;
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use glob::Pattern;
 
-use super::{
-  config_error::{parse_config_error, to_config_error_parse, ConfigError},
-  permissions_ca_certificate::DistinguishedName,
+use crate::security::{
+  certificate::DistinguishedName,
+  config::{parse_config_error, to_config_error_parse, ConfigError},
 };
 
 // A list of Grants
