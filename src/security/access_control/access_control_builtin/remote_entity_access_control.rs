@@ -69,11 +69,6 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     // This method differs from the other similar ones because of the possibility of
     // a relay only datareader
 
-    // TODO: remove after testing
-    if true {
-      return Ok(false);
-    }
-
     let grant = self.get_grant(&permissions_handle)?;
     let domain_rule = self.get_domain_rule(&permissions_handle)?;
 

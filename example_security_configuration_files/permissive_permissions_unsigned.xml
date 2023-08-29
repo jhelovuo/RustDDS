@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170901/omg_shared_ca_permissions.xsd">
+    <permissions>
+        <grant name="ExamplePermission">
+            <subject_name>CN=example_permissions_common_name</subject_name>
+            <validity>
+                <not_before>2023-01-01T00:00:00</not_before>
+                <not_after>9999-01-01T00:00:00</not_after>
+            </validity>
+            <allow_rule>
+                <domains>
+                    <id>0</id>
+                </domains>
+                <publish>
+                    <topics>
+                        <topic>example_topic</topic>
+                    </topics>
+                </publish>
+                <subscribe>
+                    <topics>
+                        <topic>example_topic</topic>
+                    </topics>
+                </subscribe>
+                <relay>
+                    <topics>
+                        <topic>example_topic</topic>
+                    </topics>
+                </relay>
+            </allow_rule>
+            <default>ALLOW</default>
+        </grant>
+    </permissions>
+</dds>

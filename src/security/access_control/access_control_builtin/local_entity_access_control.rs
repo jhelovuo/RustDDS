@@ -163,8 +163,6 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
            ..
          }| topic_security_attributes,
       )
-      // TODO remove after testing
-      .or(Ok(TopicSecurityAttributes::empty()))
   }
 
   // Currently only mocked, but ready after removing the last line
@@ -173,10 +171,7 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     topic_name: String,
   ) -> SecurityResult<EndpointSecurityAttributes> {
-    self
-      .get_endpoint_security_attributes(permissions_handle, &topic_name)
-      // TODO remove after testing
-      .or(Ok(EndpointSecurityAttributes::empty()))
+    self.get_endpoint_security_attributes(permissions_handle, &topic_name)
   }
 
   // Currently only mocked, but ready after removing the last line
@@ -185,9 +180,6 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     topic_name: String,
   ) -> SecurityResult<EndpointSecurityAttributes> {
-    self
-      .get_endpoint_security_attributes(permissions_handle, &topic_name)
-      // TODO remove after testing
-      .or(Ok(EndpointSecurityAttributes::empty()))
+    self.get_endpoint_security_attributes(permissions_handle, &topic_name)
   }
 }

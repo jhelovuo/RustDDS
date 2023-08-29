@@ -25,6 +25,7 @@ use crate::{
 };
 use super::{
   domain_governance_document::{DomainRule, TopicRule},
+  read_uri,
   s_mime_config_parser::SignedDocument,
   types::{
     BuiltinPermissionsCredentialToken, BuiltinPermissionsToken,
@@ -43,11 +44,6 @@ impl AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
   ) -> SecurityResult<()> {
-    // TODO: remove after testing
-    if true {
-      return Ok(());
-    }
-
     let grant = self.get_grant(&permissions_handle)?;
     let DomainRule {
       // corresponds to is_access_protected
@@ -78,7 +74,6 @@ impl AccessControlBuiltin {
 
 // 9.4.3
 impl ParticipantAccessControl for AccessControlBuiltin {
-  // Currently only mocked
   fn validate_local_permissions(
     &mut self,
     auth_plugin: &dyn Authentication,
@@ -86,17 +81,10 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     domain_id: u16,
     participant_qos: &QosPolicies,
   ) -> SecurityResult<PermissionsHandle> {
-    // TODO: actual implementation
-
-    // TODO remove after testing
-    if true {
-      return Ok(self.generate_permissions_handle());
-    }
-
     let permissions_ca_certificate = participant_qos
       .get_property(QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME)
       .and_then(|certificate_uri| {
-        self.read_uri(&certificate_uri).map_err(|conf_err| {
+        read_uri(&certificate_uri).map_err(|conf_err| {
           security_error!(
             "Failed to read the permissions certificate from {}: {:?}",
             certificate_uri,
@@ -111,7 +99,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     let domain_rule = participant_qos
       .get_property(QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME)
       .and_then(|governance_uri| {
-        self.read_uri(&governance_uri).map_err(|conf_err| {
+        read_uri(&governance_uri).map_err(|conf_err| {
           security_error!(
             "Failed to read the domain governance document from {}: {:?}",
             governance_uri,
@@ -142,12 +130,14 @@ impl ParticipantAccessControl for AccessControlBuiltin {
           .data_holder
           .get_property(CERT_SN_PROPERTY_NAME)
       })
+      //TODO remove the or after valid IdentityTokens have been added to tests
+      .or(Ok("CN=example_permissions_common_name".into()))
       .and_then(|name| DistinguishedName::parse(&name).map_err(|e| security_error!("{e:?}")))?;
 
     let domain_participant_permissions = participant_qos
       .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|permissions_uri| {
-        self.read_uri(&permissions_uri).map_err(|conf_err| {
+        read_uri(&permissions_uri).map_err(|conf_err| {
           security_error!(
             "Failed to read the domain participant permissions from {}: {:?}",
             permissions_uri,
@@ -192,7 +182,6 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     Ok(permissions_handle)
   }
 
-  // Currently only mocked
   fn validate_remote_permissions(
     &mut self,
     _auth_plugin: &dyn Authentication,
@@ -201,13 +190,6 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     remote_permissions_token: &PermissionsToken,
     remote_credential_token: &AuthenticatedPeerCredentialToken,
   ) -> SecurityResult<PermissionsHandle> {
-    // TODO: actual implementation
-
-    // TODO remove after testing
-    if true {
-      return Ok(self.generate_permissions_handle());
-    }
-
     let local_permissions_handle = self.get_permissions_handle(&local_identity_handle)?;
 
     // Move the following check here from check_remote_ methods, as here we have
@@ -297,21 +279,11 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     // methods, as there we have access to the tokens: "If the PluginClassName
     // or the MajorVersion of the local permissions_token differ from those in
     // the remote_permissions_token, the operation shall return FALSE."
+
     self.check_participant(permissions_handle, domain_id)
   }
 
   fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken> {
-    // TODO remove after testing
-    if true {
-      return Ok(
-        BuiltinPermissionsToken {
-          permissions_ca_subject_name: None, // TODO
-          permissions_ca_algorithm: None,    // TODO
-        }
-        .into(),
-      );
-    }
-
     self
       .get_permissions_ca_certificate(&handle)
       .map(|certificate| {
@@ -327,16 +299,6 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     &self,
     handle: PermissionsHandle,
   ) -> SecurityResult<PermissionsCredentialToken> {
-    // TODO remove after testing
-    if true {
-      return Ok(
-        BuiltinPermissionsCredentialToken {
-          permissions_document: "TODO: remove after testing".into(),
-        }
-        .into(),
-      );
-    }
-
     self
       .get_permissions_document_string(&handle)
       .cloned()
@@ -352,52 +314,44 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     todo!();
   }
 
-  // Currently only mocked, but ready after removing the last line
   fn get_participant_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
   ) -> SecurityResult<ParticipantSecurityAttributes> {
-    self
-      .get_domain_rule(&permissions_handle)
-      .map(
-        |DomainRule {
-           allow_unauthenticated_participants,
-           enable_join_access_control,
-           discovery_protection_kind,
-           liveliness_protection_kind,
-           rtps_protection_kind,
-           ..
-         }| {
-          let (is_rtps_protected, is_rtps_encrypted, is_rtps_origin_authenticated) =
-            rtps_protection_kind.to_security_attributes_format();
-          let (is_discovery_protected, is_discovery_encrypted, is_discovery_origin_authenticated) =
-            discovery_protection_kind.to_security_attributes_format();
-          let (
-            is_liveliness_protected,
+    self.get_domain_rule(&permissions_handle).map(
+      |DomainRule {
+         allow_unauthenticated_participants,
+         enable_join_access_control,
+         discovery_protection_kind,
+         liveliness_protection_kind,
+         rtps_protection_kind,
+         ..
+       }| {
+        let (is_rtps_protected, is_rtps_encrypted, is_rtps_origin_authenticated) =
+          rtps_protection_kind.to_security_attributes_format();
+        let (is_discovery_protected, is_discovery_encrypted, is_discovery_origin_authenticated) =
+          discovery_protection_kind.to_security_attributes_format();
+        let (is_liveliness_protected, is_liveliness_encrypted, is_liveliness_origin_authenticated) =
+          liveliness_protection_kind.to_security_attributes_format();
+
+        ParticipantSecurityAttributes {
+          allow_unauthenticated_participants: *allow_unauthenticated_participants,
+          is_access_protected: *enable_join_access_control,
+          is_discovery_protected,
+          is_liveliness_protected,
+          is_rtps_protected,
+          plugin_participant_attributes: BuiltinPluginParticipantSecurityAttributes {
+            is_discovery_encrypted,
+            is_discovery_origin_authenticated,
             is_liveliness_encrypted,
             is_liveliness_origin_authenticated,
-          ) = liveliness_protection_kind.to_security_attributes_format();
-
-          ParticipantSecurityAttributes {
-            allow_unauthenticated_participants: *allow_unauthenticated_participants,
-            is_access_protected: *enable_join_access_control,
-            is_discovery_protected,
-            is_liveliness_protected,
-            is_rtps_protected,
-            plugin_participant_attributes: BuiltinPluginParticipantSecurityAttributes {
-              is_discovery_encrypted,
-              is_discovery_origin_authenticated,
-              is_liveliness_encrypted,
-              is_liveliness_origin_authenticated,
-              is_rtps_encrypted,
-              is_rtps_origin_authenticated,
-            }
-            .into(),
-            ac_participant_properties: Vec::new(),
+            is_rtps_encrypted,
+            is_rtps_origin_authenticated,
           }
-        },
-      )
-      // TODO Remove after testing
-      .or(Ok(ParticipantSecurityAttributes::empty()))
+          .into(),
+          ac_participant_properties: Vec::new(),
+        }
+      },
+    )
   }
 }

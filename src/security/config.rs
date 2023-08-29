@@ -36,17 +36,17 @@ pub fn test_config() -> SecurityConfig {
     // For the access control plugin
     security::types::Property {
       name: "dds.sec.access.permissions_ca".to_string(),
-      value: "file:permissions_ca.pem".to_string(),
+      value: "file:example_security_configuration_files/permissions_ca.pem".to_string(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.access.governance".to_string(),
-      value: "file:governance.smime".to_string(),
+      value: "file:example_security_configuration_files/permissive_governance.p7s".to_string(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.access.permissions".to_string(),
-      value: "file:participant1_permissions.smime".to_string(),
+      value: "file:example_security_configuration_files/permissive_permissions.p7s".to_string(),
       propagate: false,
     },
   ];

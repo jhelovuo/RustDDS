@@ -139,21 +139,6 @@ impl AccessControlBuiltin {
       })
   }
 
-  fn read_uri(&self, uri: &str) -> Result<Bytes, ConfigError> {
-    match uri.split_once(':') {
-      Some(("data", content)) => Ok(Bytes::copy_from_slice(content.as_bytes())),
-      Some(("pkcs11", _)) => Err(other_config_error(
-        "Config URI schema 'pkcs11:' not implemented.".to_owned(),
-      )),
-      Some(("file", path)) => std::fs::read(path)
-        .map_err(to_config_error_other(&format!("I/O error reading {path}")))
-        .map(Bytes::from),
-      _ => Err(parse_config_error(
-        "Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned(),
-      )),
-    }
-  }
-
   // check_create_ and check_remote_ methods are very similar
   fn check_entity(
     &self,
@@ -164,11 +149,6 @@ impl AccessControlBuiltin {
     data_tags: &[(&str, &str)],
     entity_kind: &Entity,
   ) -> SecurityResult<()> {
-    // TODO: remove after testing
-    if true {
-      return Ok(());
-    }
-
     let grant = self.get_grant(&permissions_handle)?;
     let domain_rule = self.get_domain_rule(&permissions_handle)?;
 
@@ -225,5 +205,20 @@ impl AccessControlBuiltin {
           }
         )
       })
+  }
+}
+
+fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
+  match uri.split_once(':') {
+    Some(("data", content)) => Ok(Bytes::copy_from_slice(content.as_bytes())),
+    Some(("pkcs11", _)) => Err(other_config_error(
+      "Config URI schema 'pkcs11:' not implemented.".to_owned(),
+    )),
+    Some(("file", path)) => std::fs::read(path)
+      .map_err(to_config_error_other(&format!("I/O error reading {path}")))
+      .map(Bytes::from),
+    _ => Err(parse_config_error(
+      "Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned(),
+    )),
   }
 }

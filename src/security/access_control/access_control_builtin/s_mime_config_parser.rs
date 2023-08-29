@@ -50,11 +50,8 @@ impl SignedDocument {
       [doc_content, signature] => {
         let mut content = Vec::<u8>::from(doc_content.raw_bytes);
 
-        if content.ends_with(b"\n\n") {
-          // Remove an extra newline at end. mailparse seems to add this.
-          // In case mailparse stops doing it, this needs to be removed.
-          content.pop();
-        }
+        // Remove an extra newline at end. mailparse seems to add this.
+        content.pop();
 
         // OpenSSL has converted to MS-DOS line endings when MIME encoding, and
         // the contents has has been computed from that.
@@ -172,11 +169,27 @@ impl SignedDocument {
     // digest of the complete DER encoding of the SignedAttrs value
     // contained in the signedAttrs field.
 
+    // TODO these oids appear when testing, but are they absolutely correct or can
+    // there be more corresponding to the same algorithm?
+    const ECDSA_WITH_SHA256_OID: &str = "1.2.840.10045.4.3.2";
+    const RSA_PKCS1: &str = "1.2.840.113549.1.1.1";
+
+    //TODO maybe find a better way to determine the algorithm
+    let verify_algorithm: &'static dyn ring::signature::VerificationAlgorithm =
+      match format!("{}", signer_info.signature_algorithm.oid).as_str() {
+        ECDSA_WITH_SHA256_OID => &signature::ECDSA_P256_SHA256_ASN1,
+        //TODO for some reason this is not  working, even though the basic RSA does
+        RSA_PKCS1 => &signature::RSA_PSS_2048_8192_SHA256,
+        other => Err(ConfigError::Security(format!(
+          "Unknown signature algorithm oid: {other}"
+        )))?,
+      };
+
     certificate
       .verify_signed_data_with_algorithm(
         signed_attributes_der,
         signer_info.signature.as_bytes(),
-        &signature::ECDSA_P256_SHA256_ASN1, // TODO: Hardwired algorithm
+        verify_algorithm,
       )
       .map_err(ConfigError::Security)
       .map(|()| self.content.clone())
