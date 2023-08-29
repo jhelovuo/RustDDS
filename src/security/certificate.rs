@@ -17,7 +17,8 @@
 // Permissions documents. The verification of the two can use the same or
 // different Certificate instances.
 
-use x509_certificate::{certificate::CapturedX509Certificate, EcdsaCurve, KeyAlgorithm};
+use x509_certificate::{certificate::CapturedX509Certificate, EcdsaCurve, KeyAlgorithm,
+  signing::InMemorySigningKeyPair };
 use x509_cert;
 use der::Decode;
 
@@ -145,6 +146,22 @@ impl fmt::Display for DistinguishedName {
   }
 }
 
+#[derive(Debug)]
+pub struct PrivateKey {
+  priv_key: InMemorySigningKeyPair,
+}
+
+impl PrivateKey {
+  pub fn from_pem(pem_data: impl AsRef<[u8]>) -> Result<Self, ConfigError> {
+    let priv_key = InMemorySigningKeyPair::from_pkcs8_pem( pem_data.as_ref())
+    .map_err(to_config_error_parse("Private key parse error"))?;
+
+    Ok(PrivateKey { priv_key })
+  }
+}
+
+
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -165,5 +182,20 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
     let cert = Certificate::from_pem(cert_pem).unwrap();
 
     println!("{:?}", cert);
+  }
+
+
+  #[test]
+  pub fn parse_private_key() {
+    let priv_key_pem = r#"-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgaPBddesE0rHiP5/c
++djUjctfNoMAa5tNxOdged9AQtOhRANCAATKbyUP/dWap5kUbXky9qmhBc9ne0hg
+EEJPTyIYWQldbZS8GH/4SOMViyWhL/BcSU48V0RidVPvyKqqiLyVaVmk
+-----END PRIVATE KEY-----
+"#;
+
+    let key = PrivateKey::from_pem(priv_key_pem).unwrap();
+
+    println!("{:?}", key);
   }
 }
