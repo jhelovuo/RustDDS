@@ -24,7 +24,8 @@ use der::Decode;
 use crate::security::authentication::authentication_builtin::types::{
   CertificateAlgorithm, RSA_2048_KEY_LENGTH,
 };
-use super::config_error::{to_config_error_parse, ConfigError};
+use crate::security::config::{to_config_error_parse, ConfigError};
+
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
 // so that we can keep track of what operations we use.

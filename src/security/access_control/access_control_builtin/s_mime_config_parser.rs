@@ -26,13 +26,14 @@ use cms::{
 use der::{Decode, Encode};
 use ring::{digest, signature};
 
-use super::{
-  config_error::{
-    other_config_error, pkcs7_config_error, to_config_error_other, to_config_error_pkcs7,
-    ConfigError,
-  },
-  permissions_ca_certificate::Certificate,
+
+use crate::security::config::{
+  other_config_error, 
+  to_config_error_other, to_config_error_pkcs7,
+  pkcs7_config_error,
+  ConfigError
 };
+use crate::security::certificate::Certificate;
 
 #[derive(Debug)]
 pub struct SignedDocument {
@@ -196,10 +197,10 @@ mod tests {
   use super::{
     super::{
       domain_governance_document::*, domain_participant_permissions_document::*,
-      permissions_ca_certificate::*,
     },
     *,
   };
+  use crate::security::certificate::*;
 
   #[test]
   pub fn parse_example() {

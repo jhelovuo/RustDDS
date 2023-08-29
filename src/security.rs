@@ -7,6 +7,7 @@ pub mod access_control;
 // TODO: Remove this when getting rid of mock implementations.
 #[allow(unused_variables)]
 pub mod authentication;
+mod certificate;
 pub mod config;
 // TODO: Remove this when getting rid of mock implementations.
 #[allow(unused_variables)]

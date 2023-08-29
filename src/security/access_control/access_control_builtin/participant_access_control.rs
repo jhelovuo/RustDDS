@@ -8,7 +8,6 @@ use crate::{
       access_control_builtin::{
         domain_governance_document::DomainGovernanceDocument,
         domain_participant_permissions_document::DomainParticipantPermissions,
-        permissions_ca_certificate::{Certificate, DistinguishedName},
       },
       *,
     },
@@ -19,6 +18,8 @@ use crate::{
       },
       *,
     },
+    certificate::{Certificate, DistinguishedName},
+    config::*,
     *,
   },
   security_error,
@@ -96,7 +97,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     let permissions_ca_certificate = participant_qos
       .get_property(QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME)
       .and_then(|certificate_uri| {
-        self.read_uri(&certificate_uri).map_err(|conf_err| {
+        read_uri(&certificate_uri).map_err(|conf_err| {
           security_error!(
             "Failed to read the permissions certificate from {}: {:?}",
             certificate_uri,
@@ -111,7 +112,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     let domain_rule = participant_qos
       .get_property(QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME)
       .and_then(|governance_uri| {
-        self.read_uri(&governance_uri).map_err(|conf_err| {
+        read_uri(&governance_uri).map_err(|conf_err| {
           security_error!(
             "Failed to read the domain governance document from {}: {:?}",
             governance_uri,
@@ -147,7 +148,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     let domain_participant_permissions = participant_qos
       .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|permissions_uri| {
-        self.read_uri(&permissions_uri).map_err(|conf_err| {
+        read_uri(&permissions_uri).map_err(|conf_err| {
           security_error!(
             "Failed to read the domain participant permissions from {}: {:?}",
             permissions_uri,

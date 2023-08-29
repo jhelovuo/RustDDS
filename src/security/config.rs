@@ -61,3 +61,72 @@ pub fn test_config() -> SecurityConfig {
     properties,
   }
 }
+
+use bytes::Bytes;
+
+pub(crate) fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
+  match uri.split_once(':') {
+    Some(("data", content)) => Ok(Bytes::copy_from_slice(content.as_bytes())),
+    Some(("pkcs11", _)) => Err(other_config_error(
+      "Config URI schema 'pkcs11:' not implemented.".to_owned(),
+    )),
+    Some(("file", path)) => std::fs::read(path)
+      .map_err(to_config_error_other(&format!("I/O error reading {path}")))
+      .map(Bytes::from),
+    _ => Err(parse_config_error(
+      "Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned(),
+    )),
+  }
+}
+
+use std::fmt::Debug;
+
+#[derive(Debug)]
+pub enum ConfigError {
+  Parse(String),
+  Pkcs7(String),
+  Security(String),
+  Other(String),
+}
+
+impl From<glob::PatternError> for ConfigError {
+  fn from(e: glob::PatternError) -> ConfigError {
+    ConfigError::Parse(format!("Bad glob pattern: {e:?}"))
+  }
+}
+
+impl From<serde_xml_rs::Error> for ConfigError {
+  fn from(e: serde_xml_rs::Error) -> ConfigError {
+    ConfigError::Parse(format!("XML parse error: {e:?}"))
+  }
+}
+
+pub(crate) fn to_config_error_other<E: Debug + 'static>(
+  text: &str,
+) -> impl FnOnce(E) -> ConfigError + '_ {
+  move |e: E| ConfigError::Other(format!("{}: {:?}", text, e))
+}
+
+pub(crate) fn to_config_error_pkcs7<E: Debug + 'static>(
+  text: &str,
+) -> impl FnOnce(E) -> ConfigError + '_ {
+  move |e: E| ConfigError::Pkcs7(format!("{}: {:?}", text, e))
+}
+
+pub(crate) fn to_config_error_parse<E: Debug + 'static>(
+  text: &str,
+) -> impl FnOnce(E) -> ConfigError + '_ {
+  move |e: E| ConfigError::Parse(format!("{}: {:?}", text, e))
+}
+
+pub(crate) fn parse_config_error(text: String) -> ConfigError {
+  ConfigError::Parse(text)
+}
+
+pub(crate) fn other_config_error(text: String) -> ConfigError {
+  ConfigError::Other(text)
+}
+
+pub(crate) fn pkcs7_config_error(text: String) -> ConfigError {
+  ConfigError::Pkcs7(text)
+}

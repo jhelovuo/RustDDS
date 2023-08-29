@@ -7,12 +7,12 @@ use crate::{
   security::{
     access_control::{PermissionsCredentialToken, PermissionsToken},
     authentication::authentication_builtin::types::CertificateAlgorithm,
+    certificate::DistinguishedName,
     DataHolder, PluginEndpointSecurityAttributesMask, PluginParticipantSecurityAttributesMask,
     PluginSecurityAttributesMask, Property, SecurityError,
   },
   security_error,
 };
-use super::permissions_ca_certificate::DistinguishedName;
 
 // 9.4.2.3
 // This is also used in the builtin cryptographic plugin, hence pub(in
