@@ -179,7 +179,7 @@ impl SignedDocument {
       match format!("{}", signer_info.signature_algorithm.oid).as_str() {
         ECDSA_WITH_SHA256_OID => &signature::ECDSA_P256_SHA256_ASN1,
         //TODO for some reason this is not  working, even though the basic RSA does
-        RSA_PKCS1 => &signature::RSA_PSS_2048_8192_SHA256,
+        RSA_PKCS1 =>Err(ConfigError::Security("RSA-PSS not yet supported.".into()))?, // &signature::RSA_PSS_2048_8192_SHA256,
         other => Err(ConfigError::Security(format!(
           "Unknown signature algorithm oid: {other}"
         )))?,

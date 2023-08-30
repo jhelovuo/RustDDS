@@ -15,28 +15,28 @@ pub fn test_config() -> SecurityConfig {
     // For the authentication plugin
     security::types::Property {
       name: "dds.sec.auth.identity_ca".to_string(),
-      value: "file:example_security_configuration_files/permissions_ca.pem".to_string(),
+      value: "file:example_security_configuration_files/identity_ca_certificate.pem".to_string(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.auth.private_key".to_string(),
-      value: "file:identity_ca_private_key.pem".to_string(),
+      value: "file:example_security_configuration_files/identity_ca_private_key.pem".to_string(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.auth.password".to_string(),
-      value: "passwd".to_string(),
+      value: "password123".to_string(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.auth.identity_certificate".to_string(),
-      value: "file:participant1_identity_cert.pem".to_string(),
+      value: "file:example_security_configuration_files/participant1_certificate.pem".to_string(),
       propagate: false,
     },
     // For the access control plugin
     security::types::Property {
       name: "dds.sec.access.permissions_ca".to_string(),
-      value: "file:example_security_configuration_files/permissions_ca.pem".to_string(),
+      value: "file:example_security_configuration_files/permissions_ca_certificate.pem".to_string(),
       propagate: false,
     },
     security::types::Property {
