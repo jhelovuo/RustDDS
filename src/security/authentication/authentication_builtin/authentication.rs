@@ -4,7 +4,10 @@ use ring::digest;
 use crate::{
   security::{
     access_control::*,
-    authentication::{*, authentication_builtin::{HandshakeInfo, types::CertificateAlgorithm},},
+    authentication::{*, 
+      authentication_builtin::{
+        HandshakeInfo, types::{CertificateAlgorithm, IDENTITY_TOKEN_CLASS_ID}},
+    },
     certificate::*,
     config::*,
     Authentication, *,
@@ -204,7 +207,9 @@ impl Authentication for AuthenticationBuiltin {
     Ok(())
   }
 
-  // Currently only mocked
+  // The behaviour is specified in
+  // DDS Security spec v1.1 Section "9.3.3 DDS:Auth:PKI-DH plugin behavior"
+  // Table 52, row "validate_remote_identity"
   fn validate_remote_identity(
     &mut self,
     remote_auth_request_token: Option<AuthRequestMessageToken>,
@@ -224,7 +229,12 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
 
-    // TODO 1: compare remote identity token to the local one
+    //let local_identity_token = self.get_identity_token(local_identity_handle)?;
+
+    if remote_identity_token.class_id() != IDENTITY_TOKEN_CLASS_ID {
+      //TODO: We are really supposed to ignore differences is MinorVersion of class_id string
+      return Err(security_error!("Remote identity class_id is {:?}", remote_identity_token.class_id()))
+    }
 
     // Since built-in authentication does not use AuthRequestMessageToken, we ignore
     // them completely. Always return the token as None.
@@ -233,20 +243,21 @@ impl Authentication for AuthenticationBuiltin {
     // The initial handshake state depends on the lexicographic ordering of the
     // participant GUIDs. Note that the derived Ord trait produces the required
     // lexicographic ordering.
-    let handshake_state = match local_info.guid.prefix.cmp(&remote_participant_guidp) {
-      Ordering::Less => {
-        // Our GUID is lower than remote's. We should send the request to remote
-        BuiltinHandshakeState::PendingRequestSend
-      }
-      Ordering::Greater => {
-        // Our GUID is higher than remote's. We should wait for the request from remote
-        BuiltinHandshakeState::PendingRequestMessage
-      }
-      Ordering::Equal => {
-        // This is an error, comparing with ourself.
-        return Err(security_error!("Remote GUID is equal to the local GUID"));
-      }
-    };
+    let (handshake_state, validation_outcome) = 
+      match local_info.guid.prefix.cmp(&remote_participant_guidp) {
+        Ordering::Less => {
+          // Our GUID is lower than remote's. We should send the request to remote
+          (BuiltinHandshakeState::PendingRequestSend, ValidationOutcome::PendingHandshakeRequest)
+        }
+        Ordering::Greater => {
+          // Our GUID is higher than remote's. We should wait for the request from remote
+          (BuiltinHandshakeState::PendingRequestMessage, ValidationOutcome::PendingHandshakeMessage)
+        }
+        Ordering::Equal => {
+          // This is an error, comparing with ourself.
+          return Err(security_error!("Remote GUID is equal to the local GUID"));
+        }
+      };
 
     // Get new identity handle for the remote and associate remote info with it
     let remote_identity_handle = self.get_new_identity_handle();
@@ -265,17 +276,6 @@ impl Authentication for AuthenticationBuiltin {
     self
       .remote_participant_infos
       .insert(remote_identity_handle, remote_info);
-
-    // Map the handshake state to validation outcome of the plugin interface
-    let validation_outcome = match handshake_state {
-      BuiltinHandshakeState::PendingRequestSend => ValidationOutcome::PendingHandshakeRequest,
-      BuiltinHandshakeState::PendingRequestMessage => ValidationOutcome::PendingHandshakeMessage,
-      _ => {
-        // Should not be anything else. Panic so we don't continue with inconsistent
-        // authentication state
-        panic!("Internal plugin error - unexpected handshake state");
-      }
-    };
 
     Ok((
       validation_outcome,

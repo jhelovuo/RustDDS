@@ -6,7 +6,7 @@ use crate::{
   security_error,
 };
 
-const IDENTITY_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
+pub const IDENTITY_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
 
 // Expected property names in IdentityToken
 pub(in crate::security) const CERT_SN_PROPERTY_NAME: &str = "dds.cert.sn";
