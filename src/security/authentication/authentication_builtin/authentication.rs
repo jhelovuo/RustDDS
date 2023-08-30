@@ -1,16 +1,17 @@
 use std::cmp::Ordering;
 
 use ring::digest;
+use speedy::Writable;
+use bytes::Bytes;
 
 use crate::{
   security::{
     access_control::*,
-    authentication::{
+    authentication::{*,
       authentication_builtin::{
-        types::{CertificateAlgorithm, IDENTITY_TOKEN_CLASS_ID},
-        HandshakeInfo,
-      },
-      *,
+        HandshakeInfo, types::{
+          CertificateAlgorithm, IDENTITY_TOKEN_CLASS_ID, HANDSHAKE_REQUEST_CLASS_ID,
+          BuiltinHandshakeMessageToken,}},
     },
     certificate::*,
     config::*,
@@ -290,6 +291,7 @@ impl Authentication for AuthenticationBuiltin {
       handshake: HandshakeInfo {
         state: handshake_state,
         latest_sent_message: None,
+        my_dh_keys: None,
         challenge1: None,
         challenge2: None,
         shared_secret: None,
@@ -306,7 +308,7 @@ impl Authentication for AuthenticationBuiltin {
     ))
   }
 
-  // Currently only mocked
+  // 
   fn begin_handshake_request(
     &mut self,
     initiator_identity_handle: IdentityHandle, // Local
@@ -330,11 +332,57 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
 
-    // TODO 1: construct the handshake request message token
-    let handshake_request = HandshakeMessageToken::dummy();
+    let my_id_certificate_text = Bytes::from_static(b"dummy"); // TODO: Where to get this? Access control loads it, not us.
+    let my_permissions_doc_text= Bytes::from_static(b"dummy"); // TODO: Where to get this? Access control loads it, not us.
+    let pdata_bytes = Bytes::from(serialized_local_participant_data);
+
+    let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
+    let kagree_algo = Bytes::from_static(b"ECDH+prime256v1-CEUM"); // TODO: do not hardcode this, get from id cert
+
+    // temp structure just to produce hash
+    let c_properties : Vec<BinaryProperty> =
+      vec![
+        BinaryProperty::with_propagate("c.id", my_id_certificate_text.clone()),
+        BinaryProperty::with_propagate("c.perm", my_permissions_doc_text.clone()),
+        BinaryProperty::with_propagate("c.pdata", pdata_bytes.clone()),
+        BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
+        BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone())
+      ];
+    let c_properties_bytes = c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
+    let c_properties_hash = digest::digest(&digest::SHA256, &c_properties_bytes);
+
+    use x509_certificate::algorithm::{KeyAlgorithm, EcdsaCurve};
+    use x509_certificate::signing::{InMemorySigningKeyPair, Sign};
+
+    // Generate new, random Diffie-Hellman key pair "dh1"
+    let (dh1_key_pair, _keypair_pkcs8) = 
+      InMemorySigningKeyPair::generate_random(KeyAlgorithm::Ecdsa( EcdsaCurve::Secp256r1 ))?;
+
+    // This is an initiator-generated 256-bit nonce
+    let challenge1_bytes = rand::random::<[u8; 32]>();
+
+    let handshake_request_builtin = BuiltinHandshakeMessageToken {
+      class_id: HANDSHAKE_REQUEST_CLASS_ID.to_string(),
+      c_id: Some(my_id_certificate_text),
+      c_perm: Some(my_permissions_doc_text),
+      c_pdata: Some(pdata_bytes),
+      c_dsign_algo: Some(dsign_algo),
+      c_kagree_algo: Some(kagree_algo),
+      ocsp_status: None, // Not implemented
+      hash_c1: Some(Bytes::copy_from_slice(c_properties_hash.as_ref())),
+      dh1: Some(dh1_key_pair.public_key_data()),
+      hash_c2: None, // not used in request
+      dh2: None, // not used in request
+      challenge1: Some(Bytes::copy_from_slice(challenge1_bytes.as_ref())),
+      challenge2: None, // not used in request
+      signature: None, // not used in request
+    };
+
+    let handshake_request = HandshakeMessageToken::from(handshake_request_builtin);
 
     // Change handshake state to pending reply message & save the request token
     remote_info.handshake.state = BuiltinHandshakeState::PendingReplyMessage;
+    remote_info.handshake.my_dh_keys = Some(dh1_key_pair);
     remote_info.handshake.latest_sent_message = Some(handshake_request.clone());
 
     // Create a new handshake handle & map it to remotes identity handle

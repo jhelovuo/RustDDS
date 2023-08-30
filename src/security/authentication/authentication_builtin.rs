@@ -48,9 +48,12 @@ struct RemoteParticipantInfo {
   handshake: HandshakeInfo,
 }
 
+use x509_certificate::signing::{InMemorySigningKeyPair};
+
 struct HandshakeInfo {
   state: BuiltinHandshakeState,
   latest_sent_message: Option<HandshakeMessageToken>,
+  my_dh_keys: Option<InMemorySigningKeyPair>, // This is dh1 or dh2, whichever we generated ourself
   challenge1: Option<Bytes>,
   challenge2: Option<Bytes>,
   shared_secret: Option<SharedSecret>,
