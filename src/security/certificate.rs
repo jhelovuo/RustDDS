@@ -21,10 +21,12 @@ use x509_certificate::{
   certificate::CapturedX509Certificate, signing::InMemorySigningKeyPair, EcdsaCurve, KeyAlgorithm,
 };
 use der::Decode;
+use bcder::{encode::Values, Mode};
 
 use crate::security::{
   authentication::authentication_builtin::types::{CertificateAlgorithm, RSA_2048_KEY_LENGTH},
-  config::{to_config_error_parse, ConfigError},
+  config::{to_config_error_other, to_config_error_parse, ConfigError},
+  types::{security_error, SecurityResult},
 };
 
 // This is mostly a wrapper around
@@ -51,6 +53,16 @@ impl Certificate {
 
   pub fn subject_name(&self) -> &DistinguishedName {
     &self.subject_name
+  }
+
+  pub fn subject_name_der(&self) -> Result<Vec<u8>, ConfigError> {
+    let er = &self.cert.subject_name().encode_ref();
+    let mut buf = Vec::with_capacity(er.encoded_len(Mode::Der));
+    er.write_encoded(Mode::Der, &mut buf)
+      .map_err(to_config_error_other(
+        "Cannot extract subjcet_name DER encoding",
+      ))?;
+    Ok(buf)
   }
 
   pub(super) fn algorithm(&self) -> Option<CertificateAlgorithm> {
@@ -85,11 +97,23 @@ impl Certificate {
     signed_data: impl AsRef<[u8]>,
     signature: impl AsRef<[u8]>,
     verify_algorithm: &'static dyn ring::signature::VerificationAlgorithm,
-  ) -> Result<(), String> {
+  ) -> SecurityResult<()> {
     self
       .cert
       .verify_signed_data_with_algorithm(signed_data, signature, verify_algorithm)
-      .map_err(|e| format!("Signature verification failure: {e:?}"))
+      .map_err(|e| security_error(&format!("Signature verification failure: {e:?}")))
+  }
+
+  // Verify that `self` was signed by `other` Certificate
+  pub fn verify_signed_by_certificate(&self, other: &Certificate) -> SecurityResult<()> {
+    self
+      .cert
+      .verify_signed_by_certificate(&other.cert)
+      .map_err(|e| {
+        security_error(&format!(
+          "Certificate signature verification failure: {e:?}"
+        ))
+      })
   }
 }
 

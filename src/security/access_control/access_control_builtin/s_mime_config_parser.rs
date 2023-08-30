@@ -26,12 +26,17 @@ use cms::{
 use der::{Decode, Encode};
 use ring::{digest, signature};
 
-use crate::security::{
-  certificate::Certificate,
-  config::{
-    other_config_error, pkcs7_config_error, to_config_error_other, to_config_error_pkcs7,
-    ConfigError,
+use crate::{
+  security::{
+    certificate::Certificate,
+    config::{
+      other_config_error, pkcs7_config_error, to_config_error_other, to_config_error_pkcs7,
+      ConfigError,
+    },
+    types::SecurityResult,
+    SecurityError,
   },
+  security_error,
 };
 
 #[derive(Debug)]
@@ -84,10 +89,7 @@ impl SignedDocument {
   // and check that the data matches the signature.
   //
   // If successful, returns reference to the verified document.
-  pub fn verify_signature(
-    &self,
-    certificate: &Certificate,
-  ) -> Result<impl AsRef<[u8]>, ConfigError> {
+  pub fn verify_signature(&self, certificate: &Certificate) -> SecurityResult<impl AsRef<[u8]>> {
     // start parsing signature
     let signature_encap = EncapsulatedContentInfo::from_der(&self.signature_der)
       .map_err(to_config_error_pkcs7("Cannot parse PKCS#7 signature"))?;
@@ -97,9 +99,7 @@ impl SignedDocument {
     if signature_encap.econtent_type
       != const_oid::ObjectIdentifier::new_unwrap("1.2.840.113549.1.7.2")
     {
-      return Err(pkcs7_config_error(
-        "Expected to find SignedData object".to_owned(),
-      ));
+      return Err(pkcs7_config_error("Expected to find SignedData object".to_owned()).into());
     }
 
     let signed_data = match signature_encap.econtent {
@@ -157,11 +157,14 @@ impl SignedDocument {
 
     // Check that hash actually matches the content
     if content_hash_in_signature.as_bytes() != computed_contents_digest.as_ref() {
-      return Err(pkcs7_config_error(format!(
-        "Contents hash in signature does not match actual content.\nsignature: {:02x?}\ncontent: \
-         {:02x?}",
-        content_hash_in_signature, computed_contents_digest
-      )));
+      return Err(
+        pkcs7_config_error(format!(
+          "Contents hash in signature does not match actual content.\nsignature: \
+           {:02x?}\ncontent: {:02x?}",
+          content_hash_in_signature, computed_contents_digest
+        ))
+        .into(),
+      );
     }
 
     // Section 5.4:
@@ -175,24 +178,25 @@ impl SignedDocument {
     const RSA_PKCS1: &str = "1.2.840.113549.1.1.1";
 
     //TODO maybe find a better way to determine the algorithm
-    let verify_algorithm: &'static dyn ring::signature::VerificationAlgorithm =
-      match format!("{}", signer_info.signature_algorithm.oid).as_str() {
-        ECDSA_WITH_SHA256_OID => &signature::ECDSA_P256_SHA256_ASN1,
-        //TODO for some reason this is not  working, even though the basic RSA does
-        RSA_PKCS1 =>Err(ConfigError::Security("RSA-PSS not yet supported.".into()))?, // &signature::RSA_PSS_2048_8192_SHA256,
-        other => Err(ConfigError::Security(format!(
-          "Unknown signature algorithm oid: {other}"
-        )))?,
-      };
+    let verify_algorithm: &'static dyn ring::signature::VerificationAlgorithm = match format!(
+      "{}",
+      signer_info.signature_algorithm.oid
+    )
+    .as_str()
+    {
+      ECDSA_WITH_SHA256_OID => &signature::ECDSA_P256_SHA256_ASN1,
+      //TODO for some reason this is not  working, even though the basic RSA does
+      RSA_PKCS1 => Err(security_error!("RSA-PSS not yet supported."))?, /* &signature::RSA_PSS_2048_8192_SHA256, */
+      other => Err(security_error!("Unknown signature algorithm oid: {other}"))?,
+    };
 
-    certificate
-      .verify_signed_data_with_algorithm(
-        signed_attributes_der,
-        signer_info.signature.as_bytes(),
-        verify_algorithm,
-      )
-      .map_err(ConfigError::Security)
-      .map(|()| self.content.clone())
+    certificate.verify_signed_data_with_algorithm(
+      signed_attributes_der,
+      signer_info.signature.as_bytes(),
+      verify_algorithm,
+    )?; // exit on verification error
+
+    Ok(self.content.clone())
   }
 }
 

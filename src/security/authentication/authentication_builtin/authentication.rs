@@ -1,9 +1,17 @@
 use std::cmp::Ordering;
 
+use ring::digest;
+
 use crate::{
   security::{
     access_control::*,
-    authentication::{authentication_builtin::HandshakeInfo, *},
+    authentication::{
+      authentication_builtin::{
+        types::{CertificateAlgorithm, IDENTITY_TOKEN_CLASS_ID},
+        HandshakeInfo,
+      },
+      *,
+    },
     certificate::*,
     config::*,
     Authentication, *,
@@ -13,7 +21,8 @@ use crate::{
   QosPolicies, GUID,
 };
 use super::{
-  AuthenticationBuiltin, BuiltinHandshakeState, LocalParticipantInfo, RemoteParticipantInfo,
+  types::BuiltinIdentityToken, AuthenticationBuiltin, BuiltinHandshakeState, LocalParticipantInfo,
+  RemoteParticipantInfo,
 };
 
 // DDS Security spec v1.1
@@ -96,38 +105,76 @@ impl Authentication for AuthenticationBuiltin {
         Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
       })?;
 
-    /*
-      let private_key = participant_qos
-        .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
-        .and_then(|pem_uri| {
-          self.read_uri(&pem_uri).map_err(|conf_err| {
-            security_error!(
-              "Failed to read the DomainParticipant identity private key from {}: {:?}",
-              certificate_uri,
-              conf_err
-            )
-          })
+    let private_key = participant_qos
+      .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
+      .and_then(|pem_uri| {
+        read_uri(&pem_uri).map_err(|conf_err| {
+          security_error!(
+            "Failed to read the DomainParticipant identity private key from {}: {:?}",
+            pem_uri,
+            conf_err
+          )
         })
-        .and_then(|private_key_pem| {
-          PrivateKey::from_pem(private_key_pem).map_err(|e| security_error!("{e:?}"))
-        })?;
-    */
+      })
+      .and_then(|private_key_pem| {
+        PrivateKey::from_pem(private_key_pem).map_err(|e| security_error!("{e:?}"))
+      })?;
 
-    // TODO 2: Compute the new adjusted GUID
-    let adjusted_guid = candidate_participant_guid;
+    // Verify that CA has signed our identity
+    identity_ca
+      .verify_signed_by_certificate(&identity_certificate)
+      .map_err(|_e| {
+        security_error!("My own identity certificate does not verify against identity CA.")
+      })?;
 
-    // TODO 3: Create an identity handle for the local participant and associate
-    // needed info (identity token, private key, public key, GUID) with it
+    // TODO: Check (somehow) that my identity has not been revoked.
+
+    // Compute the new adjusted GUID
+    // DDS Security spec v1.1 Section "9.3.3 DDS:Auth:PKI-DH plugin behavior", Table
+    // 52
+    let subject_name_der = identity_certificate.subject_name_der()?;
+    let subject_name_der_hash = digest::digest(&digest::SHA256, &subject_name_der);
+
+    // slice and unwrap will succeed, because input size is static
+    // Procedure: Take beginning (8 bytes) from subjcet name DER hash, convert to
+    // big-endian u64, so first byte is MSB. Shift u64 right 1 bit and force first
+    // bit to one. Now the first bit is one and the following bits are beginning
+    // of the SHA256 digest. Truncate this to 48 bites (6 bytes).
+    let bytes_from_subject_name =
+      &((u64::from_be_bytes(subject_name_der_hash.as_ref()[0..8].try_into().unwrap()) >> 1)
+        | 0x8000_0000_0000_0000u64)
+        .to_be_bytes()[0..6];
+
+    let candidate_guid_hash =
+      digest::digest(&digest::SHA256, &candidate_participant_guid.to_bytes());
+
+    // slicing will succeed, because digest is longer than 6 bytes
+    let prefix_bytes = [&bytes_from_subject_name, &candidate_guid_hash.as_ref()[..6]].concat();
+
+    let adjusted_guid = GUID::new(
+      GuidPrefix::new(&prefix_bytes),
+      candidate_participant_guid.entity_id,
+    );
+
+    // Section "9.3.2.1 DDS:Auth:PKI-DH IdentityToken"
+    // Table 45
+    //
+    // TODO: dig out ".algo" values from identity_certificate and identity_ca
+    let identity_token = BuiltinIdentityToken {
+      certificate_subject: Some(identity_certificate.subject_name().clone().serialize()),
+      certificate_algorithm: Some(CertificateAlgorithm::ECPrime256v1),
+
+      ca_subject: Some(identity_ca.subject_name().clone().serialize()),
+      ca_algorithm: Some(CertificateAlgorithm::ECPrime256v1),
+    };
+
     let local_identity_handle = self.get_new_identity_handle();
 
-    let identity_token = IdentityToken::dummy(); // Create also this
-    let private_key: Vec<u8> = Vec::default();
-    let public_key: Vec<u8> = Vec::default();
     let local_participant_info = LocalParticipantInfo {
       identity_handle: local_identity_handle,
       identity_token,
       guid: adjusted_guid,
-      public_key,
+      public_key: identity_certificate,
       private_key,
     };
 
@@ -147,7 +194,7 @@ impl Authentication for AuthenticationBuiltin {
     }
 
     // TODO: return an identity token with actual content
-    Ok(local_info.identity_token.clone())
+    Ok(local_info.identity_token.clone().into())
   }
 
   // Currently only mocked
@@ -172,7 +219,9 @@ impl Authentication for AuthenticationBuiltin {
     Ok(())
   }
 
-  // Currently only mocked
+  // The behaviour is specified in
+  // DDS Security spec v1.1 Section "9.3.3 DDS:Auth:PKI-DH plugin behavior"
+  // Table 52, row "validate_remote_identity"
   fn validate_remote_identity(
     &mut self,
     remote_auth_request_token: Option<AuthRequestMessageToken>,
@@ -192,7 +241,16 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
 
-    // TODO 1: compare remote identity token to the local one
+    //let local_identity_token = self.get_identity_token(local_identity_handle)?;
+
+    if remote_identity_token.class_id() != IDENTITY_TOKEN_CLASS_ID {
+      //TODO: We are really supposed to ignore differences is MinorVersion of
+      // class_id string
+      return Err(security_error!(
+        "Remote identity class_id is {:?}",
+        remote_identity_token.class_id()
+      ));
+    }
 
     // Since built-in authentication does not use AuthRequestMessageToken, we ignore
     // them completely. Always return the token as None.
@@ -201,20 +259,27 @@ impl Authentication for AuthenticationBuiltin {
     // The initial handshake state depends on the lexicographic ordering of the
     // participant GUIDs. Note that the derived Ord trait produces the required
     // lexicographic ordering.
-    let handshake_state = match local_info.guid.prefix.cmp(&remote_participant_guidp) {
-      Ordering::Less => {
-        // Our GUID is lower than remote's. We should send the request to remote
-        BuiltinHandshakeState::PendingRequestSend
-      }
-      Ordering::Greater => {
-        // Our GUID is higher than remote's. We should wait for the request from remote
-        BuiltinHandshakeState::PendingRequestMessage
-      }
-      Ordering::Equal => {
-        // This is an error, comparing with ourself.
-        return Err(security_error!("Remote GUID is equal to the local GUID"));
-      }
-    };
+    let (handshake_state, validation_outcome) =
+      match local_info.guid.prefix.cmp(&remote_participant_guidp) {
+        Ordering::Less => {
+          // Our GUID is lower than remote's. We should send the request to remote
+          (
+            BuiltinHandshakeState::PendingRequestSend,
+            ValidationOutcome::PendingHandshakeRequest,
+          )
+        }
+        Ordering::Greater => {
+          // Our GUID is higher than remote's. We should wait for the request from remote
+          (
+            BuiltinHandshakeState::PendingRequestMessage,
+            ValidationOutcome::PendingHandshakeMessage,
+          )
+        }
+        Ordering::Equal => {
+          // This is an error, comparing with ourself.
+          return Err(security_error!("Remote GUID is equal to the local GUID"));
+        }
+      };
 
     // Get new identity handle for the remote and associate remote info with it
     let remote_identity_handle = self.get_new_identity_handle();
@@ -233,17 +298,6 @@ impl Authentication for AuthenticationBuiltin {
     self
       .remote_participant_infos
       .insert(remote_identity_handle, remote_info);
-
-    // Map the handshake state to validation outcome of the plugin interface
-    let validation_outcome = match handshake_state {
-      BuiltinHandshakeState::PendingRequestSend => ValidationOutcome::PendingHandshakeRequest,
-      BuiltinHandshakeState::PendingRequestMessage => ValidationOutcome::PendingHandshakeMessage,
-      _ => {
-        // Should not be anything else. Panic so we don't continue with inconsistent
-        // authentication state
-        panic!("Internal plugin error - unexpected handshake state");
-      }
-    };
 
     Ok((
       validation_outcome,

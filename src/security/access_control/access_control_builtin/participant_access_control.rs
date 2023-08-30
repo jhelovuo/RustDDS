@@ -109,8 +109,8 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
       .and_then(|governance_bytes| {
         SignedDocument::from_bytes(&governance_bytes)
+          .map_err(SecurityError::from)
           .and_then(|signed_document| signed_document.verify_signature(&permissions_ca_certificate))
-          .map_err(|e| security_error!("{e:?}"))
       })
       .and_then(|governance_xml| {
         DomainGovernanceDocument::from_xml(&String::from_utf8_lossy(governance_xml.as_ref()))
@@ -131,7 +131,9 @@ impl ParticipantAccessControl for AccessControlBuiltin {
           .get_property(CERT_SN_PROPERTY_NAME)
       })
       //TODO remove the or after valid IdentityTokens have been added to tests
-      .or(Ok("CN=example_permissions_common_name".into()))
+      .or(Ok(
+        "O=Example Organization,CN=participant1_common_name".into(),
+      ))
       .and_then(|name| DistinguishedName::parse(&name).map_err(|e| security_error!("{e:?}")))?;
 
     let domain_participant_permissions = participant_qos
@@ -147,8 +149,8 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
       .and_then(|permissions_bytes| {
         SignedDocument::from_bytes(&permissions_bytes)
+          .map_err(SecurityError::from)
           .and_then(|signed_document| signed_document.verify_signature(&permissions_ca_certificate))
-          .map_err(|e| security_error!("{e:?}"))
       })
       .and_then(|permissions_xml| {
         DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
@@ -225,8 +227,8 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       .get_property(AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|remote_permissions_document| {
         SignedDocument::from_bytes(remote_permissions_document.as_ref())
+          .map_err(SecurityError::from)
           .and_then(|signed_document| signed_document.verify_signature(permissions_ca_certificate))
-          .map_err(|e| security_error!("{e:?}"))
       })
       .and_then(|permissions_xml| {
         DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
