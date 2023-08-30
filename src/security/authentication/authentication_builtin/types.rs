@@ -238,20 +238,10 @@ impl TryFrom<AuthRequestMessageToken> for BuiltinAuthRequestMessageToken {
 
 impl From<BuiltinAuthRequestMessageToken> for AuthRequestMessageToken {
   fn from(builtin_token: BuiltinAuthRequestMessageToken) -> Self {
-    // First create the DataHolder
-    let mut dh_builder = DataHolderBuilder::new();
-
-    // Set class id
-    dh_builder.set_class_id(AUTH_REQUEST_MESSAGE_TOKEN_CLASS_ID);
-
-    // Add future status property
-    dh_builder.add_binary_property(
-      FUTURE_CHALLENGE_PROPERTY_NAME,
-      builtin_token.future_challenge,
-      true,
-    );
-
-    AuthRequestMessageToken::from(dh_builder.build())
+    DataHolderBuilder::with_class_id(AUTH_REQUEST_MESSAGE_TOKEN_CLASS_ID.to_string())
+      .add_binary_property( FUTURE_CHALLENGE_PROPERTY_NAME, builtin_token.future_challenge, true)
+    .build()
+    .into()
   }
 }
 
@@ -340,55 +330,22 @@ impl TryFrom<HandshakeMessageToken> for BuiltinHandshakeMessageToken {
 
 impl From<BuiltinHandshakeMessageToken> for HandshakeMessageToken {
   fn from(builtin_token: BuiltinHandshakeMessageToken) -> Self {
-    // First create the DataHolder
-    let mut dh_builder = DataHolderBuilder::new();
-
-    // Set class id
-    dh_builder.set_class_id(&builtin_token.class_id);
-
-    // Add the various binary properties if present
-
-    if let Some(val) = builtin_token.c_id {
-      dh_builder.add_binary_property("c.id", val, true);
-    }
-    if let Some(val) = builtin_token.c_perm {
-      dh_builder.add_binary_property("c.perm", val, true);
-    }
-    if let Some(val) = builtin_token.c_pdata {
-      dh_builder.add_binary_property("c.pdata", val, true);
-    }
-    if let Some(val) = builtin_token.c_dsign_algo {
-      dh_builder.add_binary_property("c.dsign_algo", val, true);
-    }
-    if let Some(val) = builtin_token.c_kagree_algo {
-      dh_builder.add_binary_property("c.kagree_algo", val, true);
-    }
-    if let Some(val) = builtin_token.ocsp_status {
-      dh_builder.add_binary_property("ocsp_status", val, true);
-    }
-    if let Some(val) = builtin_token.hash_c1 {
-      dh_builder.add_binary_property("hash_c1", val, true);
-    }
-    if let Some(val) = builtin_token.dh1 {
-      dh_builder.add_binary_property("dh1", val, true);
-    }
-    if let Some(val) = builtin_token.hash_c2 {
-      dh_builder.add_binary_property("hash_c2", val, true);
-    }
-    if let Some(val) = builtin_token.dh2 {
-      dh_builder.add_binary_property("dh2", val, true);
-    }
-    if let Some(val) = builtin_token.challenge1 {
-      dh_builder.add_binary_property("challenge1", val, true);
-    }
-    if let Some(val) = builtin_token.challenge2 {
-      dh_builder.add_binary_property("challenge2", val, true);
-    }
-    if let Some(val) = builtin_token.signature {
-      dh_builder.add_binary_property("signature", val, true);
-    }
-
-    HandshakeMessageToken::from(dh_builder.build())
+    DataHolderBuilder::with_class_id(builtin_token.class_id)
+      .add_binary_property_opt("c.id", builtin_token.c_id , true)
+      .add_binary_property_opt("c.perm", builtin_token.c_perm, true)
+      .add_binary_property_opt("c.pdata", builtin_token.c_pdata, true)
+      .add_binary_property_opt("c.dsign_algo", builtin_token.c_dsign_algo, true)
+      .add_binary_property_opt("c.kagree_algo", builtin_token.c_kagree_algo, true)
+      .add_binary_property_opt("ocsp_status", builtin_token.ocsp_status, true)
+      .add_binary_property_opt("hash_c1", builtin_token.hash_c1, true)
+      .add_binary_property_opt("dh1", builtin_token.dh1, true)
+      .add_binary_property_opt("hash_c2", builtin_token.hash_c2, true)
+      .add_binary_property_opt("dh2", builtin_token.dh2, true)
+      .add_binary_property_opt("challenge1", builtin_token.challenge1, true)
+      .add_binary_property_opt("challenge2", builtin_token.challenge2, true)
+      .add_binary_property_opt("signature", builtin_token.signature, true)
+      .build()
+      .into()
   }
 }
 

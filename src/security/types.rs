@@ -299,13 +299,6 @@ pub struct DataHolderBuilder {
 }
 
 impl DataHolderBuilder {
-  pub fn new() -> Self {
-    Self {
-      class_id: String::new(),
-      properties: vec![],
-      binary_properties: vec![],
-    }
-  }
 
   pub fn with_class_id(class_id: String) -> Self {
     Self {
@@ -313,10 +306,6 @@ impl DataHolderBuilder {
       properties: vec![],
       binary_properties: vec![],
     }
-  }
-
-  pub fn set_class_id(&mut self, id: &str) {
-    self.class_id = id.to_string();
   }
 
   pub fn add_property(mut self, name: &str, value: String, propagate: bool) -> Self {
@@ -341,13 +330,26 @@ impl DataHolderBuilder {
     self
   }
 
-  pub fn add_binary_property(&mut self, name: &str, value: Bytes, propagate: bool) {
+  pub fn add_binary_property(mut self, name: &str, value: Bytes, propagate: bool) -> Self {
     let bin_property = BinaryProperty {
       name: name.to_string(),
       value,
       propagate,
     };
     self.binary_properties.push(bin_property);
+    self
+  }
+
+  pub fn add_binary_property_opt(mut self, name: &str, value: Option<Bytes>, propagate: bool) -> Self {
+    if let Some(value) = value {
+      let bin_property = BinaryProperty {
+        name: name.to_string(),
+        value,
+        propagate,
+      };
+      self.binary_properties.push(bin_property);
+    }
+    self
   }
 
   pub fn build(self) -> DataHolder {
