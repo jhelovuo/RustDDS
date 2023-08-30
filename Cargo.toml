@@ -53,6 +53,7 @@ newline-converter = "0.3" # helper for handling S/MIME
 ring = "*" # Cryptographic primitives
 cms = "*" # for ASN.1 parsing
 der = "*" # ASN.1 DER encoding
+bcder = "*" # ASN.1 DER encoding
 const-oid = "*" # more ASN.1
 
 [target.'cfg(windows)'.dependencies]

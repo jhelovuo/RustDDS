@@ -11,6 +11,7 @@ use crate::{
   discovery,
   messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
   security,
+  security::config::ConfigError,
   serialization::{
     pl_cdr_adapters::{
       PlCdrDeserialize, PlCdrDeserializeError, PlCdrSerialize, PlCdrSerializeError,
@@ -52,6 +53,19 @@ impl From<speedy::Error> for SecurityError {
     SecurityError {
       msg: format!("Serialization/deserialization error: {e:?}"),
     }
+  }
+}
+
+impl From<&str> for SecurityError 
+{
+  fn from(e: &str) -> Self {
+    SecurityError { msg: format!("SecurityError {e}") }
+  }  
+}
+
+impl From<ConfigError> for SecurityError {
+  fn from(e: ConfigError) -> Self {
+    SecurityError { msg: format!("ConfigError {e:?}")}
   }
 }
 
@@ -293,17 +307,38 @@ impl DataHolderBuilder {
     }
   }
 
+  pub fn with_class_id(class_id: String) -> Self {
+    Self {
+      class_id,
+      properties: vec![],
+      binary_properties: vec![],
+    }
+  }
+
   pub fn set_class_id(&mut self, id: &str) {
     self.class_id = id.to_string();
   }
 
-  pub fn add_property(&mut self, name: &str, value: String, propagate: bool) {
+  pub fn add_property(mut self, name: &str, value: String, propagate: bool) -> Self {
     let property = Property {
       name: name.to_string(),
       value,
       propagate,
     };
     self.properties.push(property);
+    self
+  }
+
+  pub fn add_property_opt(mut self, name: &str, value: Option<String>, propagate: bool) -> Self {
+    if let Some(value) = value {
+      let property = Property {
+        name: name.to_string(),
+        value,
+        propagate,
+      };
+      self.properties.push(property);
+    }
+    self
   }
 
   pub fn add_binary_property(&mut self, name: &str, value: Bytes, propagate: bool) {

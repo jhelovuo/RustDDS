@@ -3,15 +3,17 @@ use std::collections::HashMap;
 use bytes::Bytes;
 
 use crate::{
-  security::{SecurityError, SecurityResult},
+  security::{SecurityError, SecurityResult, certificate},
   security_error,
   structure::guid::GuidPrefix,
   GUID,
 };
 use super::{
   HandshakeHandle, HandshakeMessageToken, IdentityHandle, IdentityToken, SharedSecret,
-  ValidationOutcome,
+  ValidationOutcome, 
 };
+
+use super::authentication_builtin::types::BuiltinIdentityToken;
 
 mod authentication;
 pub(in crate::security) mod types;
@@ -35,10 +37,10 @@ pub(crate) enum BuiltinHandshakeState {
 
 struct LocalParticipantInfo {
   identity_handle: IdentityHandle,
-  identity_token: IdentityToken,
+  identity_token: BuiltinIdentityToken,
   guid: GUID,
-  private_key: Vec<u8>,
-  public_key: Vec<u8>,
+  private_key: certificate::PrivateKey, // PrivateKey is actually (private,public) key pair
+  public_key: certificate::Certificate, // Certificate contains the public key also
 }
 
 // All things about remote participant that we're interested in

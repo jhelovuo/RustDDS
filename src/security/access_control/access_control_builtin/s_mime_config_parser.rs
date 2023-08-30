@@ -32,6 +32,7 @@ use crate::security::{
     other_config_error, pkcs7_config_error, to_config_error_other, to_config_error_pkcs7,
     ConfigError,
   },
+  types::{SecurityResult,security_error,},
 };
 
 #[derive(Debug)]
@@ -87,7 +88,7 @@ impl SignedDocument {
   pub fn verify_signature(
     &self,
     certificate: &Certificate,
-  ) -> Result<impl AsRef<[u8]>, ConfigError> {
+  ) -> SecurityResult<impl AsRef<[u8]>> {
     // start parsing signature
     let signature_encap = EncapsulatedContentInfo::from_der(&self.signature_der)
       .map_err(to_config_error_pkcs7("Cannot parse PKCS#7 signature"))?;
@@ -99,7 +100,7 @@ impl SignedDocument {
     {
       return Err(pkcs7_config_error(
         "Expected to find SignedData object".to_owned(),
-      ));
+      ).into());
     }
 
     let signed_data = match signature_encap.econtent {
@@ -161,7 +162,7 @@ impl SignedDocument {
         "Contents hash in signature does not match actual content.\nsignature: {:02x?}\ncontent: \
          {:02x?}",
         content_hash_in_signature, computed_contents_digest
-      )));
+      )).into());
     }
 
     // Section 5.4:
@@ -180,9 +181,7 @@ impl SignedDocument {
         ECDSA_WITH_SHA256_OID => &signature::ECDSA_P256_SHA256_ASN1,
         //TODO for some reason this is not  working, even though the basic RSA does
         RSA_PKCS1 => &signature::RSA_PSS_2048_8192_SHA256,
-        other => Err(ConfigError::Security(format!(
-          "Unknown signature algorithm oid: {other}"
-        )))?,
+        other => Err(security_error(&format!("Unknown signature algorithm oid: {other}")))?,
       };
 
     certificate
@@ -190,9 +189,9 @@ impl SignedDocument {
         signed_attributes_der,
         signer_info.signature.as_bytes(),
         verify_algorithm,
-      )
-      .map_err(ConfigError::Security)
-      .map(|()| self.content.clone())
+      )?; // exit on verification error
+
+    Ok(self.content.clone())
   }
 }
 

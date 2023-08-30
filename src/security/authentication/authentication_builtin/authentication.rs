@@ -1,9 +1,10 @@
 use std::cmp::Ordering;
+use ring::digest;
 
 use crate::{
   security::{
     access_control::*,
-    authentication::{authentication_builtin::HandshakeInfo, *},
+    authentication::{*, authentication_builtin::{HandshakeInfo, types::CertificateAlgorithm},},
     certificate::*,
     config::*,
     Authentication, *,
@@ -14,6 +15,7 @@ use crate::{
 };
 use super::{
   AuthenticationBuiltin, BuiltinHandshakeState, LocalParticipantInfo, RemoteParticipantInfo,
+  types::BuiltinIdentityToken,
 };
 
 // DDS Security spec v1.1
@@ -96,38 +98,68 @@ impl Authentication for AuthenticationBuiltin {
         Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
       })?;
 
-    /*
-      let private_key = participant_qos
-        .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
-        .and_then(|pem_uri| {
-          self.read_uri(&pem_uri).map_err(|conf_err| {
-            security_error!(
-              "Failed to read the DomainParticipant identity private key from {}: {:?}",
-              certificate_uri,
-              conf_err
-            )
-          })
+    let private_key = participant_qos
+      .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
+      .and_then(|pem_uri| {
+        read_uri(&pem_uri).map_err(|conf_err| {
+          security_error!(
+            "Failed to read the DomainParticipant identity private key from {}: {:?}", pem_uri, conf_err
+          )
         })
-        .and_then(|private_key_pem| {
-          PrivateKey::from_pem(private_key_pem).map_err(|e| security_error!("{e:?}"))
-        })?;
-    */
+      })
+      .and_then(|private_key_pem| {
+        PrivateKey::from_pem(private_key_pem).map_err(|e| security_error!("{e:?}"))
+      })?;
 
-    // TODO 2: Compute the new adjusted GUID
-    let adjusted_guid = candidate_participant_guid;
 
-    // TODO 3: Create an identity handle for the local participant and associate
-    // needed info (identity token, private key, public key, GUID) with it
+    // Verify that CA has signed our identity
+    identity_ca.verify_signed_by_certificate( &identity_certificate )
+      .map_err(|_e| security_error!(
+        "My own identity certificate does not verify against identity CA.")) ?;
+
+    // TODO: Check (somehow) that my identity has not been revoked.
+
+    // Compute the new adjusted GUID
+    // DDS Security spec v1.1 Section "9.3.3 DDS:Auth:PKI-DH plugin behavior", Table 52
+    let subject_name_der = identity_certificate.subject_name_der()?;
+    let subject_name_der_hash = 
+      digest::digest(&digest::SHA256, &subject_name_der);
+
+    // slice and unwrap will succeed, because input size is static
+    // Procedure: Take beginning (8 bytes) from subjcet name DER hash, convert to
+    // big-endian u64, so first byte is MSB. Shift u64 right 1 bit and force first bit to one.
+    // Now the first bit is one and the following bits are beginning of the SHA256 digest.
+    // Truncate this to 48 bites (6 bytes).
+    let bytes_from_subject_name =
+      &((u64::from_be_bytes(subject_name_der_hash.as_ref()[0..8].try_into().unwrap()) >> 1)
+      | 0x8000_0000_0000_0000u64).to_be_bytes()[0..6];
+
+    let candidate_guid_hash = digest::digest(&digest::SHA256, &candidate_participant_guid.to_bytes());
+
+    // slicing will succeed, because digest is longer than 6 bytes
+    let prefix_bytes = [&bytes_from_subject_name, &candidate_guid_hash.as_ref()[..6]].concat();
+
+    let adjusted_guid = GUID::new(GuidPrefix::new(&prefix_bytes), candidate_participant_guid.entity_id);
+
+    // Section "9.3.2.1 DDS:Auth:PKI-DH IdentityToken"
+    // Table 45
+    //
+    // TODO: dig out ".algo" values from identity_certificate and identity_ca
+    let identity_token = BuiltinIdentityToken {
+      certificate_subject: Some( identity_certificate.subject_name().clone().serialize()),
+      certificate_algorithm: Some(CertificateAlgorithm::ECPrime256v1), 
+
+      ca_subject: Some(identity_ca.subject_name().clone().serialize()),
+      ca_algorithm: Some(CertificateAlgorithm::ECPrime256v1), 
+    };
+
     let local_identity_handle = self.get_new_identity_handle();
 
-    let identity_token = IdentityToken::dummy(); // Create also this
-    let private_key: Vec<u8> = Vec::default();
-    let public_key: Vec<u8> = Vec::default();
     let local_participant_info = LocalParticipantInfo {
       identity_handle: local_identity_handle,
       identity_token,
       guid: adjusted_guid,
-      public_key,
+      public_key: identity_certificate,
       private_key,
     };
 
@@ -147,7 +179,7 @@ impl Authentication for AuthenticationBuiltin {
     }
 
     // TODO: return an identity token with actual content
-    Ok(local_info.identity_token.clone())
+    Ok(local_info.identity_token.clone().into())
   }
 
   // Currently only mocked
