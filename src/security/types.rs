@@ -56,19 +56,24 @@ impl From<speedy::Error> for SecurityError {
   }
 }
 
-impl From<&str> for SecurityError {
+impl From<&str> for SecurityError 
+{
   fn from(e: &str) -> Self {
-    SecurityError {
-      msg: format!("SecurityError {e}"),
-    }
-  }
+    SecurityError { msg: format!("SecurityError {e}") }
+  }  
 }
+
+impl From<String> for SecurityError 
+{
+  fn from(msg: String) -> Self {
+    SecurityError { msg }
+  }  
+}
+
 
 impl From<ConfigError> for SecurityError {
   fn from(e: ConfigError) -> Self {
-    SecurityError {
-      msg: format!("ConfigError {e:?}"),
-    }
+    SecurityError { msg: format!("ConfigError {e:?}")}
   }
 }
 
@@ -331,6 +336,7 @@ pub struct DataHolderBuilder {
 }
 
 impl DataHolderBuilder {
+
   pub fn with_class_id(class_id: String) -> Self {
     Self {
       class_id,
@@ -371,12 +377,7 @@ impl DataHolderBuilder {
     self
   }
 
-  pub fn add_binary_property_opt(
-    mut self,
-    name: &str,
-    value: Option<Bytes>,
-    propagate: bool,
-  ) -> Self {
+  pub fn add_binary_property_opt(mut self, name: &str, value: Option<Bytes>, propagate: bool) -> Self {
     if let Some(value) = value {
       let bin_property = BinaryProperty {
         name: name.to_string(),

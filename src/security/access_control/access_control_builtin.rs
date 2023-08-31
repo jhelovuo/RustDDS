@@ -3,10 +3,9 @@ use std::{collections::HashMap, ops::Not};
 use chrono::Utc;
 
 use crate::{
-  security::certificate::{Certificate, DistinguishedName},
   security::{authentication::IdentityHandle, SecurityError, SecurityResult},
-  //security::config::{other_config_error, parse_config_error, to_config_error_other,
-  // ConfigError},
+  security::certificate::{Certificate, DistinguishedName},
+  //security::config::{other_config_error, parse_config_error, to_config_error_other, ConfigError},
   security_error,
 };
 use self::{
@@ -20,7 +19,7 @@ use super::{AccessControl, PermissionsHandle};
 mod domain_governance_document;
 mod domain_participant_permissions_document;
 //mod permissions_ca_certificate; --> crate::security::certificate
-mod s_mime_config_parser;
+pub mod s_mime_config_parser;
 
 mod local_entity_access_control;
 mod participant_access_control;
@@ -139,6 +138,7 @@ impl AccessControlBuiltin {
       })
   }
 
+
   // check_create_ and check_remote_ methods are very similar
   fn check_entity(
     &self,
@@ -149,6 +149,11 @@ impl AccessControlBuiltin {
     data_tags: &[(&str, &str)],
     entity_kind: &Entity,
   ) -> SecurityResult<()> {
+    // TODO: remove after testing
+    if true {
+      return Ok(());
+    }
+
     let grant = self.get_grant(&permissions_handle)?;
     let domain_rule = self.get_domain_rule(&permissions_handle)?;
 
