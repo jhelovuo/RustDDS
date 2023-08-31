@@ -2,7 +2,7 @@ use bytes::Bytes;
 use log::debug;
 
 use crate::{
-  security::{authentication::types::*, DataHolderBuilder, SecurityError},
+  security::{authentication::types::*, DataHolderBuilder, SecurityError, SecurityResult},
   security_error,
 };
 
@@ -19,7 +19,7 @@ const RSA_2048_ALGO_NAME: &str = "RSA-2048";
 pub(in crate::security) const RSA_2048_KEY_LENGTH: usize = 256;
 const EC_PRIME_ALGO_NAME: &str = "EC-prime256v1";
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug,Clone,Copy)]
 pub(in crate::security) enum CertificateAlgorithm {
   RSA2048,
   ECPrime256v1,
@@ -61,7 +61,7 @@ impl TryFrom<String> for CertificateAlgorithm {
 /// Security specification (v. 1.1)
 ///
 /// According to the spec, the presence of each of properties is optional
-#[derive(Debug, Clone)]
+#[derive(Debug,Clone)]
 pub(in crate::security) struct BuiltinIdentityToken {
   pub certificate_subject: Option<String>,
   pub certificate_algorithm: Option<CertificateAlgorithm>,
@@ -127,23 +127,13 @@ impl TryFrom<IdentityToken> for BuiltinIdentityToken {
 impl From<BuiltinIdentityToken> for IdentityToken {
   fn from(builtin_token: BuiltinIdentityToken) -> Self {
     // First create the DataHolder
-    let dh_builder = DataHolderBuilder::with_class_id(IDENTITY_TOKEN_CLASS_ID.to_string())
-      .add_property_opt(
-        CERT_SN_PROPERTY_NAME,
-        builtin_token.certificate_subject,
-        true,
-      )
-      .add_property_opt(
-        CERT_ALGO_PROPERTY_NAME,
-        builtin_token.certificate_algorithm.map(String::from),
-        true,
-      )
+    let dh_builder = 
+      DataHolderBuilder::with_class_id(IDENTITY_TOKEN_CLASS_ID.to_string())
+      .add_property_opt(CERT_SN_PROPERTY_NAME, builtin_token.certificate_subject, true)
+      .add_property_opt(CERT_ALGO_PROPERTY_NAME, builtin_token.certificate_algorithm
+        .map(String::from), true)
       .add_property_opt(CA_SN_PROPERTY_NAME, builtin_token.ca_subject, true)
-      .add_property_opt(
-        CA_ALGO_PROPERTY_NAME,
-        builtin_token.ca_algorithm.map(String::from),
-        true,
-      );
+      .add_property_opt(CA_ALGO_PROPERTY_NAME, builtin_token.ca_algorithm.map(String::from), true);
 
     IdentityToken::from(dh_builder.build())
   }
@@ -190,7 +180,8 @@ impl TryFrom<IdentityStatusToken> for BuiltinIdentityStatusToken {
 impl From<BuiltinIdentityStatusToken> for IdentityStatusToken {
   fn from(builtin_token: BuiltinIdentityStatusToken) -> Self {
     // First create the DataHolder
-    let dh_builder = DataHolderBuilder::with_class_id(IDENTITY_STATUS_TOKEN_CLASS_ID.to_string())
+    let dh_builder = 
+      DataHolderBuilder::with_class_id(IDENTITY_STATUS_TOKEN_CLASS_ID.to_string())
       .add_property_opt(OCSP_STATUS_PROPERTY_NAME, builtin_token.ocsp_status, true);
 
     IdentityStatusToken::from(dh_builder.build())
@@ -248,13 +239,9 @@ impl TryFrom<AuthRequestMessageToken> for BuiltinAuthRequestMessageToken {
 impl From<BuiltinAuthRequestMessageToken> for AuthRequestMessageToken {
   fn from(builtin_token: BuiltinAuthRequestMessageToken) -> Self {
     DataHolderBuilder::with_class_id(AUTH_REQUEST_MESSAGE_TOKEN_CLASS_ID.to_string())
-      .add_binary_property(
-        FUTURE_CHALLENGE_PROPERTY_NAME,
-        builtin_token.future_challenge,
-        true,
-      )
-      .build()
-      .into()
+      .add_binary_property( FUTURE_CHALLENGE_PROPERTY_NAME, builtin_token.future_challenge, true)
+    .build()
+    .into()
   }
 }
 
@@ -282,6 +269,37 @@ pub(in crate::security) struct BuiltinHandshakeMessageToken {
   pub challenge2: Option<Bytes>,
   pub signature: Option<Bytes>,
 }
+
+impl BuiltinHandshakeMessageToken {
+  pub fn extract_request(self) -> SecurityResult<HandshakeRequest> {
+    // TODO: Check class_id is correct
+    let c_id = self.c_id.ok_or_else(|| security_error!("c_id not found"))?;
+    let c_perm = self.c_perm.ok_or_else(|| security_error!("c_perm not found"))?;
+    let c_pdata = self.c_pdata.ok_or_else(|| security_error!("c_pdata not found"))?;
+    let c_dsign_algo = self.c_dsign_algo.ok_or_else(|| security_error!("c_dsign_algo not found"))?;
+    let c_kagree_algo = self.c_kagree_algo.ok_or_else(|| security_error!("c_kagree_algo not found"))?;
+    let hash_c1 = self.hash_c1;
+    let challenge1 = self.challenge1.ok_or_else(|| security_error!("challenge1 not found"))?;
+    let dh1 = self.dh1.ok_or_else(|| security_error!("dh1 not found"))?;
+
+    Ok(HandshakeRequest { 
+      c_id, c_perm, c_pdata, c_dsign_algo, c_kagree_algo, hash_c1, challenge1, dh1  
+    })
+  }
+}
+
+pub (in crate::security) struct HandshakeRequest {
+  pub c_id: Bytes,
+  pub c_perm: Bytes,
+  pub c_pdata: Bytes,
+  pub c_dsign_algo: Bytes,
+  pub c_kagree_algo: Bytes,
+  pub hash_c1: Option<Bytes>,
+  pub challenge1: Bytes,
+  pub dh1: Bytes,
+}
+
+
 
 impl TryFrom<HandshakeMessageToken> for BuiltinHandshakeMessageToken {
   type Error = String;
@@ -344,7 +362,7 @@ impl TryFrom<HandshakeMessageToken> for BuiltinHandshakeMessageToken {
 impl From<BuiltinHandshakeMessageToken> for HandshakeMessageToken {
   fn from(builtin_token: BuiltinHandshakeMessageToken) -> Self {
     DataHolderBuilder::with_class_id(builtin_token.class_id)
-      .add_binary_property_opt("c.id", builtin_token.c_id, true)
+      .add_binary_property_opt("c.id", builtin_token.c_id , true)
       .add_binary_property_opt("c.perm", builtin_token.c_perm, true)
       .add_binary_property_opt("c.pdata", builtin_token.c_pdata, true)
       .add_binary_property_opt("c.dsign_algo", builtin_token.c_dsign_algo, true)
@@ -421,18 +439,14 @@ impl TryFrom<AuthenticatedPeerCredentialToken> for BuiltinAuthenticatedPeerCrede
 
 impl From<BuiltinAuthenticatedPeerCredentialToken> for AuthenticatedPeerCredentialToken {
   fn from(builtin_token: BuiltinAuthenticatedPeerCredentialToken) -> Self {
-    let dh_builder =
+    let dh_builder = 
       DataHolderBuilder::with_class_id(AUTHENTICATED_PEER_TOKEN_CLASS_ID.to_string())
-        .add_property(
-          AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME,
-          builtin_token.c_id,
-          true,
-        )
-        .add_property(
-          AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
-          builtin_token.c_perm,
-          true,
-        );
+      .add_property(AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME,
+        builtin_token.c_id, true)
+      .add_property(AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
+        builtin_token.c_perm,
+        true,
+      );
     AuthenticatedPeerCredentialToken::from(dh_builder.build())
   }
 }
