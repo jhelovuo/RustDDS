@@ -475,7 +475,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     let receiver_specific_encode_key_materials = match common_encode_key_materials {
       CommonEncodeKeyMaterials::Volatile(use_256_bit_key) => {
         let volatile_key_materials =
-          Self::derive_volatile_key_materials(&shared_secret, use_256_bit_key)?; // TODO use shared secret and the challenges
+          Self::derive_volatile_key_materials(&shared_secret, use_256_bit_key)?;
 
         // Instead of sending keys over the network like in other topics, the same key
         // material is used for decoding
@@ -616,7 +616,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     let receiver_specific_encode_key_materials = match common_encode_key_materials {
       CommonEncodeKeyMaterials::Volatile(use_256_bit_key) => {
         let volatile_key_materials =
-          Self::derive_volatile_key_materials(&shared_secret, use_256_bit_key)?; // TODO use shared secret and the challenges
+          Self::derive_volatile_key_materials(&shared_secret, use_256_bit_key)?;
 
         // Instead of sending keys over the network like in other topics, the same key
         // material is used for decoding
