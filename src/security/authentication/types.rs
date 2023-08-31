@@ -1,7 +1,5 @@
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
-use bytes::Bytes;
-
 use crate::security::types::DataHolder;
 
 // Some generic message class IDs for authentication (see section 7.4.3.5 of the
@@ -29,11 +27,19 @@ pub type IdentityHandle = u32;
 pub type HandshakeHandle = u32;
 
 // Shared secret resulting from successful handshake
-pub type SharedSecret = Bytes;
+// This is a SHA256 hash of D-H key agreement result
+pub struct SharedSecret( pub [u8;32] ); // TODO: Remove inner "pub"
+
+impl AsRef<[u8]> for SharedSecret {
+  fn as_ref(&self) -> &[u8] {
+    self.0.as_ref()
+  }
+}
+
 pub struct SharedSecretHandle {
   pub shared_secret: SharedSecret,
-  pub challenge1: Bytes,
-  pub challenge2: Bytes,
+  pub challenge1: [u8;32], // 256-bit nonce
+  pub challenge2: [u8;32], // 256-bit nonce
 }
 
 // IdentityToken: section 8.3.2.1 of the Security specification (v. 1.1)

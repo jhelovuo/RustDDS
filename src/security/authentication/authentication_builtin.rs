@@ -9,9 +9,12 @@ use crate::{
   GUID,
 };
 use super::{
-  authentication_builtin::types::BuiltinIdentityToken, HandshakeHandle, HandshakeMessageToken,
-  IdentityHandle, IdentityToken, SharedSecret, ValidationOutcome,
+  authentication_builtin::types::BuiltinIdentityToken, HandshakeHandle, 
+  IdentityHandle, IdentityToken,
 };
+
+use x509_certificate::algorithm::{KeyAlgorithm, EcdsaCurve};
+use x509_certificate::signing::{InMemorySigningKeyPair, Sign};
 
 mod authentication;
 pub(in crate::security) mod types;
@@ -20,17 +23,56 @@ pub(in crate::security) mod types;
 // internally. Note that there is no 'failed' state, since once a handshake has
 // started, it doesn't terminate if some step fails. Instead, it just doesn't
 // advance to the next step.
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Debug)]
 pub(crate) enum BuiltinHandshakeState {
   PendingRequestSend,    // We need to create & send the handshake request
   PendingRequestMessage, // We are waiting for a handshake request from remote participant
-  PendingReplyMessage,   // We have sent a handshake request and are waiting for a reply
-  PendingFinalMessage,   /* We have sent a handshake reply message and are waiting for the
-                          * final message */
-  CompletedWithFinalMessageSent, /* Handshake was completed & we sent the final message. If
-                                  * requested again, we need to resend the message */
-  CompletedWithFinalMessageReceived, /* Handshake was completed & we received the final
-                                      * message. Nothing to do for us anymore. */
+  PendingReplyMessage { // We have sent a handshake request and are waiting for a reply
+    dh1: InMemorySigningKeyPair, // both public and private keys for dh1
+    challenge1: [u8;32], // 256-bit nonce
+  },
+
+  // We have sent a handshake reply message and are waiting for the
+  // final message 
+  PendingFinalMessage {    
+    dh1: Bytes, // only public part of dh1
+    challenge1: [u8;32], // 256-bit nonce
+    dh2: InMemorySigningKeyPair, // both public and private keys for dh2
+    challenge2: [u8;32], // 256-bit nonce
+  },
+
+  // Handshake was completed & we sent the final message. If
+  // requested again, we need to resend the message 
+  CompletedWithFinalMessageSent {
+    dh1: InMemorySigningKeyPair, // both public and private keys for dh1
+    challenge1: [u8;32], // 256-bit nonce
+    dh2: Bytes,
+    challenge2: [u8;32], // 256-bit nonce
+    //shared_secret: [u8;32] // result of D-H key exchange and SHA256
+  },
+
+  // Handshake was completed & we received the final
+  // message. Nothing to do for us anymore.
+  CompletedWithFinalMessageReceived {
+    dh1: Bytes, // only public part of dh1
+    challenge1: [u8;32], // 256-bit nonce
+    dh2: InMemorySigningKeyPair, // both public and private keys for dh2
+    challenge2: [u8;32], // 256-bit nonce
+    //shared_secret: [u8;32] // result of D-H key exchange and SHA256
+  }, 
+}
+
+// This is a mirror of the above states, but with no data carried from
+// one state to another. This is for use in secure Discovery.
+// TODO: Refactor (how?) to not need to seprate types for this.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub(crate) enum DiscHandshakeState {
+  PendingRequestSend, 
+  PendingRequestMessage,
+  PendingReplyMessage,
+  PendingFinalMessage ,
+  CompletedWithFinalMessageSent,
+  CompletedWithFinalMessageReceived, 
 }
 
 struct LocalParticipantInfo {
@@ -48,15 +90,13 @@ struct RemoteParticipantInfo {
   handshake: HandshakeInfo,
 }
 
-use x509_certificate::signing::{InMemorySigningKeyPair};
-
 struct HandshakeInfo {
   state: BuiltinHandshakeState,
-  latest_sent_message: Option<HandshakeMessageToken>,
-  my_dh_keys: Option<InMemorySigningKeyPair>, // This is dh1 or dh2, whichever we generated ourself
-  challenge1: Option<Bytes>,
-  challenge2: Option<Bytes>,
-  shared_secret: Option<SharedSecret>,
+  // latest_sent_message: Option<HandshakeMessageToken>,
+  // my_dh_keys: Option<InMemorySigningKeyPair>, // This is dh1 or dh2, whichever we generated ourself
+  // challenge1: Option<Bytes>,
+  // challenge2: Option<Bytes>,
+  // shared_secret: Option<SharedSecret>,
 }
 
 // A struct implementing the builtin Authentication plugin
@@ -132,78 +172,4 @@ impl AuthenticationBuiltin {
       .ok_or_else(|| security_error!("Identity handle not found with handshake handle"))
   }
 
-  // Currently only mocked
-  #[allow(clippy::needless_pass_by_value)]
-  fn process_handshake_reply_message(
-    &mut self,
-    reply_message: HandshakeMessageToken,
-    handshake_handle: HandshakeHandle,
-  ) -> SecurityResult<(ValidationOutcome, HandshakeMessageToken)> {
-    let remote_identity_handle = *self.handshake_handle_to_identity_handle(&handshake_handle)?;
-    let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
-
-    // TODO: verify the contents of the reply message token
-
-    // TODO: verify the conten of authentication request token?
-
-    // TODO: Verify validity of IdentityCredential
-
-    // TODO: verify ocsp_status / status of IdentityCredential
-
-    // TODO: check that challenge1 is equal to the challenge1 sent in request
-    // token
-
-    // TODO: verify the digital signature
-
-    // TODO: store the value of property with name “dds.sec.” found within the
-    // handshake_message_in
-
-    // TODO: Compute the shared secret
-    let shared_secret = SharedSecret::default();
-    let challenge1 = Bytes::default();
-    let challenge2 = Bytes::default();
-
-    // TODO: Create proper HandshakeFinalMessageToken
-    let final_message_token = HandshakeMessageToken::dummy();
-
-    // Change handshake state to Completed & save the final message token
-    remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageSent;
-    remote_info.handshake.latest_sent_message = Some(final_message_token.clone());
-    remote_info.handshake.challenge1 = Some(challenge1);
-    remote_info.handshake.challenge2 = Some(challenge2);
-    remote_info.handshake.shared_secret = Some(shared_secret);
-
-    Ok((ValidationOutcome::OkFinalMessage, final_message_token))
-  }
-
-  // Currently only mocked
-  #[allow(clippy::needless_pass_by_value)]
-  fn process_handshake_final_message(
-    &mut self,
-    final_message: HandshakeMessageToken,
-    handshake_handle: HandshakeHandle,
-  ) -> SecurityResult<ValidationOutcome> {
-    let remote_identity_handle = *self.handshake_handle_to_identity_handle(&handshake_handle)?;
-    let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
-
-    // TODO: verify the contents of the final message token
-
-    // TODO: verify matching of challenge1 and challenge2 to what we sent in the
-    // reply token
-
-    // TODO: verify the digital signature
-
-    // TODO: compute the shared secret
-    let shared_secret = SharedSecret::default();
-    let challenge1 = Bytes::default();
-    let challenge2 = Bytes::default();
-
-    // Change handshake state to Completed
-    remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageReceived;
-    remote_info.handshake.challenge1 = Some(challenge1);
-    remote_info.handshake.challenge2 = Some(challenge2);
-    remote_info.handshake.shared_secret = Some(shared_secret);
-
-    Ok(ValidationOutcome::Ok)
-  }
 }

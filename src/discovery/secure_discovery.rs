@@ -18,7 +18,7 @@ use crate::{
   security::{
     access_control::{ParticipantSecurityAttributes, PermissionsToken},
     authentication::{
-      authentication_builtin::BuiltinHandshakeState, HandshakeMessageToken, IdentityToken,
+      authentication_builtin::DiscHandshakeState, HandshakeMessageToken, IdentityToken,
       ValidationOutcome, GMCLASSID_SECURITY_AUTH_HANDSHAKE,
     },
     security_error,
@@ -82,7 +82,7 @@ pub(crate) struct SecureDiscovery {
   // SecureDiscovery maintains states of handshake with remote participants.
   // We use the same states as the built-in authentication plugin, since
   // SecureDiscovery currently supports the built-in plugin only.
-  handshake_states: HashMap<GuidPrefix, BuiltinHandshakeState>,
+  handshake_states: HashMap<GuidPrefix, DiscHandshakeState>,
   // Here we store the latest authentication message that we've sent to each remote,
   // in case they need to be sent again
   stored_authentication_messages: HashMap<GuidPrefix, StoredAuthenticationMessage>,
@@ -252,7 +252,7 @@ impl SecureDiscovery {
         // We are authenticating.
         // If we need to send this remote participant a handshake request but haven't
         // managed to do so, retry
-        if let Some(BuiltinHandshakeState::PendingRequestSend) =
+        if let Some(DiscHandshakeState::PendingRequestSend) =
           self.get_handshake_state(&guid_prefix)
         {
           self.try_sending_new_handshake_request_message(
@@ -489,7 +489,7 @@ impl SecureDiscovery {
         // We should send the handshake request
         self.update_handshake_state(
           remote_guid.prefix,
-          BuiltinHandshakeState::PendingRequestSend,
+          DiscHandshakeState::PendingRequestSend,
         );
         self.try_sending_new_handshake_request_message(
           remote_guid.prefix,
@@ -503,7 +503,7 @@ impl SecureDiscovery {
         // We should wait for the handshake request
         self.update_handshake_state(
           remote_guid.prefix,
-          BuiltinHandshakeState::PendingRequestMessage,
+          DiscHandshakeState::PendingRequestMessage,
         );
 
         debug!(
@@ -622,7 +622,7 @@ impl SecureDiscovery {
     // Update handshake state to pending reply message
     self.update_handshake_state(
       remote_guid_prefix,
-      BuiltinHandshakeState::PendingReplyMessage,
+      DiscHandshakeState::PendingReplyMessage,
     );
   }
 
@@ -634,7 +634,7 @@ impl SecureDiscovery {
       // Resend the message unless it's a final message (which needs to be requested
       // from us)
       if self.handshake_states.get(guid_prefix)
-        != Some(&BuiltinHandshakeState::CompletedWithFinalMessageSent)
+        != Some(&DiscHandshakeState::CompletedWithFinalMessageSent)
       {
         match auth_msg_writer.write(stored_message.message.clone(), None) {
           Ok(()) => {
@@ -706,7 +706,7 @@ impl SecureDiscovery {
           remote_guid_prefix
         );
       }
-      Some(BuiltinHandshakeState::PendingRequestSend) => {
+      Some(DiscHandshakeState::PendingRequestSend) => {
         // Haven't yet managed to create a handshake request for this remote
         self.try_sending_new_handshake_request_message(
           remote_guid_prefix,
@@ -714,10 +714,10 @@ impl SecureDiscovery {
           auth_msg_writer,
         );
       }
-      Some(BuiltinHandshakeState::PendingRequestMessage) => {
+      Some(DiscHandshakeState::PendingRequestMessage) => {
         self.handshake_on_pending_request_message(message, discovery_db, auth_msg_writer);
       }
-      Some(BuiltinHandshakeState::PendingReplyMessage) => {
+      Some(DiscHandshakeState::PendingReplyMessage) => {
         self.handshake_on_pending_reply_message(
           message,
           discovery_db,
@@ -725,10 +725,10 @@ impl SecureDiscovery {
           discovery_updated_sender,
         );
       }
-      Some(BuiltinHandshakeState::PendingFinalMessage) => {
+      Some(DiscHandshakeState::PendingFinalMessage) => {
         self.handshake_on_pending_final_message(message, discovery_db, discovery_updated_sender);
       }
-      Some(BuiltinHandshakeState::CompletedWithFinalMessageSent) => {
+      Some(DiscHandshakeState::CompletedWithFinalMessageSent) => {
         // Handshake with this remote has completed by us sending the final
         // message. Send the message again in case the remote hasn't
         // received it
@@ -738,7 +738,7 @@ impl SecureDiscovery {
         );
         self.resend_final_handshake_message(remote_guid_prefix, auth_msg_writer);
       }
-      Some(BuiltinHandshakeState::CompletedWithFinalMessageReceived) => {
+      Some(DiscHandshakeState::CompletedWithFinalMessageReceived) => {
         trace!(
           "Received a handshake message from remote with guid prefix {:?}. Handshake with this \
            participant has already been completed by receiving the final message. Nothing for us \
@@ -829,7 +829,7 @@ impl SecureDiscovery {
         // Set handshake state as pending final message
         self.handshake_states.insert(
           remote_guid_prefix,
-          BuiltinHandshakeState::PendingFinalMessage,
+          DiscHandshakeState::PendingFinalMessage,
         );
       }
       Ok((other_outcome, _reply_token)) => {
@@ -928,7 +928,7 @@ impl SecureDiscovery {
         // Set handshake state as completed with final message
         self.handshake_states.insert(
           remote_guid_prefix,
-          BuiltinHandshakeState::CompletedWithFinalMessageSent,
+          DiscHandshakeState::CompletedWithFinalMessageSent,
         );
 
         self.on_remote_participant_authenticated(
@@ -1004,7 +1004,7 @@ impl SecureDiscovery {
         // Set handshake state as completed with final message
         self.handshake_states.insert(
           remote_guid_prefix,
-          BuiltinHandshakeState::CompletedWithFinalMessageReceived,
+          DiscHandshakeState::CompletedWithFinalMessageReceived,
         );
 
         // Remove the stored reply message so it won't be resent
@@ -1214,14 +1214,14 @@ impl SecureDiscovery {
     message.generic.related_message_identity == message_sent_by_us.generic.message_identity
   }
 
-  fn get_handshake_state(&self, remote_guid_prefix: &GuidPrefix) -> Option<BuiltinHandshakeState> {
+  fn get_handshake_state(&self, remote_guid_prefix: &GuidPrefix) -> Option<DiscHandshakeState> {
     self.handshake_states.get(remote_guid_prefix).copied()
   }
 
   fn update_handshake_state(
     &mut self,
     remote_guid_prefix: GuidPrefix,
-    state: BuiltinHandshakeState,
+    state: DiscHandshakeState,
   ) {
     self.handshake_states.insert(remote_guid_prefix, state);
   }
