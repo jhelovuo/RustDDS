@@ -1,26 +1,27 @@
 use std::cmp::Ordering;
+
 use speedy::Writable;
 use bytes::Bytes;
-
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-
 use ring::digest;
-use x509_certificate::algorithm::{KeyAlgorithm, EcdsaCurve};
-use x509_certificate::signing::{InMemorySigningKeyPair, Sign};
-
+use x509_certificate::{
+  algorithm::{EcdsaCurve, KeyAlgorithm},
+  signing::{InMemorySigningKeyPair, Sign},
+};
 
 use crate::{
   security::{
-    access_control::{*,
-      access_control_builtin::s_mime_config_parser::SignedDocument,
-    },
-    authentication::{*,
+    access_control::{access_control_builtin::s_mime_config_parser::SignedDocument, *},
+    authentication::{
       authentication_builtin::{
-        HandshakeInfo, types::{
-          CertificateAlgorithm, IDENTITY_TOKEN_CLASS_ID, HANDSHAKE_REQUEST_CLASS_ID,
-          HANDSHAKE_REPLY_CLASS_ID, HANDSHAKE_FINAL_CLASS_ID,
-          BuiltinHandshakeMessageToken,}},
+        types::{
+          BuiltinHandshakeMessageToken, CertificateAlgorithm, HANDSHAKE_FINAL_CLASS_ID,
+          HANDSHAKE_REPLY_CLASS_ID, HANDSHAKE_REQUEST_CLASS_ID, IDENTITY_TOKEN_CLASS_ID,
+        },
+        HandshakeInfo,
+      },
+      *,
     },
     certificate::*,
     config::*,
@@ -257,7 +258,7 @@ impl Authentication for AuthenticationBuiltin {
 
     if remote_identity_token.class_id() != IDENTITY_TOKEN_CLASS_ID {
       // TODO: We are really supposed to ignore differences is MinorVersion of
-      // class_id string. But now we require exact macth.
+      // class_id string. But now we require exact match.
       return Err(security_error!(
         "Remote identity class_id is {:?}",
         remote_identity_token.class_id()
@@ -430,9 +431,8 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
 
-    let request = 
-      BuiltinHandshakeMessageToken::try_from(handshake_message_in)?
-        .extract_request()?;
+    let request =
+      BuiltinHandshakeMessageToken::try_from(handshake_message_in)?.extract_request()?;
 
     // "Verifies Cert1 with the configured Identity CA"
     // So Cert1 is now `request.c_id`
@@ -449,14 +449,13 @@ impl Authentication for AuthenticationBuiltin {
     let kagree_algo = Bytes::from_static(b"ECDH+prime256v1-CEUM"); // TODO: do not hardcode this, get from id cert
 
     // temp structure just to produce hash
-    let c_properties : Vec<BinaryProperty> =
-      vec![
-        BinaryProperty::with_propagate("c.id", request.c_id.clone()),
-        BinaryProperty::with_propagate("c.perm", request.c_perm.clone()),
-        BinaryProperty::with_propagate("c.pdata", request.c_pdata.clone()),
-        BinaryProperty::with_propagate("c.dsign_algo", request.c_dsign_algo.clone()),
-        BinaryProperty::with_propagate("c.kagree_algo", request.c_kagree_algo.clone())
-      ];
+    let c_properties: Vec<BinaryProperty> = vec![
+      BinaryProperty::with_propagate("c.id", request.c_id.clone()),
+      BinaryProperty::with_propagate("c.perm", request.c_perm.clone()),
+      BinaryProperty::with_propagate("c.pdata", request.c_pdata.clone()),
+      BinaryProperty::with_propagate("c.dsign_algo", request.c_dsign_algo.clone()),
+      BinaryProperty::with_propagate("c.kagree_algo", request.c_kagree_algo.clone()),
+    ];
     let c_properties_bytes = c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
     let c_properties_hash = digest::digest(&digest::SHA256, &c_properties_bytes);
 
@@ -464,7 +463,7 @@ impl Authentication for AuthenticationBuiltin {
       if received_hash == c_properties_hash.as_ref() {
         // hashes match, safe to proceed
       } else {
-        return Err(security_error!("begin_handshake_reply: hash_c1 mismatch"))
+        return Err(security_error!("begin_handshake_reply: hash_c1 mismatch"));
       }
     } else {
       info!("Cannot compare hashes in begin_handshake_reply. Request did not have any.");
@@ -474,14 +473,14 @@ impl Authentication for AuthenticationBuiltin {
     let challenge2 = rand::random::<[u8; 32]>();
 
     // Generate new, random Diffie-Hellman key pair "dh2"
-    let (dh2_key_pair, _keypair_pkcs8) = 
-      InMemorySigningKeyPair::generate_random(KeyAlgorithm::Ecdsa( EcdsaCurve::Secp256r1 ))?;
+    let (dh2_key_pair, _keypair_pkcs8) =
+      InMemorySigningKeyPair::generate_random(KeyAlgorithm::Ecdsa(EcdsaCurve::Secp256r1))?;
 
     // sign everything
     //TODO
     let contents_signature = Bytes::new();
-    
-    let challenge1_fixed: [u8;32] = request.challenge1.as_ref().try_into().unwrap(); // TODO
+
+    let challenge1_fixed: [u8; 32] = request.challenge1.as_ref().try_into().unwrap(); // TODO
 
     let reply_token = BuiltinHandshakeMessageToken {
       class_id: HANDSHAKE_REQUEST_CLASS_ID.to_string(),
@@ -491,21 +490,22 @@ impl Authentication for AuthenticationBuiltin {
       c_dsign_algo: Some(dsign_algo),
       c_kagree_algo: Some(kagree_algo),
       ocsp_status: None, // Not implemented
-      hash_c1: Some(Bytes::copy_from_slice(c_properties_hash.as_ref())), // version we computed, not as received
+      // version we computed, not as received
+      hash_c1: Some(Bytes::copy_from_slice(c_properties_hash.as_ref())),
       dh1: Some(request.dh1.clone()),
-      hash_c2: Some(Bytes::copy_from_slice(c_properties_hash.as_ref())), 
-      dh2: Some(dh2_key_pair.public_key_data()), 
+      hash_c2: Some(Bytes::copy_from_slice(c_properties_hash.as_ref())),
+      dh2: Some(dh2_key_pair.public_key_data()),
       challenge1: Some(request.challenge1.clone()),
       challenge2: Some(Bytes::copy_from_slice(challenge2.as_ref())),
-      signature: Some( contents_signature ), 
+      signature: Some(contents_signature),
     };
 
     // Change handshake state to pending final message & save the reply token
     remote_info.handshake.state = BuiltinHandshakeState::PendingFinalMessage {
-      dh1: request.dh1, 
+      dh1: request.dh1,
       challenge1: challenge1_fixed,
-      dh2: dh2_key_pair, 
-      challenge2
+      dh2: dh2_key_pair,
+      challenge2,
     };
 
     // Create a new handshake handle & map it to remotes identity handle
@@ -532,7 +532,8 @@ impl Authentication for AuthenticationBuiltin {
 
     // This trickery is needed because BuiltinHandshakeState contains
     // key pairs, which cannot be cloned. We just move the "state" out and leave
-    // a dummy value behind. At the end of this function we will overwrite the dummy.
+    // a dummy value behind. At the end of this function we will overwrite the
+    // dummy.
     let mut state = BuiltinHandshakeState::PendingRequestSend; // dummy to leave behind
     std::mem::swap(&mut remote_info.handshake.state, &mut state);
 
@@ -571,10 +572,12 @@ impl Authentication for AuthenticationBuiltin {
         let challenge2 = rand::random::<[u8; 32]>();
 
         // Change handshake state to Completed & save the final message token
-        remote_info.handshake.state = 
-          BuiltinHandshakeState::CompletedWithFinalMessageSent {
-            dh1, dh2, challenge1, challenge2
-          };
+        remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageSent {
+          dh1,
+          dh2,
+          challenge1,
+          challenge2,
+        };
         Ok((ValidationOutcome::OkFinalMessage, Some(final_message_token)))
       }
       BuiltinHandshakeState::PendingFinalMessage {
@@ -609,8 +612,10 @@ impl Authentication for AuthenticationBuiltin {
 
         Ok((ValidationOutcome::Ok, None))
       }
-      other_state => 
-        Err(security_error!("Unexpected handshake state: {:?}", other_state )),
+      other_state => Err(security_error!(
+        "Unexpected handshake state: {:?}",
+        other_state
+      )),
     }
   }
 

@@ -3,9 +3,11 @@ use std::{collections::HashMap, ops::Not};
 use chrono::Utc;
 
 use crate::{
-  security::{authentication::IdentityHandle, SecurityError, SecurityResult},
-  security::certificate::{Certificate, DistinguishedName},
-  //security::config::{other_config_error, parse_config_error, to_config_error_other, ConfigError},
+  security::{
+    authentication::IdentityHandle,
+    certificate::{Certificate, DistinguishedName},
+    SecurityError, SecurityResult,
+  },
   security_error,
 };
 use self::{
@@ -137,7 +139,6 @@ impl AccessControlBuiltin {
         )
       })
   }
-
 
   // check_create_ and check_remote_ methods are very similar
   fn check_entity(
