@@ -1,4 +1,3 @@
-use bytes::Bytes;
 use ring::{digest, hmac};
 
 use crate::{
@@ -148,14 +147,14 @@ impl CryptographicBuiltin {
   // secret according to 9.5.2.1.2
   fn hash_shared_secret(
     hmac_key_plain: [&[u8]; 3],
-    shared_secret: &Bytes,
+    shared_secret: &SharedSecret,
     use_256_bit_key: bool,
   ) -> Vec<u8> {
     let hmac_key = hmac::Key::new(
       hmac::HMAC_SHA256,
       digest::digest(&digest::SHA256, hmac_key_plain.concat().as_ref()).as_ref(),
     );
-    let hashed_secret = hmac::sign(&hmac_key, shared_secret);
+    let hashed_secret = hmac::sign(&hmac_key, shared_secret.as_ref());
     // Truncate
     if use_256_bit_key {
       hashed_secret.as_ref().into()

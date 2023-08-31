@@ -258,29 +258,29 @@ impl From<BuiltinAuthRequestMessageToken> for AuthRequestMessageToken {
   }
 }
 
-const HANDSHAKE_REQUEST_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Req";
-const HANDSHAKE_REPLY_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Reply";
-const HANDSHAKE_FINAL_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Final";
+pub const HANDSHAKE_REQUEST_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Req";
+pub const HANDSHAKE_REPLY_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Reply";
+pub const HANDSHAKE_FINAL_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Final";
 
 /// DDS:Auth:PKI-DH HandshakeMessageToken type from section 9.3.2.5 of the
 /// Security specification (v. 1.1)
 /// Works as all three token formats: HandshakeRequestMessageToken,
 /// HandshakeReplyMessageToken and HandshakeFinalMessageToken
-pub struct BuiltinHandshakeMessageToken {
-  class_id: String,
-  c_id: Option<Bytes>,
-  c_perm: Option<Bytes>,
-  c_pdata: Option<Bytes>,
-  c_dsign_algo: Option<Bytes>,
-  c_kagree_algo: Option<Bytes>,
-  ocsp_status: Option<Bytes>,
-  hash_c1: Option<Bytes>,
-  dh1: Option<Bytes>,
-  hash_c2: Option<Bytes>,
-  dh2: Option<Bytes>,
-  challenge1: Option<Bytes>,
-  challenge2: Option<Bytes>,
-  signature: Option<Bytes>,
+pub (in crate::security) struct BuiltinHandshakeMessageToken {
+  pub class_id: String,
+  pub c_id: Option<Bytes>,
+  pub c_perm: Option<Bytes>,
+  pub c_pdata: Option<Bytes>,
+  pub c_dsign_algo: Option<Bytes>,
+  pub c_kagree_algo: Option<Bytes>,
+  pub ocsp_status: Option<Bytes>,
+  pub hash_c1: Option<Bytes>,
+  pub dh1: Option<Bytes>,
+  pub hash_c2: Option<Bytes>,
+  pub dh2: Option<Bytes>,
+  pub challenge1: Option<Bytes>,
+  pub challenge2: Option<Bytes>,
+  pub signature: Option<Bytes>,
 }
 
 impl TryFrom<HandshakeMessageToken> for BuiltinHandshakeMessageToken {
