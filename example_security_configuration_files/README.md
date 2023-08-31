@@ -36,8 +36,8 @@ Create `identity_ca.pem`:\
 _
 
 
-Create a certificate request and sign it to create `participant1_certificate.pem`:\
-`openssl req -newkey param:ec_parameters.pem -keyout participant1_private_key.pem -passout file:password -out identity_certificate_requests/participant1.pem -subj "/O=Example Organization/CN=participant1_common_name"`\
+Create a certificate request and sign it to create `participant1_certificate.pem`. WARNING: password-encrypted private keys are not yet supported for identity certificates, so we use the `-nodes` option for the example, which is not advised:\
+`openssl req -newkey param:ec_parameters.pem -keyout participant1_private_key.pem -nodes -out identity_certificate_requests/participant1.pem -subj "/O=Example Organization/CN=participant1_common_name"`\
 _\
 `openssl x509 -req -days 999999 -in identity_certificate_requests/participant1.pem -CA identity_ca_certificate.pem -CAkey identity_ca_private_key.pem -passin file:password -out participant1_certificate.pem -set_serial 1`\
 _

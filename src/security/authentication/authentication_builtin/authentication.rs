@@ -113,6 +113,9 @@ impl Authentication for AuthenticationBuiltin {
         Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
       })?;
 
+    // TODO: decrypt a password protected private key
+    let _password = participant_qos.get_optional_property(QOS_PASSWORD_PROPERTY_NAME);
+
     let private_key = participant_qos
       .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
       .and_then(|pem_uri| {

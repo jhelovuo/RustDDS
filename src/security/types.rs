@@ -148,15 +148,26 @@ impl Property {
   }
 }
 
-fn get_property(properties: &[Property], property_name: &str) -> SecurityResult<String> {
+fn get_optional_property(properties: &[Property], property_name: &str) -> Option<String> {
   properties
     .iter()
     .find(|Property { name, .. }| name.eq(property_name))
     .map(|Property { value, .. }| value.clone())
+}
+fn get_property(properties: &[Property], property_name: &str) -> SecurityResult<String> {
+  get_optional_property(properties, property_name)
     .ok_or_else(|| security_error!("Could not find a property of the name {}.", property_name))
 }
 
 impl QosPolicies {
+  pub(super) fn get_optional_property(&self, property_name: &str) -> Option<String> {
+    self
+      .property
+      .as_ref()
+      .and_then(|properties_or_binary_properties| {
+        get_optional_property(&properties_or_binary_properties.value, property_name)
+      })
+  }
   pub(super) fn get_property(&self, property_name: &str) -> SecurityResult<String> {
     self
       .property

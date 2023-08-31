@@ -60,7 +60,7 @@ impl Certificate {
     let mut buf = Vec::with_capacity(er.encoded_len(Mode::Der));
     er.write_encoded(Mode::Der, &mut buf)
       .map_err(to_config_error_other(
-        "Cannot extract subjcet_name DER encoding",
+        "Cannot extract subject_name DER encoding",
       ))?;
     Ok(buf)
   }
@@ -175,6 +175,7 @@ pub struct PrivateKey {
   priv_key: InMemorySigningKeyPair,
 }
 
+// TODO: decrypt a password protected key
 impl PrivateKey {
   pub fn from_pem(pem_data: impl AsRef<[u8]>) -> Result<Self, ConfigError> {
     let priv_key = InMemorySigningKeyPair::from_pkcs8_pem(pem_data.as_ref())
