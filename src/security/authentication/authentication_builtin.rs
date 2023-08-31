@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
+use x509_certificate::signing::InMemorySigningKeyPair;
 
 use crate::{
   security::{certificate, SecurityError, SecurityResult},
@@ -9,12 +10,9 @@ use crate::{
   GUID,
 };
 use super::{
-  authentication_builtin::types::BuiltinIdentityToken, HandshakeHandle, 
-  IdentityHandle, IdentityToken,
+  authentication_builtin::types::BuiltinIdentityToken, HandshakeHandle, IdentityHandle,
+  IdentityToken,
 };
-
-use x509_certificate::algorithm::{KeyAlgorithm, EcdsaCurve};
-use x509_certificate::signing::{InMemorySigningKeyPair, Sign};
 
 mod authentication;
 pub(in crate::security) mod types;
@@ -27,52 +25,54 @@ pub(in crate::security) mod types;
 pub(crate) enum BuiltinHandshakeState {
   PendingRequestSend,    // We need to create & send the handshake request
   PendingRequestMessage, // We are waiting for a handshake request from remote participant
-  PendingReplyMessage { // We have sent a handshake request and are waiting for a reply
+  PendingReplyMessage {
+    // We have sent a handshake request and are waiting for a reply
     dh1: InMemorySigningKeyPair, // both public and private keys for dh1
-    challenge1: [u8;32], // 256-bit nonce
+    challenge1: [u8; 32],        // 256-bit nonce
   },
 
   // We have sent a handshake reply message and are waiting for the
-  // final message 
-  PendingFinalMessage {    
-    dh1: Bytes, // only public part of dh1
-    challenge1: [u8;32], // 256-bit nonce
+  // final message
+  PendingFinalMessage {
+    dh1: Bytes,                  // only public part of dh1
+    challenge1: [u8; 32],        // 256-bit nonce
     dh2: InMemorySigningKeyPair, // both public and private keys for dh2
-    challenge2: [u8;32], // 256-bit nonce
+    challenge2: [u8; 32],        // 256-bit nonce
   },
 
   // Handshake was completed & we sent the final message. If
-  // requested again, we need to resend the message 
+  // requested again, we need to resend the message
   CompletedWithFinalMessageSent {
     dh1: InMemorySigningKeyPair, // both public and private keys for dh1
-    challenge1: [u8;32], // 256-bit nonce
+    challenge1: [u8; 32],        // 256-bit nonce
     dh2: Bytes,
-    challenge2: [u8;32], // 256-bit nonce
-    //shared_secret: [u8;32] // result of D-H key exchange and SHA256
+    challenge2: [u8; 32], /* 256-bit nonce
+                           *shared_secret: [u8;32] // result of D-H key exchange and SHA256 */
   },
 
   // Handshake was completed & we received the final
   // message. Nothing to do for us anymore.
   CompletedWithFinalMessageReceived {
-    dh1: Bytes, // only public part of dh1
-    challenge1: [u8;32], // 256-bit nonce
+    dh1: Bytes,                  // only public part of dh1
+    challenge1: [u8; 32],        // 256-bit nonce
     dh2: InMemorySigningKeyPair, // both public and private keys for dh2
-    challenge2: [u8;32], // 256-bit nonce
-    //shared_secret: [u8;32] // result of D-H key exchange and SHA256
-  }, 
+    challenge2: [u8; 32],        /* 256-bit nonce
+                                  *shared_secret: [u8;32] // result of D-H key exchange and
+                                  * SHA256 */
+  },
 }
 
 // This is a mirror of the above states, but with no data carried from
 // one state to another. This is for use in secure Discovery.
-// TODO: Refactor (how?) to not need to seprate types for this.
+// TODO: Refactor (how?) to not need to separate types for this.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum DiscHandshakeState {
-  PendingRequestSend, 
+  PendingRequestSend,
   PendingRequestMessage,
   PendingReplyMessage,
-  PendingFinalMessage ,
+  PendingFinalMessage,
   CompletedWithFinalMessageSent,
-  CompletedWithFinalMessageReceived, 
+  CompletedWithFinalMessageReceived,
 }
 
 struct LocalParticipantInfo {
@@ -93,8 +93,8 @@ struct RemoteParticipantInfo {
 struct HandshakeInfo {
   state: BuiltinHandshakeState,
   // latest_sent_message: Option<HandshakeMessageToken>,
-  // my_dh_keys: Option<InMemorySigningKeyPair>, // This is dh1 or dh2, whichever we generated ourself
-  // challenge1: Option<Bytes>,
+  // my_dh_keys: Option<InMemorySigningKeyPair>, // This is dh1 or dh2, whichever we generated
+  // ourself challenge1: Option<Bytes>,
   // challenge2: Option<Bytes>,
   // shared_secret: Option<SharedSecret>,
 }
@@ -140,7 +140,7 @@ impl AuthenticationBuiltin {
     })
   }
 
-  // Returns inmutable info
+  // Returns immutable info
   fn get_remote_participant_info(
     &self,
     identity_handle: &IdentityHandle,
@@ -171,5 +171,4 @@ impl AuthenticationBuiltin {
       .get(hs_handle)
       .ok_or_else(|| security_error!("Identity handle not found with handshake handle"))
   }
-
 }

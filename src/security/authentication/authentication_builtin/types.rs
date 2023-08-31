@@ -266,7 +266,7 @@ pub const HANDSHAKE_FINAL_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Final";
 /// Security specification (v. 1.1)
 /// Works as all three token formats: HandshakeRequestMessageToken,
 /// HandshakeReplyMessageToken and HandshakeFinalMessageToken
-pub (in crate::security) struct BuiltinHandshakeMessageToken {
+pub(in crate::security) struct BuiltinHandshakeMessageToken {
   pub class_id: String,
   pub c_id: Option<Bytes>,
   pub c_perm: Option<Bytes>,

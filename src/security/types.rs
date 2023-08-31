@@ -76,10 +76,11 @@ use x509_certificate::X509CertificateError;
 
 impl From<X509CertificateError> for SecurityError {
   fn from(e: X509CertificateError) -> Self {
-    SecurityError { msg: format!("X509CertificateError {e:?}")}
+    SecurityError {
+      msg: format!("X509CertificateError {e:?}"),
+    }
   }
 }
-
 
 #[doc(hidden)]
 #[macro_export]
@@ -179,8 +180,12 @@ pub struct BinaryProperty {
 }
 
 impl BinaryProperty {
-  pub fn with_propagate(name: &str, value:Bytes) -> Self {
-    BinaryProperty { name: name.to_string(), value, propagate: true }
+  pub fn with_propagate(name: &str, value: Bytes) -> Self {
+    BinaryProperty {
+      name: name.to_string(),
+      value,
+      propagate: true,
+    }
   }
 
   pub fn value(&self) -> Bytes {

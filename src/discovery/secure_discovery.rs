@@ -252,8 +252,7 @@ impl SecureDiscovery {
         // We are authenticating.
         // If we need to send this remote participant a handshake request but haven't
         // managed to do so, retry
-        if let Some(DiscHandshakeState::PendingRequestSend) =
-          self.get_handshake_state(&guid_prefix)
+        if let Some(DiscHandshakeState::PendingRequestSend) = self.get_handshake_state(&guid_prefix)
         {
           self.try_sending_new_handshake_request_message(
             guid_prefix,
@@ -487,10 +486,7 @@ impl SecureDiscovery {
     match outcome {
       ValidationOutcome::PendingHandshakeRequest => {
         // We should send the handshake request
-        self.update_handshake_state(
-          remote_guid.prefix,
-          DiscHandshakeState::PendingRequestSend,
-        );
+        self.update_handshake_state(remote_guid.prefix, DiscHandshakeState::PendingRequestSend);
         self.try_sending_new_handshake_request_message(
           remote_guid.prefix,
           discovery_db,
@@ -620,10 +616,7 @@ impl SecureDiscovery {
     });
 
     // Update handshake state to pending reply message
-    self.update_handshake_state(
-      remote_guid_prefix,
-      DiscHandshakeState::PendingReplyMessage,
-    );
+    self.update_handshake_state(remote_guid_prefix, DiscHandshakeState::PendingReplyMessage);
   }
 
   pub fn resend_unanswered_authentication_messages(
@@ -827,10 +820,9 @@ impl SecureDiscovery {
         );
 
         // Set handshake state as pending final message
-        self.handshake_states.insert(
-          remote_guid_prefix,
-          DiscHandshakeState::PendingFinalMessage,
-        );
+        self
+          .handshake_states
+          .insert(remote_guid_prefix, DiscHandshakeState::PendingFinalMessage);
       }
       Ok((other_outcome, _reply_token)) => {
         // Other outcomes should not be possible
@@ -940,7 +932,7 @@ impl SecureDiscovery {
       Ok((other_outcome, _token_opt)) => {
         // Expected only OkFinalMessage outcome
         error!(
-          "Received an unexpted validation outcome from the security plugins. Outcome: {:?}. \
+          "Received an unexpected validation outcome from the security plugins. Outcome: {:?}. \
            Remote guid prefix: {:?}",
           other_outcome, remote_guid_prefix
         );
@@ -1021,7 +1013,7 @@ impl SecureDiscovery {
       Ok((other_outcome, _token_opt)) => {
         // Expected only Ok outcome
         error!(
-          "Received an unexpted validation outcome from the security plugins. Outcome: {:?}. \
+          "Received an unexpected validation outcome from the security plugins. Outcome: {:?}. \
            Remote guid prefix: {:?}",
           other_outcome, remote_guid_prefix
         );
@@ -1218,11 +1210,7 @@ impl SecureDiscovery {
     self.handshake_states.get(remote_guid_prefix).copied()
   }
 
-  fn update_handshake_state(
-    &mut self,
-    remote_guid_prefix: GuidPrefix,
-    state: DiscHandshakeState,
-  ) {
+  fn update_handshake_state(&mut self, remote_guid_prefix: GuidPrefix, state: DiscHandshakeState) {
     self.handshake_states.insert(remote_guid_prefix, state);
   }
 
@@ -1276,17 +1264,17 @@ fn get_handshake_token_from_stateless_message(
   let source_guid_prefix = message.generic.source_guid_prefix();
   let message_data = &message.generic.message_data;
 
-  // We expect the message to contain only one dataholder
+  // We expect the message to contain only one data holder
   if message.generic.message_data.len() > 1 {
     warn!(
-      "ParticipantStatelessMessage for handshake contains more than one dataholder. Using only \
+      "ParticipantStatelessMessage for handshake contains more than one data holder. Using only \
        the first one. Source guid prefix: {:?}",
       source_guid_prefix
     );
   }
   message_data
     .get(0)
-    .map(|dataholder| HandshakeMessageToken::from(dataholder.clone()))
+    .map(|data_holder| HandshakeMessageToken::from(data_holder.clone()))
 }
 
 // A helper to construct/readParticipantStatelessMessages. Takes care of the
