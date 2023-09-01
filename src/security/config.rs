@@ -20,7 +20,7 @@ pub fn test_config() -> SecurityConfig {
     },
     security::types::Property {
       name: "dds.sec.auth.private_key".to_string(),
-      value: "file:example_security_configuration_files/identity_ca_private_key.pem".to_string(),
+      value: "file:example_security_configuration_files/participant1_private_key.pem".to_string(),
       propagate: false,
     },
     security::types::Property {
