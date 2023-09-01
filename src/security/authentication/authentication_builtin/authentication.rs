@@ -137,8 +137,8 @@ impl Authentication for AuthenticationBuiltin {
       })?;
 
     // Verify that CA has signed our identity
-    identity_ca
-      .verify_signed_by_certificate(&identity_certificate)
+    identity_certificate
+      .verify_signed_by_certificate(&identity_ca)
       .map_err(|_e| {
         security_error!("My own identity certificate does not verify against identity CA.")
       })?;
