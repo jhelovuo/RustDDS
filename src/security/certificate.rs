@@ -18,10 +18,9 @@
 // different Certificate instances.
 
 use bytes::Bytes;
-
 use x509_certificate::{
-  certificate::CapturedX509Certificate, signing::InMemorySigningKeyPair, EcdsaCurve, 
-  KeyAlgorithm, Signer,
+  certificate::CapturedX509Certificate, signing::InMemorySigningKeyPair, EcdsaCurve, KeyAlgorithm,
+  Signer,
 };
 use der::Decode;
 use bcder::{encode::Values, Mode};
@@ -192,10 +191,11 @@ impl PrivateKey {
   }
 
   pub fn sign(&self, msg: &[u8]) -> SecurityResult<Bytes> {
-    self.priv_key.try_sign(msg)
-      .map(|s|  Bytes::copy_from_slice(s.as_ref()) )
+    self
+      .priv_key
+      .try_sign(msg)
+      .map(|s| Bytes::copy_from_slice(s.as_ref()))
       .map_err(|e| security_error(&format!("Signature verification failure: {e:?}")))
-
   }
 }
 

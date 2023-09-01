@@ -11,8 +11,7 @@ use crate::{
 };
 use super::{
   authentication_builtin::types::BuiltinIdentityToken, HandshakeHandle, IdentityHandle,
-  IdentityToken,
-  SharedSecret,
+  IdentityToken, SharedSecret,
 };
 
 mod authentication;
@@ -81,7 +80,8 @@ struct LocalParticipantInfo {
   guid: GUID,
   id_cert_private_key: certificate::PrivateKey, // PrivateKey is actually (private,public) key pair
   identity_certificate: certificate::Certificate, // Certificate contains the public key also
-  identity_ca: certificate::Certificate, // Certification Authority who has signed identity_certificate
+  identity_ca: certificate::Certificate,        /* Certification Authority who has signed
+                                                 * identity_certificate */
 }
 
 // All things about remote participant that we're interested in

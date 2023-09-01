@@ -15,11 +15,14 @@ use crate::{
     access_control::{access_control_builtin::s_mime_config_parser::SignedDocument, *},
     authentication::{
       authentication_builtin::{
-        HandshakeInfo, types::{
-          CertificateAlgorithm, IDENTITY_TOKEN_CLASS_ID, HANDSHAKE_REQUEST_CLASS_ID,
-          HANDSHAKE_REPLY_CLASS_ID, //HANDSHAKE_FINAL_CLASS_ID,
+        types::{
           BuiltinHandshakeMessageToken,
-        }
+          CertificateAlgorithm,
+          HANDSHAKE_REPLY_CLASS_ID, //HANDSHAKE_FINAL_CLASS_ID,
+          HANDSHAKE_REQUEST_CLASS_ID,
+          IDENTITY_TOKEN_CLASS_ID,
+        },
+        HandshakeInfo,
       },
       *,
     },
@@ -175,9 +178,9 @@ impl Authentication for AuthenticationBuiltin {
     // TODO: dig out ".algo" values from identity_certificate and identity_ca
     let identity_token = BuiltinIdentityToken {
       certificate_subject: Some(identity_certificate.subject_name().clone().serialize()),
-      certificate_algorithm: Some(CertificateAlgorithm::ECPrime256v1), // TODO: hardwired 
+      certificate_algorithm: Some(CertificateAlgorithm::ECPrime256v1), // TODO: hardwired
       ca_subject: Some(identity_ca.subject_name().clone().serialize()),
-      ca_algorithm: Some(CertificateAlgorithm::ECPrime256v1), // TODO: hardwired 
+      ca_algorithm: Some(CertificateAlgorithm::ECPrime256v1), // TODO: hardwired
     };
 
     let local_identity_handle = self.get_new_identity_handle();
@@ -236,8 +239,8 @@ impl Authentication for AuthenticationBuiltin {
   // DDS Security spec v1.1 Section "9.3.3 DDS:Auth:PKI-DH plugin behavior"
   // Table 52, row "validate_remote_identity"
   //
-  // The name is quite confusing, because this function does not validate much anything,
-  // but it starts the authentication protocol.
+  // The name is quite confusing, because this function does not validate much
+  // anything, but it starts the authentication protocol.
   fn validate_remote_identity(
     &mut self,
     remote_auth_request_token: Option<AuthRequestMessageToken>,
@@ -332,7 +335,7 @@ impl Authentication for AuthenticationBuiltin {
         "The parameter initiator_identity_handle is not the correct local handle"
       ));
     }
-    let my_id_certificate_text =  Bytes::from(local_info.identity_certificate.to_pem());
+    let my_id_certificate_text = Bytes::from(local_info.identity_certificate.to_pem());
 
     // This borrows `self` mutably!
     let remote_info = self.get_remote_participant_info_mutable(&replier_identity_handle)?;
@@ -347,11 +350,10 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
 
-    
-    let my_permissions_doc_text = Bytes::from_static(b"dummy"); 
+    let my_permissions_doc_text = Bytes::from_static(b"dummy");
     // TODO: Where to get this? Access control loads it, not us.
     // Access Control has .get_permissions_document_string()
-    
+
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
     let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
@@ -449,7 +451,7 @@ impl Authentication for AuthenticationBuiltin {
     let cert1 = SignedDocument::from_bytes(request.c_id.as_ref())?;
 
     // Verify that 1's identity cert checks out against CA.
-    cert1.verify_signature( &local_info.identity_ca )?;
+    cert1.verify_signature(&local_info.identity_ca)?;
 
     let my_permissions_doc_text = Bytes::new(); //TODO: see in function above
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
@@ -487,14 +489,13 @@ impl Authentication for AuthenticationBuiltin {
       InMemorySigningKeyPair::generate_random(KeyAlgorithm::Ecdsa(EcdsaCurve::Secp256r1))?;
 
     // Compute hash(c2)
-    let c2_properties : Vec<BinaryProperty> =
-      vec![
-        BinaryProperty::with_propagate("c.id", my_id_certificate_text.clone()),
-        BinaryProperty::with_propagate("c.perm", my_permissions_doc_text.clone()),
-        BinaryProperty::with_propagate("c.pdata", pdata_bytes.clone()),
-        BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
-        BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
-      ];
+    let c2_properties: Vec<BinaryProperty> = vec![
+      BinaryProperty::with_propagate("c.id", my_id_certificate_text.clone()),
+      BinaryProperty::with_propagate("c.perm", my_permissions_doc_text.clone()),
+      BinaryProperty::with_propagate("c.pdata", pdata_bytes.clone()),
+      BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
+      BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
+    ];
     let c2_properties_bytes = c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
     let c2_hash = digest::digest(&digest::SHA256, &c2_properties_bytes);
 
@@ -506,7 +507,7 @@ impl Authentication for AuthenticationBuiltin {
     cc2.extend_from_slice(request.challenge1.as_ref());
     cc2.extend_from_slice(request.dh1.as_ref());
     cc2.extend_from_slice(computed_c1_hash.as_ref());
-    let contents_signature =  local_info.id_cert_private_key.sign(cc2.as_ref())? ;
+    let contents_signature = local_info.id_cert_private_key.sign(cc2.as_ref())?;
 
     let challenge1_fixed: [u8; 32] = request.challenge1.as_ref().try_into().unwrap(); // TODO
 
@@ -518,16 +519,17 @@ impl Authentication for AuthenticationBuiltin {
       c_dsign_algo: Some(dsign_algo),
       c_kagree_algo: Some(kagree_algo),
       ocsp_status: None, // Not implemented
-      hash_c1: Some(Bytes::copy_from_slice(computed_c1_hash.as_ref())), // version we computed, not as received
+      hash_c1: Some(Bytes::copy_from_slice(computed_c1_hash.as_ref())), /* version we computed,
+                          * not as received */
       dh1: Some(request.dh1.clone()),
-      hash_c2: Some(Bytes::copy_from_slice(c2_hash.as_ref())), 
-      dh2: Some(dh2_key_pair.public_key_data()), 
+      hash_c2: Some(Bytes::copy_from_slice(c2_hash.as_ref())),
+      dh2: Some(dh2_key_pair.public_key_data()),
       challenge1: Some(request.challenge1.clone()),
       challenge2: Some(Bytes::copy_from_slice(challenge2.as_ref())),
       signature: Some(contents_signature),
     };
 
-    // re-borrow as mutbale
+    // re-borrow as mutable
     let remote_info = self.get_remote_participant_info_mutable(&initiator_identity_handle)?;
 
     // Change handshake state to pending final message & save the reply token
@@ -603,9 +605,12 @@ impl Authentication for AuthenticationBuiltin {
         let challenge2 = rand::random::<[u8; 32]>();
 
         // Change handshake state to Completed & save the final message token
-        remote_info.handshake.state = 
-          BuiltinHandshakeState::CompletedWithFinalMessageSent {
-            dh1, dh2, challenge1, challenge2, shared_secret
+        remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageSent {
+          dh1,
+          dh2,
+          challenge1,
+          challenge2,
+          shared_secret,
         };
         Ok((ValidationOutcome::OkFinalMessage, Some(final_message_token)))
       }
@@ -665,27 +670,23 @@ impl Authentication for AuthenticationBuiltin {
         dh2,
         challenge1,
         challenge2,
-        shared_secret
-      } => {
-        Ok(SharedSecretHandle {
-          challenge1: *challenge1,
-          challenge2: *challenge2,
-          shared_secret: shared_secret.clone(),
-        })
-      }
+        shared_secret,
+      } => Ok(SharedSecretHandle {
+        challenge1: *challenge1,
+        challenge2: *challenge2,
+        shared_secret: shared_secret.clone(),
+      }),
       BuiltinHandshakeState::CompletedWithFinalMessageReceived {
         dh1,
         dh2,
         challenge1,
         challenge2,
-        shared_secret
-      } => {
-        Ok(SharedSecretHandle {
-          challenge1: *challenge1,
-          challenge2: *challenge2,
-          shared_secret: shared_secret.clone(),
-        })
-      }
+        shared_secret,
+      } => Ok(SharedSecretHandle {
+        challenge1: *challenge1,
+        challenge2: *challenge2,
+        shared_secret: shared_secret.clone(),
+      }),
       wrong_state => Err(security_error!(
         "get_shared_secret called with wrong state {wrong_state:?}"
       )),
