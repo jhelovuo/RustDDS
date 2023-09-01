@@ -29,6 +29,7 @@ pub type HandshakeHandle = u32;
 
 // Shared secret resulting from successful handshake
 // This is a SHA256 hash of D-H key agreement result
+#[derive(Debug, Clone)]
 pub struct SharedSecret(pub [u8; 32]); // TODO: Remove inner "pub"
 
 impl AsRef<[u8]> for SharedSecret {

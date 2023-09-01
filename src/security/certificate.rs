@@ -17,8 +17,11 @@
 // Permissions documents. The verification of the two can use the same or
 // different Certificate instances.
 
+use bytes::Bytes;
+
 use x509_certificate::{
-  certificate::CapturedX509Certificate, signing::InMemorySigningKeyPair, EcdsaCurve, KeyAlgorithm,
+  certificate::CapturedX509Certificate, signing::InMemorySigningKeyPair, EcdsaCurve, 
+  KeyAlgorithm, Signer,
 };
 use der::Decode;
 use bcder::{encode::Values, Mode};
@@ -49,6 +52,10 @@ impl Certificate {
     let subject_name = other_cert.tbs_certificate.subject.into();
 
     Ok(Certificate { cert, subject_name })
+  }
+
+  pub fn to_pem(&self) -> String {
+    self.cert.encode_pem()
   }
 
   pub fn subject_name(&self) -> &DistinguishedName {
@@ -182,6 +189,13 @@ impl PrivateKey {
       .map_err(to_config_error_parse("Private key parse error"))?;
 
     Ok(PrivateKey { priv_key })
+  }
+
+  pub fn sign(&self, msg: &[u8]) -> SecurityResult<Bytes> {
+    self.priv_key.try_sign(msg)
+      .map(|s|  Bytes::copy_from_slice(s.as_ref()) )
+      .map_err(|e| security_error(&format!("Signature verification failure: {e:?}")))
+
   }
 }
 

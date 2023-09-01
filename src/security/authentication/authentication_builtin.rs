@@ -12,6 +12,7 @@ use crate::{
 use super::{
   authentication_builtin::types::BuiltinIdentityToken, HandshakeHandle, IdentityHandle,
   IdentityToken,
+  SharedSecret,
 };
 
 mod authentication;
@@ -46,8 +47,8 @@ pub(crate) enum BuiltinHandshakeState {
     dh1: InMemorySigningKeyPair, // both public and private keys for dh1
     challenge1: [u8; 32],        // 256-bit nonce
     dh2: Bytes,
-    challenge2: [u8; 32], /* 256-bit nonce
-                           *shared_secret: [u8;32] // result of D-H key exchange and SHA256 */
+    challenge2: [u8; 32], //256-bit nonce
+    shared_secret: SharedSecret,
   },
 
   // Handshake was completed & we received the final
@@ -56,9 +57,8 @@ pub(crate) enum BuiltinHandshakeState {
     dh1: Bytes,                  // only public part of dh1
     challenge1: [u8; 32],        // 256-bit nonce
     dh2: InMemorySigningKeyPair, // both public and private keys for dh2
-    challenge2: [u8; 32],        /* 256-bit nonce
-                                  *shared_secret: [u8;32] // result of D-H key exchange and
-                                  * SHA256 */
+    challenge2: [u8; 32],        // 256-bit nonce
+    shared_secret: SharedSecret,
   },
 }
 
@@ -79,8 +79,9 @@ struct LocalParticipantInfo {
   identity_handle: IdentityHandle,
   identity_token: BuiltinIdentityToken,
   guid: GUID,
-  private_key: certificate::PrivateKey, // PrivateKey is actually (private,public) key pair
-  public_key: certificate::Certificate, // Certificate contains the public key also
+  id_cert_private_key: certificate::PrivateKey, // PrivateKey is actually (private,public) key pair
+  identity_certificate: certificate::Certificate, // Certificate contains the public key also
+  identity_ca: certificate::Certificate, // Certification Authority who has signed identity_certificate
 }
 
 // All things about remote participant that we're interested in
