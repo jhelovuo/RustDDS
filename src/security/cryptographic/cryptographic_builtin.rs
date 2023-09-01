@@ -292,7 +292,7 @@ impl CryptographicBuiltin {
   fn compute_session_key(
     rec_spec: ReceiverSpecific,
     master_key: &BuiltinKey,
-    master_salt: &[u8],
+    master_salt: &BuiltinKey,
     iv: BuiltinInitializationVector,
   ) -> BuiltinKey {
     // This is the algorithm given in
@@ -308,7 +308,12 @@ impl CryptographicBuiltin {
     let ring_master_key = hmac::Key::new(hmac::HMAC_SHA256, master_key.as_bytes());
     let digest = hmac::sign(
       &ring_master_key,
-      &[magic_prefix, master_salt, iv.session_id().as_bytes()].concat(),
+      &[
+        magic_prefix,
+        master_salt.as_bytes(),
+        iv.session_id().as_bytes(),
+      ]
+      .concat(),
     );
 
     // .unwrap() will succeed, because digest has is 256 bits, which

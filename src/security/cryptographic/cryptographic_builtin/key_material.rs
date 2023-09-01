@@ -17,9 +17,9 @@ use super::{
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the name from the spec
 #[derive(Clone)]
-pub(crate) struct KeyMaterial_AES_GCM_GMAC {
+pub(super) struct KeyMaterial_AES_GCM_GMAC {
   pub transformation_kind: BuiltinCryptoTransformationKind,
-  pub master_salt: Vec<u8>,
+  pub master_salt: BuiltinKey, // Salt length should match the keys by 9.5.3.3.2
   pub sender_key_id: CryptoTransformKeyId,
   pub master_sender_key: BuiltinKey,
   pub receiver_specific_key_id: CryptoTransformKeyId,
@@ -79,13 +79,13 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoToken {
 /// the second for payload only.
 #[allow(non_camel_case_types)] // We use the name from the spec
 #[derive(Clone)]
-pub(crate) enum KeyMaterial_AES_GCM_GMAC_seq {
+pub(super) enum KeyMaterial_AES_GCM_GMAC_seq {
   One(KeyMaterial_AES_GCM_GMAC),
   Two(KeyMaterial_AES_GCM_GMAC, KeyMaterial_AES_GCM_GMAC),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum KeyMaterialScope {
+pub(super) enum KeyMaterialScope {
   PayloadAndMetadata,
   PayloadOnly,
 }
@@ -159,16 +159,6 @@ impl TryFrom<Vec<KeyMaterial_AES_GCM_GMAC>> for KeyMaterial_AES_GCM_GMAC_seq {
       [key_material, payload_key_material] => Ok(KeyMaterial_AES_GCM_GMAC_seq::Two(
         key_material.clone(),
         payload_key_material.clone(),
-      )),
-      [] => Ok(KeyMaterial_AES_GCM_GMAC_seq::One(
-        KeyMaterial_AES_GCM_GMAC {
-          transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
-          master_salt: Vec::new(),
-          sender_key_id: CryptoTransformKeyId::ZERO,
-          master_sender_key: BuiltinKey::ZERO,
-          receiver_specific_key_id: CryptoTransformKeyId::ZERO,
-          master_receiver_specific_key: BuiltinKey::ZERO,
-        },
       )),
       _ => Err(security_error!(
         "Expected 1 or 2 key materials in KeyMaterial_AES_GCM_GMAC_seq, received {}",
@@ -286,13 +276,13 @@ impl KeyMaterial_AES_GCM_GMAC {
   }
 }
 
-pub(crate) struct ReceiverSpecificKeyMaterial {
+pub(super) struct ReceiverSpecificKeyMaterial {
   pub key_id: CryptoTransformKeyId,
   pub key: BuiltinKey,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum ReceiverSpecific {
+pub(super) enum ReceiverSpecific {
   No,
   Yes,
 }
@@ -351,11 +341,11 @@ impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC
     // Map generic transformation_kind to builtin
     let transformation_kind = BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
 
-    let key_len = KeyLength::try_from(transformation_kind)?;
+    let key_len = KeyLength::from(transformation_kind);
 
     Ok(Self {
       transformation_kind,
-      master_salt,
+      master_salt: BuiltinKey::from_bytes(key_len, &master_salt)?,
       sender_key_id,
       master_sender_key: BuiltinKey::from_bytes(key_len, &master_sender_key)?,
       receiver_specific_key_id,
@@ -377,7 +367,7 @@ impl From<KeyMaterial_AES_GCM_GMAC> for Serializable_KeyMaterial_AES_GCM_GMAC {
   ) -> Self {
     Serializable_KeyMaterial_AES_GCM_GMAC {
       transformation_kind: transformation_kind.into(),
-      master_salt,
+      master_salt: master_salt.as_bytes().into(),
       sender_key_id,
       master_sender_key: master_sender_key.as_bytes().into(),
       receiver_specific_key_id,

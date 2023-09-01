@@ -1,6 +1,9 @@
 use ring::{aead::*, error::Unspecified};
 
-use crate::security::SecurityResult;
+use crate::{
+  security::{SecurityError, SecurityResult},
+  security_error,
+};
 use super::{
   builtin_key::*,
   types::{BuiltinInitializationVector, BuiltinMAC, MAC_LENGTH},
@@ -37,20 +40,15 @@ pub(super) fn keygen(key_length: KeyLength) -> BuiltinKey {
   BuiltinKey::generate_random(key_length)
 }
 
-// Generate a key of the given length
-pub(super) fn try_keygen(key_length: Option<KeyLength>) -> BuiltinKey {
-  match key_length {
-    Some(key_length) => BuiltinKey::generate_random(key_length),
-    None => BuiltinKey::ZERO,
-  }
-}
-
 #[allow(non_snake_case)]
-fn to_unbound_AES_GCM_key(key: &BuiltinKey) -> UnboundKey {
+fn to_unbound_AES_GCM_key(key: &BuiltinKey) -> SecurityResult<UnboundKey> {
   match key {
+    BuiltinKey::None => Err(security_error!(
+      "Attempted to call a cryptographic function with an empty key."
+    )),
     // unwraps should be safe, because builtin key lengths always match expected length
-    BuiltinKey::AES128(key) => UnboundKey::new(&AES_128_GCM, key).unwrap(),
-    BuiltinKey::AES256(key) => UnboundKey::new(&AES_256_GCM, key).unwrap(),
+    BuiltinKey::AES128(key) => Ok(UnboundKey::new(&AES_128_GCM, key).unwrap()),
+    BuiltinKey::AES256(key) => Ok(UnboundKey::new(&AES_256_GCM, key).unwrap()),
   }
 }
 
@@ -82,7 +80,7 @@ pub(super) fn compute_mac(
   // by the same AES-GCM where the Additional Authenticated Data is empty."
 
   let mut sealing_key = SealingKey::new(
-    to_unbound_AES_GCM_key(key),
+    to_unbound_AES_GCM_key(key)?,
     TrivialNonceSequence::new(initialization_vector),
   );
 
@@ -102,7 +100,7 @@ pub(super) fn encrypt(
   let mut in_out_data = Vec::from(plaintext);
 
   let mut sealing_key = SealingKey::new(
-    to_unbound_AES_GCM_key(key),
+    to_unbound_AES_GCM_key(key)?,
     TrivialNonceSequence::new(initialization_vector),
   );
 
@@ -123,7 +121,7 @@ pub(super) fn validate_mac(
   in_out.extend_from_slice(&mac);
 
   let mut opening_key = OpeningKey::new(
-    to_unbound_AES_GCM_key(key),
+    to_unbound_AES_GCM_key(key)?,
     TrivialNonceSequence::new(initialization_vector),
   );
 
@@ -146,7 +144,7 @@ pub(super) fn decrypt(
   in_out.extend_from_slice(mac.as_ref());
 
   let mut opening_key = OpeningKey::new(
-    to_unbound_AES_GCM_key(key),
+    to_unbound_AES_GCM_key(key)?,
     TrivialNonceSequence::new(initialization_vector),
   );
 

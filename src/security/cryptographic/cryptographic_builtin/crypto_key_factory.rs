@@ -12,7 +12,7 @@ use crate::{
   },
   security_error,
 };
-use super::{aes_gcm_gmac::try_keygen, builtin_key::*, key_material::*};
+use super::{aes_gcm_gmac::keygen, builtin_key::*, key_material::*};
 
 impl CryptographicBuiltin {
   fn generate_crypto_handle(&mut self) -> CryptoHandle {
@@ -98,25 +98,22 @@ impl CryptographicBuiltin {
     } else {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
     };
+    let key_length = KeyLength::from(transformation_kind);
 
-    let salt_cookie: &[u8] = b"keyexchange salt".as_ref();
+    let salt_cookie: &[u8] = b"keyexchange salt".as_ref(); // Not a typo
     let key_cookie: &[u8] = b"key exchange key".as_ref();
 
     let master_salt = Self::hash_shared_secret(
       [challenge1.as_ref(), salt_cookie, challenge2.as_ref()],
       shared_secret,
-      use_256_bit_key,
+      key_length,
     );
 
-    let master_sender_key = BuiltinKey::from_bytes(
-      KeyLength::try_from(transformation_kind)?,
-      Self::hash_shared_secret(
-        [challenge2.as_ref(), key_cookie, challenge1.as_ref()],
-        shared_secret,
-        use_256_bit_key,
-      )
-      .as_ref(),
-    )?;
+    let master_sender_key = Self::hash_shared_secret(
+      [challenge2.as_ref(), key_cookie, challenge1.as_ref()],
+      shared_secret,
+      key_length,
+    );
 
     Ok(KeyMaterial_AES_GCM_GMAC_seq::Two(
       KeyMaterial_AES_GCM_GMAC {
@@ -126,19 +123,16 @@ impl CryptographicBuiltin {
         master_sender_key,
         // Leave receiver-specific key empty
         receiver_specific_key_id: CryptoTransformKeyId::ZERO,
-        master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
-                                                         * sequence */
+        master_receiver_specific_key: BuiltinKey::None,
       },
       // The volatile topic has no payload protection
       KeyMaterial_AES_GCM_GMAC {
         transformation_kind: BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
-        master_salt: Vec::new(),
+        master_salt: BuiltinKey::None,
         sender_key_id: CryptoTransformKeyId::ZERO,
-        master_sender_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
-                                              * sequence */
+        master_sender_key: BuiltinKey::None,
         receiver_specific_key_id: CryptoTransformKeyId::ZERO,
-        master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
-                                                         * sequence */
+        master_receiver_specific_key: BuiltinKey::None,
       },
     ))
   }
@@ -148,19 +142,16 @@ impl CryptographicBuiltin {
   fn hash_shared_secret(
     hmac_key_plain: [&[u8]; 3],
     shared_secret: &SharedSecret,
-    use_256_bit_key: bool,
-  ) -> Vec<u8> {
+    key_length: KeyLength,
+  ) -> BuiltinKey {
     let hmac_key = hmac::Key::new(
       hmac::HMAC_SHA256,
       digest::digest(&digest::SHA256, hmac_key_plain.concat().as_ref()).as_ref(),
     );
     let hashed_secret = hmac::sign(&hmac_key, shared_secret.as_ref());
-    // Truncate
-    if use_256_bit_key {
-      hashed_secret.as_ref().into()
-    } else {
-      hashed_secret.as_ref()[..AES128_KEY_LENGTH].into()
-    }
+    // from_bytes handles truncation. HMAC_SHA256 gives 256 bit output so this never
+    // fails.
+    BuiltinKey::from_bytes(KeyLength::AES256, hashed_secret.as_ref()).unwrap()
   }
 
   fn use_256_bit_key(properties: &[Property]) -> bool {
@@ -193,18 +184,17 @@ impl CryptographicBuiltin {
     crypto_handle: CryptoHandle,
     transformation_kind: BuiltinCryptoTransformationKind,
   ) -> KeyMaterial_AES_GCM_GMAC {
-    let master_sender_key = try_keygen(transformation_kind.try_into().ok());
+    let key_length = KeyLength::from(transformation_kind);
     KeyMaterial_AES_GCM_GMAC {
       transformation_kind,
-      // TODO
-      master_salt: Vec::new(),
+
+      master_salt: BuiltinKey::generate_random(key_length),
 
       sender_key_id: CryptoTransformKeyId::ZERO, // TODO
-      master_sender_key,
+      master_sender_key: keygen(key_length),
       // Leave receiver-specific key empty initially
       receiver_specific_key_id: CryptoTransformKeyId::ZERO,
-      master_receiver_specific_key: BuiltinKey::ZERO, /* TODO this is wrong, should be an empty
-                                                       * sequence */
+      master_receiver_specific_key: BuiltinKey::None,
     }
   }
 
@@ -222,17 +212,12 @@ impl CryptographicBuiltin {
     crypto_handle: CryptoHandle,
   ) -> KeyMaterial_AES_GCM_GMAC_seq {
     if origin_authentication {
-      let master_receiver_specific_key = try_keygen(
-        key_materials
-          .key_material()
-          .transformation_kind
-          .try_into()
-          .ok(),
-      );
+      let master_receiver_specific_key =
+        keygen(key_materials.key_material().transformation_kind.into());
       let key_id = key_materials.key_material().sender_key_id; // TODO: Is this correct?
       key_materials.add_master_receiver_specific_key(key_id, master_receiver_specific_key)
     } else {
-      key_materials.add_master_receiver_specific_key(CryptoTransformKeyId::ZERO, BuiltinKey::ZERO)
+      key_materials.add_master_receiver_specific_key(CryptoTransformKeyId::ZERO, BuiltinKey::None)
     }
   }
 
