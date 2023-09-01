@@ -113,7 +113,7 @@ pub trait Authentication: Send {
   /// set_permissions_credential_and_token: section 8.3.2.11.11 of the Security
   /// specification
   fn set_permissions_credential_and_token(
-    &self,
+    &mut self,
     handle: IdentityHandle,
     permissions_credential_token: PermissionsCredentialToken,
     permissions_token: PermissionsToken,

@@ -97,7 +97,7 @@ impl SecureDiscovery {
     // Section "8.8.1 Authentication and AccessControl behavior with local
     // DomainParticipant"
 
-    let plugins = security_plugins.lock().unwrap();
+    let mut plugins = security_plugins.lock().unwrap();
 
     let participant_guid_prefix = domain_participant.guid().prefix;
 

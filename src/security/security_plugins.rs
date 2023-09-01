@@ -208,7 +208,7 @@ impl SecurityPlugins {
   }
 
   pub fn set_permissions_credential_and_token(
-    &self,
+    &mut self,
     participant_guidp: GuidPrefix,
     permissions_credential_token: PermissionsCredentialToken,
     permissions_token: PermissionsToken,

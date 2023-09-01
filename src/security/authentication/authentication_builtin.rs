@@ -82,6 +82,7 @@ struct LocalParticipantInfo {
   identity_certificate: certificate::Certificate, // Certificate contains the public key also
   identity_ca: certificate::Certificate,        /* Certification Authority who has signed
                                                  * identity_certificate */
+  permissions_document_xml: Bytes, // We do not care about UTF-8:ness anymore
 }
 
 // All things about remote participant that we're interested in
@@ -137,6 +138,12 @@ impl AuthenticationBuiltin {
 
   fn get_local_participant_info(&self) -> SecurityResult<&LocalParticipantInfo> {
     self.local_participant_info.as_ref().ok_or_else(|| {
+      security_error!("Local participant info not found. Has the local identity been validated?")
+    })
+  }
+
+  fn get_local_participant_info_mutable(&mut self) -> SecurityResult<&mut LocalParticipantInfo> {
+    self.local_participant_info.as_mut().ok_or_else(|| {
       security_error!("Local participant info not found. Has the local identity been validated?")
     })
   }

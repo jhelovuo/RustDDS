@@ -12,7 +12,10 @@ use x509_certificate::{
 
 use crate::{
   security::{
-    access_control::{access_control_builtin::s_mime_config_parser::SignedDocument, *},
+    access_control::{*, 
+      access_control_builtin::s_mime_config_parser::SignedDocument,
+      access_control_builtin::types::BuiltinPermissionsCredentialToken,
+    },
     authentication::{
       authentication_builtin::{
         types::{
@@ -192,6 +195,8 @@ impl Authentication for AuthenticationBuiltin {
       identity_certificate,
       id_cert_private_key,
       identity_ca,
+      permissions_document_xml: Bytes::new(), // This is to filled in later by
+      // intialization calling .set_permissions_credential_and_token()
     };
 
     self.local_participant_info = Some(local_participant_info);
@@ -223,14 +228,27 @@ impl Authentication for AuthenticationBuiltin {
     Ok(IdentityStatusToken::dummy())
   }
 
-  // Currently only mocked
   fn set_permissions_credential_and_token(
-    &self,
+    &mut self,
     handle: IdentityHandle,
     permissions_credential_token: PermissionsCredentialToken,
     permissions_token: PermissionsToken,
   ) -> SecurityResult<()> {
-    // TODO: actual implementation
+    let local_info = self.get_local_participant_info_mutable()?;
+    // Make sure local_identity_handle is actually ours
+    if handle != local_info.identity_handle {
+      return Err(security_error!(
+        "The parameter local_identity_handle is not the correct local handle"
+      ));
+    }
+
+    let builtin_token = BuiltinPermissionsCredentialToken::try_from(permissions_credential_token)?;
+    local_info.permissions_document_xml = 
+      Bytes::copy_from_slice( builtin_token.permissions_document.as_bytes() );
+
+    // TODO:
+    // What do we do about permissions_credential_token
+
 
     Ok(())
   }
@@ -336,6 +354,7 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
     let my_id_certificate_text = Bytes::from(local_info.identity_certificate.to_pem());
+    let my_permissions_doc_text = local_info.permissions_document_xml.clone();
 
     // This borrows `self` mutably!
     let remote_info = self.get_remote_participant_info_mutable(&replier_identity_handle)?;
@@ -349,11 +368,8 @@ impl Authentication for AuthenticationBuiltin {
         remote_info.handshake.state
       ));
     }
-
-    let my_permissions_doc_text = Bytes::from_static(b"dummy");
-    // TODO: Where to get this? Access control loads it, not us.
-    // Access Control has .get_permissions_document_string()
-
+  
+    
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
     let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
@@ -431,6 +447,7 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
     let my_id_certificate_text = Bytes::from(local_info.identity_certificate.to_pem());
+    let my_permissions_doc_text = local_info.permissions_document_xml.clone();
 
     // Make sure we are expecting a authentication request from remote
     let remote_info = self.get_remote_participant_info(&initiator_identity_handle)?;
@@ -453,7 +470,6 @@ impl Authentication for AuthenticationBuiltin {
     // Verify that 1's identity cert checks out against CA.
     cert1.verify_signature(&local_info.identity_ca)?;
 
-    let my_permissions_doc_text = Bytes::new(); //TODO: see in function above
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
     let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert

@@ -9,9 +9,9 @@ use crate::{
     authentication::authentication_builtin::types::CertificateAlgorithm,
     certificate::DistinguishedName,
     DataHolder, PluginEndpointSecurityAttributesMask, PluginParticipantSecurityAttributesMask,
-    PluginSecurityAttributesMask, Property, SecurityError,
+    PluginSecurityAttributesMask, Property, SecurityError, SecurityResult, 
   },
-  security_error,
+  security_error, 
 };
 
 // 9.4.2.3
@@ -241,9 +241,10 @@ const PERMISSIONS_CREDENTIAL_TOKEN_CLASS_ID: &str = "DDS:Access:PermissionsCrede
 const PERMISSIONS_CREDENTIAL_TOKEN_DOCUMENT_NAME: &str = "dds.perm.cert"; // Why is this cert, if the property contains the permissions document
 
 // 9.4.2.1
-pub(super) struct BuiltinPermissionsCredentialToken {
+pub(in crate::security) struct BuiltinPermissionsCredentialToken {
   pub permissions_document: String, // Permissions document XML as a string
 }
+
 impl From<BuiltinPermissionsCredentialToken> for PermissionsCredentialToken {
   fn from(
     BuiltinPermissionsCredentialToken {
@@ -261,6 +262,14 @@ impl From<BuiltinPermissionsCredentialToken> for PermissionsCredentialToken {
         binary_properties: Vec::new(),
       },
     }
+  }
+}
+
+impl TryFrom<PermissionsCredentialToken> for BuiltinPermissionsCredentialToken {
+  type Error = SecurityError;
+
+  fn try_from(pct: PermissionsCredentialToken) -> SecurityResult<BuiltinPermissionsCredentialToken> {
+    todo!()
   }
 }
 
