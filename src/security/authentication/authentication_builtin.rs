@@ -11,7 +11,7 @@ use crate::{
 };
 use super::{
   authentication_builtin::types::BuiltinIdentityToken, HandshakeHandle, IdentityHandle,
-  IdentityToken, SharedSecret,
+  IdentityToken, SharedSecret, Challenge,
 };
 
 mod authentication;
@@ -28,25 +28,25 @@ pub(crate) enum BuiltinHandshakeState {
   PendingReplyMessage {
     // We have sent a handshake request and are waiting for a reply
     dh1: InMemorySigningKeyPair, // both public and private keys for dh1
-    challenge1: [u8; 32],        // 256-bit nonce
+    challenge1: Challenge,        // 256-bit nonce
   },
 
   // We have sent a handshake reply message and are waiting for the
   // final message
   PendingFinalMessage {
     dh1: Bytes,                  // only public part of dh1
-    challenge1: [u8; 32],        // 256-bit nonce
+    challenge1: Challenge,        // 256-bit nonce
     dh2: InMemorySigningKeyPair, // both public and private keys for dh2
-    challenge2: [u8; 32],        // 256-bit nonce
+    challenge2: Challenge,        // 256-bit nonce
   },
 
   // Handshake was completed & we sent the final message. If
   // requested again, we need to resend the message
   CompletedWithFinalMessageSent {
     dh1: InMemorySigningKeyPair, // both public and private keys for dh1
-    challenge1: [u8; 32],        // 256-bit nonce
+    challenge1: Challenge,        // 256-bit nonce
     dh2: Bytes,
-    challenge2: [u8; 32], //256-bit nonce
+    challenge2: Challenge, //256-bit nonce
     shared_secret: SharedSecret,
   },
 
@@ -54,9 +54,9 @@ pub(crate) enum BuiltinHandshakeState {
   // message. Nothing to do for us anymore.
   CompletedWithFinalMessageReceived {
     dh1: Bytes,                  // only public part of dh1
-    challenge1: [u8; 32],        // 256-bit nonce
+    challenge1: Challenge,        // 256-bit nonce
     dh2: InMemorySigningKeyPair, // both public and private keys for dh2
-    challenge2: [u8; 32],        // 256-bit nonce
+    challenge2: Challenge,        // 256-bit nonce
     shared_secret: SharedSecret,
   },
 }
@@ -92,13 +92,9 @@ struct RemoteParticipantInfo {
   handshake: HandshakeInfo,
 }
 
+// TODO: This struct layer is redundant. Remove and replace with BuiltinHandshakeState
 struct HandshakeInfo {
   state: BuiltinHandshakeState,
-  // latest_sent_message: Option<HandshakeMessageToken>,
-  // my_dh_keys: Option<InMemorySigningKeyPair>, // This is dh1 or dh2, whichever we generated
-  // ourself challenge1: Option<Bytes>,
-  // challenge2: Option<Bytes>,
-  // shared_secret: Option<SharedSecret>,
 }
 
 // A struct implementing the builtin Authentication plugin
