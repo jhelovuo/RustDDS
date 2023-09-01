@@ -18,7 +18,9 @@ use crate::{
         HandshakeInfo, types::{
           CertificateAlgorithm, IDENTITY_TOKEN_CLASS_ID, HANDSHAKE_REQUEST_CLASS_ID,
           HANDSHAKE_REPLY_CLASS_ID, //HANDSHAKE_FINAL_CLASS_ID,
-          BuiltinHandshakeMessageToken,}},
+          BuiltinHandshakeMessageToken,
+        }
+      },
       *,
     },
     certificate::*,
@@ -516,10 +518,10 @@ impl Authentication for AuthenticationBuiltin {
       c_dsign_algo: Some(dsign_algo),
       c_kagree_algo: Some(kagree_algo),
       ocsp_status: None, // Not implemented
-(??)      hash_c1: Some(Bytes::copy_from_slice(c_properties_hash.as_ref())), // version we computed, not as received
+      hash_c1: Some(Bytes::copy_from_slice(computed_c1_hash.as_ref())), // version we computed, not as received
       dh1: Some(request.dh1.clone()),
-(??)      hash_c2: Some(Bytes::copy_from_slice(c_properties_hash.as_ref())), 
-(??)      dh2: Some(dh2_key_pair.public_key_data()), 
+      hash_c2: Some(Bytes::copy_from_slice(c2_hash.as_ref())), 
+      dh2: Some(dh2_key_pair.public_key_data()), 
       challenge1: Some(request.challenge1.clone()),
       challenge2: Some(Bytes::copy_from_slice(challenge2.as_ref())),
       signature: Some(contents_signature),
@@ -601,9 +603,9 @@ impl Authentication for AuthenticationBuiltin {
         let challenge2 = rand::random::<[u8; 32]>();
 
         // Change handshake state to Completed & save the final message token
-(??)        remote_info.handshake.state = 
-(??)          BuiltinHandshakeState::CompletedWithFinalMessageSent {
-(??)            dh1, dh2, challenge1, challenge2
+        remote_info.handshake.state = 
+          BuiltinHandshakeState::CompletedWithFinalMessageSent {
+            dh1, dh2, challenge1, challenge2, shared_secret
         };
         Ok((ValidationOutcome::OkFinalMessage, Some(final_message_token)))
       }
