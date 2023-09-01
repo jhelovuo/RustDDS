@@ -9,9 +9,9 @@ use crate::{
     authentication::authentication_builtin::types::CertificateAlgorithm,
     certificate::DistinguishedName,
     DataHolder, PluginEndpointSecurityAttributesMask, PluginParticipantSecurityAttributesMask,
-    PluginSecurityAttributesMask, Property, SecurityError, SecurityResult, 
+    PluginSecurityAttributesMask, Property, SecurityError, SecurityResult,
   },
-  security_error, 
+  security_error,
 };
 
 // 9.4.2.3
@@ -268,7 +268,9 @@ impl From<BuiltinPermissionsCredentialToken> for PermissionsCredentialToken {
 impl TryFrom<PermissionsCredentialToken> for BuiltinPermissionsCredentialToken {
   type Error = SecurityError;
 
-  fn try_from(pct: PermissionsCredentialToken) -> SecurityResult<BuiltinPermissionsCredentialToken> {
+  fn try_from(
+    pct: PermissionsCredentialToken,
+  ) -> SecurityResult<BuiltinPermissionsCredentialToken> {
     todo!()
   }
 }

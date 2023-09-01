@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
-use crate::security::types::DataHolder;
-use crate::security_error;
-use crate::security:: {SecurityError, SecurityResult};
+use crate::{
+  security::{types::DataHolder, SecurityError, SecurityResult},
+  security_error,
+};
 
 // Some generic message class IDs for authentication (see section 7.4.3.5 of the
 // Security spec)
@@ -39,12 +40,16 @@ impl AsRef<[u8]> for Sha256 {
   }
 }
 
-impl From<[u8;32]> for Sha256 {
-  fn from(s:[u8;32]) -> Sha256 { Sha256(s) }
+impl From<[u8; 32]> for Sha256 {
+  fn from(s: [u8; 32]) -> Sha256 {
+    Sha256(s)
+  }
 }
 
-impl From<Sha256> for [u8;32] {
-  fn from(s: Sha256) -> [u8;32] { s.0 }
+impl From<Sha256> for [u8; 32] {
+  fn from(s: Sha256) -> [u8; 32] {
+    s.0
+  }
 }
 
 impl TryFrom<&[u8]> for Sha256 {
@@ -52,11 +57,9 @@ impl TryFrom<&[u8]> for Sha256 {
   fn try_from(v: &[u8]) -> SecurityResult<Sha256> {
     v.try_into()
       .map_err(|e| security_error!("Cannot read SHA-256 hash: {e:?}"))
-      .map( Sha256 )
+      .map(Sha256)
   }
 }
-
-
 
 // Shared secret resulting from successful handshake
 // This is a SHA256 hash of D-H key agreement result
@@ -65,33 +68,35 @@ pub struct SharedSecret([u8; 32]);
 
 impl SharedSecret {
   pub fn dummy() -> Self {
-    SharedSecret( <[u8; 32]>::default() )
+    SharedSecret(<[u8; 32]>::default())
   }
-} 
+}
 
 impl AsRef<[u8]> for SharedSecret {
   fn as_ref(&self) -> &[u8] {
     self.0.as_ref()
   }
 }
-impl From<[u8;32]> for SharedSecret {
-  fn from(s:[u8;32]) -> SharedSecret { SharedSecret(s) }
+impl From<[u8; 32]> for SharedSecret {
+  fn from(s: [u8; 32]) -> SharedSecret {
+    SharedSecret(s)
+  }
 }
 
-impl From<SharedSecret> for [u8;32] {
-  fn from(s: SharedSecret) -> [u8;32] { s.0 }
+impl From<SharedSecret> for [u8; 32] {
+  fn from(s: SharedSecret) -> [u8; 32] {
+    s.0
+  }
 }
-
 
 impl TryFrom<&[u8]> for SharedSecret {
   type Error = SecurityError;
   fn try_from(v: &[u8]) -> SecurityResult<SharedSecret> {
     v.try_into()
       .map_err(|e| security_error!("Cannot read SharedSecret: {e:?}"))
-      .map( SharedSecret )
+      .map(SharedSecret)
   }
 }
-
 
 // Crypto challenge used in authentication protocol.
 // Essentially just a 256-bit number.
@@ -102,19 +107,23 @@ pub struct Challenge([u8; 32]);
 //   pub fn dummy() -> Self {
 //     Challenge( <[u8; 32]>::default() )
 //   }
-// } 
+// }
 
 impl AsRef<[u8]> for Challenge {
   fn as_ref(&self) -> &[u8] {
     self.0.as_ref()
   }
 }
-impl From<[u8;32]> for Challenge {
-  fn from(s:[u8;32]) -> Challenge { Challenge(s) }
+impl From<[u8; 32]> for Challenge {
+  fn from(s: [u8; 32]) -> Challenge {
+    Challenge(s)
+  }
 }
 
-impl From<Challenge> for [u8;32] {
-  fn from(s: Challenge) -> [u8;32] { s.0 }
+impl From<Challenge> for [u8; 32] {
+  fn from(s: Challenge) -> [u8; 32] {
+    s.0
+  }
 }
 
 impl TryFrom<&[u8]> for Challenge {
@@ -122,10 +131,9 @@ impl TryFrom<&[u8]> for Challenge {
   fn try_from(v: &[u8]) -> SecurityResult<Challenge> {
     v.try_into()
       .map_err(|e| security_error!("Cannot read Challenge: {e:?}"))
-      .map( Challenge )
+      .map(Challenge)
   }
 }
-
 
 pub struct SharedSecretHandle {
   pub shared_secret: SharedSecret,

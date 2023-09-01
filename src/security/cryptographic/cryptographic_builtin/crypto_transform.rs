@@ -496,7 +496,7 @@ impl CryptoTransform for CryptographicBuiltin {
             aes_gcm_gmac::validate_mac(&decode_key, initialization_vector, &serialized_submessages, common_mac)
               // Validate the receiver-specific MAC if one exists
               .and_then( |()|
-                // common mac was ok, let's see if there is receiveer-specific MAC
+                // common mac was ok, let's see if there is receiver-specific MAC
                 receiver_specific_key_and_mac
                   .map(|(key,mac)|
                     aes_gcm_gmac::validate_mac( &key,initialization_vector, &serialized_submessages, mac ) )
@@ -662,7 +662,7 @@ impl CryptoTransform for CryptographicBuiltin {
       receiving_datareader_crypto_handle,
       sending_datawriter_crypto_handle,
     )? {
-      SubmessageBody::Writer(subm) => Ok(subm),
+      SubmessageBody::Writer(submessage) => Ok(submessage),
       other => {
         warn!("Expected WriterSubmessage, but decoded as {other:?}");
         Err(security_error(
@@ -683,7 +683,7 @@ impl CryptoTransform for CryptographicBuiltin {
       receiving_datawriter_crypto_handle,
       sending_datareader_crypto_handle,
     )? {
-      SubmessageBody::Reader(subm) => Ok(subm),
+      SubmessageBody::Reader(submessage) => Ok(submessage),
       other => {
         warn!("Expected ReaderSubmessage, but decoded as {other:?}");
         Err(security_error(
