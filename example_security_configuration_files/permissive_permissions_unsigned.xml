@@ -3,7 +3,7 @@
     xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170901/omg_shared_ca_permissions.xsd">
     <permissions>
         <grant name="Participant1ExamplePermission">
-            <subject_name>O=Example Organization,CN=participant1_common_name</subject_name>
+            <subject_name>CN=participant1_common_name,O=Example Organization</subject_name>
             <validity>
                 <not_before>2023-01-01T00:00:00</not_before>
                 <not_after>9999-01-01T00:00:00</not_after>

@@ -130,10 +130,6 @@ impl ParticipantAccessControl for AccessControlBuiltin {
           .data_holder
           .get_property(CERT_SN_PROPERTY_NAME)
       })
-      //TODO remove the or after valid IdentityTokens have been added to tests
-      .or(Ok(
-        "O=Example Organization,CN=participant1_common_name".into(),
-      ))
       .and_then(|name| DistinguishedName::parse(&name).map_err(|e| security_error!("{e:?}")))?;
 
     let domain_participant_permissions = participant_qos
