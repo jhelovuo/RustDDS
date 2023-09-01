@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
 use crate::security::types::DataHolder;
+use crate::security_error;
+use crate::security:: {SecurityError, SecurityResult};
 
 // Some generic message class IDs for authentication (see section 7.4.3.5 of the
 // Security spec)
@@ -27,21 +29,108 @@ pub enum ValidationOutcome {
 pub type IdentityHandle = u32;
 pub type HandshakeHandle = u32;
 
+// Wrapper for a SHA-256 hash, to avoid confusion
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Sha256([u8; 32]);
+
+impl AsRef<[u8]> for Sha256 {
+  fn as_ref(&self) -> &[u8] {
+    self.0.as_ref()
+  }
+}
+
+impl From<[u8;32]> for Sha256 {
+  fn from(s:[u8;32]) -> Sha256 { Sha256(s) }
+}
+
+impl From<Sha256> for [u8;32] {
+  fn from(s: Sha256) -> [u8;32] { s.0 }
+}
+
+impl TryFrom<&[u8]> for Sha256 {
+  type Error = SecurityError;
+  fn try_from(v: &[u8]) -> SecurityResult<Sha256> {
+    v.try_into()
+      .map_err(|e| security_error!("Cannot read SHA-256 hash: {e:?}"))
+      .map( Sha256 )
+  }
+}
+
+
+
 // Shared secret resulting from successful handshake
 // This is a SHA256 hash of D-H key agreement result
-#[derive(Debug, Clone)]
-pub struct SharedSecret(pub [u8; 32]); // TODO: Remove inner "pub"
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct SharedSecret([u8; 32]);
+
+impl SharedSecret {
+  pub fn dummy() -> Self {
+    SharedSecret( <[u8; 32]>::default() )
+  }
+} 
 
 impl AsRef<[u8]> for SharedSecret {
   fn as_ref(&self) -> &[u8] {
     self.0.as_ref()
   }
 }
+impl From<[u8;32]> for SharedSecret {
+  fn from(s:[u8;32]) -> SharedSecret { SharedSecret(s) }
+}
+
+impl From<SharedSecret> for [u8;32] {
+  fn from(s: SharedSecret) -> [u8;32] { s.0 }
+}
+
+
+impl TryFrom<&[u8]> for SharedSecret {
+  type Error = SecurityError;
+  fn try_from(v: &[u8]) -> SecurityResult<SharedSecret> {
+    v.try_into()
+      .map_err(|e| security_error!("Cannot read SharedSecret: {e:?}"))
+      .map( SharedSecret )
+  }
+}
+
+
+// Crypto challenge used in authentication protocol.
+// Essentially just a 256-bit number.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct Challenge([u8; 32]);
+
+// impl Challenge {
+//   pub fn dummy() -> Self {
+//     Challenge( <[u8; 32]>::default() )
+//   }
+// } 
+
+impl AsRef<[u8]> for Challenge {
+  fn as_ref(&self) -> &[u8] {
+    self.0.as_ref()
+  }
+}
+impl From<[u8;32]> for Challenge {
+  fn from(s:[u8;32]) -> Challenge { Challenge(s) }
+}
+
+impl From<Challenge> for [u8;32] {
+  fn from(s: Challenge) -> [u8;32] { s.0 }
+}
+
+impl TryFrom<&[u8]> for Challenge {
+  type Error = SecurityError;
+  fn try_from(v: &[u8]) -> SecurityResult<Challenge> {
+    v.try_into()
+      .map_err(|e| security_error!("Cannot read Challenge: {e:?}"))
+      .map( Challenge )
+  }
+}
+
 
 pub struct SharedSecretHandle {
   pub shared_secret: SharedSecret,
-  pub challenge1: [u8; 32], // 256-bit nonce
-  pub challenge2: [u8; 32], // 256-bit nonce
+  pub challenge1: Challenge, // 256-bit nonce
+  pub challenge2: Challenge, // 256-bit nonce
 }
 
 // IdentityToken: section 8.3.2.1 of the Security specification (v. 1.1)
