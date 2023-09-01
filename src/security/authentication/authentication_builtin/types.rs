@@ -245,16 +245,16 @@ impl From<BuiltinAuthRequestMessageToken> for AuthRequestMessageToken {
   }
 }
 
-pub const HANDSHAKE_REQUEST_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Req";
-pub const HANDSHAKE_REPLY_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Reply";
-pub const HANDSHAKE_FINAL_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0+Final";
+pub const HANDSHAKE_REQUEST_CLASS_ID: &[u8] = b"DDS:Auth:PKI-DH:1.0+Req";
+pub const HANDSHAKE_REPLY_CLASS_ID: &[u8] = b"DDS:Auth:PKI-DH:1.0+Reply";
+pub const HANDSHAKE_FINAL_CLASS_ID: &[u8] = b"DDS:Auth:PKI-DH:1.0+Final";
 
 /// DDS:Auth:PKI-DH HandshakeMessageToken type from section 9.3.2.5 of the
 /// Security specification (v. 1.1)
 /// Works as all three token formats: HandshakeRequestMessageToken,
 /// HandshakeReplyMessageToken and HandshakeFinalMessageToken
 pub (in crate::security) struct BuiltinHandshakeMessageToken {
-  pub class_id: String,
+  pub class_id: Bytes,
   pub c_id: Option<Bytes>,
   pub c_perm: Option<Bytes>,
   pub c_pdata: Option<Bytes>,
@@ -271,8 +271,12 @@ pub (in crate::security) struct BuiltinHandshakeMessageToken {
 }
 
 impl BuiltinHandshakeMessageToken {
+
+  // request message parser
   pub fn extract_request(self) -> SecurityResult<HandshakeRequest> {
-    // TODO: Check class_id is correct
+    if self.class_id.as_ref() != HANDSHAKE_REQUEST_CLASS_ID {
+      return Err(security_error!("Wrong class_id"))
+    }
     let c_id = self.c_id.ok_or_else(|| security_error!("c_id not found"))?;
     let c_perm = self.c_perm.ok_or_else(|| security_error!("c_perm not found"))?;
     let c_pdata = self.c_pdata.ok_or_else(|| security_error!("c_pdata not found"))?;
@@ -287,8 +291,12 @@ impl BuiltinHandshakeMessageToken {
       c_id, c_perm, c_pdata, c_dsign_algo, c_kagree_algo, hash_c1, challenge1, dh1  
     })
   }
+
+  // reply message parser
   pub fn extract_reply(self) -> SecurityResult<HandshakeReply> {
-    // TODO: Check class_id is correct
+    if self.class_id.as_ref() != HANDSHAKE_REPLY_CLASS_ID{
+      return Err(security_error!("Wrong class_id"))
+    }
     let c_id = self.c_id.ok_or_else(|| security_error!("c_id not found"))?;
     let c_perm = self.c_perm.ok_or_else(|| security_error!("c_perm not found"))?;
     let c_pdata = self.c_pdata.ok_or_else(|| security_error!("c_pdata not found"))?;
@@ -312,18 +320,27 @@ impl BuiltinHandshakeMessageToken {
       signature
     })
   }
+
+  // final message parser
   pub fn extract_final(self) -> SecurityResult<HandshakeFinal> {
-    // TODO: Check class_id is correct
+    if self.class_id.as_ref() != HANDSHAKE_FINAL_CLASS_ID {
+      return Err(security_error!("Wrong class_id"))
+    }
+    let hash_c1 = self.hash_c1.map(|mh| mh.as_ref().try_into() ).transpose()?;
+    let hash_c2 = self.hash_c2.map(|mh| mh.as_ref().try_into() ).transpose()?;
+    let challenge1 = self.challenge1.ok_or_else(|| security_error!("challenge1 not found"))
+      .and_then(|b| Challenge::try_from(b.as_ref()) ) ?;
+    let challenge2 = self.challenge2.ok_or_else(|| security_error!("challenge2 not found"))
+      .and_then(|b| Challenge::try_from(b.as_ref()) ) ?;
+    let dh1 = self.dh1.ok_or_else(|| security_error!("dh1 not found"))?;
+    let dh2 = self.dh2.ok_or_else(|| security_error!("dh2 not found"))?;
+    let signature = self.signature.ok_or_else(|| security_error!("signature not found"))?;
 
-    todo!()
-
-    // let hash_c1 = self.hash_c1;
-    // let challenge1 = self.challenge1.ok_or_else(|| security_error!("challenge1 not found"))?;
-    // let dh1 = self.dh1.ok_or_else(|| security_error!("dh1 not found"))?;
-
-    // Ok(HandshakeRequest { 
-    //   c_id, c_perm, c_pdata, c_dsign_algo, c_kagree_algo, hash_c1, challenge1, dh1  
-    // })
+    Ok(HandshakeFinal { 
+      hash_c1, challenge1, dh1,
+      hash_c2, challenge2, dh2,
+      signature,
+    })
   }
 }
 
@@ -382,7 +399,7 @@ impl TryFrom<HandshakeMessageToken> for BuiltinHandshakeMessageToken {
       HANDSHAKE_REPLY_CLASS_ID,
       HANDSHAKE_FINAL_CLASS_ID,
     ]
-    .contains(&dh.class_id.as_str()))
+    .contains(&dh.class_id.as_bytes()))
     {
       return Err(format!("Invalid class ID '{}'", dh.class_id));
     }
@@ -409,7 +426,7 @@ impl TryFrom<HandshakeMessageToken> for BuiltinHandshakeMessageToken {
     let signature = bin_properties_map.get("signature").map(|val| val.value());
 
     let builtin_token = Self {
-      class_id: dh.class_id,
+      class_id: Bytes::copy_from_slice( dh.class_id.as_bytes()) ,
       c_id,
       c_perm,
       c_pdata,
@@ -430,7 +447,11 @@ impl TryFrom<HandshakeMessageToken> for BuiltinHandshakeMessageToken {
 
 impl From<BuiltinHandshakeMessageToken> for HandshakeMessageToken {
   fn from(builtin_token: BuiltinHandshakeMessageToken) -> Self {
-    DataHolderBuilder::with_class_id(builtin_token.class_id)
+    // TODO: make sure this .unwrap() does not panic
+    // Better yet, class_id in DataHolder should be converted to Bytes or
+    // Vec<u8>, as it is OMG IDL tpye string, which is not UTF-8, but
+    // just an byte string (with null characters forbidden).
+    DataHolderBuilder::with_class_id( String::from_utf8(builtin_token.class_id.to_vec() ).unwrap() )
       .add_binary_property_opt("c.id", builtin_token.c_id , true)
       .add_binary_property_opt("c.perm", builtin_token.c_perm, true)
       .add_binary_property_opt("c.pdata", builtin_token.c_pdata, true)
