@@ -2,7 +2,6 @@ use std::collections::HashMap;
 
 use bytes::Bytes;
 //use x509_certificate::signing::InMemorySigningKeyPair;
-
 use ring::agreement;
 
 use crate::{
@@ -30,17 +29,17 @@ pub(crate) enum BuiltinHandshakeState {
   PendingReplyMessage {
     // We have sent a handshake request and are waiting for a reply
     dh1: agreement::EphemeralPrivateKey, // both public and private keys for dh1
-    challenge1: Challenge,       // 256-bit nonce
-    hash_c1: Sha256,             // To avoid recomputing this on receiving reply
+    challenge1: Challenge,               // 256-bit nonce
+    hash_c1: Sha256,                     // To avoid recomputing this on receiving reply
   },
 
   // We have sent a handshake reply message and are waiting for the
   // final message
   PendingFinalMessage {
-    dh1: Bytes,                  // only public part of dh1
-    challenge1: Challenge,       // 256-bit nonce
+    dh1: Bytes,                          // only public part of dh1
+    challenge1: Challenge,               // 256-bit nonce
     dh2: agreement::EphemeralPrivateKey, // both public and private keys for dh2
-    challenge2: Challenge,       // 256-bit nonce
+    challenge2: Challenge,               // 256-bit nonce
   },
 
   // Handshake was completed & we sent the final message. If
@@ -52,7 +51,7 @@ pub(crate) enum BuiltinHandshakeState {
     // both using and storing them woould be difficult.
 
     // dh1: InMemorySigningKeyPair, // both public and private keys for dh1
-    challenge1: Challenge,       // 256-bit nonce
+    challenge1: Challenge, // 256-bit nonce
     // dh2: Bytes,
     challenge2: Challenge, //256-bit nonce
     shared_secret: SharedSecret,
@@ -62,9 +61,9 @@ pub(crate) enum BuiltinHandshakeState {
   // message. Nothing to do for us anymore.
   CompletedWithFinalMessageReceived {
     // dh1: Bytes,                  // only public part of dh1
-    challenge1: Challenge,       // 256-bit nonce
+    challenge1: Challenge, // 256-bit nonce
     // dh2: InMemorySigningKeyPair, // both public and private keys for dh2
-    challenge2: Challenge,       // 256-bit nonce
+    challenge2: Challenge, // 256-bit nonce
     shared_secret: SharedSecret,
   },
 }
@@ -217,10 +216,10 @@ impl AuthenticationBuiltin {
     // Construct the handshake request message token
     let handshake_request = HandshakeMessageToken::dummy();
 
-    let dh1 =
-      agreement::EphemeralPrivateKey::generate(&agreement::ECDH_P256, 
-        &ring::rand::SystemRandom::new())?;
-
+    let dh1 = agreement::EphemeralPrivateKey::generate(
+      &agreement::ECDH_P256,
+      &ring::rand::SystemRandom::new(),
+    )?;
 
     // Change handshake state to pending reply message & save the request token
     remote_info.handshake.state = BuiltinHandshakeState::PendingReplyMessage {
@@ -272,9 +271,10 @@ impl AuthenticationBuiltin {
     // Generate a reply token
     let reply_token = HandshakeMessageToken::dummy();
 
-    let dh2 =
-      agreement::EphemeralPrivateKey::generate(&agreement::ECDH_P256, 
-        &ring::rand::SystemRandom::new())?;
+    let dh2 = agreement::EphemeralPrivateKey::generate(
+      &agreement::ECDH_P256,
+      &ring::rand::SystemRandom::new(),
+    )?;
 
     // Change handshake state to pending final message
     remote_info.handshake.state = BuiltinHandshakeState::PendingFinalMessage {
@@ -339,7 +339,8 @@ impl AuthenticationBuiltin {
       BuiltinHandshakeState::PendingFinalMessage {
         challenge1,
         challenge2,
-        dh1, dh2,
+        dh1,
+        dh2,
       } => {
         // We are the responder, and expect the final message.
         // Result is that we do not produce a MassageToken, since this was the final
