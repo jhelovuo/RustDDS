@@ -349,6 +349,14 @@ impl Authentication for AuthenticationBuiltin {
     replier_identity_handle: IdentityHandle,   // Remote
     serialized_local_participant_data: Vec<u8>,
   ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
+    if self.mock_handshakes {
+      return self.begin_handshake_request_mocked(
+        initiator_identity_handle,
+        replier_identity_handle,
+        serialized_local_participant_data,
+      );
+    }
+
     // Make sure initiator_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
     if initiator_identity_handle != local_info.identity_handle {
@@ -398,7 +406,7 @@ impl Authentication for AuthenticationBuiltin {
     let challenge1 = Challenge::from(rand::random::<[u8; 32]>());
 
     let handshake_request_builtin = BuiltinHandshakeMessageToken {
-      class_id: Bytes::copy_from_slice(HANDSHAKE_REPLY_CLASS_ID),
+      class_id: Bytes::copy_from_slice(HANDSHAKE_REQUEST_CLASS_ID),
       c_id: Some(my_id_certificate_text),
       c_perm: Some(my_permissions_doc_text),
       c_pdata: Some(pdata_bytes),
@@ -535,14 +543,15 @@ impl Authentication for AuthenticationBuiltin {
     let contents_signature = local_info.id_cert_private_key.sign(cc2.as_ref())?;
 
     let reply_token = BuiltinHandshakeMessageToken {
-      class_id: Bytes::copy_from_slice(HANDSHAKE_REQUEST_CLASS_ID),
+      class_id: Bytes::copy_from_slice(HANDSHAKE_REPLY_CLASS_ID),
       c_id: Some(my_id_certificate_text),
       c_perm: Some(my_permissions_doc_text),
       c_pdata: Some(pdata_bytes),
       c_dsign_algo: Some(dsign_algo),
       c_kagree_algo: Some(kagree_algo),
       ocsp_status: None, // Not implemented
-(??)      hash_c1: Some(Bytes::copy_from_slice(computed_c1_hash.as_ref())), // version we computed, not as received
+      hash_c1: Some(Bytes::copy_from_slice(computed_c1_hash.as_ref())), /* version we computed,
+                                                                         * not as received */
       dh1: Some(request.dh1.clone()),
       hash_c2: Some(Bytes::copy_from_slice(c2_hash.as_ref())),
       dh2: Some(dh2_public_key),
@@ -643,7 +652,7 @@ impl Authentication for AuthenticationBuiltin {
         ];
         let c2_properties_bytes =
           c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-(??)        let c2_hash_recomputed = digest::digest(&digest::SHA256, &c2_properties_bytes);
+        let c2_hash_recomputed = digest::digest(&digest::SHA256, &c2_properties_bytes);
 
         if let Some(received_hash_c2) = reply.hash_c2 {
           if received_hash_c2.as_ref() == c2_hash_recomputed.as_ref() {
