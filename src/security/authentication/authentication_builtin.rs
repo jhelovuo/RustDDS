@@ -10,8 +10,8 @@ use crate::{
   GUID,
 };
 use super::{
-  authentication_builtin::types::BuiltinIdentityToken, Challenge, HandshakeHandle, IdentityHandle,
-  IdentityToken, SharedSecret,
+  authentication_builtin::types::BuiltinIdentityToken, HandshakeHandle, IdentityHandle,
+  IdentityToken, SharedSecret, Challenge, Sha256,
 };
 
 mod authentication;
@@ -29,6 +29,7 @@ pub(crate) enum BuiltinHandshakeState {
     // We have sent a handshake request and are waiting for a reply
     dh1: InMemorySigningKeyPair, // both public and private keys for dh1
     challenge1: Challenge,       // 256-bit nonce
+    hash_c1: Sha256,    // To avoid recomputing this on receiving reply
   },
 
   // We have sent a handshake reply message and are waiting for the

@@ -12,20 +12,17 @@ use x509_certificate::{
 
 use crate::{
   security::{
-    access_control::{
+    access_control::{*, 
       access_control_builtin::s_mime_config_parser::SignedDocument,
-      access_control_builtin::types::BuiltinPermissionsCredentialToken, *,
+      access_control_builtin::types::BuiltinPermissionsCredentialToken,
     },
     authentication::{
       authentication_builtin::{
-        types::{
-          BuiltinHandshakeMessageToken,
-          CertificateAlgorithm,
+        HandshakeInfo, types::{
+          CertificateAlgorithm, IDENTITY_TOKEN_CLASS_ID, HANDSHAKE_REQUEST_CLASS_ID,
           HANDSHAKE_REPLY_CLASS_ID, //HANDSHAKE_FINAL_CLASS_ID,
-          HANDSHAKE_REQUEST_CLASS_ID,
-          IDENTITY_TOKEN_CLASS_ID,
-        },
-        HandshakeInfo,
+          BuiltinHandshakeMessageToken,
+        }
       },
       *,
     },
@@ -374,7 +371,7 @@ impl Authentication for AuthenticationBuiltin {
     let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
     let kagree_algo = Bytes::from_static(b"ECDH+prime256v1-CEUM"); // TODO: do not hardcode this, get from id cert
 
-    // temp structure just to produce hash
+    // temp structure just to produce hash(C1)
     let c_properties: Vec<BinaryProperty> = vec![
       BinaryProperty::with_propagate("c.id", my_id_certificate_text.clone()),
       BinaryProperty::with_propagate("c.perm", my_permissions_doc_text.clone()),
@@ -383,7 +380,8 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
     let c_properties_bytes = c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-    let c_properties_hash = digest::digest(&digest::SHA256, &c_properties_bytes);
+    let hash_c1 = 
+      Sha256::try_from(digest::digest(&digest::SHA256, &c_properties_bytes).as_ref())? ;
 
     // Generate new, random Diffie-Hellman key pair "dh1"
     let (dh1_key_pair, _keypair_pkcs8) =
@@ -400,7 +398,7 @@ impl Authentication for AuthenticationBuiltin {
       c_dsign_algo: Some(dsign_algo),
       c_kagree_algo: Some(kagree_algo),
       ocsp_status: None, // Not implemented
-      hash_c1: Some(Bytes::copy_from_slice(c_properties_hash.as_ref())),
+      hash_c1: Some(Bytes::copy_from_slice(hash_c1.as_ref())),
       dh1: Some(dh1_key_pair.public_key_data()),
       hash_c2: None, // not used in request
       dh2: None,     // not used in request
@@ -415,6 +413,7 @@ impl Authentication for AuthenticationBuiltin {
     remote_info.handshake.state = BuiltinHandshakeState::PendingReplyMessage {
       dh1: dh1_key_pair,
       challenge1,
+      hash_c1,
     };
 
     // Create a new handshake handle & map it to remotes identity handle
@@ -582,25 +581,66 @@ impl Authentication for AuthenticationBuiltin {
     // dummy.
     let mut state = BuiltinHandshakeState::PendingRequestSend; // dummy to leave behind
     std::mem::swap(&mut remote_info.handshake.state, &mut state);
+    let remote_info = self.get_remote_participant_info(&remote_identity_handle)?;
+
+    let local_info = self.get_local_participant_info()?;
 
     match state {
-      BuiltinHandshakeState::PendingReplyMessage { dh1, challenge1 } => {
+      BuiltinHandshakeState::PendingReplyMessage { dh1, challenge1, hash_c1 } => {
         // We are the initiator, and expect a reply.
         // Result is that we produce a MassageToken (i.e. send the final message)
         // and the handshake results (shared secret)
+        let reply =
+          BuiltinHandshakeMessageToken::try_from(handshake_message_in)?.extract_reply()?;
 
-        // TODO: verify the contents of the reply message token
+        // "Verifies Cert2 with the configured Identity CA"
+        // So Cert2 is now `request.c_id`
+        let cert2 = SignedDocument::from_bytes(reply.c_id.as_ref())?;
 
-        // TODO: verify the content of authentication request token?
-
-        // TODO: Verify validity of IdentityCredential
+        // Verify that 2's identity cert checks out against CA.
+        cert2.verify_signature( &local_info.identity_ca )?;
 
         // TODO: verify ocsp_status / status of IdentityCredential
 
-        // TODO: check that challenge1 is equal to the challenge1 sent in request
-        // token
+        if challenge1 != reply.challenge1 {
+          return Err(security_error!("Challenge 1 mismatch on authentication reply"))
+        }
 
-        // TODO: verify the digital signature
+        if let Some(received_hash_c1) = reply.hash_c1 {
+          if hash_c1 != received_hash_c1 {
+            return Err(security_error!("Hash C1 mismatch on authentication reply")) 
+          } else { /* ok */ }
+        } else {
+          debug!("Cannot compare hash C1 in process_handshake. Reply did not have any.")
+        }
+
+        // Compute hash(C2) from received data.
+        let c2_properties : Vec<BinaryProperty> =
+          vec![
+            BinaryProperty::with_propagate("c.id", reply.c_id.clone()),
+            BinaryProperty::with_propagate("c.perm", reply.c_perm.clone()),
+            BinaryProperty::with_propagate("c.pdata", reply.c_pdata.clone()),
+            BinaryProperty::with_propagate("c.dsign_algo", reply.c_dsign_algo.clone()),
+            BinaryProperty::with_propagate("c.kagree_algo", reply.c_kagree_algo.clone()),
+          ];
+        let c2_properties_bytes = c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
+        let c2_hash_sanity_check = digest::digest(&digest::SHA256, &c2_properties_bytes);
+
+        if let Some(received_hash_c2) = reply.hash_c2 {
+          if received_hash_c2.as_ref() == c2_hash_sanity_check.as_ref() {
+            // hashes match, safe to proceed
+          } else {
+            return Err(security_error!("process_handshake: hash_c2 mismatch"));
+          }
+        } else {
+          debug!("Cannot compare hashes in process_handshake. Reply did not have any.");
+        }
+
+        // Reconstruct signed data: C2 = Cert2, Perm2, Pdata2, Dsign_algo2, Kagree_algo2
+        // and then Hash(C2)
+
+
+        // Verify reply.signature signature agains 2's public key 
 
         // TODO: store the value of property with name “dds.sec.” found within the
         // handshake_message_in
@@ -618,6 +658,7 @@ impl Authentication for AuthenticationBuiltin {
         let challenge2 = Challenge::from(rand::random::<[u8; 32]>());
 
         // Change handshake state to Completed & save the final message token
+        let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
         remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageSent {
           dh1,
           dh2,
@@ -651,6 +692,7 @@ impl Authentication for AuthenticationBuiltin {
 
         // Change handshake state to Completed
         let shared_secret = SharedSecret::dummy(); // TODO
+        let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
         remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageReceived {
           dh1,
           dh2,
