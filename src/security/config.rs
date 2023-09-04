@@ -33,6 +33,13 @@ pub fn test_config() -> SecurityConfig {
       value: "file:example_security_configuration_files/participant1_certificate.pem".to_string(),
       propagate: false,
     },
+    security::types::Property {
+      // Custom & temporary property. Should be here only in the development phase.
+      name: "dds.sec.auth.mock_handshakes".to_string(),
+      value: "no" // If "yes", authentication handshakes will be mocked. Otherwise not.
+        .to_string(),
+      propagate: false,
+    },
     // For the access control plugin
     security::types::Property {
       name: "dds.sec.access.permissions_ca".to_string(),

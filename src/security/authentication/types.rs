@@ -34,6 +34,12 @@ pub type HandshakeHandle = u32;
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Sha256([u8; 32]);
 
+impl Sha256 {
+  pub fn dummy() -> Self {
+    Sha256(<[u8; 32]>::default())
+  }
+}
+
 impl AsRef<[u8]> for Sha256 {
   fn as_ref(&self) -> &[u8] {
     self.0.as_ref()
@@ -103,11 +109,11 @@ impl TryFrom<&[u8]> for SharedSecret {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct Challenge([u8; 32]);
 
-// impl Challenge {
-//   pub fn dummy() -> Self {
-//     Challenge( <[u8; 32]>::default() )
-//   }
-// }
+impl Challenge {
+  pub fn dummy() -> Self {
+    Challenge(<[u8; 32]>::default())
+  }
+}
 
 impl AsRef<[u8]> for Challenge {
   fn as_ref(&self) -> &[u8] {
