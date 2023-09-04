@@ -349,14 +349,6 @@ impl Authentication for AuthenticationBuiltin {
     replier_identity_handle: IdentityHandle,   // Remote
     serialized_local_participant_data: Vec<u8>,
   ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
-    if self.mock_handshakes {
-      return self.begin_handshake_request_mocked(
-        initiator_identity_handle,
-        replier_identity_handle,
-        serialized_local_participant_data,
-      );
-    }
-
     // Make sure initiator_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
     if initiator_identity_handle != local_info.identity_handle {
@@ -406,7 +398,7 @@ impl Authentication for AuthenticationBuiltin {
     let challenge1 = Challenge::from(rand::random::<[u8; 32]>());
 
     let handshake_request_builtin = BuiltinHandshakeMessageToken {
-      class_id: Bytes::copy_from_slice(HANDSHAKE_REQUEST_CLASS_ID),
+      class_id: Bytes::copy_from_slice(HANDSHAKE_REPLY_CLASS_ID),
       c_id: Some(my_id_certificate_text),
       c_perm: Some(my_permissions_doc_text),
       c_pdata: Some(pdata_bytes),
@@ -452,15 +444,6 @@ impl Authentication for AuthenticationBuiltin {
     replier_identity_handle: IdentityHandle,   // Local
     serialized_local_participant_data: Vec<u8>,
   ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
-    if self.mock_handshakes {
-      return self.begin_handshake_reply_mocked(
-        handshake_message_in,
-        initiator_identity_handle,
-        replier_identity_handle,
-        serialized_local_participant_data,
-      );
-    }
-
     // Make sure replier_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
     if replier_identity_handle != local_info.identity_handle {
@@ -539,7 +522,7 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
     let c2_properties_bytes = c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-    let c2_hash = digest::digest(&digest::SHA256, &c2_properties_bytes);
+    let c2_hash = Sha256::try_from(digest::digest(&digest::SHA256, &c2_properties_bytes).as_ref())?;
 
     // Spec: "Sign(Hash(C2) | Challenge2 | DH2 | Challenge1 | DH1 | Hash(C1)) )"
     let mut cc2 = BytesMut::with_capacity(1024);
@@ -552,15 +535,14 @@ impl Authentication for AuthenticationBuiltin {
     let contents_signature = local_info.id_cert_private_key.sign(cc2.as_ref())?;
 
     let reply_token = BuiltinHandshakeMessageToken {
-      class_id: Bytes::copy_from_slice(HANDSHAKE_REPLY_CLASS_ID),
+      class_id: Bytes::copy_from_slice(HANDSHAKE_REQUEST_CLASS_ID),
       c_id: Some(my_id_certificate_text),
       c_perm: Some(my_permissions_doc_text),
       c_pdata: Some(pdata_bytes),
       c_dsign_algo: Some(dsign_algo),
       c_kagree_algo: Some(kagree_algo),
       ocsp_status: None, // Not implemented
-      hash_c1: Some(Bytes::copy_from_slice(computed_c1_hash.as_ref())), /* version we computed,
-                          * not as received */
+(??)      hash_c1: Some(Bytes::copy_from_slice(computed_c1_hash.as_ref())), // version we computed, not as received
       dh1: Some(request.dh1.clone()),
       hash_c2: Some(Bytes::copy_from_slice(c2_hash.as_ref())),
       dh2: Some(dh2_public_key),
@@ -574,10 +556,13 @@ impl Authentication for AuthenticationBuiltin {
 
     // Change handshake state to pending final message & save the reply token
     remote_info.handshake.state = BuiltinHandshakeState::PendingFinalMessage {
+      hash_c1: computed_c1_hash,
+      hash_c2: c2_hash,
       dh1: request.dh1,
       challenge1: request.challenge1,
       dh2,
       challenge2,
+      remote_id_certificate: cert1,
     };
 
     // Create a new handshake handle & map it to remotes identity handle
@@ -598,10 +583,6 @@ impl Authentication for AuthenticationBuiltin {
     handshake_message_in: HandshakeMessageToken,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<(ValidationOutcome, Option<HandshakeMessageToken>)> {
-    if self.mock_handshakes {
-      return self.process_handshake_mocked(handshake_message_in, handshake_handle);
-    }
-
     // Check what is the handshake state
     let remote_identity_handle = *self.handshake_handle_to_identity_handle(&handshake_handle)?;
     let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
@@ -662,7 +643,7 @@ impl Authentication for AuthenticationBuiltin {
         ];
         let c2_properties_bytes =
           c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-        let c2_hash_recomputed = digest::digest(&digest::SHA256, &c2_properties_bytes);
+(??)        let c2_hash_recomputed = digest::digest(&digest::SHA256, &c2_properties_bytes);
 
         if let Some(received_hash_c2) = reply.hash_c2 {
           if received_hash_c2.as_ref() == c2_hash_recomputed.as_ref() {
@@ -755,29 +736,86 @@ impl Authentication for AuthenticationBuiltin {
       }
 
       BuiltinHandshakeState::PendingFinalMessage {
+        hash_c1,
+        hash_c2,
         dh1,
         dh2,
         challenge1,
         challenge2,
+        remote_id_certificate,
       } => {
         // We are the responder, and expect the final message.
         // Result is that we do not produce a MassageToken, since this was the final
         // message, but we compute the handshake results (shared secret)
+        let final_token =
+          BuiltinHandshakeMessageToken::try_from(handshake_message_in)?.extract_final()?;
 
-        // TODO: verify the contents of the final message token
+        // This is a sanity check
+        if let Some(received_hash_c1) = final_token.hash_c1 {
+          if hash_c1 != received_hash_c1 {
+            return Err(security_error!(
+              "Hash C1 mismatch on authentication final receive"
+            ));
+          } else { /* ok */
+          }
+        }
 
-        // TODO: verify matching of challenge1 and challenge2 to what we sent in the
-        // reply token
+        // "The operation shall check that the challenge1 and challenge2 match the ones
+        // that were sent on the HandshakeReplyMessageToken."
+        if challenge1 != final_token.challenge1 {
+          return Err(security_error!(
+            "process_handshake: Final token challenge1 mismatch"
+          ));
+        }
+        if challenge2 != final_token.challenge2 {
+          //
+          return Err(security_error!(
+            "process_handshake: Final token challenge2 mismatch"
+          ));
+        }
 
-        // TODO: verify the digital signature
+        // "The operation shall validate the digital signature in the “signature”
+        // property, according to the expected contents and algorithm described
+        // in 9.3.2.5.3." ....
+        // signature for final message:
+        // Sign( Hash(C1) | Challenge1 | DH1 | Challenge2 | DH2 | Hash(C2) )
+        let dh2_public = dh2.compute_public_key()?;
 
-        // TODO: compute the shared secret
-        // let shared_secret = SharedSecret::default();
-        // let challenge1 = Bytes::default();
-        // let challenge2 = Bytes::default();
+        let mut cc_final = BytesMut::with_capacity(1024);
+        cc_final.extend_from_slice(hash_c1.as_ref());
+        cc_final.extend_from_slice(challenge1.as_ref());
+        cc_final.extend_from_slice(dh1.as_ref());
+        cc_final.extend_from_slice(challenge2.as_ref());
+        cc_final.extend_from_slice(dh2_public.as_ref());
+        cc_final.extend_from_slice(hash_c2.as_ref());
+
+        // Now we use the remote certificate, which we verified in the previous (request
+        // -> reply) step against CA.
+        // TODO: Hardcoded algorithm
+        remote_id_certificate
+          .verify_signed_data_with_algorithm(
+            cc_final.as_ref(),
+            final_token.signature,
+            &signature::ECDSA_P256_SHA256_ASN1,
+          )
+          .map_err(|e| {
+            security_error!("Signature verification failed in process_handshake: {e:?}")
+          })?;
+
+        // Compute the shared secret
+        // TODO: Algorithm is hardwired. Should follow "c.kagree_algo" from above.
+        let dh2_public = dh2.compute_public_key()?;
+        let dh1 = agreement::UnparsedPublicKey::new(&agreement::ECDH_P256, dh1.as_ref());
+        let shared_secret = agreement::agree_ephemeral(
+          dh2,
+          &dh1,
+          security_error("Shared secret forming failed"), // in case it fails
+          |raw_shared_secret| {
+            SharedSecret::try_from(digest::digest(&digest::SHA256, raw_shared_secret).as_ref())
+          },
+        )?;
 
         // Change handshake state to Completed
-        let shared_secret = SharedSecret::dummy(); // TODO
         let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
         remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageReceived {
           challenge1,

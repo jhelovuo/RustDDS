@@ -111,6 +111,9 @@ impl Certificate {
   }
 
   // Verify that `self` was signed by `other` Certificate
+  // e.g.
+  // `someones_identity.verify_signed_by_certificate( certificate_authority )`
+  //
   pub fn verify_signed_by_certificate(&self, other: &Certificate) -> SecurityResult<()> {
     self
       .cert

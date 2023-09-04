@@ -36,10 +36,13 @@ pub(crate) enum BuiltinHandshakeState {
   // We have sent a handshake reply message and are waiting for the
   // final message
   PendingFinalMessage {
+    hash_c1: Sha256,
+    hash_c2: Sha256,
     dh1: Bytes,                          // only public part of dh1
     challenge1: Challenge,               // 256-bit nonce
     dh2: agreement::EphemeralPrivateKey, // both public and private keys for dh2
     challenge2: Challenge,               // 256-bit nonce
+    remote_id_certificate: certificate::Certificate,
   },
 
   // Handshake was completed & we sent the final message. If
@@ -49,10 +52,7 @@ pub(crate) enum BuiltinHandshakeState {
     // for dh1, dh2, or the challenges.
     // The ring library disallows copying of private DH key exchange keys, so
     // both using and storing them woould be difficult.
-
-    // dh1: InMemorySigningKeyPair, // both public and private keys for dh1
     challenge1: Challenge, // 256-bit nonce
-    // dh2: Bytes,
     challenge2: Challenge, //256-bit nonce
     shared_secret: SharedSecret,
   },
@@ -60,9 +60,7 @@ pub(crate) enum BuiltinHandshakeState {
   // Handshake was completed & we received the final
   // message. Nothing to do for us anymore.
   CompletedWithFinalMessageReceived {
-    // dh1: Bytes,                  // only public part of dh1
     challenge1: Challenge, // 256-bit nonce
-    // dh2: InMemorySigningKeyPair, // both public and private keys for dh2
     challenge2: Challenge, // 256-bit nonce
     shared_secret: SharedSecret,
   },
@@ -276,12 +274,28 @@ impl AuthenticationBuiltin {
       &ring::rand::SystemRandom::new(),
     )?;
 
+    let cert_pem = r#"-----BEGIN CERTIFICATE-----
+MIIBOzCB4qADAgECAhR361786/qVPfJWWDw4Wg5cmJUwBTAKBggqhkjOPQQDAjAS
+MRAwDgYDVQQDDAdzcm9zMkNBMB4XDTIzMDcyMzA4MjgzNloXDTMzMDcyMTA4Mjgz
+NlowEjEQMA4GA1UEAwwHc3JvczJDQTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IA
+BMpvJQ/91ZqnmRRteTL2qaEFz2d7SGAQQk9PIhhZCV1tlLwYf/hI4xWLJaEv8FxJ
+TjxXRGJ1U+/IqqqIvJVpWaSjFjAUMBIGA1UdEwEB/wQIMAYBAf8CAQEwCgYIKoZI
+zj0EAwIDSAAwRQIgEiyVGRc664+/TE/HImA4WNwsSi/alHqPYB58BWINj34CIQDD
+iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
+-----END CERTIFICATE-----
+"#;
+
+    let certificate = certificate::Certificate::from_pem(cert_pem).unwrap();
+
     // Change handshake state to pending final message
     remote_info.handshake.state = BuiltinHandshakeState::PendingFinalMessage {
       dh1: Bytes::default(),
       challenge1: Challenge::dummy(),
       dh2,
       challenge2: Challenge::dummy(),
+      hash_c1: Sha256::dummy(),
+      hash_c2: Sha256::dummy(),
+      remote_id_certificate: certificate,
     };
 
     // Create a new handshake handle & map it to remotes identity handle
@@ -341,6 +355,9 @@ impl AuthenticationBuiltin {
         challenge2,
         dh1,
         dh2,
+        hash_c1,
+        hash_c2,
+        remote_id_certificate,
       } => {
         // We are the responder, and expect the final message.
         // Result is that we do not produce a MassageToken, since this was the final
