@@ -8,8 +8,9 @@ use crate::{
     access_control::{PermissionsCredentialToken, PermissionsToken},
     authentication::authentication_builtin::types::CertificateAlgorithm,
     certificate::DistinguishedName,
-    DataHolder, PluginEndpointSecurityAttributesMask, PluginParticipantSecurityAttributesMask,
-    PluginSecurityAttributesMask, Property, SecurityError, SecurityResult,
+    security_error, DataHolder, PluginEndpointSecurityAttributesMask,
+    PluginParticipantSecurityAttributesMask, PluginSecurityAttributesMask, Property, SecurityError,
+    SecurityResult,
   },
   security_error,
 };
@@ -271,7 +272,19 @@ impl TryFrom<PermissionsCredentialToken> for BuiltinPermissionsCredentialToken {
   fn try_from(
     pct: PermissionsCredentialToken,
   ) -> SecurityResult<BuiltinPermissionsCredentialToken> {
-    todo!()
+    let dh = pct.data_holder;
+    // Verify class id
+    if dh.class_id != PERMISSIONS_CREDENTIAL_TOKEN_CLASS_ID {
+      return Err(security_error(&format!(
+        "Invalid class ID. Got {}, expected {}",
+        dh.class_id, PERMISSIONS_CREDENTIAL_TOKEN_CLASS_ID
+      )));
+    }
+
+    let builtin_token = Self {
+      permissions_document: dh.get_property("dds.perm.cert")?,
+    };
+    Ok(builtin_token)
   }
 }
 
