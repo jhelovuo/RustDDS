@@ -141,9 +141,12 @@ impl TryFrom<&[u8]> for Challenge {
   }
 }
 
+// This is not really much of a handle, since it contains
+// the actual data. TODO: Maybe just replace this with
+// SharedSecret directly?
 pub struct SharedSecretHandle {
   pub shared_secret: SharedSecret,
-  pub challenge1: Challenge, // 256-bit nonce
+  pub challenge1: Challenge, // 256-bit nonce, needed to generate AES keys
   pub challenge2: Challenge, // 256-bit nonce
 }
 
