@@ -393,7 +393,7 @@ impl Authentication for AuthenticationBuiltin {
     let challenge1 = Challenge::from(rand::random::<[u8; 32]>());
 
     let handshake_request_builtin = BuiltinHandshakeMessageToken {
-      class_id: Bytes::copy_from_slice(HANDSHAKE_REPLY_CLASS_ID),
+      class_id: Bytes::copy_from_slice(HANDSHAKE_REQUEST_CLASS_ID),
       c_id: Some(my_id_certificate_text),
       c_perm: Some(my_permissions_doc_text),
       c_pdata: Some(pdata_bytes),
@@ -527,7 +527,7 @@ impl Authentication for AuthenticationBuiltin {
     let contents_signature = local_info.id_cert_private_key.sign(cc2.as_ref())?;
 
     let reply_token = BuiltinHandshakeMessageToken {
-      class_id: Bytes::copy_from_slice(HANDSHAKE_REQUEST_CLASS_ID),
+      class_id: Bytes::copy_from_slice(HANDSHAKE_REPLY_CLASS_ID),
       c_id: Some(my_id_certificate_text),
       c_perm: Some(my_permissions_doc_text),
       c_pdata: Some(pdata_bytes),

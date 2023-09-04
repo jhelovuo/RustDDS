@@ -2,7 +2,9 @@ use bytes::Bytes;
 use log::debug;
 
 use crate::{
-  security::{authentication::types::*, DataHolderBuilder, SecurityError, SecurityResult},
+  security::{
+    authentication::types::*, security_error, DataHolderBuilder, SecurityError, SecurityResult,
+  },
   security_error,
 };
 
@@ -287,7 +289,11 @@ impl BuiltinHandshakeMessageToken {
   // request message parser
   pub fn extract_request(self) -> SecurityResult<HandshakeRequest> {
     if self.class_id.as_ref() != HANDSHAKE_REQUEST_CLASS_ID {
-      return Err(security_error!("Wrong class_id"));
+      return Err(security_error(&format!(
+        "Wrong class_id: {:?}. Expected {:?}",
+        self.class_id,
+        std::str::from_utf8(HANDSHAKE_REQUEST_CLASS_ID)
+      )));
     }
     let c_id = self.c_id.ok_or_else(|| security_error!("c_id not found"))?;
     let c_perm = self
@@ -324,7 +330,11 @@ impl BuiltinHandshakeMessageToken {
   // reply message parser
   pub fn extract_reply(self) -> SecurityResult<HandshakeReply> {
     if self.class_id.as_ref() != HANDSHAKE_REPLY_CLASS_ID {
-      return Err(security_error!("Wrong class_id"));
+      return Err(security_error(&format!(
+        "Wrong class_id: {:?}. Expected {:?}",
+        self.class_id,
+        std::str::from_utf8(HANDSHAKE_REPLY_CLASS_ID)
+      )));
     }
     let c_id = self.c_id.ok_or_else(|| security_error!("c_id not found"))?;
     let c_perm = self
@@ -374,7 +384,11 @@ impl BuiltinHandshakeMessageToken {
   // final message parser
   pub fn extract_final(self) -> SecurityResult<HandshakeFinal> {
     if self.class_id.as_ref() != HANDSHAKE_FINAL_CLASS_ID {
-      return Err(security_error!("Wrong class_id"));
+      return Err(security_error(&format!(
+        "Wrong class_id: {:?}. Expected {:?}",
+        self.class_id,
+        std::str::from_utf8(HANDSHAKE_FINAL_CLASS_ID)
+      )));
     }
     let hash_c1 = self.hash_c1.map(|mh| mh.as_ref().try_into()).transpose()?;
     let hash_c2 = self.hash_c2.map(|mh| mh.as_ref().try_into()).transpose()?;
