@@ -834,10 +834,6 @@ impl Authentication for AuthenticationBuiltin {
     &self,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
-    if self.mock_handshakes {
-      return self.get_authenticated_peer_credential_token_mocked(handshake_handle);
-    }
-
     // TODO: actual implementation
 
     Ok(AuthenticatedPeerCredentialToken::dummy())
