@@ -12,17 +12,20 @@ use x509_certificate::{
 
 use crate::{
   security::{
-    access_control::{*, 
+    access_control::{
       access_control_builtin::s_mime_config_parser::SignedDocument,
-      access_control_builtin::types::BuiltinPermissionsCredentialToken,
+      access_control_builtin::types::BuiltinPermissionsCredentialToken, *,
     },
     authentication::{
       authentication_builtin::{
-        HandshakeInfo, types::{
-          CertificateAlgorithm, IDENTITY_TOKEN_CLASS_ID, HANDSHAKE_REQUEST_CLASS_ID,
-          HANDSHAKE_REPLY_CLASS_ID, //HANDSHAKE_FINAL_CLASS_ID,
+        types::{
           BuiltinHandshakeMessageToken,
-        }
+          CertificateAlgorithm,
+          HANDSHAKE_REPLY_CLASS_ID, //HANDSHAKE_FINAL_CLASS_ID,
+          HANDSHAKE_REQUEST_CLASS_ID,
+          IDENTITY_TOKEN_CLASS_ID,
+        },
+        HandshakeInfo,
       },
       *,
     },
@@ -380,8 +383,7 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
     let c_properties_bytes = c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-    let hash_c1 = 
-      Sha256::try_from(digest::digest(&digest::SHA256, &c_properties_bytes).as_ref())? ;
+    let hash_c1 = Sha256::try_from(digest::digest(&digest::SHA256, &c_properties_bytes).as_ref())?;
 
     // Generate new, random Diffie-Hellman key pair "dh1"
     let (dh1_key_pair, _keypair_pkcs8) =
@@ -586,7 +588,11 @@ impl Authentication for AuthenticationBuiltin {
     let local_info = self.get_local_participant_info()?;
 
     match state {
-      BuiltinHandshakeState::PendingReplyMessage { dh1, challenge1, hash_c1 } => {
+      BuiltinHandshakeState::PendingReplyMessage {
+        dh1,
+        challenge1,
+        hash_c1,
+      } => {
         // We are the initiator, and expect a reply.
         // Result is that we produce a MassageToken (i.e. send the final message)
         // and the handshake results (shared secret)
@@ -598,32 +604,35 @@ impl Authentication for AuthenticationBuiltin {
         let cert2 = SignedDocument::from_bytes(reply.c_id.as_ref())?;
 
         // Verify that 2's identity cert checks out against CA.
-        cert2.verify_signature( &local_info.identity_ca )?;
+        cert2.verify_signature(&local_info.identity_ca)?;
 
         // TODO: verify ocsp_status / status of IdentityCredential
 
         if challenge1 != reply.challenge1 {
-          return Err(security_error!("Challenge 1 mismatch on authentication reply"))
+          return Err(security_error!(
+            "Challenge 1 mismatch on authentication reply"
+          ));
         }
 
         if let Some(received_hash_c1) = reply.hash_c1 {
           if hash_c1 != received_hash_c1 {
-            return Err(security_error!("Hash C1 mismatch on authentication reply")) 
-          } else { /* ok */ }
+            return Err(security_error!("Hash C1 mismatch on authentication reply"));
+          } else { /* ok */
+          }
         } else {
           debug!("Cannot compare hash C1 in process_handshake. Reply did not have any.")
         }
 
         // Compute hash(C2) from received data.
-        let c2_properties : Vec<BinaryProperty> =
-          vec![
-            BinaryProperty::with_propagate("c.id", reply.c_id.clone()),
-            BinaryProperty::with_propagate("c.perm", reply.c_perm.clone()),
-            BinaryProperty::with_propagate("c.pdata", reply.c_pdata.clone()),
-            BinaryProperty::with_propagate("c.dsign_algo", reply.c_dsign_algo.clone()),
-            BinaryProperty::with_propagate("c.kagree_algo", reply.c_kagree_algo.clone()),
-          ];
-        let c2_properties_bytes = c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
+        let c2_properties: Vec<BinaryProperty> = vec![
+          BinaryProperty::with_propagate("c.id", reply.c_id.clone()),
+          BinaryProperty::with_propagate("c.perm", reply.c_perm.clone()),
+          BinaryProperty::with_propagate("c.pdata", reply.c_pdata.clone()),
+          BinaryProperty::with_propagate("c.dsign_algo", reply.c_dsign_algo.clone()),
+          BinaryProperty::with_propagate("c.kagree_algo", reply.c_kagree_algo.clone()),
+        ];
+        let c2_properties_bytes =
+          c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
         let c2_hash_sanity_check = digest::digest(&digest::SHA256, &c2_properties_bytes);
 
         if let Some(received_hash_c2) = reply.hash_c2 {
@@ -639,8 +648,7 @@ impl Authentication for AuthenticationBuiltin {
         // Reconstruct signed data: C2 = Cert2, Perm2, Pdata2, Dsign_algo2, Kagree_algo2
         // and then Hash(C2)
 
-
-        // Verify reply.signature signature agains 2's public key 
+        // Verify reply.signature signature agains 2's public key
 
         // TODO: store the value of property with name “dds.sec.” found within the
         // handshake_message_in
