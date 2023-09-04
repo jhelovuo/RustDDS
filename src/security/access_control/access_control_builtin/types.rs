@@ -1,5 +1,6 @@
 // Builtin types for the access control plugin
 
+use bytes::Bytes;
 use enumflags2::{bitflags, BitFlags};
 use speedy::{Readable, Writable};
 
@@ -8,7 +9,7 @@ use crate::{
     access_control::{PermissionsCredentialToken, PermissionsToken},
     authentication::authentication_builtin::types::CertificateAlgorithm,
     certificate::DistinguishedName,
-    security_error, DataHolder, PluginEndpointSecurityAttributesMask,
+    security_error, BinaryProperty, DataHolder, PluginEndpointSecurityAttributesMask,
     PluginParticipantSecurityAttributesMask, PluginSecurityAttributesMask, Property, SecurityError,
     SecurityResult,
   },
@@ -243,7 +244,7 @@ const PERMISSIONS_CREDENTIAL_TOKEN_DOCUMENT_NAME: &str = "dds.perm.cert"; // Why
 
 // 9.4.2.1
 pub(in crate::security) struct BuiltinPermissionsCredentialToken {
-  pub permissions_document: String, // Permissions document XML as a string
+  pub permissions_document: Bytes, // Signed permissions document XML
 }
 
 impl From<BuiltinPermissionsCredentialToken> for PermissionsCredentialToken {
@@ -255,12 +256,13 @@ impl From<BuiltinPermissionsCredentialToken> for PermissionsCredentialToken {
     PermissionsCredentialToken {
       data_holder: DataHolder {
         class_id: PERMISSIONS_CREDENTIAL_TOKEN_CLASS_ID.into(),
-        properties: vec![Property {
+        properties: Vec::new(),
+        // Spec says property, should be binary property: https://issues.omg.org/issues/DDSSEC12-110
+        binary_properties: vec![BinaryProperty {
           name: PERMISSIONS_CREDENTIAL_TOKEN_DOCUMENT_NAME.into(),
           value: permissions_certificate,
           propagate: true,
         }],
-        binary_properties: Vec::new(),
       },
     }
   }
@@ -282,7 +284,7 @@ impl TryFrom<PermissionsCredentialToken> for BuiltinPermissionsCredentialToken {
     }
 
     let builtin_token = Self {
-      permissions_document: dh.get_property("dds.perm.cert")?,
+      permissions_document: dh.get_binary_property("dds.perm.cert")?,
     };
     Ok(builtin_token)
   }

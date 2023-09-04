@@ -194,7 +194,7 @@ impl Authentication for AuthenticationBuiltin {
       id_cert_private_key,
       identity_ca,
       permissions_document_xml: Bytes::new(), /* This is to filled in later by
-                                               * intialization calling
+                                               * initialization calling
                                                * .set_permissions_credential_and_token() */
     };
 
@@ -248,8 +248,7 @@ impl Authentication for AuthenticationBuiltin {
     }
 
     let builtin_token = BuiltinPermissionsCredentialToken::try_from(permissions_credential_token)?;
-    local_info.permissions_document_xml =
-      Bytes::copy_from_slice(builtin_token.permissions_document.as_bytes());
+    local_info.permissions_document_xml = builtin_token.permissions_document;
 
     // TODO:
     // What do we do about permissions_credential_token
@@ -570,7 +569,7 @@ impl Authentication for AuthenticationBuiltin {
       signature: Some(contents_signature),
     };
 
-    // re-borrow as mutbale
+    // re-borrow as mutabale
     let remote_info = self.get_remote_participant_info_mutable(&initiator_identity_handle)?;
 
     // Change handshake state to pending final message & save the reply token
@@ -650,7 +649,7 @@ impl Authentication for AuthenticationBuiltin {
           } else { /* ok */
           }
         } else {
-          debug!("Cannot compare hash C1 in process_handshake. Reply did not have any.")
+          debug!("Cannot compare hash C1 in process_handshake. Reply did not have any.");
         }
 
         // Compute hash(C2) from received data.
@@ -678,7 +677,7 @@ impl Authentication for AuthenticationBuiltin {
         // Reconstruct signed data: C2 = Cert2, Perm2, Pdata2, Dsign_algo2, Kagree_algo2
         // Spec: "Sign(Hash(C2) | Challenge2 | DH2 | Challenge1 | DH1 | Hash(C1)) )"
         //
-        // Note: We already varified above that hash_c1-recomputed vs. hash_c1-stored
+        // Note: We already verified above that hash_c1-recomputed vs. hash_c1-stored
         // match and hash_c2 recomputed vs received (if any) match.
         let mut cc2 = BytesMut::with_capacity(1024);
         cc2.extend_from_slice(c2_hash_recomputed.as_ref());

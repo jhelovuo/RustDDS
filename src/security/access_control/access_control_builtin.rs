@@ -1,5 +1,6 @@
 use std::{collections::HashMap, ops::Not};
 
+use bytes::Bytes;
 use chrono::Utc;
 
 use crate::{
@@ -33,6 +34,7 @@ pub(in crate::security) mod types;
 pub struct AccessControlBuiltin {
   domain_participant_permissions:
     HashMap<PermissionsHandle, (DistinguishedName, DomainParticipantPermissions)>,
+  signed_permissions_documents: HashMap<PermissionsHandle, Bytes>,
   domain_rules: HashMap<PermissionsHandle, DomainRule>,
   permissions_ca_certificates: HashMap<PermissionsHandle, Certificate>,
   identity_to_permissions: HashMap<IdentityHandle, PermissionsHandle>,
@@ -45,6 +47,7 @@ impl AccessControlBuiltin {
   pub fn new() -> Self {
     Self {
       domain_participant_permissions: HashMap::new(),
+      signed_permissions_documents: HashMap::new(),
       domain_rules: HashMap::new(),
       permissions_ca_certificates: HashMap::new(),
       identity_to_permissions: HashMap::new(),
@@ -96,18 +99,19 @@ impl AccessControlBuiltin {
     )
   }
 
-  fn get_permissions_document_string(
+  fn get_signed_permissions_document(
     &self,
     permissions_handle: &PermissionsHandle,
-  ) -> SecurityResult<&String> {
-    self.get_permissions_document(permissions_handle).map(
-      |(
-        _,
-        DomainParticipantPermissions {
-          original_string, ..
-        },
-      )| original_string,
-    )
+  ) -> SecurityResult<&Bytes> {
+    self
+      .signed_permissions_documents
+      .get(permissions_handle)
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find a valid signed permissions document for the PermissionsHandle {}",
+          permissions_handle
+        )
+      })
   }
 
   fn get_permissions_ca_certificate(

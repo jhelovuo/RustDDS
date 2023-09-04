@@ -210,6 +210,27 @@ impl BinaryProperty {
   }
 }
 
+fn get_optional_binary_property(
+  binary_properties: &[BinaryProperty],
+  binary_property_name: &str,
+) -> Option<Bytes> {
+  binary_properties
+    .iter()
+    .find(|BinaryProperty { name, .. }| name.eq(binary_property_name))
+    .map(|BinaryProperty { value, .. }| value.clone())
+}
+fn get_binary_property(
+  binary_properties: &[BinaryProperty],
+  binary_property_name: &str,
+) -> SecurityResult<Bytes> {
+  get_optional_binary_property(binary_properties, binary_property_name).ok_or_else(|| {
+    security_error!(
+      "Could not find a binary property of the name {}.",
+      binary_property_name
+    )
+  })
+}
+
 mod repr {
   use serde::{Deserialize, Serialize};
 
@@ -423,6 +444,10 @@ impl DataHolder {
 
   pub(super) fn get_property(&self, property_name: &str) -> SecurityResult<String> {
     get_property(&self.properties, property_name)
+  }
+
+  pub(super) fn get_binary_property(&self, binary_property_name: &str) -> SecurityResult<Bytes> {
+    get_binary_property(&self.binary_properties, binary_property_name)
   }
 
   pub fn properties_as_map(&self) -> HashMap<String, &Property> {

@@ -132,7 +132,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
       .and_then(|name| DistinguishedName::parse(&name).map_err(|e| security_error!("{e:?}")))?;
 
-    let domain_participant_permissions = participant_qos
+    let signed_permissions = participant_qos
       .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|permissions_uri| {
         read_uri(&permissions_uri).map_err(|conf_err| {
@@ -142,12 +142,10 @@ impl ParticipantAccessControl for AccessControlBuiltin {
             conf_err
           )
         })
-      })
-      .and_then(|permissions_bytes| {
-        SignedDocument::from_bytes(&permissions_bytes)
-          .map_err(SecurityError::from)
-          .and_then(|signed_document| signed_document.verify_signature(&permissions_ca_certificate))
-      })
+      })?;
+    let domain_participant_permissions = SignedDocument::from_bytes(&signed_permissions)
+      .map_err(SecurityError::from)
+      .and_then(|signed_document| signed_document.verify_signature(&permissions_ca_certificate))
       .and_then(|permissions_xml| {
         DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
           .map_err(|e| security_error!("{e:?}"))
@@ -171,6 +169,9 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       permissions_handle,
       (subject_name, domain_participant_permissions),
     );
+    self
+      .signed_permissions_documents
+      .insert(permissions_handle, signed_permissions);
     self
       .identity_to_permissions
       .insert(identity_handle, permissions_handle);
@@ -298,7 +299,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     handle: PermissionsHandle,
   ) -> SecurityResult<PermissionsCredentialToken> {
     self
-      .get_permissions_document_string(&handle)
+      .get_signed_permissions_document(&handle)
       .cloned()
       .map(|permissions_document| {
         BuiltinPermissionsCredentialToken {
