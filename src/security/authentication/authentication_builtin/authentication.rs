@@ -4,7 +4,7 @@ use speedy::Writable;
 use bytes::{Bytes, BytesMut};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use ring::{agreement, digest, signature};
+use ring::{agreement, signature};
 
 //use x509_certificate::{
 //algorithm::{EcdsaCurve, KeyAlgorithm},
@@ -150,7 +150,7 @@ impl Authentication for AuthenticationBuiltin {
     // DDS Security spec v1.1 Section "9.3.3 DDS:Auth:PKI-DH plugin behavior", Table
     // 52
     let subject_name_der = identity_certificate.subject_name_der()?;
-    let subject_name_der_hash = digest::digest(&digest::SHA256, &subject_name_der);
+    let subject_name_der_hash = Sha256::hash(&subject_name_der);
 
     // slice and unwrap will succeed, because input size is static
     // Procedure: Take beginning (8 bytes) from subject name DER hash, convert to
@@ -162,8 +162,7 @@ impl Authentication for AuthenticationBuiltin {
         | 0x8000_0000_0000_0000u64)
         .to_be_bytes()[0..6];
 
-    let candidate_guid_hash =
-      digest::digest(&digest::SHA256, &candidate_participant_guid.to_bytes());
+    let candidate_guid_hash = Sha256::hash(&candidate_participant_guid.to_bytes());
 
     // slicing will succeed, because digest is longer than 6 bytes
     let prefix_bytes = [&bytes_from_subject_name, &candidate_guid_hash.as_ref()[..6]].concat();
@@ -393,8 +392,7 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
-    let c_properties_bytes = c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-    let hash_c1 = Sha256::try_from(digest::digest(&digest::SHA256, &c_properties_bytes).as_ref())?;
+    let hash_c1 = Sha256::hash(&c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
 
     // Generate new, random Diffie-Hellman key pair "dh1"
     let dh1 = agreement::EphemeralPrivateKey::generate(
@@ -505,9 +503,8 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", request.c_dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", request.c_kagree_algo.clone()),
     ];
-    let c1_properties_bytes = c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
     let computed_c1_hash =
-      Sha256::try_from(digest::digest(&digest::SHA256, &c1_properties_bytes).as_ref())?;
+      Sha256::hash(&c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
 
     // Sanity check, received hash(c1) should match what we computed
     if let Some(received_hash_c1) = request.hash_c1 {
@@ -538,8 +535,8 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
-    let c2_properties_bytes = c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-    let c2_hash = Sha256::try_from(digest::digest(&digest::SHA256, &c2_properties_bytes).as_ref())?;
+    let c2_hash =
+      Sha256::hash(&c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
 
     // Spec: "Sign(Hash(C2) | Challenge2 | DH2 | Challenge1 | DH1 | Hash(C1)) )"
     let mut cc2 = BytesMut::with_capacity(1024);
@@ -663,9 +660,8 @@ impl Authentication for AuthenticationBuiltin {
           BinaryProperty::with_propagate("c.dsign_algo", reply.c_dsign_algo.clone()),
           BinaryProperty::with_propagate("c.kagree_algo", reply.c_kagree_algo.clone()),
         ];
-        let c2_properties_bytes =
-          c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-        let c2_hash_recomputed = digest::digest(&digest::SHA256, &c2_properties_bytes);
+        let c2_hash_recomputed =
+          Sha256::hash(&c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
 
         if let Some(received_hash_c2) = reply.hash_c2 {
           if received_hash_c2.as_ref() == c2_hash_recomputed.as_ref() {
@@ -706,9 +702,7 @@ impl Authentication for AuthenticationBuiltin {
           dh1,
           &dh2,
           security_error("Shared secret forming failed"), // in case it fails
-          |raw_shared_secret| {
-            SharedSecret::try_from(digest::digest(&digest::SHA256, raw_shared_secret).as_ref())
-          },
+          |raw_shared_secret| Ok(SharedSecret::from(Sha256::hash(raw_shared_secret))),
         )?;
 
         // Create signature for final message:
@@ -832,9 +826,7 @@ impl Authentication for AuthenticationBuiltin {
           dh2,
           &dh1,
           security_error("Shared secret forming failed"), // in case it fails
-          |raw_shared_secret| {
-            SharedSecret::try_from(digest::digest(&digest::SHA256, raw_shared_secret).as_ref())
-          },
+          |raw_shared_secret| Ok(SharedSecret::from(Sha256::hash(raw_shared_secret))),
         )?;
 
         // Change handshake state to Completed

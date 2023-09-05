@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
+use ring::digest;
 
 use crate::{
   security::{types::DataHolder, SecurityError, SecurityResult},
@@ -38,7 +39,25 @@ impl Sha256 {
   pub fn dummy() -> Self {
     Sha256(<[u8; 32]>::default())
   }
+
+  pub const fn len() -> usize {
+    32
+  }
+
+  pub fn hash(input: &[u8]) -> Self {
+    // The .unwrap() will always succeed, because data length is
+    // actually fixed to 256 / 8 = 32 bytes
+    Sha256(
+      digest::digest(&digest::SHA256, input)
+        .as_ref()
+        .try_into()
+        .unwrap(),
+    )
+  }
 }
+
+// Ensure our idea of the length agrees with the ring
+static_assertions::const_assert!(Sha256::len() == digest::SHA256_OUTPUT_LEN);
 
 impl AsRef<[u8]> for Sha256 {
   fn as_ref(&self) -> &[u8] {
@@ -83,9 +102,16 @@ impl AsRef<[u8]> for SharedSecret {
     self.0.as_ref()
   }
 }
+
 impl From<[u8; 32]> for SharedSecret {
   fn from(s: [u8; 32]) -> SharedSecret {
     SharedSecret(s)
+  }
+}
+
+impl From<Sha256> for SharedSecret {
+  fn from(s: Sha256) -> SharedSecret {
+    SharedSecret(s.into())
   }
 }
 
