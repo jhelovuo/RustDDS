@@ -22,11 +22,11 @@ use crate::{
 // This is for the assembly of a single object
 struct AssemblyBuffer {
   buffer_bytes: BytesMut,
-  #[allow(dead_code)] // This module is still WiP
   fragment_count: usize,
   received_bitmap: BitVec,
 
-  #[allow(dead_code)] // This module is still WiP
+  #[allow(dead_code)] // TODO: Purpose is to use this later for e.g.
+  // garbage collection, in case some buffer is not completed within reasonable time.
   created_time: Timestamp,
   modified_time: Timestamp,
 }

@@ -35,7 +35,10 @@ use crate::{
   },
   mio_source,
   network::udp_sender::UDPSender,
-  rtps::{message_receiver::MessageReceiverState, rtps_writer_proxy::RtpsWriterProxy, Message},
+  rtps::{
+    fragment_assembler::FragmentAssembler, message_receiver::MessageReceiverState,
+    rtps_writer_proxy::RtpsWriterProxy, Message,
+  },
   security::{security_plugins::SecurityPluginsHandle, SecurityError, SecurityResult},
   security_error,
   structure::{
@@ -44,7 +47,7 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
-    sequence_number::{FragmentNumberSet, SequenceNumber, SequenceNumberSet},
+    sequence_number::{FragmentNumber, FragmentNumberSet, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
 };
@@ -127,6 +130,7 @@ pub(crate) struct Reader {
 
   received_heartbeat_count: i32,
 
+  fragment_assemblers: BTreeMap<GUID, FragmentAssembler>,
   matched_writers: BTreeMap<GUID, RtpsWriterProxy>,
   writer_match_count_total: i32, // total count, never decreases
 
@@ -157,7 +161,7 @@ impl Reader {
     }
 
     // If reader should be stateless, only BestEffor QoS is supported
-    if i.like_stateless && i.qos_policy.reliability() != Some(policy::Reliability::BestEffort) {
+    if i.like_stateless && i.qos_policy.is_reliable() {
       panic!("Attempted to create a stateless Reader with other than BestEffort reliability");
     }
 
@@ -182,6 +186,7 @@ impl Reader {
       heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
       heartbeat_suppression_duration: StdDuration::new(0, 0),
       received_heartbeat_count: 0,
+      fragment_assemblers: BTreeMap::new(),
       matched_writers: BTreeMap::new(),
       writer_match_count_total: 0,
       requested_deadline_missed_count: 0,
@@ -535,15 +540,6 @@ impl Reader {
     datafrag_flags: BitFlags<DATAFRAG_Flags>,
     mr_state: &MessageReceiverState,
   ) {
-    if self.like_stateless {
-      info!(
-        "Attempted to handle datafrag msg in a stateless Reader, which does not support \
-         datafrags. Ignoring. topic={:?}",
-        self.topic_name
-      );
-      return;
-    }
-
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, datafrag.writer_id);
     let seq_num = datafrag.writer_sn;
     let receive_timestamp = Timestamp::now();
@@ -582,27 +578,64 @@ impl Reader {
       write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
 
+    // Feed to fragment assembler ...
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
-    if let Some(writer_proxy) = self.matched_writer_mut(writer_guid) {
-      if let Some(complete_ddsdata) = writer_proxy.handle_datafrag(datafrag, datafrag_flags) {
-        // Source timestamp (if any) will be the timestamp of the last fragment (that
-        // completes the sample).
-        self.process_received_data(
-          complete_ddsdata,
-          receive_timestamp,
-          write_options_b.build(),
-          writer_guid,
-          writer_seq_num,
-        );
-      } else {
-        // not yet complete, nothing more to do
-      }
-    } else {
-      info!(
-        "handle_datafrag_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
-        self.my_guid.entity_id, writer_guid, self.topic_name,
+    let completed_dds_data = self
+      .fragment_assembler_mutable(writer_guid, datafrag.fragment_size)
+      .new_datafrag(datafrag, datafrag_flags);
+
+    // ... and continue processing, if data was completed.
+    if let Some(ddsdata) = completed_dds_data {
+      // Source timestamp (if any) will be the timestamp of the last fragment (that
+      // completes the sample).
+      self.process_received_data(
+        ddsdata,
+        receive_timestamp,
+        write_options_b.build(),
+        writer_guid,
+        writer_seq_num,
       );
+    } else {
+      self.garbage_collect_fragments();
     }
+  }
+
+  fn fragment_assembler_mutable(
+    &mut self,
+    writer_guid: GUID,
+    frag_size: u16,
+  ) -> &mut FragmentAssembler {
+    self
+      .fragment_assemblers
+      .entry(writer_guid)
+      .or_insert_with(|| FragmentAssembler::new(frag_size))
+  }
+
+  fn garbage_collect_fragments(&mut self) {
+    // TODO: On most calls, do nothing.
+    //
+    // If GC time/packet limit has been exceeded, iterate through
+    // fragment assemblers and discard those assembly buffers whose
+    // creation / modification timestamps look like it is no longer receiving
+    // data and can therefore be discarded.
+  }
+
+  fn missing_frags_for(
+    &self,
+    writer_guid: GUID,
+    seq: SequenceNumber,
+  ) -> Box<dyn '_ + Iterator<Item = FragmentNumber>> {
+    self.fragment_assemblers.get(&writer_guid).map_or_else(
+      || Box::new(iter::empty()) as Box<dyn Iterator<Item = FragmentNumber>>,
+      |fa| fa.missing_frags_for(seq),
+    )
+  }
+
+  fn is_frag_partially_received(&self, writer_guid: GUID, seq: SequenceNumber) -> bool {
+    self
+      .fragment_assemblers
+      .get(&writer_guid)
+      .map_or(false, |fa| fa.is_partially_received(seq))
   }
 
   // common parts of processing DATA or a completed DATAFRAG (when all frags are
@@ -745,6 +778,27 @@ impl Reader {
     }
   }
 
+  // helper to work with mutable proxy
+  fn with_mutable_writer_proxy<F, U>(&mut self, writer_guid: GUID, worker: F) -> Option<U>
+  where
+    F: FnOnce(&mut Self, &mut RtpsWriterProxy) -> U,
+  {
+    match self.matched_writers.remove(&writer_guid) {
+      None => {
+        error!("Writer proxy {writer_guid:?} not found");
+        None
+      }
+      Some(mut wp) => {
+        let res = worker(self, &mut wp);
+        let x = self.matched_writers.insert(writer_guid, wp); // re-insert
+        if x.is_some() {
+          panic!("with_mutable_writer_proxy: Worker inserted writer proxy behind my back!")
+        }
+        Some(res)
+      }
+    }
+  }
+
   // Returns if responding with ACKNACK?
   // TODO: Return value seems to go unused in callers.
   // ...except in test cases, but not sure if this is strictly necessary to have.
@@ -786,166 +840,160 @@ impl Reader {
       );
     }
 
-    let writer_proxy = if let Some(wp) = self.matched_writer_mut(writer_guid) {
-      wp
-    } else {
-      error!("Writer proxy disappeared 1!");
-      return false;
-    };
-
     let mut mr_state = mr_state;
 
-    // TODO: This is likely a bug. If mr_state.unicast_reply_locator_list contains
-    // something useful (other than a single invalid locator),
-    // it came from INFO_REPLY submessage preceeding HEARTBEAT, and should be used
-    // to send the reply to. Only if mr_state has no unicast locators, use locators
-    // from writer_proxy.
-    mr_state.unicast_reply_locator_list = writer_proxy.unicast_locator_list.clone();
+    self
+      .with_mutable_writer_proxy(writer_guid, |this, writer_proxy| {
+        // Note: This is worker closure. Use `this` instead of `self`.
 
-    if heartbeat.count <= writer_proxy.received_heartbeat_count {
-      // This heartbeat was already seen an processed.
-      return false;
-    }
-    writer_proxy.received_heartbeat_count = heartbeat.count;
+        // TODO: This is likely a bug. If mr_state.unicast_reply_locator_list contains
+        // something useful (other than a single invalid locator),
+        // it came from INFO_REPLY submessage preceeding HEARTBEAT, and should be used
+        // to send the reply to. Only if mr_state has no unicast locators, use locators
+        // from writer_proxy.
+        mr_state.unicast_reply_locator_list = writer_proxy.unicast_locator_list.clone();
 
-    // remove fragmented changes until first_sn.
-    writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
-
-    // let received_before = writer_proxy.all_ackable_before();
-    let reader_id = self.entity_id();
-    // this is duplicate code from above, but needed, because we need another
-    // mutable borrow. TODO: Maybe could be written in some sensible way.
-    let writer_proxy = if let Some(wp) = self.matched_writer_mut(writer_guid) {
-      wp
-    } else {
-      error!("Writer proxy disappeared 2!");
-      return false;
-    };
-
-    // See if ACKNACK is needed, and generate one.
-    let missing_seqnums = writer_proxy.missing_seqnums(heartbeat.first_sn, heartbeat.last_sn);
-
-    // Interpretation of final flag in RTPS spec
-    // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with
-    // final flag not set
-    //
-    // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must
-    // respond with an ACKNACK Message. The ACKNACK Message may acknowledge
-    // having received all the data samples or may indicate that some data
-    // samples are missing. The response may be delayed to avoid message storms.
-
-    if !missing_seqnums.is_empty() || !final_flag_set {
-      let mut partially_received = Vec::new();
-      // report of what we have.
-      // We claim to have received all SNs before "base" and produce a set of missing
-      // sequence numbers that are >= base.
-      let reader_sn_state = match missing_seqnums.get(0) {
-        Some(&first_missing) => {
-          // Here we assume missing_seqnums are returned in order.
-          // Limit the set to maximum that can be sent in acknack submessage.
-
-          SequenceNumberSet::from_base_and_set(
-            first_missing,
-            &missing_seqnums
-              .iter()
-              .copied()
-              .take_while(|sn| sn < &(first_missing + SequenceNumber::new(256)))
-              .filter(|sn| {
-                if writer_proxy.is_partially_received(*sn) {
-                  partially_received.push(*sn);
-                  false
-                } else {
-                  true
-                }
-              })
-              .collect(),
-          )
+        if heartbeat.count <= writer_proxy.received_heartbeat_count {
+          // This heartbeat was already seen an processed.
+          return false;
         }
+        writer_proxy.received_heartbeat_count = heartbeat.count;
 
-        // Nothing missing. Report that we have all we have.
-        None => SequenceNumberSet::new_empty(writer_proxy.all_ackable_before()),
-      };
+        // remove fragmented changes until first_sn.
+        writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
-      let response_ack_nack = AckNack {
-        reader_id,
-        writer_id: heartbeat.writer_id,
-        reader_sn_state,
-        count: writer_proxy.next_ack_nack_sequence_number(),
-      };
+        // let received_before = writer_proxy.all_ackable_before();
+        let reader_id = this.entity_id();
 
-      // Sanity check
-      //
-      // Wrong. This sanity check is invalid. The condition
-      // ack_base > heartbeat.last_sn + 1
-      // May be legitimately true, if there are some changes available, and a GAP
-      // after that. E.g. HEARTBEAT 1..8 and GAP 9..10. Then acknack_base == 11
-      // and 11 > 8 + 1.
-      //
-      //
-      // if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn +
-      // SequenceNumber::new(1) {   error!(
-      //     "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}
-      // missing_seqnums = {:?} all_ackable_before = {:?} writer={:?}",
-      //     &heartbeat, &response_ack_nack, missing_seqnums,
-      // writer_proxy.all_ackable_before(), writer_guid,   );
-      // }
+        // See if ACKNACK is needed, and generate one.
+        let missing_seqnums = writer_proxy.missing_seqnums(heartbeat.first_sn, heartbeat.last_sn);
 
-      // The acknack can be sent now or later. The rest of the RTPS message
-      // needs to be constructed. p. 48
-      let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
-        | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
+        // Interpretation of final flag in RTPS spec
+        // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with
+        // final flag not set
+        //
+        // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must
+        // respond with an ACKNACK Message. The ACKNACK Message may acknowledge
+        // having received all the data samples or may indicate that some data
+        // samples are missing. The response may be delayed to avoid message storms.
 
-      let fflags = BitFlags::<NACKFRAG_Flags>::from_flag(NACKFRAG_Flags::Endianness);
+        if !missing_seqnums.is_empty() || !final_flag_set {
+          let mut partially_received = Vec::new();
+          // report of what we have.
+          // We claim to have received all SNs before "base" and produce a set of missing
+          // sequence numbers that are >= base.
+          let reader_sn_state = match missing_seqnums.get(0) {
+            Some(&first_missing) => {
+              // Here we assume missing_seqnums are returned in order.
+              // Limit the set to maximum that can be sent in acknack submessage.
 
-      // send NackFrags, if any
-      let mut nackfrags = Vec::new();
-      for sn in partially_received {
-        let count = writer_proxy.next_ack_nack_sequence_number();
-        let mut missing_frags = writer_proxy.missing_frags_for(sn);
-        let first_missing = missing_frags.next();
-        if let Some(first) = first_missing {
-          let missing_frags_set = iter::once(first).chain(missing_frags).collect(); // "undo" the .next() above
-          let nf = NackFrag {
-            reader_id,
-            writer_id: writer_proxy.remote_writer_guid.entity_id,
-            writer_sn: sn,
-            fragment_number_state: FragmentNumberSet::from_base_and_set(first, &missing_frags_set),
-            count,
+              SequenceNumberSet::from_base_and_set(
+                first_missing,
+                &missing_seqnums
+                  .iter()
+                  .copied()
+                  .take_while(|sn| sn < &(first_missing + SequenceNumber::new(256)))
+                  .filter(|sn| {
+                    if this.is_frag_partially_received(writer_guid, *sn) {
+                      partially_received.push(*sn);
+                      false
+                    } else {
+                      true
+                    }
+                  })
+                  .collect(),
+              )
+            }
+
+            // Nothing missing. Report that we have all we have.
+            None => SequenceNumberSet::new_empty(writer_proxy.all_ackable_before()),
           };
-          nackfrags.push(nf);
-        } else {
-          error!("The dog ate my missing fragments.");
-          // Really, this should not happen, as we are above checking
-          // that this SN is really partially (and not fully) received.
+
+          let response_ack_nack = AckNack {
+            reader_id,
+            writer_id: heartbeat.writer_id,
+            reader_sn_state,
+            count: writer_proxy.next_ack_nack_sequence_number(),
+          };
+
+          // Sanity check
+          //
+          // Wrong. This sanity check is invalid. The condition
+          // ack_base > heartbeat.last_sn + 1
+          // May be legitimately true, if there are some changes available, and a GAP
+          // after that. E.g. HEARTBEAT 1..8 and GAP 9..10. Then acknack_base == 11
+          // and 11 > 8 + 1.
+          //
+          //
+          // if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn +
+          // SequenceNumber::new(1) {   error!(
+          //     "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}
+          // missing_seqnums = {:?} all_ackable_before = {:?} writer={:?}",
+          //     &heartbeat, &response_ack_nack, missing_seqnums,
+          // writer_proxy.all_ackable_before(), writer_guid,   );
+          // }
+
+          // The acknack can be sent now or later. The rest of the RTPS message
+          // needs to be constructed. p. 48
+          let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
+            | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
+
+          let fflags = BitFlags::<NACKFRAG_Flags>::from_flag(NACKFRAG_Flags::Endianness);
+
+          // send NackFrags, if any
+          let mut nackfrags = Vec::new();
+          for sn in partially_received {
+            let count = writer_proxy.next_ack_nack_sequence_number();
+            let mut missing_frags = this.missing_frags_for(writer_guid, sn);
+            let first_missing = missing_frags.next();
+            if let Some(first) = first_missing {
+              let missing_frags_set = iter::once(first).chain(missing_frags).collect(); // "undo" the .next() above
+              let nf = NackFrag {
+                reader_id,
+                writer_id: writer_proxy.remote_writer_guid.entity_id,
+                writer_sn: sn,
+                fragment_number_state: FragmentNumberSet::from_base_and_set(
+                  first,
+                  &missing_frags_set,
+                ),
+                count,
+              };
+              nackfrags.push(nf);
+            } else {
+              error!("The dog ate my missing fragments.");
+              // Really, this should not happen, as we are above checking
+              // that this SN is really partially (and not fully) received.
+            }
+          }
+
+          if !nackfrags.is_empty() {
+            this.send_nackfrags_to(
+              fflags,
+              nackfrags,
+              InfoDestination {
+                guid_prefix: mr_state.source_guid_prefix,
+              },
+              &mr_state.unicast_reply_locator_list,
+              writer_guid,
+            );
+          }
+
+          this.send_acknack_to(
+            flags,
+            response_ack_nack,
+            InfoDestination {
+              guid_prefix: mr_state.source_guid_prefix,
+            },
+            &mr_state.unicast_reply_locator_list,
+            writer_guid,
+          );
+
+          return true;
         }
-      }
 
-      if !nackfrags.is_empty() {
-        self.send_nackfrags_to(
-          fflags,
-          nackfrags,
-          InfoDestination {
-            guid_prefix: mr_state.source_guid_prefix,
-          },
-          &mr_state.unicast_reply_locator_list,
-          writer_guid,
-        );
-      }
-
-      self.send_acknack_to(
-        flags,
-        response_ack_nack,
-        InfoDestination {
-          guid_prefix: mr_state.source_guid_prefix,
-        },
-        &mr_state.unicast_reply_locator_list,
-        writer_guid,
-      );
-
-      return true;
-    }
-
-    false
+        false
+      }) // worker fn
+      .unwrap_or(false)
   } // fn
 
   pub fn handle_gap_msg(&mut self, gap: &Gap, mr_state: &MessageReceiverState) {

@@ -266,7 +266,7 @@ impl Writer {
 
     // If writer should behave statelessly, only BestEffor QoS is currently
     // supported
-    if i.like_stateless && i.qos_policies.reliability() != Some(policy::Reliability::BestEffort) {
+    if i.like_stateless && i.qos_policies.is_reliable() {
       panic!("Attempted to create a stateless-like Writer with other than BestEffort reliability");
     }
 
@@ -351,12 +351,7 @@ impl Writer {
   }
 
   pub fn is_reliable(&self) -> bool {
-    if !self.like_stateless {
-      self.qos_policies.reliability.is_some()
-    } else {
-      // Reliable not currently supported for Writer which mimics stateless behaviour
-      false
-    }
+    self.qos_policies.is_reliable()
   }
 
   pub fn local_readers(&self) -> Vec<EntityId> {
@@ -571,15 +566,6 @@ impl Writer {
             );
           } else {
             // Large payload, must fragment.
-            if self.like_stateless {
-              // DataFrags are currently not supported by a stateless-like Writer
-              warn!(
-                "Attempted to fragment data in a stateless-like Writer, which does not currently \
-                 support DataFrags. Ignoring. topic={:?}",
-                self.my_topic_name
-              );
-              return;
-            }
 
             if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp)
             {
@@ -655,17 +641,11 @@ impl Writer {
           let readers_pending: BTreeSet<_> = self
             .readers
             .iter()
-            .filter_map(|(guid, rp)| {
-              if rp.qos().reliability().is_some() {
-                if rp.all_acked_before <= wait_until {
-                  Some(*guid)
-                } else {
-                  None // already acked
-                }
-              } else {
-                None // not reliable reader => not supposed to ack at all
-              }
-            })
+            .filter_map(|(guid, rp)| 
+              if rp.qos().is_reliable() && rp.all_acked_before <= wait_until {
+                Some(*guid)
+              } else { None }
+            )
             .collect();
           self.ack_waiter = if readers_pending.is_empty() {
             // all acked already: try to signal app waiting at DataWriter
