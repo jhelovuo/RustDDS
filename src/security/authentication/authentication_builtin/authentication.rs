@@ -55,8 +55,6 @@ impl Authentication for AuthenticationBuiltin {
     participant_qos: &QosPolicies,
     candidate_participant_guid: GUID,
   ) -> SecurityResult<(ValidationOutcome, IdentityHandle, GUID)> {
-    // TODO 1: Verify identity certificate from PropertyQosPolicy
-    //
     // Steps: (spec Table 52, row 1)
     //
     // Load config files from URI's given in PropertyQosPolicy
@@ -195,6 +193,7 @@ impl Authentication for AuthenticationBuiltin {
       signed_permissions_document_xml: Bytes::new(), /* This is to filled in later by
                                                       * initialization calling
                                                       * .set_permissions_credential_and_token() */
+      local_permissions_token: None, // We do no have it yet.
     };
 
     self.local_participant_info = Some(local_participant_info);
@@ -249,8 +248,8 @@ impl Authentication for AuthenticationBuiltin {
     let builtin_token = BuiltinPermissionsCredentialToken::try_from(permissions_credential_token)?;
     local_info.signed_permissions_document_xml = builtin_token.permissions_document;
 
-    // TODO:
-    // What do we do about permissions_credential_token
+    // Why do we store this? What is it used for?
+    local_info.local_permissions_token = Some(permissions_token);
 
     Ok(())
   }
@@ -930,6 +929,8 @@ impl Authentication for AuthenticationBuiltin {
   }
 
   fn set_listener(&self) -> SecurityResult<()> {
-    Err(security_error!("set_listener not supported. Use status events in DataReader/DataWriter instead."))
+    Err(security_error!(
+      "set_listener not supported. Use status events in DataReader/DataWriter instead."
+    ))
   }
 }

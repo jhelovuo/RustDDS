@@ -1,11 +1,10 @@
 use std::collections::HashMap;
 
 use bytes::Bytes;
-//use x509_certificate::signing::InMemorySigningKeyPair;
 use ring::agreement;
 
 use crate::{
-  security::{certificate, SecurityError, SecurityResult},
+  security::{access_control::PermissionsToken, certificate, SecurityError, SecurityResult},
   security_error,
   structure::guid::GuidPrefix,
   GUID,
@@ -90,6 +89,7 @@ struct LocalParticipantInfo {
   identity_ca: certificate::Certificate,        /* Certification Authority who has signed
                                                  * identity_certificate */
   signed_permissions_document_xml: Bytes, // We do not care about UTF-8:ness anymore
+  local_permissions_token: Option<PermissionsToken>,
 }
 
 // All things about remote participant that we're interested in
@@ -405,6 +405,8 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
   }
 
   fn set_listener(&self) -> SecurityResult<()> {
-    todo!();
+    Err(security_error!(
+      "set_listener not supported. Use status events in DataReader/DataWriter instead."
+    ))
   }
 }
