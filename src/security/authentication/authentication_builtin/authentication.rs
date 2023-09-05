@@ -930,6 +930,6 @@ impl Authentication for AuthenticationBuiltin {
   }
 
   fn set_listener(&self) -> SecurityResult<()> {
-    todo!();
+    Err(security_error!("set_listener not supported. Use status events in DataReader/DataWriter instead."))
   }
 }
