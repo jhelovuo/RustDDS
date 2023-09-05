@@ -551,47 +551,49 @@ pub(in crate::security) const AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROP
 
 /// DDS:Auth:PKI-DH AuthenticatedPeerCredentialToken type from section 9.3.2.3
 /// of the Security specification (v. 1.1)
-pub struct BuiltinAuthenticatedPeerCredentialToken {
-  c_id: String,
-  c_perm: String,
+/// The spec specifies the fields as properties (Strings), but they actually
+/// should be binary properties. See https://issues.omg.org/issues/DDSSEC12-110
+pub(in crate::security) struct BuiltinAuthenticatedPeerCredentialToken {
+  pub c_id: Bytes,
+  pub c_perm: Bytes,
 }
 
 impl TryFrom<AuthenticatedPeerCredentialToken> for BuiltinAuthenticatedPeerCredentialToken {
-  type Error = String;
+  type Error = SecurityError;
 
   fn try_from(token: AuthenticatedPeerCredentialToken) -> Result<Self, Self::Error> {
     let dh = token.data_holder;
     // Verify class id
     if dh.class_id != AUTHENTICATED_PEER_TOKEN_CLASS_ID {
-      return Err(format!(
+      return Err(security_error(&format!(
         "Invalid class ID. Got {}, expected {}",
         dh.class_id, AUTHENTICATED_PEER_TOKEN_CLASS_ID
-      ));
+      )));
     }
 
     // Extract properties
-    let properties_map = dh.properties_as_map();
+    let bin_props_map = dh.binary_properties_as_map();
 
     let c_id = if let Some(prop) =
-      properties_map.get(AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME)
+      bin_props_map.get(AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME)
     {
       prop.value()
     } else {
-      return Err(format!(
-        "No required {} property",
+      return Err(security_error(&format!(
+        "No required {} binary property",
         AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME
-      ));
+      )));
     };
 
     let c_perm = if let Some(prop) =
-      properties_map.get(AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
+      bin_props_map.get(AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
     {
       prop.value()
     } else {
-      return Err(format!(
-        "No required {} property",
+      return Err(security_error(&format!(
+        "No required {} binary property",
         AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME
-      ));
+      )));
     };
 
     let builtin_token = Self { c_id, c_perm };
@@ -603,12 +605,12 @@ impl From<BuiltinAuthenticatedPeerCredentialToken> for AuthenticatedPeerCredenti
   fn from(builtin_token: BuiltinAuthenticatedPeerCredentialToken) -> Self {
     let dh_builder =
       DataHolderBuilder::with_class_id(AUTHENTICATED_PEER_TOKEN_CLASS_ID.to_string())
-        .add_property(
+        .add_binary_property(
           AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME,
           builtin_token.c_id,
           true,
         )
-        .add_property(
+        .add_binary_property(
           AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
           builtin_token.c_perm,
           true,
