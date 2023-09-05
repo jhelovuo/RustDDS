@@ -36,8 +36,8 @@ use crate::{
   QosPolicies, GUID,
 };
 use super::{
-  types::BuiltinIdentityToken, AuthenticationBuiltin, BuiltinHandshakeState, LocalParticipantInfo,
-  RemoteParticipantInfo,
+  types::{BuiltinAuthenticatedPeerCredentialToken, BuiltinIdentityToken},
+  AuthenticationBuiltin, BuiltinHandshakeState, LocalParticipantInfo, RemoteParticipantInfo,
 };
 
 // DDS Security spec v1.1
@@ -326,6 +326,8 @@ impl Authentication for AuthenticationBuiltin {
     let remote_info = RemoteParticipantInfo {
       guid_prefix: remote_participant_guidp,
       identity_token: remote_identity_token,
+      identity_certificate_opt: None,   // Not yet available
+      signed_permissions_xml_opt: None, // Not yet available
       handshake: HandshakeInfo {
         state: handshake_state,
       },
@@ -577,8 +579,12 @@ impl Authentication for AuthenticationBuiltin {
       challenge1: request.challenge1,
       dh2,
       challenge2,
-      remote_id_certificate: cert1,
+      remote_id_certificate: cert1.clone(),
     };
+
+    // Store remote's ID certificate and permissions doc
+    remote_info.identity_certificate_opt = Some(cert1);
+    remote_info.signed_permissions_xml_opt = Some(request.c_perm);
 
     // Create a new handshake handle & map it to remotes identity handle
     let new_handshake_handle = self.get_new_handshake_handle();
@@ -745,6 +751,11 @@ impl Authentication for AuthenticationBuiltin {
           challenge2: reply.challenge2,
           shared_secret,
         };
+
+        // Store remote's ID certificate and permissions doc
+        remote_info.identity_certificate_opt = Some(cert2);
+        remote_info.signed_permissions_xml_opt = Some(reply.c_perm);
+
         Ok((
           ValidationOutcome::OkFinalMessage,
           Some(HandshakeMessageToken::from(final_message_token)),
@@ -880,7 +891,6 @@ impl Authentication for AuthenticationBuiltin {
     }
   }
 
-  // Currently only mocked
   fn get_authenticated_peer_credential_token(
     &self,
     handshake_handle: HandshakeHandle,
@@ -889,9 +899,34 @@ impl Authentication for AuthenticationBuiltin {
       return self.get_authenticated_peer_credential_token_mocked(handshake_handle);
     }
 
-    // TODO: actual implementation
+    let identity_handle = self.handshake_handle_to_identity_handle(&handshake_handle)?;
+    let remote_info = self.get_remote_participant_info(identity_handle)?;
 
-    Ok(AuthenticatedPeerCredentialToken::dummy())
+    let id_cert = remote_info
+      .identity_certificate_opt
+      .clone()
+      .ok_or_else(|| {
+        security_error(
+          "Remote's identity certificate missing. It should have been stored from authentication \
+           handshake messages",
+        )
+      })?;
+
+    let permissions_doc = remote_info
+      .signed_permissions_xml_opt
+      .clone()
+      .ok_or_else(|| {
+        security_error(
+          "Remote's permissions document missing. It should have been stored from authentication \
+           handshake messages",
+        )
+      })?;
+
+    let builtin_token = BuiltinAuthenticatedPeerCredentialToken {
+      c_id: Bytes::from(id_cert.to_pem()),
+      c_perm: permissions_doc,
+    };
+    Ok(AuthenticatedPeerCredentialToken::from(builtin_token))
   }
 
   fn set_listener(&self) -> SecurityResult<()> {

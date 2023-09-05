@@ -96,6 +96,11 @@ struct LocalParticipantInfo {
 struct RemoteParticipantInfo {
   identity_token: IdentityToken,
   guid_prefix: GuidPrefix,
+  identity_certificate_opt: Option<certificate::Certificate>, /* Not available at first.
+                                                               * Obtained from handshake
+                                                               * request/reply message */
+  signed_permissions_xml_opt: Option<Bytes>, /* Not available at first. Obtained from handshake
+                                              * request/reply message */
   handshake: HandshakeInfo,
 }
 

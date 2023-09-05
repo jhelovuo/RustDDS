@@ -34,7 +34,7 @@ use crate::security::{
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
 // so that we can keep track of what operations we use.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Certificate {
   cert: CapturedX509Certificate,
   subject_name: DistinguishedName,
