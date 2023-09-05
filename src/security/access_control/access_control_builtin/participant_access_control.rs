@@ -211,26 +211,56 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     let permissions_ca_certificate =
       self.get_permissions_ca_certificate(local_permissions_handle)?;
 
-    let remote_identity_certificate = remote_credential_token
+    let bin_prop_map = remote_credential_token
       .data_holder
-      .get_property(AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME)
-      .and_then(|certificate_contents_pem| {
-        Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
-      })?;
+      .binary_properties_as_map();
+
+    // Extract remote identity certificate
+    let remote_cert_bytes = bin_prop_map
+      .get(AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME)
+      .map(|val| &val.value)
+      .ok_or(security_error("Could not find remote_identity_certificate"))?;
+
+    let remote_identity_certificate = Certificate::from_pem(remote_cert_bytes).map_err(|e| {
+      security_error(&format!(
+        "Could not parse remote identity certificate from data: {:?}",
+        e
+      ))
+    })?;
+
     let remote_subject_name = remote_identity_certificate.subject_name();
 
-    let remote_domain_participant_permissions = remote_credential_token
-      .data_holder
-      .get_property(AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
-      .and_then(|remote_permissions_document| {
-        SignedDocument::from_bytes(remote_permissions_document.as_ref())
-          .map_err(SecurityError::from)
-          .and_then(|signed_document| signed_document.verify_signature(permissions_ca_certificate))
-      })
-      .and_then(|permissions_xml| {
-        DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
-          .map_err(|e| security_error!("{e:?}"))
+    // Extract remote signed permissions document bytes
+    let remote_permissions_bytes = bin_prop_map
+      .get(AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
+      .map(|val| &val.value)
+      .ok_or(security_error(
+        "Could not find remote_domain_participant_permissions",
+      ))?;
+
+    // Parse to signed document
+    let signed_permissions = SignedDocument::from_bytes(remote_permissions_bytes).map_err(|e| {
+      security_error(&format!(
+        "Could not parse signed document from permissions data: {:?}",
+        e
+      ))
+    })?;
+
+    // Verify signature
+    let permissions_xml_content = signed_permissions
+      .verify_signature(permissions_ca_certificate)
+      .map_err(|e| {
+        security_error(&format!(
+          "Could not verify signature on remote permissions document: {}",
+          e
+        ))
       })?;
+
+    // Parse to permissions struct
+    let remote_domain_participant_permissions = DomainParticipantPermissions::from_xml(
+      &String::from_utf8_lossy(permissions_xml_content.as_ref()),
+    )
+    .map_err(|e| security_error(&format!("Could not parse permissions from XML: {:?}", e)))?;
 
     // Check the subject name in the identity certificate matches the one from the
     // permissions document.
