@@ -193,9 +193,9 @@ impl Authentication for AuthenticationBuiltin {
       identity_certificate,
       id_cert_private_key,
       identity_ca,
-      permissions_document_xml: Bytes::new(), /* This is to filled in later by
-                                               * initialization calling
-                                               * .set_permissions_credential_and_token() */
+      signed_permissions_document_xml: Bytes::new(), /* This is to filled in later by
+                                                      * initialization calling
+                                                      * .set_permissions_credential_and_token() */
     };
 
     self.local_participant_info = Some(local_participant_info);
@@ -248,7 +248,7 @@ impl Authentication for AuthenticationBuiltin {
     }
 
     let builtin_token = BuiltinPermissionsCredentialToken::try_from(permissions_credential_token)?;
-    local_info.permissions_document_xml = builtin_token.permissions_document;
+    local_info.signed_permissions_document_xml = builtin_token.permissions_document;
 
     // TODO:
     // What do we do about permissions_credential_token
@@ -365,7 +365,7 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
     let my_id_certificate_text = Bytes::from(local_info.identity_certificate.to_pem());
-    let my_permissions_doc_text = local_info.permissions_document_xml.clone();
+    let my_permissions_doc_text = local_info.signed_permissions_document_xml.clone();
 
     // This borrows `self` mutably!
     let remote_info = self.get_remote_participant_info_mutable(&replier_identity_handle)?;
@@ -452,6 +452,15 @@ impl Authentication for AuthenticationBuiltin {
     replier_identity_handle: IdentityHandle,   // Local
     serialized_local_participant_data: Vec<u8>,
   ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
+    if self.mock_handshakes {
+      return self.begin_handshake_reply_mocked(
+        handshake_message_in,
+        initiator_identity_handle,
+        replier_identity_handle,
+        serialized_local_participant_data,
+      );
+    }
+
     // Make sure replier_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
     if replier_identity_handle != local_info.identity_handle {
@@ -460,7 +469,7 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
     let my_id_certificate_text = Bytes::from(local_info.identity_certificate.to_pem());
-    let my_permissions_doc_text = local_info.permissions_document_xml.clone();
+    let my_permissions_doc_text = local_info.signed_permissions_document_xml.clone();
 
     // Make sure we are expecting a authentication request from remote
     let remote_info = self.get_remote_participant_info(&initiator_identity_handle)?;
@@ -551,7 +560,7 @@ impl Authentication for AuthenticationBuiltin {
       c_kagree_algo: Some(kagree_algo),
       ocsp_status: None, // Not implemented
       hash_c1: Some(Bytes::copy_from_slice(computed_c1_hash.as_ref())), /* version we computed,
-                                                                         * not as received */
+                          * not as received */
       dh1: Some(request.dh1.clone()),
       hash_c2: Some(Bytes::copy_from_slice(c2_hash.as_ref())),
       dh2: Some(dh2_public_key),
@@ -592,6 +601,10 @@ impl Authentication for AuthenticationBuiltin {
     handshake_message_in: HandshakeMessageToken,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<(ValidationOutcome, Option<HandshakeMessageToken>)> {
+    if self.mock_handshakes {
+      return self.process_handshake_mocked(handshake_message_in, handshake_handle);
+    }
+
     // Check what is the handshake state
     let remote_identity_handle = *self.handshake_handle_to_identity_handle(&handshake_handle)?;
     let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
@@ -880,6 +893,10 @@ impl Authentication for AuthenticationBuiltin {
     &self,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
+    if self.mock_handshakes {
+      return self.get_authenticated_peer_credential_token_mocked(handshake_handle);
+    }
+
     // TODO: actual implementation
 
     Ok(AuthenticatedPeerCredentialToken::dummy())

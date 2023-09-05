@@ -10,9 +10,11 @@ use crate::{
   structure::guid::GuidPrefix,
   GUID,
 };
+use self::types::BuiltinAuthenticatedPeerCredentialToken;
 use super::{
-  authentication_builtin::types::BuiltinIdentityToken, Challenge, HandshakeHandle,
-  HandshakeMessageToken, IdentityHandle, IdentityToken, Sha256, SharedSecret, ValidationOutcome,
+  authentication_builtin::types::BuiltinIdentityToken, AuthenticatedPeerCredentialToken, Challenge,
+  HandshakeHandle, HandshakeMessageToken, IdentityHandle, IdentityToken, Sha256, SharedSecret,
+  ValidationOutcome,
 };
 
 mod authentication;
@@ -87,7 +89,7 @@ struct LocalParticipantInfo {
   identity_certificate: certificate::Certificate, // Certificate contains the public key also
   identity_ca: certificate::Certificate,        /* Certification Authority who has signed
                                                  * identity_certificate */
-  permissions_document_xml: Bytes, // We do not care about UTF-8:ness anymore
+  signed_permissions_document_xml: Bytes, // We do not care about UTF-8:ness anymore
 }
 
 // All things about remote participant that we're interested in
@@ -379,5 +381,25 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
         other_state
       )),
     }
+  }
+
+  fn get_authenticated_peer_credential_token_mocked(
+    &self,
+    handshake_handle: HandshakeHandle,
+  ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
+    // Return a token with our own info. This can be used to test against an
+    // identical RustDDS instance.
+    let local_info = self.get_local_participant_info()?;
+
+    let builtin_token = BuiltinAuthenticatedPeerCredentialToken {
+      c_id: Bytes::from(local_info.identity_certificate.to_pem()),
+      c_perm: local_info.signed_permissions_document_xml.clone(),
+    };
+
+    Ok(AuthenticatedPeerCredentialToken::from(builtin_token))
+  }
+
+  fn set_listener(&self) -> SecurityResult<()> {
+    todo!();
   }
 }
