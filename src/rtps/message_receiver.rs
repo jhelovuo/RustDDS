@@ -482,10 +482,12 @@ impl MessageReceiver {
               r.contains_writer(datafrag.writer_id)
                 || (datafrag.writer_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
                   && r.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_READER)
+                || (datafrag.writer_id == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER
+                  && r.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER)
             })
           {
             debug!(
-              "handle_entity_submessage DATA from unknown handling in {:?}",
+              "handle_entity_submessage DATAFRAG from unknown handling in {:?}",
               &reader
             );
 

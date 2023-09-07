@@ -369,18 +369,13 @@ impl MessageBuilder {
         .bytes_slice(from_byte, up_to_before_byte),
     );
 
-    let encoded_payload = match serialized_payload
-      // Serialize
-      .write_to_vec()
-      .map_err(|e| security_error!("{e:?}"))
-      .and_then(|serialized_payload| {
-        // Try to get security plugins
-        SecurityPluginsHandle::get_mutex_guard(security_plugins).and_then(
+    let encoded_payload = match SecurityPluginsHandle::get_mutex_guard(security_plugins).and_then(
           |security_plugins_option| {
             security_plugins_option.map_or(
               // If there are no security plugins, use plaintext
               Ok(serialized_payload.clone()),
-              // If security plugins exist, call them to encode payload
+
+              // ..else, security plugins exist, call them to encode payload
               |security_plugins| {
                 security_plugins
                   .encode_serialized_payload(serialized_payload, &writer_guid)
@@ -393,7 +388,7 @@ impl MessageBuilder {
             )
           },
         )
-      }) {
+      {
       Ok(encoded_payload) => encoded_payload,
       Err(e) => {
         error!("{e:?}");

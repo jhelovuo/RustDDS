@@ -543,7 +543,8 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, datafrag.writer_id);
     let seq_num = datafrag.writer_sn;
     let receive_timestamp = Timestamp::now();
-
+    //trace!("DATAFRAG received topic={:?}", self.topic_name);
+    
     // check if this submessage is expired already
     // TODO: Maybe this check is in the wrong place altogether? It should be
     // done when Datareader fetches data for the application.
@@ -675,7 +676,7 @@ impl Reader {
         writer_proxy.received_changes_add(writer_sn, receive_timestamp);
       } else {
         // no writer proxy found
-        info!(
+        debug!(
           "handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
           my_entity_id, writer_guid, self.topic_name,
         );
@@ -826,7 +827,7 @@ impl Reader {
     }
 
     if !self.matched_writers.contains_key(&writer_guid) {
-      info!(
+      debug!(
         "HEARTBEAT from {:?}, but no writer proxy available. topic={:?} reader={:?}",
         writer_guid, self.topic_name, self.my_guid
       );

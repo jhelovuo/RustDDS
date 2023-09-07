@@ -25,7 +25,7 @@ pub fn test_config() -> SecurityConfig {
     },
     security::types::Property {
       name: "dds.sec.auth.password".to_string(),
-      value: "password123".to_string(),
+      value: "password123".to_string(), // TODO: Do we need a "data:" prefix here?
       propagate: false,
     },
     security::types::Property {
