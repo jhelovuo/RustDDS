@@ -13,7 +13,7 @@ use crate::{
     participant::DomainParticipantWeak,
     with_key::{DataSample, Sample},
   },
-  network::constant::DiscoveryNotificationType,
+  rtps::constant::DiscoveryNotificationType,
   qos, rpc,
   security::{
     access_control::{ParticipantSecurityAttributes, PermissionsToken},

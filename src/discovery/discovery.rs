@@ -33,7 +33,7 @@ use crate::{
     },
     spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
-  network::constant::*,
+  rtps::constant::*,
   security::{security_plugins::SecurityPluginsHandle, types::*},
   serialization::{
     cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter,
@@ -850,6 +850,13 @@ impl Discovery {
           CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN => {
             self.on_authentication_message_resend_triggered();
           }
+          SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN |
+          SECURE_DISCOVERY_SEND_READERS_INFO_TOKEN |
+          SECURE_DISCOVERY_SEND_WRITERS_INFO_TOKEN |
+          P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN |
+          P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN => 
+            debug!("Handler not implemented for {:?}", event.token()),
+
           other_token => {
             error!("discovery event loop got token: {:?}", other_token);
           }
@@ -1169,7 +1176,7 @@ impl Discovery {
     for t in ts {
       match t {
         Sample::Value((topic_data, writer)) => {
-          info!("handle_topic_reader discovered {:?}", &topic_data);
+          debug!("handle_topic_reader discovered {:?}", &topic_data);
           self
             .discovery_db_write()
             .update_topic_data(&topic_data, writer, DiscoveredVia::Topic);
@@ -1182,7 +1189,7 @@ impl Discovery {
           let writers = self
             .discovery_db_read()
             .writers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
-          info!("writers {:?}", &writers);
+          debug!("writers {:?}", &writers);
           for discovered_writer_data in writers {
             self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
               discovered_writer_data,

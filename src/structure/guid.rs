@@ -139,7 +139,7 @@ impl EntityKind {
   // 5 = fixed poll tokens continued
   // 6 = fixed poll tokens continued
   // 7 = fixed poll tokens continued
-  // 8
+  // 8 = fixed poll tokens continued
   // 9
   // A
   // B
@@ -398,7 +398,7 @@ impl EntityId {
     match (t.0 & 0xF0) as u8 {
       0x00 | 0xC0 => TokenDecode::Entity(Self::from_usize(t.0)),
       0x20 | 0xE0 => TokenDecode::AltEntity(Self::from_usize(t.0 & !0x20)),
-      0x40 | 0x50 | 0x60 | 0x70 => TokenDecode::FixedToken(t),
+      0x40 | 0x50 | 0x60 | 0x70 | 0x80 => TokenDecode::FixedToken(t),
       _other => {
         warn!("EntityId::from_token tried to decode 0x{:x?}", t.0);
         TokenDecode::FixedToken(t)

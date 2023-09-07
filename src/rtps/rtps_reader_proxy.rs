@@ -8,7 +8,7 @@ use crate::{
   dds::{participant::DomainParticipant, qos::QosPolicies},
   discovery::sedp_messages::DiscoveredReaderData,
   messages::submessages::submessage::AckSubmessage,
-  network::constant::*,
+  rtps::constant::*,
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,
