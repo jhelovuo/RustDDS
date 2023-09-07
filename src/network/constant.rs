@@ -1,6 +1,3 @@
-
-
-
 // These constants are from RTPS spec Section 9.6.2.3 Default Port Numbers
 const PB: u16 = 7400;
 const DG: u16 = 250;
@@ -26,4 +23,3 @@ pub fn user_traffic_multicast_port(domain_id: u16) -> u16 {
 pub fn user_traffic_unicast_port(domain_id: u16, participant_id: u16) -> u16 {
   PB + DG * domain_id + D3 + PG * participant_id
 }
-

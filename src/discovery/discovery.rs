@@ -850,12 +850,13 @@ impl Discovery {
           CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN => {
             self.on_authentication_message_resend_triggered();
           }
-          SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN |
-          SECURE_DISCOVERY_SEND_READERS_INFO_TOKEN |
-          SECURE_DISCOVERY_SEND_WRITERS_INFO_TOKEN |
-          P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN |
-          P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN => 
-            debug!("Handler not implemented for {:?}", event.token()),
+          SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN
+          | SECURE_DISCOVERY_SEND_READERS_INFO_TOKEN
+          | SECURE_DISCOVERY_SEND_WRITERS_INFO_TOKEN
+          | P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN
+          | P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN => {
+            debug!("Handler not implemented for {:?}", event.token());
+          }
 
           other_token => {
             error!("discovery event loop got token: {:?}", other_token);
@@ -1545,7 +1546,6 @@ mod tests {
   use std::net::SocketAddr;
 
   use chrono::Utc;
-  // use bytes::Bytes;
   use mio_06::Token;
   use speedy::{Endianness, Writable};
 
@@ -1554,7 +1554,7 @@ mod tests {
     dds::{adapters::no_key::DeserializerAdapter, participant::DomainParticipant},
     discovery::sedp_messages::TopicBuiltinTopicData,
     messages::submessages::submessages::{InterpreterSubmessage, WriterSubmessage},
-    network::{udp_listener::UDPListener, udp_sender::UDPSender},
+    network::{constant::*, udp_listener::UDPListener, udp_sender::UDPSender},
     rtps::submessage::*,
     serialization::cdr_deserializer::CDRDeserializerAdapter,
     structure::{entity::RTPSEntity, locator::Locator},

@@ -3,12 +3,12 @@ use std::time::Duration;
 use mio_06::Token;
 use mio_extras::channel as mio_channel;
 
-use crate::{discovery::builtin_endpoint::BuiltinEndpointSet, structure::guid::EntityId,
-  structure::guid::{EntityKind, GuidPrefix, GUID},
-};
-
 use crate::{
-  discovery::sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
+  discovery::{
+    builtin_endpoint::BuiltinEndpointSet,
+    sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
+  },
+  structure::guid::{EntityId, EntityKind, GuidPrefix, GUID},
 };
 
 pub const PREEMPTIVE_ACKNACK_PERIOD: Duration = Duration::from_secs(5);
@@ -172,13 +172,12 @@ pub const SECURE_BUILTIN_WRITER_ENTITY_IDS: &[EntityId] = &[
   EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
 ];
 
-
 // Poll token constants list.
 
 // The numbering of these constants must not exceed the range allowewd in token
 // decoding in the definition of EnityId.
-// The current maximum is PTB+79 . Do not define higher numbers here without modifying
-// EntityId and EntityKind.
+// The current maximum is PTB+79 . Do not define higher numbers here without
+// modifying EntityId and EntityKind.
 //
 // The poll tokens defined above are just arbitrary names used to correlate
 // poll registrations and invocations. Their order is not relevant.
@@ -252,7 +251,6 @@ pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN: Token = Token(64 + PTB)
 pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN: Token = Token(65 + PTB);
 
 // See note about maximum allowed number above.
-
 
 pub struct TokenReceiverPair<T> {
   pub token: Token,

@@ -641,11 +641,13 @@ impl Writer {
           let readers_pending: BTreeSet<_> = self
             .readers
             .iter()
-            .filter_map(|(guid, rp)| 
+            .filter_map(|(guid, rp)| {
               if rp.qos().is_reliable() && rp.all_acked_before <= wait_until {
                 Some(*guid)
-              } else { None }
-            )
+              } else {
+                None
+              }
+            })
             .collect();
           self.ack_waiter = if readers_pending.is_empty() {
             // all acked already: try to signal app waiting at DataWriter

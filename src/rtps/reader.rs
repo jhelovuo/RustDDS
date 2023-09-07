@@ -544,7 +544,7 @@ impl Reader {
     let seq_num = datafrag.writer_sn;
     let receive_timestamp = Timestamp::now();
     //trace!("DATAFRAG received topic={:?}", self.topic_name);
-    
+
     // check if this submessage is expired already
     // TODO: Maybe this check is in the wrong place altogether? It should be
     // done when Datareader fetches data for the application.

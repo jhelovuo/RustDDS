@@ -13,8 +13,8 @@ use crate::{
     participant::DomainParticipantWeak,
     with_key::{DataSample, Sample},
   },
-  rtps::constant::DiscoveryNotificationType,
   qos, rpc,
+  rtps::constant::DiscoveryNotificationType,
   security::{
     access_control::{ParticipantSecurityAttributes, PermissionsToken},
     authentication::{
@@ -274,7 +274,7 @@ impl SecureDiscovery {
     discovery_db_write(discovery_db).update_authentication_status(guid_prefix, updated_auth_status);
 
     // Decide if normal Discovery can process the participant message
-    if updated_auth_status == AuthenticationStatus::Unauthenticated 
+    if updated_auth_status == AuthenticationStatus::Unauthenticated
       || updated_auth_status == AuthenticationStatus::Authenticating
     {
       true
