@@ -13,8 +13,8 @@ use crate::{
     participant::DomainParticipantWeak,
     with_key::{DataSample, Sample},
   },
-  network::constant::DiscoveryNotificationType,
   qos, rpc,
+  rtps::constant::DiscoveryNotificationType,
   security::{
     access_control::{ParticipantSecurityAttributes, PermissionsToken},
     authentication::{
@@ -260,6 +260,7 @@ impl SecureDiscovery {
             auth_msg_writer,
           );
         }
+        info!("Authenticating with Participant {guid_prefix:?}");
         // Otherwise keep the same authentication status
         AuthenticationStatus::Authenticating
       }
@@ -273,7 +274,9 @@ impl SecureDiscovery {
     discovery_db_write(discovery_db).update_authentication_status(guid_prefix, updated_auth_status);
 
     // Decide if normal Discovery can process the participant message
-    if updated_auth_status == AuthenticationStatus::Unauthenticated {
+    if updated_auth_status == AuthenticationStatus::Unauthenticated
+      || updated_auth_status == AuthenticationStatus::Authenticating
+    {
       true
     } else {
       false
@@ -464,7 +467,7 @@ impl SecureDiscovery {
       }
     };
 
-    debug!(
+    info!(
       "Validated identity of remote participant with guid: {:?}",
       remote_guid
     );
@@ -1004,6 +1007,8 @@ impl SecureDiscovery {
           .stored_authentication_messages
           .remove(&remote_guid_prefix);
 
+        info!("Authenticated successfully Participant {remote_guid_prefix:?}");
+
         self.on_remote_participant_authenticated(
           remote_guid_prefix,
           discovery_db,
@@ -1069,7 +1074,7 @@ impl SecureDiscovery {
         .check_remote_participant(self.domain_id, remote_guid_prefix)
       {
         Ok(()) => {
-          debug!(
+          info!(
             "Allowing remote participant to join the domain. Remote guid prefix {:?}",
             remote_guid_prefix
           );
@@ -1102,8 +1107,8 @@ impl SecureDiscovery {
         )
       }) {
       Ok(()) => {
-        debug!(
-          "Registered remote participant with the crypto plugin. Remote guid prefix {:?}",
+        info!(
+          "Registered remote participant with the crypto plugin. Remote = {:?}",
           remote_guid_prefix
         );
       }

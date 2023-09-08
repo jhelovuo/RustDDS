@@ -635,7 +635,7 @@ impl DiscoveryDB {
       .external_topic_writers
       .range(participant.range())
       .map(|(_guid, dwd)| dwd);
-    info!(
+    debug!(
       "Writers on participant {:?} are {:?}",
       participant, on_participant
     );

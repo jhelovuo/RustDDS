@@ -1,19 +1,15 @@
 use core::ops::Bound::{Included, Unbounded};
-use std::{cmp::max, collections::BTreeMap, iter};
+use std::{cmp::max, collections::BTreeMap};
 
-use enumflags2::BitFlags;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::ddsdata::DDSData,
   discovery::sedp_messages::DiscoveredWriterData,
-  messages::submessages::submessages::{DATAFRAG_Flags, DecodedDataFrag},
-  rtps::fragment_assembler::FragmentAssembler,
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,
-    sequence_number::{FragmentNumber, SequenceNumber},
+    sequence_number::SequenceNumber,
     time::Timestamp,
   },
 };
@@ -78,8 +74,7 @@ pub(crate) struct RtpsWriterProxy {
   // These are used for quick tracking of
   last_received_sequence_number: SequenceNumber,
   last_received_timestamp: Timestamp,
-
-  fragment_assembler: Option<FragmentAssembler>,
+  //fragment_assembler: Option<FragmentAssembler>,
 }
 
 impl RtpsWriterProxy {
@@ -102,7 +97,7 @@ impl RtpsWriterProxy {
       ack_base: SequenceNumber::new(1),
       last_received_sequence_number: SequenceNumber::new(0),
       last_received_timestamp: Timestamp::INVALID,
-      fragment_assembler: None,
+      //fragment_assembler: None,
     }
   }
 
@@ -327,43 +322,9 @@ impl RtpsWriterProxy {
       ack_base: SequenceNumber::default(),
       last_received_sequence_number: SequenceNumber::new(0),
       last_received_timestamp: Timestamp::INVALID,
-      fragment_assembler: None,
+      //fragment_assembler: None,
     }
   } // fn
-
-  pub fn handle_datafrag(
-    &mut self,
-    datafrag: &DecodedDataFrag,
-    flags: BitFlags<DATAFRAG_Flags>,
-  ) -> Option<DDSData> {
-    if let Some(ref mut fa) = self.fragment_assembler {
-      fa.new_datafrag(datafrag, flags)
-    } else {
-      let mut fa = FragmentAssembler::new(datafrag.fragment_size);
-      // TODO: Test that the fragment size is not zero
-      let ret = fa.new_datafrag(datafrag, flags);
-      self.fragment_assembler = Some(fa);
-      ret
-    }
-  } // fn
-
-  pub fn missing_frags_for<'a>(
-    &'a self,
-    seq: SequenceNumber,
-  ) -> Box<dyn 'a + Iterator<Item = FragmentNumber>> {
-    if let Some(ref fa) = self.fragment_assembler {
-      fa.missing_frags_for(seq)
-    } else {
-      Box::new(iter::empty())
-    }
-  }
-  pub fn is_partially_received(&self, seq: SequenceNumber) -> bool {
-    if let Some(ref fa) = self.fragment_assembler {
-      fa.is_partially_received(seq)
-    } else {
-      false
-    }
-  }
 
   // Advance ack_base as far as possible
   // This function should be called after the writer proxy has modified its

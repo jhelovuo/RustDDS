@@ -16,8 +16,7 @@ use crate::{
     submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
     vendor_id::VendorId,
   },
-  network::constant::*,
-  rtps::{rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
+  rtps::{constant::*, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
   security::{
     access_control::PermissionsToken, authentication::IdentityToken, ParticipantSecurityInfo,
   },

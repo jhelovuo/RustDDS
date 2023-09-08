@@ -366,28 +366,22 @@ impl MessageBuilder {
         .bytes_slice(from_byte, up_to_before_byte),
     );
 
-    let encoded_payload = match serialized_payload
-      // Serialize
-      .write_to_vec()
-      .map_err(|e| security_error!("{e:?}"))
-      .and_then(|serialized_payload| {
-        security_plugins
-          .map(SecurityPluginsHandle::get_plugins)
-          .map_or(
-            // If there are no security plugins, use plaintext
-            Ok(serialized_payload.clone()),
-            // If security plugins exist, call them to encode payload
-            |security_plugins| {
-              security_plugins
-                .encode_serialized_payload(serialized_payload, &writer_guid)
-                // Add the extra qos
-                .map(|(encoded_payload, extra_inline_qos)| {
-                  param_list.concat(extra_inline_qos);
-                  encoded_payload
-                })
-            },
-          )
-      }) {
+    let encoded_payload = match security_plugins
+      .map(SecurityPluginsHandle::get_plugins)
+      .map_or(
+        // If there are no security plugins, use plaintext
+        Ok(serialized_payload.clone()),
+        // ..else, security plugins exist, call them to encode payload
+        |security_plugins| {
+          security_plugins
+            .encode_serialized_payload(serialized_payload, &writer_guid)
+            // Add the extra qos
+            .map(|(encoded_payload, extra_inline_qos)| {
+              param_list.concat(extra_inline_qos);
+              encoded_payload
+            })
+        },
+      ) {
       Ok(encoded_payload) => encoded_payload,
       Err(e) => {
         error!("{e:?}");

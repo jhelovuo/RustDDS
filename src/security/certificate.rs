@@ -34,7 +34,7 @@ use crate::security::{
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
 // so that we can keep track of what operations we use.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Certificate {
   cert: CapturedX509Certificate,
   subject_name: DistinguishedName,
@@ -111,6 +111,9 @@ impl Certificate {
   }
 
   // Verify that `self` was signed by `other` Certificate
+  // e.g.
+  // `someones_identity.verify_signed_by_certificate( certificate_authority )`
+  //
   pub fn verify_signed_by_certificate(&self, other: &Certificate) -> SecurityResult<()> {
     self
       .cert

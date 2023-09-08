@@ -4,7 +4,7 @@ use speedy::Writable;
 use bytes::{Bytes, BytesMut};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use ring::{agreement, digest, signature};
+use ring::{agreement, signature};
 
 //use x509_certificate::{
 //algorithm::{EcdsaCurve, KeyAlgorithm},
@@ -36,8 +36,8 @@ use crate::{
   QosPolicies, GUID,
 };
 use super::{
-  types::BuiltinIdentityToken, AuthenticationBuiltin, BuiltinHandshakeState, LocalParticipantInfo,
-  RemoteParticipantInfo,
+  types::{BuiltinAuthenticatedPeerCredentialToken, BuiltinIdentityToken},
+  AuthenticationBuiltin, BuiltinHandshakeState, LocalParticipantInfo, RemoteParticipantInfo,
 };
 
 // DDS Security spec v1.1
@@ -55,8 +55,6 @@ impl Authentication for AuthenticationBuiltin {
     participant_qos: &QosPolicies,
     candidate_participant_guid: GUID,
   ) -> SecurityResult<(ValidationOutcome, IdentityHandle, GUID)> {
-    // TODO 1: Verify identity certificate from PropertyQosPolicy
-    //
     // Steps: (spec Table 52, row 1)
     //
     // Load config files from URI's given in PropertyQosPolicy
@@ -150,7 +148,7 @@ impl Authentication for AuthenticationBuiltin {
     // DDS Security spec v1.1 Section "9.3.3 DDS:Auth:PKI-DH plugin behavior", Table
     // 52
     let subject_name_der = identity_certificate.subject_name_der()?;
-    let subject_name_der_hash = digest::digest(&digest::SHA256, &subject_name_der);
+    let subject_name_der_hash = Sha256::hash(&subject_name_der);
 
     // slice and unwrap will succeed, because input size is static
     // Procedure: Take beginning (8 bytes) from subject name DER hash, convert to
@@ -162,8 +160,7 @@ impl Authentication for AuthenticationBuiltin {
         | 0x8000_0000_0000_0000u64)
         .to_be_bytes()[0..6];
 
-    let candidate_guid_hash =
-      digest::digest(&digest::SHA256, &candidate_participant_guid.to_bytes());
+    let candidate_guid_hash = Sha256::hash(&candidate_participant_guid.to_bytes());
 
     // slicing will succeed, because digest is longer than 6 bytes
     let prefix_bytes = [&bytes_from_subject_name, &candidate_guid_hash.as_ref()[..6]].concat();
@@ -193,9 +190,10 @@ impl Authentication for AuthenticationBuiltin {
       identity_certificate,
       id_cert_private_key,
       identity_ca,
-      permissions_document_xml: Bytes::new(), /* This is to filled in later by
-                                               * initialization calling
-                                               * .set_permissions_credential_and_token() */
+      signed_permissions_document_xml: Bytes::new(), /* This is to filled in later by
+                                                      * initialization calling
+                                                      * .set_permissions_credential_and_token() */
+      local_permissions_token: None, // We do no have it yet.
     };
 
     self.local_participant_info = Some(local_participant_info);
@@ -248,10 +246,10 @@ impl Authentication for AuthenticationBuiltin {
     }
 
     let builtin_token = BuiltinPermissionsCredentialToken::try_from(permissions_credential_token)?;
-    local_info.permissions_document_xml = builtin_token.permissions_document;
+    local_info.signed_permissions_document_xml = builtin_token.permissions_document;
 
-    // TODO:
-    // What do we do about permissions_credential_token
+    // Why do we store this? What is it used for?
+    local_info.local_permissions_token = Some(permissions_token);
 
     Ok(())
   }
@@ -327,6 +325,8 @@ impl Authentication for AuthenticationBuiltin {
     let remote_info = RemoteParticipantInfo {
       guid_prefix: remote_participant_guidp,
       identity_token: remote_identity_token,
+      identity_certificate_opt: None,   // Not yet available
+      signed_permissions_xml_opt: None, // Not yet available
       handshake: HandshakeInfo {
         state: handshake_state,
       },
@@ -365,7 +365,7 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
     let my_id_certificate_text = Bytes::from(local_info.identity_certificate.to_pem());
-    let my_permissions_doc_text = local_info.permissions_document_xml.clone();
+    let my_permissions_doc_text = local_info.signed_permissions_document_xml.clone();
 
     // This borrows `self` mutably!
     let remote_info = self.get_remote_participant_info_mutable(&replier_identity_handle)?;
@@ -393,8 +393,7 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
-    let c_properties_bytes = c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-    let hash_c1 = Sha256::try_from(digest::digest(&digest::SHA256, &c_properties_bytes).as_ref())?;
+    let hash_c1 = Sha256::hash(&c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
 
     // Generate new, random Diffie-Hellman key pair "dh1"
     let dh1 = agreement::EphemeralPrivateKey::generate(
@@ -469,7 +468,7 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
     let my_id_certificate_text = Bytes::from(local_info.identity_certificate.to_pem());
-    let my_permissions_doc_text = local_info.permissions_document_xml.clone();
+    let my_permissions_doc_text = local_info.signed_permissions_document_xml.clone();
 
     // Make sure we are expecting a authentication request from remote
     let remote_info = self.get_remote_participant_info(&initiator_identity_handle)?;
@@ -505,9 +504,8 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", request.c_dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", request.c_kagree_algo.clone()),
     ];
-    let c1_properties_bytes = c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
     let computed_c1_hash =
-      Sha256::try_from(digest::digest(&digest::SHA256, &c1_properties_bytes).as_ref())?;
+      Sha256::hash(&c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
 
     // Sanity check, received hash(c1) should match what we computed
     if let Some(received_hash_c1) = request.hash_c1 {
@@ -538,8 +536,8 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
-    let c2_properties_bytes = c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-    let c2_hash = digest::digest(&digest::SHA256, &c2_properties_bytes);
+    let c2_hash =
+      Sha256::hash(&c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
 
     // Spec: "Sign(Hash(C2) | Challenge2 | DH2 | Challenge1 | DH1 | Hash(C1)) )"
     let mut cc2 = BytesMut::with_capacity(1024);
@@ -574,11 +572,18 @@ impl Authentication for AuthenticationBuiltin {
 
     // Change handshake state to pending final message & save the reply token
     remote_info.handshake.state = BuiltinHandshakeState::PendingFinalMessage {
+      hash_c1: computed_c1_hash,
+      hash_c2: c2_hash,
       dh1: request.dh1,
       challenge1: request.challenge1,
       dh2,
       challenge2,
+      remote_id_certificate: cert1.clone(),
     };
+
+    // Store remote's ID certificate and permissions doc
+    remote_info.identity_certificate_opt = Some(cert1);
+    remote_info.signed_permissions_xml_opt = Some(request.c_perm);
 
     // Create a new handshake handle & map it to remotes identity handle
     let new_handshake_handle = self.get_new_handshake_handle();
@@ -660,9 +665,8 @@ impl Authentication for AuthenticationBuiltin {
           BinaryProperty::with_propagate("c.dsign_algo", reply.c_dsign_algo.clone()),
           BinaryProperty::with_propagate("c.kagree_algo", reply.c_kagree_algo.clone()),
         ];
-        let c2_properties_bytes =
-          c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?;
-        let c2_hash_recomputed = digest::digest(&digest::SHA256, &c2_properties_bytes);
+        let c2_hash_recomputed =
+          Sha256::hash(&c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
 
         if let Some(received_hash_c2) = reply.hash_c2 {
           if received_hash_c2.as_ref() == c2_hash_recomputed.as_ref() {
@@ -703,9 +707,7 @@ impl Authentication for AuthenticationBuiltin {
           dh1,
           &dh2,
           security_error("Shared secret forming failed"), // in case it fails
-          |raw_shared_secret| {
-            SharedSecret::try_from(digest::digest(&digest::SHA256, raw_shared_secret).as_ref())
-          },
+          |raw_shared_secret| Ok(SharedSecret::from(Sha256::hash(raw_shared_secret))),
         )?;
 
         // Create signature for final message:
@@ -748,6 +750,11 @@ impl Authentication for AuthenticationBuiltin {
           challenge2: reply.challenge2,
           shared_secret,
         };
+
+        // Store remote's ID certificate and permissions doc
+        remote_info.identity_certificate_opt = Some(cert2);
+        remote_info.signed_permissions_xml_opt = Some(reply.c_perm);
+
         Ok((
           ValidationOutcome::OkFinalMessage,
           Some(HandshakeMessageToken::from(final_message_token)),
@@ -755,29 +762,84 @@ impl Authentication for AuthenticationBuiltin {
       }
 
       BuiltinHandshakeState::PendingFinalMessage {
+        hash_c1,
+        hash_c2,
         dh1,
         dh2,
         challenge1,
         challenge2,
+        remote_id_certificate,
       } => {
         // We are the responder, and expect the final message.
         // Result is that we do not produce a MassageToken, since this was the final
         // message, but we compute the handshake results (shared secret)
+        let final_token =
+          BuiltinHandshakeMessageToken::try_from(handshake_message_in)?.extract_final()?;
 
-        // TODO: verify the contents of the final message token
+        // This is a sanity check
+        if let Some(received_hash_c1) = final_token.hash_c1 {
+          if hash_c1 != received_hash_c1 {
+            return Err(security_error!(
+              "Hash C1 mismatch on authentication final receive"
+            ));
+          } else { /* ok */
+          }
+        }
 
-        // TODO: verify matching of challenge1 and challenge2 to what we sent in the
-        // reply token
+        // "The operation shall check that the challenge1 and challenge2 match the ones
+        // that were sent on the HandshakeReplyMessageToken."
+        if challenge1 != final_token.challenge1 {
+          return Err(security_error!(
+            "process_handshake: Final token challenge1 mismatch"
+          ));
+        }
+        if challenge2 != final_token.challenge2 {
+          //
+          return Err(security_error!(
+            "process_handshake: Final token challenge2 mismatch"
+          ));
+        }
 
-        // TODO: verify the digital signature
+        // "The operation shall validate the digital signature in the “signature”
+        // property, according to the expected contents and algorithm described
+        // in 9.3.2.5.3." ....
+        // signature for final message:
+        // Sign( Hash(C1) | Challenge1 | DH1 | Challenge2 | DH2 | Hash(C2) )
+        let dh2_public = dh2.compute_public_key()?;
 
-        // TODO: compute the shared secret
-        // let shared_secret = SharedSecret::default();
-        // let challenge1 = Bytes::default();
-        // let challenge2 = Bytes::default();
+        let mut cc_final = BytesMut::with_capacity(1024);
+        cc_final.extend_from_slice(hash_c1.as_ref());
+        cc_final.extend_from_slice(challenge1.as_ref());
+        cc_final.extend_from_slice(dh1.as_ref());
+        cc_final.extend_from_slice(challenge2.as_ref());
+        cc_final.extend_from_slice(dh2_public.as_ref());
+        cc_final.extend_from_slice(hash_c2.as_ref());
+
+        // Now we use the remote certificate, which we verified in the previous (request
+        // -> reply) step against CA.
+        // TODO: Hardcoded algorithm
+        remote_id_certificate
+          .verify_signed_data_with_algorithm(
+            cc_final.as_ref(),
+            final_token.signature,
+            &signature::ECDSA_P256_SHA256_ASN1,
+          )
+          .map_err(|e| {
+            security_error!("Signature verification failed in process_handshake: {e:?}")
+          })?;
+
+        // Compute the shared secret
+        // TODO: Algorithm is hardwired. Should follow "c.kagree_algo" from above.
+        let dh2_public = dh2.compute_public_key()?;
+        let dh1 = agreement::UnparsedPublicKey::new(&agreement::ECDH_P256, dh1.as_ref());
+        let shared_secret = agreement::agree_ephemeral(
+          dh2,
+          &dh1,
+          security_error("Shared secret forming failed"), // in case it fails
+          |raw_shared_secret| Ok(SharedSecret::from(Sha256::hash(raw_shared_secret))),
+        )?;
 
         // Change handshake state to Completed
-        let shared_secret = SharedSecret::dummy(); // TODO
         let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
         remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageReceived {
           challenge1,
@@ -828,17 +890,47 @@ impl Authentication for AuthenticationBuiltin {
     }
   }
 
-  // Currently only mocked
   fn get_authenticated_peer_credential_token(
     &self,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
-    // TODO: actual implementation
+    if self.mock_handshakes {
+      return self.get_authenticated_peer_credential_token_mocked(handshake_handle);
+    }
 
-    Ok(AuthenticatedPeerCredentialToken::dummy())
+    let identity_handle = self.handshake_handle_to_identity_handle(&handshake_handle)?;
+    let remote_info = self.get_remote_participant_info(identity_handle)?;
+
+    let id_cert = remote_info
+      .identity_certificate_opt
+      .clone()
+      .ok_or_else(|| {
+        security_error(
+          "Remote's identity certificate missing. It should have been stored from authentication \
+           handshake messages",
+        )
+      })?;
+
+    let permissions_doc = remote_info
+      .signed_permissions_xml_opt
+      .clone()
+      .ok_or_else(|| {
+        security_error(
+          "Remote's permissions document missing. It should have been stored from authentication \
+           handshake messages",
+        )
+      })?;
+
+    let builtin_token = BuiltinAuthenticatedPeerCredentialToken {
+      c_id: Bytes::from(id_cert.to_pem()),
+      c_perm: permissions_doc,
+    };
+    Ok(AuthenticatedPeerCredentialToken::from(builtin_token))
   }
 
   fn set_listener(&self) -> SecurityResult<()> {
-    todo!();
+    Err(security_error!(
+      "set_listener not supported. Use status events in DataReader/DataWriter instead."
+    ))
   }
 }

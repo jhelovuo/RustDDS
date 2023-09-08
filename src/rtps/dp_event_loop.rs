@@ -18,7 +18,7 @@ use crate::{
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
   messages::submessages::submessages::AckSubmessage,
-  network::{constant::*, udp_listener::UDPListener, udp_sender::UDPSender},
+  network::{udp_listener::UDPListener, udp_sender::UDPSender},
   rtps::{
     constant::*,
     message_receiver::MessageReceiver,

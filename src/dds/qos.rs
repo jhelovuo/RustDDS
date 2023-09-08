@@ -246,6 +246,10 @@ impl QosPolicies {
     self.reliability
   }
 
+  pub fn is_reliable(&self) -> bool {
+    matches!(self.reliability, Some(policy::Reliability::Reliable { .. }))
+  }
+
   pub const fn reliable_max_blocking_time(&self) -> Option<Duration> {
     if let Some(policy::Reliability::Reliable { max_blocking_time }) = self.reliability {
       Some(max_blocking_time)
