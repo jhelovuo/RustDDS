@@ -132,3 +132,44 @@ impl AckSubmessage {
     }
   }
 }
+
+pub trait HasEntityIds {
+  fn receiver_entity_id(&self) -> EntityId;
+  fn sender_entity_id(&self) -> EntityId;
+}
+
+impl HasEntityIds for WriterSubmessage {
+  fn receiver_entity_id(&self) -> EntityId {
+    match self {
+      WriterSubmessage::Data(s, _f) => s.receiver_entity_id(),
+      WriterSubmessage::DataFrag(s, _f) => s.receiver_entity_id(),
+      WriterSubmessage::Gap(s, _f) => s.receiver_entity_id(),
+      WriterSubmessage::Heartbeat(s, _f) => s.receiver_entity_id(),
+      WriterSubmessage::HeartbeatFrag(s, _f) => s.receiver_entity_id(),
+    }
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    match self {
+      WriterSubmessage::Data(s, _f) => s.sender_entity_id(),
+      WriterSubmessage::DataFrag(s, _f) => s.sender_entity_id(),
+      WriterSubmessage::Gap(s, _f) => s.sender_entity_id(),
+      WriterSubmessage::Heartbeat(s, _f) => s.sender_entity_id(),
+      WriterSubmessage::HeartbeatFrag(s, _f) => s.sender_entity_id(),
+    }
+  }
+}
+
+impl HasEntityIds for ReaderSubmessage {
+  fn receiver_entity_id(&self) -> EntityId {
+    match self {
+      ReaderSubmessage::AckNack(s, _f) => s.receiver_entity_id(),
+      ReaderSubmessage::NackFrag(s, _f) => s.receiver_entity_id(),
+    }
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    match self {
+      ReaderSubmessage::AckNack(s, _f) => s.sender_entity_id(),
+      ReaderSubmessage::NackFrag(s, _f) => s.sender_entity_id(),
+    }
+  }
+}

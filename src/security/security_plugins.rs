@@ -1,6 +1,6 @@
 use core::fmt;
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   sync::{Arc, Mutex, MutexGuard},
 };
 
@@ -22,7 +22,7 @@ use super::{
   authentication::*,
   cryptographic::{
     DatareaderCryptoHandle, DatawriterCryptoHandle, EncodedSubmessage, EndpointCryptoHandle,
-    ParticipantCryptoHandle, SecureSubmessageKind,
+    ParticipantCryptoHandle, SecureSubmessageCategory,
   },
   types::*,
   AccessControl, Cryptographic,
@@ -40,6 +40,12 @@ pub(crate) struct SecurityPlugins {
   participant_crypto_handle_cache: HashMap<GuidPrefix, ParticipantCryptoHandle>,
   local_endpoint_crypto_handle_cache: HashMap<GUID, EndpointCryptoHandle>,
   remote_endpoint_crypto_handle_cache: HashMap<(GUID, GUID), EndpointCryptoHandle>,
+
+  // Guid prefixes or guids of unprotected domains and topics to allow skipping plugin calls when
+  // there are no CryptoHeaders
+  rtps_not_protected: HashSet<GuidPrefix>,
+  submessage_not_protected: HashSet<GUID>,
+  payload_not_protected: HashSet<GUID>,
 
   test_disable_crypto_transform: bool, /* TODO: Disables the crypto transform interface, remove
                                         * after testing */
@@ -61,6 +67,10 @@ impl SecurityPlugins {
       participant_crypto_handle_cache: HashMap::new(),
       local_endpoint_crypto_handle_cache: HashMap::new(),
       remote_endpoint_crypto_handle_cache: HashMap::new(),
+
+      rtps_not_protected: HashSet::new(),
+      submessage_not_protected: HashSet::new(),
+      payload_not_protected: HashSet::new(),
 
       test_disable_crypto_transform: true, // TODO Remove after testing
     }
@@ -132,6 +142,20 @@ impl SecurityPlugins {
         )
       })
       .copied()
+  }
+
+  // Checks whether the given guid matches the given handle
+  pub fn confirm_local_endpoint_guid(
+    &self,
+    local_endpoint_crypto_handle: EndpointCryptoHandle,
+    guid: &GUID,
+  ) -> bool {
+    self
+      .local_endpoint_crypto_handle_cache
+      .get(guid)
+      .map_or(false, |found_handle| {
+        local_endpoint_crypto_handle.eq(found_handle)
+      })
   }
 
   /// The `local_proxy_guid_pair` should be `&(local_endpoint_guid,
@@ -453,6 +477,10 @@ impl SecurityPlugins {
       .map(|prop| prop.value)
       .unwrap_or_default();
 
+    if !participant_security_attributes.is_rtps_protected {
+      self.rtps_not_protected.insert(participant_guidp);
+    }
+
     let crypto_handle = self.crypto.register_local_participant(
       identity_handle,
       permissions_handle,
@@ -476,6 +504,13 @@ impl SecurityPlugins {
 
     let properties = reader_properties.map(|prop| prop.value).unwrap_or_default();
 
+    if !reader_security_attributes.is_submessage_protected {
+      self.submessage_not_protected.insert(reader_guid);
+    }
+    if !reader_security_attributes.is_payload_protected {
+      self.payload_not_protected.insert(reader_guid);
+    }
+
     let crypto_handle = self.crypto.register_local_datareader(
       participant_crypto_handle,
       &properties,
@@ -498,6 +533,13 @@ impl SecurityPlugins {
 
     let properties = writer_properties.map(|prop| prop.value).unwrap_or_default();
 
+    if !writer_security_attributes.is_submessage_protected {
+      self.submessage_not_protected.insert(writer_guid);
+    }
+    if !writer_security_attributes.is_payload_protected {
+      self.payload_not_protected.insert(writer_guid);
+    }
+
     let crypto_handle = self.crypto.register_local_datawriter(
       participant_crypto_handle,
       &properties,
@@ -512,11 +554,11 @@ impl SecurityPlugins {
 
   pub fn register_matched_remote_participant(
     &mut self,
-    local_participant_guip: GuidPrefix,
+    local_participant_guidp: GuidPrefix,
     remote_participant_guidp: GuidPrefix,
     shared_secret: SharedSecretHandle,
   ) -> SecurityResult<()> {
-    let local_crypto = self.get_participant_crypto_handle(&local_participant_guip)?;
+    let local_crypto = self.get_participant_crypto_handle(&local_participant_guidp)?;
     let remote_identity = self.get_identity_handle(&remote_participant_guidp)?;
     let remote_permissions = self.get_permissions_handle(&remote_participant_guidp)?;
 
@@ -713,7 +755,7 @@ impl SecurityPlugins {
     secure_prefix: &SecurePrefix,
     source_guid_prefix: &GuidPrefix,
     destination_guid_prefix: &GuidPrefix,
-  ) -> SecurityResult<SecureSubmessageKind> {
+  ) -> SecurityResult<SecureSubmessageCategory> {
     self.crypto.preprocess_secure_submessage(
       secure_prefix,
       self.get_participant_crypto_handle(destination_guid_prefix)?,
@@ -759,12 +801,30 @@ impl SecurityPlugins {
       return Ok(encoded_payload);
     }
 
-    self.crypto.decode_serialized_payload(
-      encoded_payload,
-      inline_qos,
-      self.get_local_endpoint_crypto_handle(destination_guid)?,
-      self.get_remote_endpoint_crypto_handle((destination_guid, source_guid))?,
-    )
+    if self.payload_not_protected(destination_guid) {
+      Ok(encoded_payload)
+    } else {
+      self.crypto.decode_serialized_payload(
+        encoded_payload,
+        inline_qos,
+        self.get_local_endpoint_crypto_handle(destination_guid)?,
+        self.get_remote_endpoint_crypto_handle((destination_guid, source_guid))?,
+      )
+    }
+  }
+
+  // These allow us to accept unprotected messages without CryptoHeaders in
+  // domains or topics where they are allowed
+  pub fn rtps_not_protected(&self, local_participant_guid_prefix: &GuidPrefix) -> bool {
+    self
+      .rtps_not_protected
+      .contains(local_participant_guid_prefix)
+  }
+  pub fn submessage_not_protected(&self, local_endpoint_guid: &GUID) -> bool {
+    self.submessage_not_protected.contains(local_endpoint_guid)
+  }
+  pub fn payload_not_protected(&self, local_endpoint_guid: &GUID) -> bool {
+    self.payload_not_protected.contains(local_endpoint_guid)
   }
 }
 
@@ -780,23 +840,8 @@ impl SecurityPluginsHandle {
     }
   }
 
-  pub(crate) fn get_mutex_guard(
-    security_plugins: Option<&SecurityPluginsHandle>,
-  ) -> SecurityResult<Option<MutexGuard<SecurityPlugins>>> {
-    security_plugins
-      // Get a mutex guard
-      .map(|security_plugins_handle| security_plugins_handle.lock())
-      // Dig out the error
-      .transpose()
-      .map_err(|e| {
-        security_error!("SecurityPluginHandle poisoned! {e:?}")
-        // TODO: Send signal to exit RTPS thread, as there is no way to
-        // recover.
-      })
-  }
-
-  pub(crate) fn get_plugins(handle: &SecurityPluginsHandle) -> MutexGuard<SecurityPlugins> {
-    handle.lock().unwrap_or_else(|e| {
+  pub(crate) fn get_plugins(&self) -> MutexGuard<SecurityPlugins> {
+    self.lock().unwrap_or_else(|e| {
       security_error!("Security plugins are poisoned! {}", e);
       panic!("Security plugins are poisoned!");
     })

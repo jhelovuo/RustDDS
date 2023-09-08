@@ -575,7 +575,7 @@ impl CryptoTransform for CryptographicBuiltin {
     secure_prefix: &SecurePrefix,
     _receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<SecureSubmessageKind> {
+  ) -> SecurityResult<SecureSubmessageCategory> {
     // 9.5.3.3.5
     let SecurePrefix {
       crypto_header:
@@ -602,9 +602,15 @@ impl CryptoTransform for CryptographicBuiltin {
         "Could not find registered entities for the sending_participant_crypto_handle {}",
         sending_participant_crypto_handle
       ))?;
+
+    let mut datawriter_submessage_handle_pairs =
+      Vec::<(DatawriterCryptoHandle, DatareaderCryptoHandle)>::new();
+    let mut datareader_submessage_handle_pairs =
+      Vec::<(DatareaderCryptoHandle, DatawriterCryptoHandle)>::new();
+
     for EndpointInfo {
-      crypto_handle: handle,
-      kind: category,
+      crypto_handle,
+      kind,
     } in sending_participant_endpoints
     {
       // Iterate over the key materials associated with the endpoint
@@ -614,14 +620,14 @@ impl CryptoTransform for CryptographicBuiltin {
         ..
       }) = self
         .decode_key_materials
-        .get(handle)
+        .get(crypto_handle)
         .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
       {
         // Compare key materials to the crypto transform identifier
         if submessage_transformation_kind.eq(transformation_kind)
           && transformation_key_id.eq(sender_key_id)
         {
-          let remote_endpoint_crypto_handle = *handle;
+          let remote_endpoint_crypto_handle = *crypto_handle;
           let matched_local_endpoint_crypto_handle = *self
             .matched_local_endpoint
             .get(&remote_endpoint_crypto_handle)
@@ -629,26 +635,44 @@ impl CryptoTransform for CryptographicBuiltin {
               "The local endpoint matched to the remote endpoint crypto handle {} is missing.",
               remote_endpoint_crypto_handle
             ))?;
-          return Ok(match category {
-            EndpointKind::DataReader => SecureSubmessageKind::DatareaderSubmessage(
+          match kind {
+            EndpointKind::DataWriter => datawriter_submessage_handle_pairs.push((
               remote_endpoint_crypto_handle,
               matched_local_endpoint_crypto_handle,
-            ),
-            EndpointKind::DataWriter => SecureSubmessageKind::DatawriterSubmessage(
+            )),
+            EndpointKind::DataReader => datareader_submessage_handle_pairs.push((
               remote_endpoint_crypto_handle,
               matched_local_endpoint_crypto_handle,
-            ),
-          });
+            )),
+          }
         }
       }
     }
-    // No matching key materials were found for any endpoint registered to the
-    // sender
-    Err(security_error!(
-      "Could not find matching key materials for any registered endpoint for the \
-       sending_participant_crypto_handle {}.",
-      sending_participant_crypto_handle
-    ))
+
+    match (
+      datawriter_submessage_handle_pairs.is_empty(),
+      datareader_submessage_handle_pairs.is_empty(),
+    ) {
+      (true, true) => Err(security_error!(
+        "Could not find matching key materials for any registered endpoint for the \
+         sending_participant_crypto_handle {}.",
+        sending_participant_crypto_handle
+      )),
+      (false, false) => {
+        //
+        Err(security_error!(
+          "Matching key materials found for both registered datawriters and datareaders for the \
+           sending_participant_crypto_handle {}.",
+          sending_participant_crypto_handle
+        ))
+      }
+      (false, true) => Ok(SecureSubmessageCategory::DatawriterSubmessage(
+        datawriter_submessage_handle_pairs,
+      )),
+      (true, false) => Ok(SecureSubmessageCategory::DatareaderSubmessage(
+        datareader_submessage_handle_pairs,
+      )),
+    }
   }
 
   fn decode_datawriter_submessage(

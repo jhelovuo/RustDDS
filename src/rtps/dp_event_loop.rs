@@ -419,7 +419,7 @@ impl DPEventLoop {
     }
   }
 
-  /// Writer timed events can be heatrbeats or cache cleaning events.
+  /// Writer timed events can be heartbeats or cache cleaning events.
   /// events are distinguished by TimerMessageType which is send via mio
   /// channel. Channel token in
   fn handle_writer_timed_event(&mut self, entity_id: EntityId) {
@@ -577,9 +577,11 @@ impl DPEventLoop {
                 .domain_participant_guid
                 .from_prefix(*writer_eid);
 
-              if let Err(e) = SecurityPluginsHandle::get_plugins(plugins_handle)
-                .register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
-              {
+              if let Err(e) = plugins_handle.get_plugins().register_matched_remote_reader(
+                remote_reader_guid,
+                local_writer_guid,
+                false,
+              ) {
                 error!(
                   "Failed to register remote reader with the crypto plugin: {} GUID: {:?}",
                   e, remote_reader_guid
@@ -632,7 +634,8 @@ impl DPEventLoop {
                 .domain_participant_guid
                 .from_prefix(*reader_eid);
 
-              if let Err(e) = SecurityPluginsHandle::get_plugins(plugins_handle)
+              if let Err(e) = plugins_handle
+                .get_plugins()
                 .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
               {
                 error!(
@@ -785,7 +788,7 @@ impl DPEventLoop {
       // TODO: add correct should_be_registered for application-data readers
       let should_be_registered = SECURE_BUILTIN_READER_ENTITY_IDS.contains(&reader_guid.entity_id);
       if should_be_registered {
-        let mut sec_plugins = SecurityPluginsHandle::get_plugins(plugins_handle);
+        let mut sec_plugins = plugins_handle.get_plugins();
 
         if let Err(e) = sec_plugins
           .get_reader_sec_attributes(reader_guid, topic_name)
@@ -829,8 +832,9 @@ impl DPEventLoop {
         // Currently the unregister method is called for every reader, and errors are
         // ignored. If this is inconvenient, add a check if the reader has been
         // registered/is secure, and unregister only if it is so
-        let _ =
-          SecurityPluginsHandle::get_plugins(plugins_handle).unregister_local_reader(&reader_guid);
+        let _ = plugins_handle
+          .get_plugins()
+          .unregister_local_reader(&reader_guid);
       }
     } else {
       warn!("Tried to remove nonexistent Reader {reader_guid:?}");
@@ -871,7 +875,7 @@ impl DPEventLoop {
       // TODO: add correct should_be_registered for application-data writers
       let should_be_registered = SECURE_BUILTIN_WRITER_ENTITY_IDS.contains(&writer_guid.entity_id);
       if should_be_registered {
-        let mut sec_plugins = SecurityPluginsHandle::get_plugins(plugins_handle);
+        let mut sec_plugins = plugins_handle.get_plugins();
 
         if let Err(e) = sec_plugins
           .get_writer_sec_attributes(writer_guid, topic_name)
@@ -911,8 +915,9 @@ impl DPEventLoop {
         // Currently the unregister method is called for every writer, and errors are
         // ignored. If this is inconvenient, add a check if the writer has been
         // registered/is secure, and unregister only if it is so
-        let _ =
-          SecurityPluginsHandle::get_plugins(plugins_handle).unregister_local_writer(writer_guid);
+        let _ = plugins_handle
+          .get_plugins()
+          .unregister_local_writer(writer_guid);
       }
     }
   }

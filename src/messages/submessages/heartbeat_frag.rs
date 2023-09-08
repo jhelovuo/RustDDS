@@ -4,6 +4,7 @@ use crate::structure::{
   guid::EntityId,
   sequence_number::{FragmentNumber, SequenceNumber},
 };
+use super::submessage::HasEntityIds;
 
 /// When fragmenting data and until all fragments are available, the
 /// HeartbeatFrag Submessage is sent from an RTPS Writer to an RTPS Reader to
@@ -34,6 +35,15 @@ pub struct HeartbeatFrag {
   /// messages that can result from the presence of redundant communication
   /// paths.
   pub count: i32,
+}
+
+impl HasEntityIds for HeartbeatFrag {
+  fn receiver_entity_id(&self) -> EntityId {
+    self.reader_id
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    self.writer_id
+  }
 }
 
 #[cfg(test)]

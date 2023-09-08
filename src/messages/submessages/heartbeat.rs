@@ -8,7 +8,9 @@ use crate::{
   structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
 use super::{
-  submessage::WriterSubmessage, submessage_flag::HEARTBEAT_Flags, submessage_kind::SubmessageKind,
+  submessage::{HasEntityIds, WriterSubmessage},
+  submessage_flag::HEARTBEAT_Flags,
+  submessage_kind::SubmessageKind,
 };
 
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
@@ -65,6 +67,15 @@ impl Heartbeat {
       body: SubmessageBody::Writer(WriterSubmessage::Heartbeat(self, flags)),
       original_bytes: None,
     })
+  }
+}
+
+impl HasEntityIds for Heartbeat {
+  fn receiver_entity_id(&self) -> EntityId {
+    self.reader_id
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    self.writer_id
   }
 }
 

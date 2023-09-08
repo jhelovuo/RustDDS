@@ -257,12 +257,17 @@ pub trait CryptoTransform: Send {
   /// [SecureSubmessageCategory::DatareaderSubmessage] in the order
   /// (sender,receiver). In the case `INFO_SUBMESSAGE`,
   /// [SecureSubmessageCategory::InfoSubmessage] is returned instead of `false`.
+  ///
+  /// A vector of handle pairs is included in the SecureSubmessageCategory
+  /// instead of one pair, since there can be multiple receiving local
+  /// endpoints matched to the sending remote endpoint, which in this case
+  /// would also have a different CryptoHandle for each match
   fn preprocess_secure_submessage(
     &self,
     secure_prefix: &SecurePrefix,
     receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<SecureSubmessageKind>;
+  ) -> SecurityResult<SecureSubmessageCategory>;
 
   /// decode_datawriter_submessage: section 8.5.1.9.7 of the Security
   /// specification (v. 1.1)

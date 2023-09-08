@@ -202,6 +202,15 @@ impl<C: Context> Writable<C> for Data {
   }
 }
 
+impl HasEntityIds for Data {
+  fn receiver_entity_id(&self) -> EntityId {
+    self.reader_id
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    self.writer_id
+  }
+}
+
 // A version of the above struct with the payload decoded
 pub struct DecodedData {
   /// Identifies the RTPS Reader entity that is being informed of the change

@@ -81,10 +81,10 @@ impl fmt::Display for CryptoTransformKeyId {
 /// latter two cases.
 
 #[allow(clippy::enum_variant_names)] // We are using variant names from the spec
-pub enum SecureSubmessageKind {
+pub enum SecureSubmessageCategory {
   InfoSubmessage,
-  DatawriterSubmessage(DatawriterCryptoHandle, DatareaderCryptoHandle),
-  DatareaderSubmessage(DatareaderCryptoHandle, DatawriterCryptoHandle),
+  DatawriterSubmessage(Vec<(DatawriterCryptoHandle, DatareaderCryptoHandle)>),
+  DatareaderSubmessage(Vec<(DatareaderCryptoHandle, DatawriterCryptoHandle)>),
 }
 
 /// [super::cryptographic_plugin::CryptoTransform::encode_datawriter_submessage]

@@ -14,7 +14,9 @@ use crate::{
   },
 };
 use super::{
-  submessage::ReaderSubmessage, submessage_flag::NACKFRAG_Flags, submessage_kind::SubmessageKind,
+  submessage::{HasEntityIds, ReaderSubmessage},
+  submessage_flag::NACKFRAG_Flags,
+  submessage_kind::SubmessageKind,
 };
 
 /// The NackFrag Submessage is used to communicate the state of a Reader to a
@@ -68,6 +70,15 @@ impl NackFrag {
       + size_of::<SequenceNumber>()
       + self.fragment_number_state.len_serialized()
       + size_of::<i32>()
+  }
+}
+
+impl HasEntityIds for NackFrag {
+  fn receiver_entity_id(&self) -> EntityId {
+    self.writer_id
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    self.reader_id
   }
 }
 

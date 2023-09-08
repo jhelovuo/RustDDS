@@ -307,6 +307,15 @@ impl<C: Context> Writable<C> for DataFrag {
   }
 }
 
+impl HasEntityIds for DataFrag {
+  fn receiver_entity_id(&self) -> EntityId {
+    self.reader_id
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    self.writer_id
+  }
+}
+
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[cfg_attr(test, derive(Default))]
 pub struct DecodedDataFrag {
