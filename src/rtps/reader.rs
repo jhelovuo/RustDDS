@@ -841,18 +841,16 @@ impl Reader {
       );
     }
 
-    let mut mr_state = mr_state;
-
     self
       .with_mutable_writer_proxy(writer_guid, |this, writer_proxy| {
         // Note: This is worker closure. Use `this` instead of `self`.
 
-        // TODO: This is likely a bug. If mr_state.unicast_reply_locator_list contains
-        // something useful (other than a single invalid locator),
-        // it came from INFO_REPLY submessage preceeding HEARTBEAT, and should be used
-        // to send the reply to. Only if mr_state has no unicast locators, use locators
-        // from writer_proxy.
-        mr_state.unicast_reply_locator_list = writer_proxy.unicast_locator_list.clone();
+        // Decide where should we send a reply, i.e. ACKNACK
+        let reply_locators = match mr_state.unicast_reply_locator_list.as_slice() {
+          [] | [Locator::Invalid] => writer_proxy.unicast_locator_list.clone(),
+          //TODO: What is writer_proxy has an empty list?
+          others => others.to_vec(),
+        };
 
         if heartbeat.count <= writer_proxy.received_heartbeat_count {
           // This heartbeat was already seen an processed.
@@ -974,7 +972,7 @@ impl Reader {
               InfoDestination {
                 guid_prefix: mr_state.source_guid_prefix,
               },
-              &mr_state.unicast_reply_locator_list,
+              &reply_locators,
               writer_guid,
             );
           }
@@ -985,7 +983,7 @@ impl Reader {
             InfoDestination {
               guid_prefix: mr_state.source_guid_prefix,
             },
-            &mr_state.unicast_reply_locator_list,
+            &reply_locators,
             writer_guid,
           );
 
