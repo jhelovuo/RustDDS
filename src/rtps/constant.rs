@@ -174,8 +174,8 @@ pub const SECURE_BUILTIN_WRITER_ENTITY_IDS: &[EntityId] = &[
 
 // Poll token constants list.
 
-// The numbering of these constants must not exceed the range allowewd in token
-// decoding in the definition of EnityId.
+// The numbering of these constants must not exceed the range allowed in token
+// decoding in the definition of EntityId.
 // The current maximum is PTB+79 . Do not define higher numbers here without
 // modifying EntityId and EntityKind.
 //
@@ -282,4 +282,39 @@ pub(crate) enum DiscoveryNotificationType {
     writer_guid: GUID,
     manual_assertion: bool,
   },
+}
+
+pub mod builtin_topic_names {
+  // DDS-RTPS 2.5: 8.5.2
+  pub const DCPS_PARTICIPANT: &str = "DCPSParticipant";
+  pub const DCPS_PUBLICATION: &str = "DCPSPublication";
+  pub const DCPS_SUBSCRIPTION: &str = "DCPSSubscription";
+  pub const DCPS_TOPIC: &str = "DCPSTopic";
+  // DDS-RTPS 2.5: 8.4.13.4
+  pub const DCPS_PARTICIPANT_MESSAGE: &str = "DCPSParticipantMessage";
+
+  // DDS-SECURITY 1.1: 7.4
+  pub const DCPS_PARTICIPANT_SECURE: &str = "DCPSParticipantSecure";
+  pub const DCPS_PUBLICATIONS_SECURE: &str = "DCPSPublicationsSecure";
+  pub const DCPS_SUBSCRIPTIONS_SECURE: &str = "DCPSSubscriptionsSecure";
+  pub const DCPS_PARTICIPANT_MESSAGE_SECURE: &str = "DCPSParticipantMessageSecure";
+  pub const DCPS_PARTICIPANT_STATELESS_MESSAGE: &str = "DCPSParticipantStatelessMessage";
+  pub const DCPS_PARTICIPANT_VOLATILE_MESSAGE_SECURE: &str = "DCPSParticipantVolatileMessageSecure";
+}
+
+// topic type name over RTPS
+pub mod builtin_topic_type_names {
+  pub const DCPS_PARTICIPANT: &str = "SPDPDiscoveredParticipantData";
+  pub const DCPS_PUBLICATION: &str = "DiscoveredWriterData";
+  pub const DCPS_SUBSCRIPTION: &str = "DiscoveredReaderData";
+  pub const DCPS_TOPIC: &str = "DiscoveredTopicData";
+
+  pub const DCPS_PARTICIPANT_MESSAGE: &str = "ParticipantMessageData";
+
+  pub const DCPS_PARTICIPANT_SECURE: &str = "ParticipantBuiltinTopicDataSecure";
+  pub const DCPS_PUBLICATIONS_SECURE: &str = "PublicationBuiltinTopicDataSecure";
+  pub const DCPS_SUBSCRIPTIONS_SECURE: &str = "SubscriptionBuiltinTopicDataSecure";
+  pub const DCPS_PARTICIPANT_MESSAGE_SECURE: &str = "ParticipantMessageData";
+  pub const DCPS_PARTICIPANT_STATELESS_MESSAGE: &str = "ParticipantStatelessMessage";
+  pub const DCPS_PARTICIPANT_VOLATILE_MESSAGE_SECURE: &str = "ParticipantVolatileMessageSecure";
 }

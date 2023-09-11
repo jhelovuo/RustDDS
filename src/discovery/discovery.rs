@@ -387,8 +387,8 @@ impl Discovery {
     let dcps_participant = construct_topic_and_poll!(
       PlCdr,
       with_key,
-      "DCPSParticipant",               // topic name
-      "SPDPDiscoveredParticipantData", // topic type name over RTPS
+      builtin_topic_names::DCPS_PARTICIPANT,
+      builtin_topic_type_names::DCPS_PARTICIPANT,
       SpdpDiscoveredParticipantData,
       Some(Self::create_spdp_participant_qos()),
       false, // Regular stateful RTPS Reader & Writer
@@ -417,8 +417,8 @@ impl Discovery {
     let dcps_subscription = construct_topic_and_poll!(
       PlCdr,
       with_key,
-      "DCPSSubscription",     // topic name
-      "DiscoveredReaderData", // topic type name over RTPS
+      builtin_topic_names::DCPS_SUBSCRIPTION,
+      builtin_topic_type_names::DCPS_SUBSCRIPTION,
       DiscoveredReaderData,
       None,  // QoS
       false, // Regular stateful RTPS Reader & Writer
@@ -433,8 +433,8 @@ impl Discovery {
     let dcps_publication = construct_topic_and_poll!(
       PlCdr,
       with_key,
-      "DCPSPublication",      // topic name
-      "DiscoveredReaderData", // topic type name over RTPS
+      builtin_topic_names::DCPS_PUBLICATION,
+      builtin_topic_type_names::DCPS_PUBLICATION,
       DiscoveredWriterData,
       None,  // QoS,
       false, // Regular stateful RTPS Reader & Writer
@@ -449,8 +449,8 @@ impl Discovery {
     let dcps_topic = construct_topic_and_poll!(
       PlCdr,
       with_key,
-      "DCPSTopic",           // topic name
-      "DiscoveredTopicData", // topic type name over RTPS
+      builtin_topic_names::DCPS_TOPIC,
+      builtin_topic_type_names::DCPS_TOPIC,
       DiscoveredTopicData,
       None,  // QoS,
       false, // Regular stateful RTPS Reader & Writer
@@ -478,8 +478,8 @@ impl Discovery {
     let dcps_participant_message = construct_topic_and_poll!(
       CDR,
       with_key,
-      "DCPSParticipantMessage", // topic name
-      "ParticipantMessageData", // topic type name over RTPS
+      builtin_topic_names::DCPS_PARTICIPANT_MESSAGE,
+      builtin_topic_type_names::DCPS_PARTICIPANT_MESSAGE,
       ParticipantMessageData,
       Some(Self::PARTICIPANT_MESSAGE_QOS),
       false, // Regular stateful RTPS Reader & Writer
@@ -508,8 +508,8 @@ impl Discovery {
     let dcps_participant_secure = construct_topic_and_poll!(
       PlCdr,
       with_key,
-      "DCPSParticipantsSecure",            // topic name
-      "ParticipantBuiltinTopicDataSecure", // topic type name over RTPS (use the same data type)
+      builtin_topic_names::DCPS_PARTICIPANT_SECURE,
+      builtin_topic_type_names::DCPS_PARTICIPANT_SECURE,
       ParticipantBuiltinTopicDataSecure,
       None,  // QoS
       false, // Regular stateful RTPS Reader & Writer
@@ -525,8 +525,8 @@ impl Discovery {
     let dcps_subscriptions_secure = construct_topic_and_poll!(
       PlCdr,
       with_key,
-      "DCPSSubscriptionsSecure",            // topic name
-      "SubscriptionBuiltinTopicDataSecure", // topic type name over RTPS
+      builtin_topic_names::DCPS_SUBSCRIPTIONS_SECURE,
+      builtin_topic_type_names::DCPS_SUBSCRIPTIONS_SECURE,
       SubscriptionBuiltinTopicDataSecure,
       None,  // QoS
       false, // Regular stateful RTPS Reader & Writer
@@ -541,8 +541,8 @@ impl Discovery {
     let dcps_publications_secure = construct_topic_and_poll!(
       PlCdr,
       with_key,
-      "DCPSPublicationsSecure",             // topic name
-      "PublicationBuiltinTopicDataSecure,", // topic type name over RTPS
+      builtin_topic_names::DCPS_PUBLICATIONS_SECURE,
+      builtin_topic_type_names::DCPS_PUBLICATIONS_SECURE,
       PublicationBuiltinTopicDataSecure,
       None,  // QoS
       false, // Regular stateful RTPS Reader & Writer
@@ -557,11 +557,11 @@ impl Discovery {
     let dcps_participant_message_secure = construct_topic_and_poll!(
       CDR,
       with_key,
-      "DCPSParticipantMessageSecure", // topic name
-      "ParticipantMessageData",       // topic type name over RTPS (use the same data type)
-      ParticipantMessageData,         // actually reuse the non-secure data type
-      None,                           // QoS
-      false,                          // Regular stateful RTPS Reader & Writer
+      builtin_topic_names::DCPS_PARTICIPANT_MESSAGE_SECURE,
+      builtin_topic_type_names::DCPS_PARTICIPANT_MESSAGE_SECURE,
+      ParticipantMessageData, // actually reuse the non-secure data type
+      None,                   // QoS
+      false,                  // Regular stateful RTPS Reader & Writer
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_READER,
       P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_WRITER,
@@ -572,8 +572,8 @@ impl Discovery {
     let dcps_participant_stateless_message = construct_topic_and_poll!(
       CDR,
       no_key,
-      "DCPSParticipantStatelessMessage", // topic name
-      "ParticipantStatelessMessage",
+      builtin_topic_names::DCPS_PARTICIPANT_STATELESS_MESSAGE,
+      builtin_topic_type_names::DCPS_PARTICIPANT_STATELESS_MESSAGE,
       ParticipantStatelessMessage,
       Some(Self::PARTICIPANT_STATELESS_MESSAGE_QOS),
       true, // Important: STATELESS RTPS Reader & Writer (see Security spec. section 7.4.3)
@@ -587,8 +587,8 @@ impl Discovery {
     let dcps_participant_volatile_message_secure = construct_topic_and_poll!(
       CDR,
       no_key,
-      "ParticipantVolatileMessageSecure", // topic name
-      "ParticipantVolatileMessageSecure",
+      builtin_topic_names::DCPS_PARTICIPANT_VOLATILE_MESSAGE_SECURE,
+      builtin_topic_type_names::DCPS_PARTICIPANT_VOLATILE_MESSAGE_SECURE,
       ParticipantVolatileMessageSecure, // actually reuse the non-secure data type
       None,                             // QoS
       false,                            // Regular stateful RTPS Reader & Writer
@@ -927,8 +927,8 @@ impl Discovery {
     let sub_topic_data = SubscriptionBuiltinTopicData::new(
       reader_guid,
       Some(dp.guid()),
-      String::from("DCPSParticipant"),
-      String::from("SPDPDiscoveredParticipantData"),
+      String::from(builtin_topic_names::DCPS_PARTICIPANT),
+      String::from(builtin_topic_type_names::DCPS_PARTICIPANT),
       &Self::create_spdp_participant_qos(),
       None, // <<---------------TODO: None here means we advertise no EndpointSecurityInfo
     );
@@ -957,8 +957,8 @@ impl Discovery {
     let pub_topic_data = PublicationBuiltinTopicData::new(
       writer_guid,
       Some(dp.guid()),
-      String::from("DCPSParticipant"),
-      String::from("SPDPDiscoveredParticipantData"),
+      String::from(builtin_topic_names::DCPS_PARTICIPANT),
+      String::from(builtin_topic_type_names::DCPS_PARTICIPANT),
       None, // TODO: EndpointSecurityInfo is missing from here.
     );
     let dwd = DiscoveredWriterData {
