@@ -519,7 +519,7 @@ impl Writer {
               {
                 // If DataWriter sent us a source timestamp, then add that.
                 // Timestamp has to go before Data to have effect on Data.
-                if let Some(src_ts) = cache_change.write_options.source_timestamp {
+                if let Some(src_ts) = cache_change.write_options.source_timestamp() {
                   message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
                 }
                 message_builder = message_builder.data_msg(
@@ -579,7 +579,7 @@ impl Writer {
                   FragmentNumber::new(num_frags),
                 ) {
                   let mut message_builder = MessageBuilder::new();
-                  if let Some(src_ts) = cache_change.write_options.source_timestamp {
+                  if let Some(src_ts) = cache_change.write_options.source_timestamp() {
                     message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
                   }
 
@@ -634,6 +634,7 @@ impl Writer {
                supports BestEffort QoS. Ignoring. topic={:?}",
               self.my_topic_name
             );
+            let _ = all_acked.try_send(()); // Let the poor waiter continue.
             return;
           }
 
@@ -1081,7 +1082,7 @@ impl Writer {
         if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp) {
           // Generate datafrag message
           let mut message_builder = MessageBuilder::new();
-          if let Some(src_ts) = cache_change.write_options.source_timestamp {
+          if let Some(src_ts) = cache_change.write_options.source_timestamp() {
             message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
           }
 

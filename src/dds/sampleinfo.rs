@@ -234,7 +234,7 @@ impl SampleInfo {
   /// Source timestamp is the timestamp that was supplied by the DataWriter
   /// that sent this sample. It is optional to timestamp samples when writing.
   pub fn source_timestamp(&self) -> Option<Timestamp> {
-    self.write_options.source_timestamp
+    self.write_options.source_timestamp()
   }
 
   pub fn sample_state(&self) -> SampleState {
@@ -292,7 +292,7 @@ impl SampleInfo {
   }
 
   pub fn related_sample_identity(&self) -> Option<SampleIdentity> {
-    self.write_options.related_sample_identity
+    self.write_options.related_sample_identity()
   }
 
   pub fn sample_identity(&self) -> SampleIdentity {

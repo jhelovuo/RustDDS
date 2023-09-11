@@ -47,6 +47,7 @@ use crate::{
 pub struct WriteOptionsBuilder {
   related_sample_identity: Option<SampleIdentity>,
   source_timestamp: Option<Timestamp>,
+  to_single_reader: Option<GUID>,
 }
 
 impl WriteOptionsBuilder {
@@ -58,6 +59,7 @@ impl WriteOptionsBuilder {
     WriteOptions {
       related_sample_identity: self.related_sample_identity,
       source_timestamp: self.source_timestamp,
+      to_single_reader: self.to_single_reader,
     }
   }
 
@@ -81,14 +83,21 @@ impl WriteOptionsBuilder {
     self.source_timestamp = Some(source_timestamp);
     self
   }
+
+  #[must_use]
+  pub fn to_single_reader(mut self, reader: GUID) -> Self {
+    self.to_single_reader = Some(reader);
+    self
+  }
 }
 
 /// Type to be used with write_with_options.
 /// Use WriteOptionsBuilder to construct this.
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default)]
 pub struct WriteOptions {
-  pub(crate) related_sample_identity: Option<SampleIdentity>,
-  pub(crate) source_timestamp: Option<Timestamp>,
+  related_sample_identity: Option<SampleIdentity>, // for DDS-RPC
+  source_timestamp: Option<Timestamp>, // from DDS spec
+  to_single_reader: Option<GUID>, // try to send to one Reader only
   // future extension room fo other fields.
 }
 
@@ -100,6 +109,11 @@ impl WriteOptions {
   pub fn source_timestamp(&self) -> Option<Timestamp> {
     self.source_timestamp
   }
+
+  pub fn to_single_reader(&self) -> Option<GUID> {
+    self.to_single_reader
+  }
+
 }
 
 impl From<Option<Timestamp>> for WriteOptions {
@@ -107,6 +121,7 @@ impl From<Option<Timestamp>> for WriteOptions {
     Self {
       related_sample_identity: None,
       source_timestamp,
+      to_single_reader: None,
     }
   }
 }
