@@ -13,7 +13,7 @@ use crate::{
   dds::{qos::policy, typedesc::TypeDesc},
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
-    discovery_db::{discovery_db_read, DiscoveryDB},
+    discovery_db::DiscoveryDB,
     secure_discovery::AuthenticationStatus,
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
