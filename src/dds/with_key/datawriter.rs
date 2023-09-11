@@ -96,9 +96,9 @@ impl WriteOptionsBuilder {
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Debug, Default)]
 pub struct WriteOptions {
   related_sample_identity: Option<SampleIdentity>, // for DDS-RPC
-  source_timestamp: Option<Timestamp>, // from DDS spec
-  to_single_reader: Option<GUID>, // try to send to one Reader only
-  // future extension room fo other fields.
+  source_timestamp: Option<Timestamp>,             // from DDS spec
+  to_single_reader: Option<GUID>,                  /* try to send to one Reader only
+                                                    * future extension room fo other fields. */
 }
 
 impl WriteOptions {
@@ -113,7 +113,6 @@ impl WriteOptions {
   pub fn to_single_reader(&self) -> Option<GUID> {
     self.to_single_reader
   }
-
 }
 
 impl From<Option<Timestamp>> for WriteOptions {

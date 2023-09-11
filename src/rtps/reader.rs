@@ -1061,9 +1061,9 @@ impl Reader {
     // in the Topic Cache, then we should generate a SAMPLE_LOST status event
     // from our Datareader (DDS Spec Section 2.2.4.1)
     //
-    // If the the GAP message contained filteredCount (RTPS spec v2.5 Table 8.43),
-    // then some of the not-available messages should not be treated as "lost" but
-    // "filtered".
+    // If the the GAP message contained filteredCount (RTPS spec v2.5 Table
+    // 8.43), then some of the not-available messages should not be treated
+    // as "lost" but "filtered".
   }
 
   pub fn handle_heartbeatfrag_msg(
