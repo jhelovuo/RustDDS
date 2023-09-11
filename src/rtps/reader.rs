@@ -807,7 +807,7 @@ impl Reader {
     &mut self,
     heartbeat: &Heartbeat,
     final_flag_set: bool,
-    mr_state: MessageReceiverState,
+    mr_state: &MessageReceiverState,
   ) -> bool {
     let writer_guid =
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
@@ -1660,7 +1660,7 @@ mod tests {
       last_sn: SequenceNumber::new(0),
       count: 1,
     };
-    assert!(!reader.handle_heartbeat_msg(&hb_new, true, mr_state.clone())); // should be false, no ack
+    assert!(!reader.handle_heartbeat_msg(&hb_new, true, &mr_state)); // should be false, no ack
 
     // 4. Send the first proper heartbeat, reader should respond with acknack
     let hb_one = Heartbeat {
@@ -1670,12 +1670,12 @@ mod tests {
       last_sn: SequenceNumber::new(1),
       count: 2,
     };
-    assert!(reader.handle_heartbeat_msg(&hb_one, false, mr_state.clone())); // Should send an ack_nack
+    assert!(reader.handle_heartbeat_msg(&hb_one, false, &mr_state)); // Should send an ack_nack
 
     // 5. Send a duplicate of the first heartbeat, reader should not respond with
     // acknack
     let hb_one2 = hb_one.clone();
-    assert!(!reader.handle_heartbeat_msg(&hb_one2, false, mr_state.clone())); // No acknack
+    assert!(!reader.handle_heartbeat_msg(&hb_one2, false, &mr_state)); // No acknack
 
     // 6. Send a second proper heartbeat, reader should respond with acknack
     let hb_2 = Heartbeat {
@@ -1685,7 +1685,7 @@ mod tests {
       last_sn: SequenceNumber::new(3),  // writer has written 3 samples
       count: 3,
     };
-    assert!(reader.handle_heartbeat_msg(&hb_2, false, mr_state)); // Should send an ack_nack
+    assert!(reader.handle_heartbeat_msg(&hb_2, false, &mr_state)); // Should send an ack_nack
 
     // 7. Count of acknack sent should be 2
     // The count is verified from the writer proxy

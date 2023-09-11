@@ -498,7 +498,7 @@ impl MessageReceiver {
         target_reader.handle_heartbeat_msg(
           &heartbeat,
           flags.contains(HEARTBEAT_Flags::Final),
-          mr_state,
+          &mr_state,
         );
       }
 
