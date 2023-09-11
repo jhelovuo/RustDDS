@@ -130,7 +130,7 @@ impl From<RtpsReaderProxy> for ReaderProxy {
   fn from(rtps_reader_proxy: RtpsReaderProxy) -> Self {
     Self {
       remote_reader_guid: rtps_reader_proxy.remote_reader_guid,
-      expects_inline_qos: rtps_reader_proxy.expects_in_line_qos,
+      expects_inline_qos: rtps_reader_proxy.expects_inline_qos(),
       unicast_locator_list: rtps_reader_proxy.unicast_locator_list,
       multicast_locator_list: rtps_reader_proxy.multicast_locator_list,
     }

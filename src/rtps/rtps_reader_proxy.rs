@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use bit_vec::BitVec;
 #[allow(unused_imports)]
-use log::{debug, error, trace, warn};
+use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{participant::DomainParticipant, qos::QosPolicies},
@@ -21,8 +21,7 @@ use super::reader::ReaderIngredients;
 /// ReaderProxy class represents the information an RTPS StatefulWriter
 /// maintains on each matched RTPS Reader
 //
-// TODO: matched_reader_update() in Writer uses constructor syntax to update
-// this, so all members have to be public. Fix this to get some privacy.
+// TODO: Maybe more of the members could be made private.
 pub(crate) struct RtpsReaderProxy {
   /// Identifies the remote matched RTPS Reader that is represented by the
   /// ReaderProxy
@@ -39,37 +38,36 @@ pub(crate) struct RtpsReaderProxy {
 
   /// Specifies whether the remote matched RTPS Reader expects in-line QoS to be
   /// sent along with any data.
-  pub expects_in_line_qos: bool,
+  expects_in_line_qos: bool,
   /// Specifies whether the remote Reader is responsive to the Writer
-  pub is_active: bool,
+  is_active: bool,
 
   // Reader has positively acked all SequenceNumbers _before_ this.
   // This is directly the same as readerSNState.base in ACKNACK submessage.
   pub all_acked_before: SequenceNumber,
 
   // List of SequenceNumbers to be sent to Reader. Both unsent and requested by ACKNACK.
-  // TODO: Can we make this private?
-  pub unsent_changes: BTreeSet<SequenceNumber>,
+  unsent_changes: BTreeSet<SequenceNumber>,
 
   // Messages that we are not going to send to this Reader.
   // We will send the SNs as GAP until they have been acked.
   // This is to be used in Reliable mode only.
-  pub pending_gap: BTreeSet<SequenceNumber>,
+  pending_gap: BTreeSet<SequenceNumber>,
   // true = send repair data messages due to NACKs, buffer messages by DataWriter
   // false = send data messages directly from DataWriter
   pub repair_mode: bool,
-  pub qos: QosPolicies,
-  pub frags_requested: BTreeMap<SequenceNumber, BitVec>,
+  qos: QosPolicies,
+  frags_requested: BTreeMap<SequenceNumber, BitVec>,
 }
 
 impl RtpsReaderProxy {
-  pub fn new(remote_reader_guid: GUID, qos: QosPolicies) -> Self {
+  pub fn new(remote_reader_guid: GUID, qos: QosPolicies, expects_in_line_qos: bool) -> Self {
     Self {
       remote_reader_guid,
       remote_group_entity_id: EntityId::UNKNOWN,
       unicast_locator_list: Vec::default(),
       multicast_locator_list: Vec::default(),
-      expects_in_line_qos: false,
+      expects_in_line_qos,
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
@@ -80,8 +78,61 @@ impl RtpsReaderProxy {
     }
   }
 
+  // We get a (discovery) update on the properties of this remote Reader.
+  // Update those properties that Discovery tells us, but keep run-time data.
+  pub fn update(&mut self, update: &Self) {
+    if self.remote_reader_guid != update.remote_reader_guid {
+      error!("Update tried to change ReaderProxy GUID!"); // This is like
+                                                          // changing primary
+                                                          // key
+                                                          // Refuse to update
+    }
+    if self.remote_group_entity_id != update.remote_group_entity_id {
+      error!("Update tried to change ReaderProxy group entity id!"); // almost the same?
+                                                                     // Refuse to update
+    }
+
+    if self.unicast_locator_list != update.unicast_locator_list
+      || self.multicast_locator_list != update.multicast_locator_list
+    {
+      info!("Upddate changes Locators in ReaderProxy.");
+      self.unicast_locator_list = update.unicast_locator_list.clone();
+      self.multicast_locator_list = update.multicast_locator_list.clone();
+    }
+
+    self.expects_in_line_qos = update.expects_in_line_qos;
+
+    if self.qos != update.qos {
+      warn!("Upddate changes QoS in ReaderProxy.");
+      self.qos = update.qos.clone();
+    }
+  }
+
   pub fn qos(&self) -> &QosPolicies {
     &self.qos
+  }
+
+  pub fn expects_inline_qos(&self) -> bool {
+    self.expects_in_line_qos
+  }
+
+  pub fn unsent_changes_iter(
+    &self,
+  ) -> impl std::iter::DoubleEndedIterator<Item = SequenceNumber> + '_ {
+    self.unsent_changes.iter().cloned()
+  }
+
+  // used to produce log messages
+  pub fn unsent_changes_debug(&self) -> Vec<SequenceNumber> {
+    self.unsent_changes_iter().collect()
+  }
+
+  pub fn first_unsent_change(&self) -> Option<SequenceNumber> {
+    self.unsent_changes_iter().next()
+  }
+
+  pub fn mark_change_sent(&mut self, seq_num: SequenceNumber) {
+    self.unsent_changes.remove(&seq_num);
   }
 
   pub fn from_reader(reader: &ReaderIngredients, domain_participant: &DomainParticipant) -> Self {
@@ -207,6 +258,8 @@ impl RtpsReaderProxy {
   pub fn acked_up_to_before(&self) -> SequenceNumber {
     self.all_acked_before
   }
+
+  // Fragment handling
 
   pub fn mark_all_frags_requested(&mut self, seq_num: SequenceNumber, frag_count: u32) {
     // Insert all ones set with frag_count bits

@@ -81,8 +81,8 @@ impl SpdpDiscoveredParticipantData {
     let mut proxy = RtpsReaderProxy::new(
       remote_reader_guid,
       QosPolicies::qos_none(), // TODO: What is the correct QoS value here?
+      self.expects_inline_qos,
     );
-    proxy.expects_in_line_qos = self.expects_inline_qos;
 
     if !is_metatraffic {
       proxy.multicast_locator_list = self.default_multicast_locators.clone();

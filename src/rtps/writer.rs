@@ -845,11 +845,13 @@ impl Writer {
                                                              // Sanity Check: if the reader asked for something we did not even advertise
                                                              // yet. TODO: This
                                                              // checks the stored unset_changes, not presently received ACKNACK.
-          if let Some(&high) = reader_proxy.unsent_changes.iter().next_back() {
+          if let Some(high) = reader_proxy.unsent_changes_iter().next_back() {
             if high > last_seq {
               warn!(
                 "ReaderProxy {:?} thinks we need to send {:?} but I have only up to {:?}",
-                reader_proxy.remote_reader_guid, reader_proxy.unsent_changes, last_seq
+                reader_proxy.remote_reader_guid,
+                reader_proxy.unsent_changes_debug(),
+                last_seq
               );
             }
           }
@@ -1002,7 +1004,7 @@ impl Writer {
     // i.e. should be read from DDSCache (and be implemented there)
     debug!(
       "Repair data send due to ACKNACK. ReaderProxy Unsent changes: {:?}",
-      reader_proxy.unsent_changes
+      reader_proxy.unsent_changes_debug()
     );
 
     let mut no_longer_relevant = Vec::new();
@@ -1010,7 +1012,7 @@ impl Writer {
     let mut sending_data = false;
     let mut sending_gap = false;
     let mut trigger_send_repair_frags = false;
-    if let Some(&unsent_sn) = reader_proxy.unsent_changes.iter().next() {
+    if let Some(unsent_sn) = reader_proxy.first_unsent_change() {
       // There are unsent changes.
       if let Some(timestamp) = self.sequence_number_to_instant(unsent_sn) {
         // Try to find the cache change from topic cache
@@ -1067,7 +1069,7 @@ impl Writer {
 
       // This SN will be sent or found no longer relevant => remove
       // from unsent list.
-      reader_proxy.unsent_changes.remove(&unsent_sn);
+      reader_proxy.mark_change_sent(unsent_sn);
       found_data = true;
     }
     // Add GAP submessage, if some cache changes could not be found.
@@ -1364,7 +1366,7 @@ impl Writer {
     match self.qos_policies.compliance_failure_wrt(requested_qos) {
       // matched QoS
       None => {
-        let change = self.matched_reader_update(reader_proxy.clone());
+        let change = self.matched_reader_update(reader_proxy);
         if change > 0 {
           self.matched_readers_count_total += change;
           self.send_status(DataWriterStatus::PublicationMatched {
@@ -1403,22 +1405,17 @@ impl Writer {
   // Update the given reader proxy. Preserve data we are tracking.
   // return 0 if the reader already existed
   // return 1 if it was new ( = count of added reader proxies)
-  fn matched_reader_update(&mut self, reader_proxy: RtpsReaderProxy) -> i32 {
-    let (to_insert, count_change) = match self.readers.remove(&reader_proxy.remote_reader_guid) {
-      None => (reader_proxy, 1),
-      Some(existing_reader) => (
-        RtpsReaderProxy {
-          is_active: existing_reader.is_active,
-          all_acked_before: existing_reader.all_acked_before,
-          unsent_changes: existing_reader.unsent_changes,
-          repair_mode: existing_reader.repair_mode,
-          ..reader_proxy
-        },
-        0,
-      ),
-    };
-    self.readers.insert(to_insert.remote_reader_guid, to_insert);
-    count_change
+  fn matched_reader_update(&mut self, updated_reader_proxy: &RtpsReaderProxy) -> i32 {
+    let mut new = 0;
+    self
+      .readers
+      .entry(updated_reader_proxy.remote_reader_guid)
+      .and_modify(|rp| rp.update(updated_reader_proxy))
+      .or_insert_with(|| {
+        new = 1;
+        updated_reader_proxy.clone()
+      });
+    new
   }
 
   fn matched_reader_remove(&mut self, guid: GUID) -> Option<RtpsReaderProxy> {
