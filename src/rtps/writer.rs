@@ -509,24 +509,28 @@ impl Writer {
           self.increase_heartbeat_counter();
           let mut message_builder = MessageBuilder::new();
 
-          // Check if this is for single Reader only. 
+          // Check if this is for single Reader only.
           // If so, insert GAP for others.
           // And additionally send any pending gap for the single reader.
           if let Some(single_reader) = write_options.to_single_reader() {
             let writer_entity_id = self.entity_id();
-            for (reader_guid,reader_proxy) in self.readers.iter_mut() {
+            for (reader_guid, reader_proxy) in self.readers.iter_mut() {
               if *reader_guid == single_reader {
-                if ! reader_proxy.get_pending_gap().is_empty() {
+                if !reader_proxy.get_pending_gap().is_empty() {
                   message_builder = message_builder.gap_msg(
-                    reader_proxy.get_pending_gap(), writer_entity_id, self.endianness, *reader_guid);
+                    reader_proxy.get_pending_gap(),
+                    writer_entity_id,
+                    self.endianness,
+                    *reader_guid,
+                  );
                 }
               } else {
                 reader_proxy.insert_pending_gap(sequence_number);
-              }             
+              }
             }
           }
 
-          // Proceed to send either a DATA or several DATAFRAGs 
+          // Proceed to send either a DATA or several DATAFRAGs
           if !fragmentation_needed {
             // the beef: DATA submessage
             if self.push_mode {
@@ -869,7 +873,6 @@ impl Writer {
             }
           }
 
-
           // if we cannot send more data, we are done.
           // This is to prevent empty "repair data" messages from being sent.
           if reader_proxy.all_acked_before > last_seq {
@@ -888,9 +891,14 @@ impl Writer {
 
         // See if we need to respond by GAP message
         if let Some(reader_proxy) = self.readers.get(&reader_guid) {
-          if ! reader_proxy.get_pending_gap().is_empty() {
+          if !reader_proxy.get_pending_gap().is_empty() {
             let gap_message = MessageBuilder::new()
-              .gap_msg(reader_proxy.get_pending_gap(), self.my_guid.entity_id, self.endianness, reader_guid)
+              .gap_msg(
+                reader_proxy.get_pending_gap(),
+                self.my_guid.entity_id,
+                self.endianness,
+                reader_guid,
+              )
               .add_header_and_build(self.my_guid.prefix);
             self.send_message_to_readers(
               DeliveryMode::Unicast,
@@ -1064,8 +1072,12 @@ impl Writer {
     }
     // Add GAP submessage, if some cache changes could not be found.
     if !no_longer_relevant.is_empty() {
-      partial_message =
-        partial_message.gap_msg(&BTreeSet::from_iter(no_longer_relevant), self.entity_id(), self.endianness, reader_guid);
+      partial_message = partial_message.gap_msg(
+        &BTreeSet::from_iter(no_longer_relevant),
+        self.entity_id(),
+        self.endianness,
+        reader_guid,
+      );
       sending_gap = true;
     }
 

@@ -174,7 +174,7 @@ impl RtpsReaderProxy {
           }
         }
         // AckNack also clears pending_gap
-        self.pending_gap = self.pending_gap.split_off(&self.all_acked_before); 
+        self.pending_gap = self.pending_gap.split_off(&self.all_acked_before);
       }
 
       AckSubmessage::NackFrag(_nack_frag) => {
