@@ -6,7 +6,10 @@ use speedy::{Readable, Writable};
 
 use crate::{
   security::{
-    access_control::{PermissionsCredentialToken, PermissionsToken},
+    access_control::{
+      EndpointSecurityAttributes, PermissionsCredentialToken, PermissionsToken,
+      TopicSecurityAttributes,
+    },
     authentication::authentication_builtin::types::CertificateAlgorithm,
     certificate::DistinguishedName,
     security_error, BinaryProperty, DataHolder, PluginEndpointSecurityAttributesMask,
@@ -198,6 +201,31 @@ pub(super) enum BuiltinPluginEndpointSecurityAttributesMaskFlags {
   IsSubmessageEncrypted = 0b0000_0001,
   IsPayloadEncrypted = 0b0000_0010,
   IsSubmessageOriginAuthenticated = 0b0000_0100,
+}
+
+// 7.4.8: Builtin topics have attributes that can only differ from empty by
+// submessage protection
+impl EndpointSecurityAttributes {
+  pub(super) fn for_builtin_topic(
+    is_submessage_protected: bool,
+    is_submessage_encrypted: bool,
+    is_submessage_origin_authenticated: bool,
+  ) -> Self {
+    EndpointSecurityAttributes {
+      topic_security_attributes: TopicSecurityAttributes::empty(),
+      is_submessage_protected,
+      is_payload_protected: false,
+      is_key_protected: false,
+      plugin_endpoint_attributes: PluginSecurityAttributesMask::from(
+        BuiltinPluginEndpointSecurityAttributes {
+          is_submessage_encrypted,
+          is_submessage_origin_authenticated,
+          is_payload_encrypted: false,
+        },
+      ),
+      ac_endpoint_properties: Vec::new(),
+    }
+  }
 }
 
 const PERMISSIONS_TOKEN_CLASS_ID: &str = "DDS:Access:Permissions:1.0";
