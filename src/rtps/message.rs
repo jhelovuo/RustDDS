@@ -105,7 +105,7 @@ impl<C: Context> Writable<C> for Message {
   }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct MessageBuilder {
   submessages: Vec<Submessage>,
 }
@@ -453,7 +453,8 @@ impl MessageBuilder {
   pub fn gap_msg(
     mut self,
     irrelevant_sns: &BTreeSet<SequenceNumber>,
-    writer: &RtpsWriter,
+    writer_entity_id: EntityId,
+    writer_endianness: Endianness,
     reader_guid: GUID,
   ) -> Self {
     match (
@@ -464,11 +465,11 @@ impl MessageBuilder {
         let gap_list = SequenceNumberSet::from_base_and_set(base, irrelevant_sns);
         let gap = Gap {
           reader_id: reader_guid.entity_id,
-          writer_id: writer.entity_id(),
+          writer_id: writer_entity_id,
           gap_start: base,
           gap_list,
         };
-        let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer.endianness);
+        let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer_endianness);
         gap
           .create_submessage(gap_flags)
           .map(|s| self.submessages.push(s));
