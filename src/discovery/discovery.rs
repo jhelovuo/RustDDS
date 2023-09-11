@@ -63,6 +63,9 @@ pub enum DiscoveryCommand {
     writer_guid: GUID,
     manual_assertion: bool,
   },
+  StartKeyExchangeWithRemoteParticipant {
+    participant_guid_prefix: GuidPrefix,
+  },
 }
 
 pub struct LivelinessState {
@@ -737,6 +740,17 @@ impl Discovery {
                     },
                   );
                 }
+                DiscoveryCommand::StartKeyExchangeWithRemoteParticipant {
+                  participant_guid_prefix,
+                } => {
+                  if let Some(security) = self.security_opt.as_mut() {
+                    security.start_key_exchange_with_remote(
+                      participant_guid_prefix,
+                      &self.dcps_participant_volatile_message_secure.writer,
+                      &self.discovery_db,
+                    );
+                  }
+                }
               };
             }
           }
@@ -849,6 +863,9 @@ impl Discovery {
           }
           CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN => {
             self.on_authentication_message_resend_triggered();
+          }
+          P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN => {
+            self.handle_volatile_message_secure_reader();
           }
           SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN
           | SECURE_DISCOVERY_SEND_READERS_INFO_TOKEN
@@ -1361,6 +1378,27 @@ impl Discovery {
         }
         Err(e) => {
           error!("handle_participant_stateless_message_reader: {e:?}");
+        }
+      };
+    }
+  }
+
+  fn handle_volatile_message_secure_reader(&mut self) {
+    if let Some(security) = self.security_opt.as_mut() {
+      // Security enabled. Get messages from the volatile message reader & feed to
+      // Secure Discovery.
+      match self
+        .dcps_participant_volatile_message_secure
+        .reader
+        .into_iterator()
+      {
+        Ok(dr_iter) => {
+          for msg in dr_iter {
+            security.volatile_message_secure_read(&msg);
+          }
+        }
+        Err(e) => {
+          error!("handle_volatile_message_secure_reader: {e:?}");
         }
       };
     }

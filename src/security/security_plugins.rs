@@ -21,8 +21,9 @@ use super::{
   access_control::*,
   authentication::*,
   cryptographic::{
-    DatareaderCryptoHandle, DatawriterCryptoHandle, EncodedSubmessage, EndpointCryptoHandle,
-    ParticipantCryptoHandle, SecureSubmessageCategory,
+    DatareaderCryptoHandle, DatareaderCryptoToken, DatawriterCryptoHandle, DatawriterCryptoToken,
+    EncodedSubmessage, EndpointCryptoHandle, ParticipantCryptoHandle, ParticipantCryptoToken,
+    SecureSubmessageCategory,
   },
   types::*,
   AccessControl, Cryptographic,
@@ -635,6 +636,102 @@ impl SecurityPlugins {
   pub fn unregister_local_writer(&mut self, writer_guid: &GUID) -> SecurityResult<()> {
     let handle = self.get_local_endpoint_crypto_handle(writer_guid)?;
     self.crypto.unregister_datawriter(handle)
+  }
+}
+
+/// Interface for using the CryptoKeyExchange of the Cryptographic plugin
+impl SecurityPlugins {
+  pub fn create_local_participant_crypto_tokens(
+    &mut self,
+    local_participant_guidp: GuidPrefix,
+    remote_participant_guidp: GuidPrefix,
+  ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
+    let local_crypto_handle = self.get_participant_crypto_handle(&local_participant_guidp)?;
+    let remote_crypto_handle = self.get_participant_crypto_handle(&remote_participant_guidp)?;
+
+    self
+      .crypto
+      .create_local_participant_crypto_tokens(local_crypto_handle, remote_crypto_handle)
+  }
+
+  pub fn create_local_writer_crypto_tokens(
+    &mut self,
+    local_writer_guid: GUID,
+    remote_reader_guid: GUID,
+  ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
+    let local_writer_crypto_handle = self.get_local_endpoint_crypto_handle(&local_writer_guid)?;
+    let remote_reader_crypto_handle =
+      self.get_remote_endpoint_crypto_handle((&local_writer_guid, &remote_reader_guid))?;
+
+    self.crypto.create_local_datawriter_crypto_tokens(
+      local_writer_crypto_handle,
+      remote_reader_crypto_handle,
+    )
+  }
+
+  pub fn create_local_reader_crypto_tokens(
+    &mut self,
+    local_reader_guid: GUID,
+    remote_writer_guid: GUID,
+  ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
+    let local_reader_crypto_handle = self.get_local_endpoint_crypto_handle(&local_reader_guid)?;
+    let remote_writer_crypto_handle =
+      self.get_remote_endpoint_crypto_handle((&local_reader_guid, &remote_writer_guid))?;
+
+    self.crypto.create_local_datareader_crypto_tokens(
+      local_reader_crypto_handle,
+      remote_writer_crypto_handle,
+    )
+  }
+
+  pub fn set_remote_participant_crypto_tokens(
+    &mut self,
+    local_participant_guidp: GuidPrefix,
+    remote_participant_guidp: GuidPrefix,
+    remote_participant_tokens: Vec<ParticipantCryptoToken>,
+  ) -> SecurityResult<()> {
+    let local_crypto_handle = self.get_participant_crypto_handle(&local_participant_guidp)?;
+    let remote_crypto_handle = self.get_participant_crypto_handle(&remote_participant_guidp)?;
+
+    self.crypto.set_remote_participant_crypto_tokens(
+      local_crypto_handle,
+      remote_crypto_handle,
+      remote_participant_tokens,
+    )
+  }
+
+  pub fn set_remote_writer_crypto_tokens(
+    &mut self,
+    remote_writer_guid: GUID,
+    local_reader_guid: GUID,
+    remote_crypto_tokens: Vec<DatawriterCryptoToken>,
+  ) -> SecurityResult<()> {
+    let local_reader_crypto_handle = self.get_local_endpoint_crypto_handle(&local_reader_guid)?;
+    let remote_writer_crypto_handle =
+      self.get_remote_endpoint_crypto_handle((&local_reader_guid, &remote_writer_guid))?;
+
+    self.crypto.set_remote_datawriter_crypto_tokens(
+      local_reader_crypto_handle,
+      remote_writer_crypto_handle,
+      remote_crypto_tokens,
+    )
+  }
+
+  pub fn set_remote_reader_crypto_tokens(
+    &mut self,
+    remote_reader_guid: GUID,
+    local_writer_guid: GUID,
+    remote_crypto_tokens: Vec<DatareaderCryptoToken>,
+  ) -> SecurityResult<()> {
+    let local_writer_crypto_handle = self.get_local_endpoint_crypto_handle(&local_writer_guid)?;
+    let remote_reader_crypto_handle =
+      self.get_remote_endpoint_crypto_handle((&local_writer_guid, &remote_reader_guid))?;
+
+    self.crypto.set_remote_datareader_crypto_tokens(
+      local_writer_crypto_handle,
+      remote_reader_crypto_handle,
+      remote_crypto_tokens,
+    )
   }
 }
 

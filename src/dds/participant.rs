@@ -598,6 +598,7 @@ impl DomainParticipantDisc {
       participant_guid,
       qos_policies,
       discovery_update_notification_receiver,
+      discovery_command_sender.clone(),
       spdp_liveness_sender,
       security_plugins_handle,
     )?;
@@ -802,6 +803,7 @@ impl DomainParticipantInner {
     participant_guid: GUID,
     qos_policies: QosPolicies,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+    discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> CreateResult<Self> {
@@ -948,6 +950,7 @@ impl DomainParticipantInner {
           },
           stop_poll_receiver,
           discovery_update_notification_receiver,
+          discovery_command_sender,
           spdp_liveness_sender,
           security_plugins_clone,
         );

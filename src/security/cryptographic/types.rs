@@ -4,6 +4,13 @@ use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
 use crate::{rtps::Submessage, security::types::DataHolder};
+
+// Crypto related message class IDs for GenericMessageClassId:
+// See section 7.4.4.5 of the security spec
+pub const GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS: &str = "dds.sec.participant_crypto_tokens";
+pub const GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS: &str = "dds.sec.datawriter_crypto_tokens";
+pub const GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS: &str = "dds.sec.datareader_crypto_tokens";
+
 /// CryptoToken: sections 7.2.4.2 and 8.5.1.1 of the Security specification (v.
 /// 1.1)
 #[derive(Clone)]

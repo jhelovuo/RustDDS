@@ -14,17 +14,23 @@ use crate::{
     with_key::{DataSample, Sample},
   },
   qos, rpc,
-  rtps::constant::DiscoveryNotificationType,
+  rtps::constant::{
+    DiscoveryNotificationType, SECURE_BUILTIN_READERS_INIT_LIST, SECURE_BUILTIN_WRITERS_INIT_LIST,
+  },
   security::{
     access_control::{ParticipantSecurityAttributes, PermissionsToken},
     authentication::{
       authentication_builtin::DiscHandshakeState, HandshakeMessageToken, IdentityToken,
       ValidationOutcome, GMCLASSID_SECURITY_AUTH_HANDSHAKE,
     },
+    cryptographic::{
+      CryptoToken, GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS,
+      GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS, GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS,
+    },
     security_error,
     security_plugins::{SecurityPlugins, SecurityPluginsHandle},
-    ParticipantGenericMessage, ParticipantSecurityInfo, ParticipantStatelessMessage, SecurityError,
-    SecurityResult,
+    DataHolder, ParticipantGenericMessage, ParticipantSecurityInfo, ParticipantStatelessMessage,
+    ParticipantVolatileMessageSecure, SecurityError, SecurityResult,
   },
   security_error, security_log,
   serialization::pl_cdr_adapters::PlCdrSerialize,
@@ -79,6 +85,7 @@ pub(crate) struct SecureDiscovery {
   pub local_dp_sec_attributes: ParticipantSecurityAttributes,
 
   stateless_message_helper: ParticipantStatelessMessageHelper,
+  generic_message_helper: ParticipantGenericMessageHelper,
   // SecureDiscovery maintains states of handshake with remote participants.
   // We use the same states as the built-in authentication plugin, since
   // SecureDiscovery currently supports the built-in plugin only.
@@ -164,6 +171,7 @@ impl SecureDiscovery {
       local_dp_property_qos: property_qos,
       local_dp_sec_attributes: security_attributes,
       stateless_message_helper: ParticipantStatelessMessageHelper::new(),
+      generic_message_helper: ParticipantGenericMessageHelper::new(),
       handshake_states: HashMap::new(),
       stored_authentication_messages: HashMap::new(),
     })
@@ -1035,6 +1043,107 @@ impl SecureDiscovery {
     }
   }
 
+  pub fn volatile_message_secure_read(&mut self, msg: &ParticipantVolatileMessageSecure) {
+    // Check is the message meant to us (see 7.4.4.4 Destination of the
+    // ParticipantVolatileMessageSecure of the spec)
+    let dest_guid = msg.generic.destination_participant_guid;
+    let is_for_us = (dest_guid == GUID::GUID_UNKNOWN) || (dest_guid == self.local_participant_guid);
+    if !is_for_us {
+      trace!(
+        "Ignoring ParticipantVolatileMessageSecure message since it's not for us. dest_guid: {:?}",
+        dest_guid
+      );
+      return;
+    }
+
+    // Get crypto tokens from message
+    let crypto_tokens = msg
+      .generic
+      .message_data
+      .iter()
+      .map(|dh| CryptoToken::from(dh.clone()))
+      .collect();
+
+    let mut sec_plugins = self.security_plugins.get_plugins();
+    match msg.generic.message_class_id.as_str() {
+      GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS => {
+        // Got participant crypto tokens, see "7.4.4.6.1 Data for message class
+        // GMCLASS_SECURITY_PARTICIPANT_CRYPTO_TOKENS" of the security spec
+
+        // Make sure destination_participant_guid is correct
+        if dest_guid != self.local_participant_guid {
+          debug!("Invalid destination participant guid, ignoring participant crypto tokens");
+          return;
+        }
+
+        let remote_participant_guidp = msg.generic.message_identity.writer_guid.prefix;
+        if let Err(e) = sec_plugins.set_remote_participant_crypto_tokens(
+          self.local_participant_guid.prefix,
+          remote_participant_guidp,
+          crypto_tokens,
+        ) {
+          security_error!(
+            "Failed to set remote participant crypto tokens: {}. Remote: {:?}",
+            e,
+            remote_participant_guidp
+          );
+        } else {
+          info!(
+            "Set crypto tokens for remote participant {:?}",
+            remote_participant_guidp
+          );
+        }
+      }
+
+      GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS => {
+        // Got data writer crypto tokens, see "7.4.4.6.2 Data for message class
+        // GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS" of the security spec
+
+        if let Err(e) = sec_plugins.set_remote_writer_crypto_tokens(
+          msg.generic.source_endpoint_guid,
+          msg.generic.destination_endpoint_guid,
+          crypto_tokens,
+        ) {
+          security_error!(
+            "Failed to set remote writer crypto tokens: {}. Remote: {:?}",
+            e,
+            msg.generic.source_endpoint_guid
+          );
+        } else {
+          info!(
+            "Set crypto tokens for remote writer {:?}",
+            msg.generic.source_endpoint_guid
+          );
+        }
+      }
+
+      GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS => {
+        // Got data reader crypto tokens, see "7.4.4.6.3 Data for message class
+        // GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS" of the security spec
+
+        if let Err(e) = sec_plugins.set_remote_reader_crypto_tokens(
+          msg.generic.source_endpoint_guid,
+          msg.generic.destination_endpoint_guid,
+          crypto_tokens,
+        ) {
+          security_error!(
+            "Failed to set remote reader crypto tokens: {}. Remote: {:?}",
+            e,
+            msg.generic.source_endpoint_guid
+          );
+        } else {
+          info!(
+            "Set crypto tokens for remote reader {:?}",
+            msg.generic.source_endpoint_guid
+          );
+        }
+      }
+      other => {
+        debug!("Unknown message_class_id in a volatile message: {}", other);
+      }
+    }
+  }
+
   fn on_remote_participant_authenticated(
     &mut self,
     remote_guid_prefix: GuidPrefix,
@@ -1094,38 +1203,6 @@ impl SecureDiscovery {
     }
     // Permission checks OK
 
-    // Register remote to crypto plugin with the shared secret which resulted from
-    // the successful handshake
-    let mut sec_plugins = get_security_plugins(&self.security_plugins);
-    match sec_plugins
-      .get_shared_secret(remote_guid_prefix)
-      .and_then(|shared_secret| {
-        sec_plugins.register_matched_remote_participant(
-          self.local_participant_guid.prefix,
-          remote_guid_prefix,
-          shared_secret,
-        )
-      }) {
-      Ok(()) => {
-        info!(
-          "Registered remote participant with the crypto plugin. Remote = {:?}",
-          remote_guid_prefix
-        );
-      }
-      Err(e) => {
-        security_log!(
-          "Failed to register remote participant with the crypto plugin: {}. Rejecting the \
-           remote. Guid prefix: {:?}",
-          e,
-          remote_guid_prefix
-        );
-        discovery_db_write(discovery_db)
-          .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
-        return;
-      }
-    }
-    drop(sec_plugins);
-
     // Update participant status as Authenticated & notify dp
     self.update_participant_authentication_status_and_notify_dp(
       remote_guid_prefix,
@@ -1133,6 +1210,292 @@ impl SecureDiscovery {
       discovery_db,
       discovery_updated_sender,
     );
+  }
+
+  // Initiates the exchange of cryptographic keys with the remote participant.
+  // The exchange is started for the secure built-in topics.
+  // Note that this function needs to be called after the built-in endpoints have
+  // been matched in dp_event_loop, since otherwise the key exchange messages that
+  // we send (in topic ParticipantVolatileMessageSecure) won't reach the remote
+  // participant.
+  pub fn start_key_exchange_with_remote(
+    &mut self,
+    remote_guid_prefix: GuidPrefix,
+    key_exchange_writer: &no_key::DataWriter<ParticipantVolatileMessageSecure>,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) {
+    // Register remote participant to crypto plugin with the shared secret which
+    // resulted from the successful handshake
+    let mut sec_plugins = self.security_plugins.get_plugins();
+    if let Err(e) = sec_plugins
+      .get_shared_secret(remote_guid_prefix)
+      .and_then(|shared_secret| {
+        sec_plugins.register_matched_remote_participant(
+          self.local_participant_guid.prefix,
+          remote_guid_prefix,
+          shared_secret,
+        )
+      })
+    {
+      security_error!(
+        "Failed to register remote participant with the crypto plugin: {}. Remote: {:?}",
+        e,
+        remote_guid_prefix
+      );
+      return;
+    } else {
+      info!(
+        "Registered remote participant with the crypto plugin. Remote = {:?}",
+        remote_guid_prefix
+      );
+    }
+
+    // Read remote's available endpoints from DB
+    let remotes_builtin_endpoints =
+      match discovery_db_read(discovery_db).find_participant_proxy(remote_guid_prefix) {
+        Some(data) => data.available_builtin_endpoints,
+        None => {
+          error!(
+            "Could not find participant {:?} from DiscoveryDB",
+            remote_guid_prefix
+          );
+          return;
+        }
+      };
+
+    // Register remote reader & writer of topic
+    // ParticipantVolatileMessageSecure, which is used for exchanging crypto
+    // tokens.
+    // These need to be registered before sending crypto tokens
+    let local_volatile_reader_guid = self
+      .local_participant_guid
+      .from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER);
+    let local_volatile_writer_guid = self
+      .local_participant_guid
+      .from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER);
+
+    let remote_volatile_reader_guid = GUID::new(
+      remote_guid_prefix,
+      EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
+    );
+    let remote_volatile_writer_guid = GUID::new(
+      remote_guid_prefix,
+      EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
+    );
+
+    if let Err(e) = sec_plugins
+      .register_matched_remote_reader(
+        remote_volatile_reader_guid,
+        local_volatile_writer_guid,
+        false,
+      )
+      .and_then(|()| {
+        sec_plugins
+          .register_matched_remote_writer(remote_volatile_writer_guid, local_volatile_reader_guid)
+      })
+    {
+      security_error!(
+        "Failed to register remote volatile reader/writer to crypto plugin {}. Remote: {:?}",
+        e,
+        remote_guid_prefix
+      );
+      // If this registration failed, it is pointless to try to send any crypto
+      // tokens. So just exit.
+      return;
+    }
+
+    // Send local participant crypto tokens to remote
+    // TODO: do this only if needed?
+    let res = sec_plugins
+      // Get participant crypto tokens
+      .create_local_participant_crypto_tokens(
+        self.local_participant_guid.prefix,
+        remote_guid_prefix,
+      )
+      // Map to vector of data holders
+      .map(|crypto_token_vec| {
+        crypto_token_vec
+          .iter()
+          .map(|ctoken| ctoken.data_holder.clone())
+          .collect::<Vec<_>>()
+      })
+      // Create a GenericParticipantMessage
+      .map(|dataholders| {
+        self.generic_message_helper.new_message(
+          GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS, // Message id
+          key_exchange_writer.guid(),
+          GUID::GUID_UNKNOWN, // No source endpoint guid
+          None,               // No related message
+          remote_guid_prefix,
+          GUID::GUID_UNKNOWN, // No destination endpoint guid
+          dataholders,
+        )
+      })
+      // Create the volatile message
+      .map(ParticipantVolatileMessageSecure::from)
+      // Send with writer
+      .map(|vol_msg| match key_exchange_writer.write(vol_msg, None) {
+        Ok(()) => Ok(()),
+        Err(write_err) => Err(security_error(&format!(
+          "DataWriter write operation failed: {}",
+          write_err
+        ))),
+      });
+
+    if let Err(e) = res {
+      security_error!(
+        "Failed to send participant crypto tokens: {}. Remote: {:?}",
+        e,
+        remote_guid_prefix
+      );
+    } else {
+      info!("Sent participant crypto tokens to {:?}", remote_guid_prefix);
+    }
+
+    // Register the rest of the remote's secure built-in readers
+    for (writer_eid, reader_eid, reader_endpoint) in SECURE_BUILTIN_READERS_INIT_LIST {
+      if remotes_builtin_endpoints.contains(*reader_endpoint)
+        && *reader_eid != EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER
+      {
+        let remote_reader_guid = GUID::new(remote_guid_prefix, *reader_eid);
+        let local_writer_guid = self.local_participant_guid.from_prefix(*writer_eid);
+
+        // First register remote reader
+        if let Err(e) =
+          sec_plugins.register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
+        {
+          security_error!(
+            "Failed to register remote built-in reader {:?} to crypto plugin: {}",
+            remote_reader_guid,
+            e,
+          );
+          continue;
+        }
+        info!(
+          "Registered remote reader with the crypto plugin. GUID: {:?}",
+          remote_reader_guid
+        );
+
+        // Then send local writer crypto tokens to the remote reader
+        let res = sec_plugins
+          .create_local_writer_crypto_tokens(local_writer_guid, remote_reader_guid)
+          // Map crypto tokens to vector of data holders
+          .map(|crypto_token_vec| {
+            crypto_token_vec
+              .iter()
+              .map(|ctoken| ctoken.data_holder.clone())
+              .collect::<Vec<_>>()
+          })
+          // Create a GenericParticipantMessage
+          .map(|dataholders| {
+            self.generic_message_helper.new_message(
+              GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS, // Message id
+              key_exchange_writer.guid(),
+              local_writer_guid, // Source endpoint guid is our writer
+              None,              // No related message
+              remote_guid_prefix,
+              remote_reader_guid, // Destination endpoint guid is the remote reader
+              dataholders,
+            )
+          })
+          // Create the volatile message
+          .map(ParticipantVolatileMessageSecure::from)
+          // Send with writer
+          .map(|vol_msg| match key_exchange_writer.write(vol_msg, None) {
+            Ok(()) => Ok(()),
+            Err(write_err) => Err(security_error(&format!(
+              "DataWriter write operation failed: {}",
+              write_err
+            ))),
+          });
+
+        if let Err(e) = res {
+          security_error!(
+            "Failed to send local writer crypto tokens: {}. Remote reader: {:?}",
+            e,
+            remote_reader_guid
+          );
+        } else {
+          info!(
+            "Sent local writer crypto tokens to {:?}",
+            remote_reader_guid
+          );
+        }
+      }
+    }
+
+    // Register the rest of the remote's secure built-in writers
+    for (writer_eid, reader_eid, writer_endpoint) in SECURE_BUILTIN_WRITERS_INIT_LIST {
+      if remotes_builtin_endpoints.contains(*writer_endpoint)
+        && *writer_eid != EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER
+      {
+        let remote_writer_guid = GUID::new(remote_guid_prefix, *writer_eid);
+        let local_reader_guid = self.local_participant_guid.from_prefix(*reader_eid);
+
+        // First register remote writer
+        if let Err(e) =
+          sec_plugins.register_matched_remote_writer(remote_writer_guid, local_reader_guid)
+        {
+          security_error!(
+            "Failed to register remote built-in writer {:?} to crypto plugin: {}",
+            remote_writer_guid,
+            e,
+          );
+          continue;
+        } else {
+          info!(
+            "Registered remote writer with the crypto plugin. GUID: {:?}",
+            remote_writer_guid
+          );
+        }
+
+        // Then send local reader crypto tokens to the remote writer
+        let res = sec_plugins
+          .create_local_reader_crypto_tokens(local_reader_guid, remote_writer_guid)
+          // Map crypto tokens to vector of data holders
+          .map(|crypto_token_vec| {
+            crypto_token_vec
+              .iter()
+              .map(|ctoken| ctoken.data_holder.clone())
+              .collect::<Vec<_>>()
+          })
+          // Create a GenericParticipantMessage
+          .map(|dataholders| {
+            self.generic_message_helper.new_message(
+              GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS, // Message id
+              key_exchange_writer.guid(),
+              local_reader_guid, // Source endpoint guid is our reader
+              None,              // No related message
+              remote_guid_prefix,
+              remote_writer_guid, // Destination endpoint guid is the remote writer
+              dataholders,
+            )
+          })
+          // Create the volatile message
+          .map(ParticipantVolatileMessageSecure::from)
+          // Send with writer
+          .map(|vol_msg| match key_exchange_writer.write(vol_msg, None) {
+            Ok(()) => Ok(()),
+            Err(write_err) => Err(security_error(&format!(
+              "DataWriter write operation failed: {}",
+              write_err
+            ))),
+          });
+
+        if let Err(e) = res {
+          security_error!(
+            "Failed to send local reader crypto tokens: {}. Remote writer: {:?}",
+            e,
+            remote_writer_guid
+          );
+        } else {
+          info!(
+            "Sent local reader crypto tokens to {:?}",
+            remote_writer_guid
+          );
+        }
+      }
+    }
   }
 
   fn validate_remote_participant_permissions(
@@ -1340,5 +1703,70 @@ impl ParticipantStatelessMessageHelper {
     };
 
     ParticipantStatelessMessage { generic }
+  }
+}
+
+// A helper to construct/readParticipantStatelessMessages. Takes care of the
+// sequence numbering of the messages
+// TODO: use this also with ParticipantStatelessMessages, i.e. get rid of
+// ParticipantStatelessMessageHelper
+struct ParticipantGenericMessageHelper {
+  next_seqnum: SequenceNumber,
+}
+
+impl ParticipantGenericMessageHelper {
+  pub fn new() -> Self {
+    Self {
+      next_seqnum: SequenceNumber::new(1),
+    }
+  }
+
+  fn get_next_seqnum(&mut self) -> SequenceNumber {
+    let next = self.next_seqnum;
+    // Increment for next get
+    self.next_seqnum = self.next_seqnum + SequenceNumber::new(1);
+    next
+  }
+
+  #[allow(clippy::too_many_arguments)]
+  pub fn new_message(
+    &mut self,
+    message_class_id: &str,
+    msg_identity_source_guid: GUID,
+    source_endpoint_guid: GUID,
+    related_message_opt: Option<&ParticipantGenericMessage>,
+    destination_guid_prefix: GuidPrefix,
+    destination_endpoint_guid: GUID,
+    data_holders: Vec<DataHolder>,
+  ) -> ParticipantGenericMessage {
+    // See Sections 7.4.3 (ParticipantStatelessMessage) & 7.4.4
+    // (ParticipantVolatileMessageSecure) of the Security specification
+
+    let message_identity = rpc::SampleIdentity {
+      writer_guid: msg_identity_source_guid,
+      sequence_number: self.get_next_seqnum(),
+    };
+
+    let related_message_identity = if let Some(msg) = related_message_opt {
+      msg.message_identity
+    } else {
+      rpc::SampleIdentity {
+        writer_guid: GUID::GUID_UNKNOWN,
+        sequence_number: SequenceNumber::zero(),
+      }
+    };
+
+    // Make sure destination GUID has correct EntityId
+    let destination_participant_guid = GUID::new(destination_guid_prefix, EntityId::PARTICIPANT);
+
+    ParticipantGenericMessage {
+      message_identity,
+      related_message_identity,
+      destination_participant_guid,
+      destination_endpoint_guid,
+      source_endpoint_guid,
+      message_class_id: message_class_id.to_string(),
+      message_data: data_holders,
+    }
   }
 }

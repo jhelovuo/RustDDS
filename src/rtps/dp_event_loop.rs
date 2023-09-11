@@ -12,8 +12,8 @@ use mio_extras::channel as mio_channel;
 use crate::{
   dds::{qos::policy, typedesc::TypeDesc},
   discovery::{
-    discovery::Discovery,
-    discovery_db::DiscoveryDB,
+    discovery::{Discovery, DiscoveryCommand},
+    discovery_db::{discovery_db_read, DiscoveryDB},
     secure_discovery::AuthenticationStatus,
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
@@ -73,6 +73,7 @@ pub struct DPEventLoop {
   udp_sender: Rc<UDPSender>,
 
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+  discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
 impl DPEventLoop {
@@ -90,6 +91,7 @@ impl DPEventLoop {
     remove_writer_receiver: TokenReceiverPair<GUID>,
     stop_poll_receiver: mio_channel::Receiver<EventLoopCommand>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+    discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> Self {
@@ -195,6 +197,7 @@ impl DPEventLoop {
       writers: HashMap::new(),
       ack_nack_receiver: acknack_receiver,
       discovery_update_notification_receiver,
+      discovery_command_sender,
     }
   }
 
@@ -391,12 +394,12 @@ impl DPEventLoop {
       ADD_READER_TOKEN => {
         trace!("add reader(s)");
         while let Ok(new_reader_ing) = self.add_reader_receiver.receiver.try_recv() {
-          self.add_reader(new_reader_ing);
+          self.add_local_reader(new_reader_ing);
         }
       }
       REMOVE_READER_TOKEN => {
         while let Ok(old_reader_guid) = self.remove_reader_receiver.receiver.try_recv() {
-          self.remove_reader(old_reader_guid);
+          self.remove_local_reader(old_reader_guid);
         }
       }
       _ => {}
@@ -407,12 +410,12 @@ impl DPEventLoop {
     match event.token() {
       ADD_WRITER_TOKEN => {
         while let Ok(new_writer_ingredients) = self.add_writer_receiver.receiver.try_recv() {
-          self.add_writer(new_writer_ingredients);
+          self.add_local_writer(new_writer_ingredients);
         }
       }
       REMOVE_WRITER_TOKEN => {
         while let Ok(writer_guid) = &self.remove_writer_receiver.receiver.try_recv() {
-          self.remove_writer(writer_guid);
+          self.remove_local_writer(writer_guid);
         }
       }
       other => error!("Expected writer action token, got {:?}", other),
@@ -660,6 +663,24 @@ impl DPEventLoop {
       }
     } // for
 
+    // If appropriate, send a signal to Discovery to start key exchange with the
+    // participant
+    if let Some(AuthenticationStatus::Authenticated) =
+      db.get_authentication_status(participant_guid_prefix)
+    {
+      if let Err(e) = self.discovery_command_sender.send(
+        DiscoveryCommand::StartKeyExchangeWithRemoteParticipant {
+          participant_guid_prefix,
+        },
+      ) {
+        error!(
+          "Could not signal Discovery to start the key exchange with remote. Reason: {}. Remote: \
+           {:?}",
+          e, participant_guid_prefix
+        );
+      }
+    }
+
     debug!(
       "update_participant - finished for {:?}",
       participant_guid_prefix
@@ -753,7 +774,7 @@ impl DPEventLoop {
     }
   }
 
-  fn add_reader(&mut self, reader_ing: ReaderIngredients) {
+  fn add_local_reader(&mut self, reader_ing: ReaderIngredients) {
     let timer = mio_extras::timer::Builder::default().num_slots(8).build();
     self
       .poll
@@ -802,7 +823,7 @@ impl DPEventLoop {
           );
         } else {
           info!(
-            "Registered reader to crypto plugin. GUID: {:?}",
+            "Registered local reader to crypto plugin. GUID: {:?}",
             reader_guid
           );
         }
@@ -814,7 +835,7 @@ impl DPEventLoop {
     self.message_receiver.add_reader(new_reader);
   }
 
-  fn remove_reader(&mut self, reader_guid: GUID) {
+  fn remove_local_reader(&mut self, reader_guid: GUID) {
     if let Some(old_reader) = self.message_receiver.remove_reader(reader_guid) {
       self
         .poll
@@ -841,7 +862,7 @@ impl DPEventLoop {
     }
   }
 
-  fn add_writer(&mut self, writer_ing: WriterIngredients) {
+  fn add_local_writer(&mut self, writer_ing: WriterIngredients) {
     let timer = mio_extras::timer::Builder::default().num_slots(8).build();
     self
       .poll
@@ -889,7 +910,7 @@ impl DPEventLoop {
           );
         } else {
           info!(
-            "Registered writer to crypto plugin. GUID: {:?}",
+            "Registered local writer to crypto plugin. GUID: {:?}",
             writer_guid
           );
         }
@@ -899,7 +920,7 @@ impl DPEventLoop {
     self.writers.insert(new_writer.guid().entity_id, new_writer);
   }
 
-  fn remove_writer(&mut self, writer_guid: &GUID) {
+  fn remove_local_writer(&mut self, writer_guid: &GUID) {
     if let Some(w) = self.writers.remove(&writer_guid.entity_id) {
       self
         .poll
@@ -972,6 +993,8 @@ mod tests {
 
     let (_discovery_update_notification_sender, discovery_update_notification_receiver) =
       mio_channel::channel();
+    let (discovery_command_sender, _discovery_command_receiver) =
+      mio_channel::sync_channel::<DiscoveryCommand>(64);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
@@ -1018,6 +1041,7 @@ mod tests {
         },
         stop_poll_receiver,
         discovery_update_notification_receiver,
+        discovery_command_sender,
         spdp_liveness_sender,
         None,
       );

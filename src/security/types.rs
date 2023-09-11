@@ -969,17 +969,15 @@ impl Keyed for ParticipantStatelessMessage {
 //
 // spec: typedef ParticipantVolatileMessageSecure ParticipantGenericMessage;
 #[derive(Serialize, Deserialize)]
-pub struct ParticipantVolatileMessageSecure {
-  generic: ParticipantGenericMessage,
+pub(crate) struct ParticipantVolatileMessageSecure {
+  pub generic: ParticipantGenericMessage,
 }
-// The specification defines and uses the following specific values for the
-// GenericMessageClassId:
-// #define GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS
-//    ”dds.sec.participant_crypto_tokens”
-// #define GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS
-//    ”dds.sec.datawriter_crypto_tokens”
-// #define GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS
-//    ”dds.sec.datareader_crypto_tokens”
+
+impl From<ParticipantGenericMessage> for ParticipantVolatileMessageSecure {
+  fn from(msg: ParticipantGenericMessage) -> Self {
+    Self { generic: msg }
+  }
+}
 
 impl Keyed for ParticipantVolatileMessageSecure {
   type K = GUID;
