@@ -805,28 +805,24 @@ impl DPEventLoop {
       .expect("Reader command channel registration failed!!!");
 
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-      // Security is enabled. Register Reader to crypto plugin if needed
-      // TODO: add correct should_be_registered for application-data readers
-      let should_be_registered = SECURE_BUILTIN_READER_ENTITY_IDS.contains(&reader_guid.entity_id);
-      if should_be_registered {
-        let mut sec_plugins = plugins_handle.get_plugins();
+      // Security is enabled. Register Reader to crypto plugin
+      let mut sec_plugins = plugins_handle.get_plugins();
 
-        if let Err(e) = sec_plugins
-          .get_reader_sec_attributes(reader_guid, topic_name)
-          .and_then(|attributes| {
-            sec_plugins.register_local_reader(reader_guid, reader_property_qos, attributes)
-          })
-        {
-          error!(
-            "Failed to register reader to crypto plugin: {} . GUID: {:?}",
-            e, reader_guid
-          );
-        } else {
-          info!(
-            "Registered local reader to crypto plugin. GUID: {:?}",
-            reader_guid
-          );
-        }
+      if let Err(e) = sec_plugins
+        .get_reader_sec_attributes(reader_guid, topic_name)
+        .and_then(|attributes| {
+          sec_plugins.register_local_reader(reader_guid, reader_property_qos, attributes)
+        })
+      {
+        error!(
+          "Failed to register reader to crypto plugin: {} . GUID: {:?}",
+          e, reader_guid
+        );
+      } else {
+        info!(
+          "Registered local reader to crypto plugin. GUID: {:?}",
+          reader_guid
+        );
       }
     }
 
@@ -892,28 +888,24 @@ impl DPEventLoop {
       .expect("Writer command channel registration failed!!");
 
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-      // Security is enabled. Register Writer to crypto plugin if needed
-      // TODO: add correct should_be_registered for application-data writers
-      let should_be_registered = SECURE_BUILTIN_WRITER_ENTITY_IDS.contains(&writer_guid.entity_id);
-      if should_be_registered {
-        let mut sec_plugins = plugins_handle.get_plugins();
+      // Security is enabled. Register Writer to crypto plugin
+      let mut sec_plugins = plugins_handle.get_plugins();
 
-        if let Err(e) = sec_plugins
-          .get_writer_sec_attributes(writer_guid, topic_name)
-          .and_then(|attributes| {
-            sec_plugins.register_local_writer(writer_guid, writer_property_qos, attributes)
-          })
-        {
-          error!(
-            "Failed to register writer to crypto plugin: {} . GUID: {:?}",
-            e, writer_guid
-          );
-        } else {
-          info!(
-            "Registered local writer to crypto plugin. GUID: {:?}",
-            writer_guid
-          );
-        }
+      if let Err(e) = sec_plugins
+        .get_writer_sec_attributes(writer_guid, topic_name)
+        .and_then(|attributes| {
+          sec_plugins.register_local_writer(writer_guid, writer_property_qos, attributes)
+        })
+      {
+        error!(
+          "Failed to register writer to crypto plugin: {} . GUID: {:?}",
+          e, writer_guid
+        );
+      } else {
+        info!(
+          "Registered local writer to crypto plugin. GUID: {:?}",
+          writer_guid
+        );
       }
     }
 
