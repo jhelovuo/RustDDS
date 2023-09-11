@@ -20,6 +20,9 @@ use super::reader::ReaderIngredients;
 #[derive(Debug, PartialEq, Eq, Clone)]
 /// ReaderProxy class represents the information an RTPS StatefulWriter
 /// maintains on each matched RTPS Reader
+//
+// TODO: matched_reader_update() in Writer uses constructor syntax to update
+// this, so all members have to be public. Fix this to get some privacy.
 pub(crate) struct RtpsReaderProxy {
   /// Identifies the remote matched RTPS Reader that is represented by the
   /// ReaderProxy
@@ -48,6 +51,10 @@ pub(crate) struct RtpsReaderProxy {
   // TODO: Can we make this private?
   pub unsent_changes: BTreeSet<SequenceNumber>,
 
+  // Messages that we are not going to send to this Reader.
+  // We will send the SNs as GAP until they have been acked.
+  // This is to be used in Reliable mode only.
+  pub pending_gap: BTreeSet<SequenceNumber>,
   // true = send repair data messages due to NACKs, buffer messages by DataWriter
   // false = send data messages directly from DataWriter
   pub repair_mode: bool,
@@ -66,6 +73,7 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
+      pending_gap: BTreeSet::new(),
       repair_mode: false,
       qos,
       frags_requested: BTreeMap::new(),
@@ -94,6 +102,7 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
+      pending_gap: BTreeSet::new(),
       repair_mode: false,
       qos: reader.qos_policy.clone(),
       frags_requested: BTreeMap::new(),
@@ -131,6 +140,7 @@ impl RtpsReaderProxy {
       is_active: true,
       all_acked_before: SequenceNumber::zero(),
       unsent_changes: BTreeSet::new(),
+      pending_gap: BTreeSet::new(),
       repair_mode: false,
       qos: discovered_reader_data.subscription_topic_data.qos(),
       frags_requested: BTreeMap::new(),
@@ -163,6 +173,8 @@ impl RtpsReaderProxy {
             );
           }
         }
+        // AckNack also clears pending_gap
+        self.pending_gap = self.pending_gap.split_off(&self.all_acked_before); 
       }
 
       AckSubmessage::NackFrag(_nack_frag) => {
@@ -170,6 +182,14 @@ impl RtpsReaderProxy {
         error!("NACKFRAG not implemented");
       }
     }
+  }
+
+  pub fn insert_pending_gap(&mut self, seq_num: SequenceNumber) {
+    self.pending_gap.insert(seq_num);
+  }
+
+  pub fn get_pending_gap(&self) -> &BTreeSet<SequenceNumber> {
+    &self.pending_gap
   }
 
   /// this should be called every time a new CacheChange is set to RTPS writer

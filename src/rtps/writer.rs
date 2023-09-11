@@ -487,7 +487,7 @@ impl Writer {
           write_options,
           sequence_number,
         } => {
-          // Signal that there is now space in the queue
+          // Signal that there is now space in the DataWriter to Writer queue
           {
             self
               .writer_command_receiver_waker
@@ -507,9 +507,27 @@ impl Writer {
             self.insert_to_history_cache(ddsdata, write_options.clone(), sequence_number);
 
           self.increase_heartbeat_counter();
+          let mut message_builder = MessageBuilder::new();
 
+          // Check if this is for single Reader only. 
+          // If so, insert GAP for others.
+          // And additionally send any pending gap for the single reader.
+          if let Some(single_reader) = write_options.to_single_reader() {
+            let writer_entity_id = self.entity_id();
+            for (reader_guid,reader_proxy) in self.readers.iter_mut() {
+              if *reader_guid == single_reader {
+                if ! reader_proxy.get_pending_gap().is_empty() {
+                  message_builder = message_builder.gap_msg(
+                    reader_proxy.get_pending_gap(), writer_entity_id, self.endianness, *reader_guid);
+                }
+              } else {
+                reader_proxy.insert_pending_gap(sequence_number);
+              }             
+            }
+          }
+
+          // Proceed to send either a DATA or several DATAFRAGs 
           if !fragmentation_needed {
-            let mut message_builder = MessageBuilder::new();
             // the beef: DATA submessage
             if self.push_mode {
               // If we are in push mode, proactively send DATA submessage along with
@@ -522,6 +540,7 @@ impl Writer {
                 if let Some(src_ts) = cache_change.write_options.source_timestamp() {
                   message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
                 }
+                // TODO: insert info_destination if sending to single reader
                 message_builder = message_builder.data_msg(
                   cache_change,
                   EntityId::UNKNOWN, // reader
@@ -578,11 +597,11 @@ impl Writer {
                   FragmentNumber::new(1),
                   FragmentNumber::new(num_frags),
                 ) {
-                  let mut message_builder = MessageBuilder::new();
+                  let mut message_builder = message_builder.clone(); // fresh builder
                   if let Some(src_ts) = cache_change.write_options.source_timestamp() {
                     message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
                   }
-
+                  // TODO: insert info_destination if sending to single reader
                   message_builder = message_builder.data_frag_msg(
                     cache_change,
                     EntityId::UNKNOWN, // reader
@@ -812,7 +831,6 @@ impl Writer {
         }
         let my_topic = self.my_topic_name.clone(); // for debugging
         let reader_guid = GUID::new(reader_guid_prefix, an.reader_id);
-
         self.update_ack_waiters(reader_guid, Some(an.reader_sn_state.base()));
 
         if let Some(reader_proxy) = self.lookup_reader_proxy_mut(reader_guid) {
@@ -851,6 +869,7 @@ impl Writer {
             }
           }
 
+
           // if we cannot send more data, we are done.
           // This is to prevent empty "repair data" messages from being sent.
           if reader_proxy.all_acked_before > last_seq {
@@ -865,8 +884,22 @@ impl Writer {
               },
             );
           }
+        } // if have reader_proxy
+
+        // See if we need to respond by GAP message
+        if let Some(reader_proxy) = self.readers.get(&reader_guid) {
+          if ! reader_proxy.get_pending_gap().is_empty() {
+            let gap_message = MessageBuilder::new()
+              .gap_msg(reader_proxy.get_pending_gap(), self.my_guid.entity_id, self.endianness, reader_guid)
+              .add_header_and_build(self.my_guid.prefix);
+            self.send_message_to_readers(
+              DeliveryMode::Unicast,
+              gap_message,
+              &mut std::iter::once(reader_proxy),
+            );
+          }
         }
-      }
+      } // AckNack
       AckSubmessage::NackFrag(ref nackfrag) => {
         // NackFrag is negative acknowledgement only, i.e. requesting missing fragments.
 
@@ -1032,7 +1065,7 @@ impl Writer {
     // Add GAP submessage, if some cache changes could not be found.
     if !no_longer_relevant.is_empty() {
       partial_message =
-        partial_message.gap_msg(&BTreeSet::from_iter(no_longer_relevant), self, reader_guid);
+        partial_message.gap_msg(&BTreeSet::from_iter(no_longer_relevant), self.entity_id(), self.endianness, reader_guid);
       sending_gap = true;
     }
 
