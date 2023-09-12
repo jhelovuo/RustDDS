@@ -238,7 +238,8 @@ mod repr {
   pub struct BinaryProperty {
     pub(crate) name: String,
     pub(crate) value: Vec<u8>,
-    pub(crate) propagate: bool,
+    //pub(crate) propagate: bool,
+    // The "propagate" flag is never serialized, because it is always true, if we are serializing.
   }
 
   impl From<BinaryProperty> for super::BinaryProperty {
@@ -246,7 +247,7 @@ mod repr {
       super::BinaryProperty {
         name: bp.name,
         value: bp.value.into(),
-        propagate: bp.propagate,
+        propagate: true,
       }
     }
   }
@@ -256,7 +257,6 @@ mod repr {
       BinaryProperty {
         name: bp.name,
         value: bp.value.into(),
-        propagate: bp.propagate,
       }
     }
   }
