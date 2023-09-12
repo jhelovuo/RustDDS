@@ -229,8 +229,6 @@ impl MessageReceiver {
       None => rtps_message,
 
       Some(security_plugins_handle) => {
-        let security_plugins = security_plugins_handle.get_plugins();
-
         // If the first submessage is SecureRTPSPrefix, the message has to be decoded
         // using the cryptographic plugin
         if let Some(Submessage {
@@ -238,7 +236,7 @@ impl MessageReceiver {
           ..
         }) = rtps_message.submessages.first()
         {
-          match security_plugins.decode_rtps_message(
+          match security_plugins_handle.get_plugins().decode_rtps_message(
             rtps_message,
             &self.source_guid_prefix,
             &self.dest_guid_prefix,
@@ -246,7 +244,10 @@ impl MessageReceiver {
             Ok(message) => message,
             Err(e) => return error!("{e:?}"),
           }
-        } else if security_plugins.rtps_not_protected(&self.dest_guid_prefix) {
+        } else if security_plugins_handle
+          .get_plugins()
+          .rtps_not_protected(&self.dest_guid_prefix)
+        {
           // The domain is not protected, pass through
           rtps_message
         } else {
@@ -347,29 +348,26 @@ impl MessageReceiver {
             }
           }
 
-          SubmessageBody::Reader(submessage) => {
-            match self
-              .security_plugins
-              .as_ref()
-              .map(SecurityPluginsHandle::get_plugins)
-            {
-              None => self.handle_reader_submessage(submessage),
-              Some(plugins) => {
-                let destination_guid = GUID {
-                  prefix: self.dest_guid_prefix,
-                  entity_id: submessage.receiver_entity_id(),
-                };
-                if plugins.submessage_not_protected(&destination_guid) {
-                  self.handle_reader_submessage(submessage);
-                } else {
-                  error!(
-                    "No writer with unprotected submessages found for the GUID {:?}",
-                    destination_guid
-                  );
-                }
+          SubmessageBody::Reader(submessage) => match self.security_plugins.as_ref() {
+            None => self.handle_reader_submessage(submessage),
+            Some(security_plugins_handle) => {
+              let destination_guid = GUID {
+                prefix: self.dest_guid_prefix,
+                entity_id: submessage.receiver_entity_id(),
+              };
+              if security_plugins_handle
+                .get_plugins()
+                .submessage_not_protected(&destination_guid)
+              {
+                self.handle_reader_submessage(submessage);
+              } else {
+                error!(
+                  "No writer with unprotected submessages found for the GUID {:?}",
+                  destination_guid
+                );
               }
             }
-          }
+          },
           SubmessageBody::Security(m) => {
             if self.dest_guid_prefix != self.own_guid_prefix
               && self.dest_guid_prefix != GuidPrefix::UNKNOWN
@@ -544,15 +542,15 @@ impl MessageReceiver {
       // If there is an encoded_payload, decode it
       .map(|encoded_payload| {
         security_plugins
-          .map(SecurityPluginsHandle::get_plugins)
           .map_or(
             // If there are no security plugins, we expect a serialized SerializedPayload as
             // Bytes
             Ok(encoded_payload.clone()),
             // If security plugins exist, use them to decode
-            |security_plugins| {
+            |security_plugins_handle| {
               // Decode
-              security_plugins
+              security_plugins_handle
+                .get_plugins()
                 .decode_serialized_payload(
                   Vec::from(encoded_payload),
                   inline_qos.unwrap_or_default(),
@@ -593,15 +591,15 @@ impl MessageReceiver {
     } = datafrag.clone();
 
     security_plugins
-      .map(SecurityPluginsHandle::get_plugins)
       .map_or(
         // If there are no security plugins, we expect a serialized SerializedPayload as
         // Bytes
         Ok(encoded_payload.clone()),
         // If security plugins exist, use them to decode
-        |security_plugins| {
+        |security_plugins_handle| {
           // Decode
-          security_plugins
+          security_plugins_handle
+            .get_plugins()
             .decode_serialized_payload(
               Vec::from(encoded_payload),
               inline_qos.unwrap_or_default(),
@@ -683,23 +681,22 @@ impl MessageReceiver {
     encoded_submessage: Submessage,
     sec_postfix: &SecurePostfix,
   ) {
-    let security_plugins = self.security_plugins.clone();
-    let security_plugins = match security_plugins {
+    let security_plugins_clone = self.security_plugins.clone();
+    let security_plugins_handle = match security_plugins_clone {
       None => {
         warn!("Cannot handle secure submessage: No security plugins configured.");
         return;
       }
-      Some(ref security_plugins_handle) => security_plugins_handle.get_plugins(),
+      Some(security_plugins_handle) => security_plugins_handle,
     };
 
     // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
     // the submessage contains and then proceed to decode and process accordingly.
 
-    match security_plugins.preprocess_secure_submessage(
-      sec_prefix,
-      &self.source_guid_prefix,
-      &self.dest_guid_prefix,
-    ) {
+    match security_plugins_handle
+      .get_plugins()
+      .preprocess_secure_submessage(sec_prefix, &self.source_guid_prefix, &self.dest_guid_prefix)
+    {
       Err(e) => {
         error!("{e:?}");
       }
@@ -708,22 +705,23 @@ impl MessageReceiver {
         // preprocess_secure_submsg": decoding does not apply to info
         // submessages. (But what if someone fakes them? Or must we secure whole
         // RTPS message then?)
-        drop(security_plugins);
         self.handle_submessage(encoded_submessage);
       }
       Ok(SecureSubmessageCategory::DatawriterSubmessage(sender_receiver_pairs)) => {
         for (sending_datawriter_crypto_handle, receiving_datareader_crypto_handle) in
           sender_receiver_pairs
         {
-          match security_plugins.decode_datawriter_submessage(
-            (
-              sec_prefix.clone(),
-              encoded_submessage.clone(),
-              sec_postfix.clone(),
-            ),
-            receiving_datareader_crypto_handle,
-            sending_datawriter_crypto_handle,
-          ) {
+          match security_plugins_handle
+            .get_plugins()
+            .decode_datawriter_submessage(
+              (
+                sec_prefix.clone(),
+                encoded_submessage.clone(),
+                sec_postfix.clone(),
+              ),
+              receiving_datareader_crypto_handle,
+              sending_datawriter_crypto_handle,
+            ) {
             Ok(submessage) => {
               let receiver_entity_id = submessage.receiver_entity_id();
 
@@ -747,7 +745,7 @@ impl MessageReceiver {
                         && target_reader.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER)
                       )
                       &&
-                      security_plugins
+                      security_plugins_handle.get_plugins()
                       .confirm_local_endpoint_guid(receiving_datareader_crypto_handle,
                         &GUID { prefix: self.dest_guid_prefix,entity_id: target_reader.entity_id() })
                 }){
@@ -760,7 +758,8 @@ impl MessageReceiver {
                   prefix: self.dest_guid_prefix,
                   entity_id: receiver_entity_id,
                 };
-                if security_plugins
+                if security_plugins_handle
+                  .get_plugins()
                   .confirm_local_endpoint_guid(receiving_datareader_crypto_handle, &receiver_guid)
                 {
                   self.handle_writer_submessage(receiver_entity_id, submessage);
@@ -780,22 +779,25 @@ impl MessageReceiver {
         for (sending_datareader_crypto_handle, receiving_datawriter_crypto_handle) in
           sender_receiver_pairs
         {
-          match security_plugins.decode_datareader_submessage(
-            (
-              sec_prefix.clone(),
-              encoded_submessage.clone(),
-              sec_postfix.clone(),
-            ),
-            receiving_datawriter_crypto_handle,
-            sending_datareader_crypto_handle,
-          ) {
+          match security_plugins_handle
+            .get_plugins()
+            .decode_datareader_submessage(
+              (
+                sec_prefix.clone(),
+                encoded_submessage.clone(),
+                sec_postfix.clone(),
+              ),
+              receiving_datawriter_crypto_handle,
+              sending_datareader_crypto_handle,
+            ) {
             Ok(submessage) => {
               let receiver_entity_id = submessage.receiver_entity_id();
               let receiver_guid = GUID {
                 prefix: self.dest_guid_prefix,
                 entity_id: receiver_entity_id,
               };
-              if security_plugins
+              if security_plugins_handle
+                .get_plugins()
                 .confirm_local_endpoint_guid(receiving_datawriter_crypto_handle, &receiver_guid)
               {
                 self.handle_reader_submessage(submessage);
@@ -810,7 +812,7 @@ impl MessageReceiver {
           }
         }
       }
-    }
+    };
   }
 
   fn handle_interpreter_submessage(&mut self, interp_subm: InterpreterSubmessage)

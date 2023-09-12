@@ -750,14 +750,18 @@ impl DPEventLoop {
 
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
       // Security is enabled. Register Reader to crypto plugin
-      let mut sec_plugins = plugins_handle.get_plugins();
-
-      if let Err(e) = sec_plugins
-        .get_reader_sec_attributes(reader_guid, topic_name)
-        .and_then(|attributes| {
-          sec_plugins.register_local_reader(reader_guid, reader_property_qos, attributes)
+      if let Err(e) = {
+        let reader_security_attributes = plugins_handle
+          .get_plugins()
+          .get_reader_sec_attributes(reader_guid, topic_name); // Release lock
+        reader_security_attributes.and_then(|attributes| {
+          plugins_handle.get_plugins().register_local_reader(
+            reader_guid,
+            reader_property_qos,
+            attributes,
+          )
         })
-      {
+      } {
         error!(
           "Failed to register reader to crypto plugin: {} . GUID: {:?}",
           e, reader_guid
@@ -833,14 +837,19 @@ impl DPEventLoop {
 
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
       // Security is enabled. Register Writer to crypto plugin
-      let mut sec_plugins = plugins_handle.get_plugins();
 
-      if let Err(e) = sec_plugins
-        .get_writer_sec_attributes(writer_guid, topic_name)
-        .and_then(|attributes| {
-          sec_plugins.register_local_writer(writer_guid, writer_property_qos, attributes)
+      if let Err(e) = {
+        let writer_security_attributes = plugins_handle
+          .get_plugins()
+          .get_writer_sec_attributes(writer_guid, topic_name); // Release lock
+        writer_security_attributes.and_then(|attributes| {
+          plugins_handle.get_plugins().register_local_writer(
+            writer_guid,
+            writer_property_qos,
+            attributes,
+          )
         })
-      {
+      } {
         error!(
           "Failed to register writer to crypto plugin: {} . GUID: {:?}",
           e, writer_guid
