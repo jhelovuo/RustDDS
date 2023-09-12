@@ -548,12 +548,13 @@ impl Writer {
                 }
                 // TODO: insert info_destination if sending to single reader
 
-                let reader_entity_id = write_options.to_single_reader()
-                  .map_or( EntityId::UNKNOWN,  |g| g.entity_id);
+                let reader_entity_id = write_options
+                  .to_single_reader()
+                  .map_or(EntityId::UNKNOWN, |g| g.entity_id);
                 message_builder = message_builder.data_msg(
                   cache_change,
-                  reader_entity_id, 
-                  self.my_guid,      // writer
+                  reader_entity_id,
+                  self.my_guid, // writer
                   self.endianness,
                   self.security_plugins.as_ref(),
                 );
