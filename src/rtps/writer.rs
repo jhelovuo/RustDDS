@@ -185,11 +185,11 @@ pub(crate) struct Writer {
   udp_sender: Rc<UDPSender>,
 
   // By default, this writer is a StatefulWriter (see RTPS spec section 8.4.9)
-  // If like_stateless is true, then the writer mimics the behaviour of a Best-Effort
-  // StatelessWriter. This behaviour is needed only for a single built-in discovery topic of
+  // If like_stateless is true, then the writer mimics the behavior of a Best-Effort
+  // StatelessWriter. This behavior is needed only for a single built-in discovery topic of
   // Secure DDS (topic DCPSParticipantStatelessMessage).
   // The basic idea in mimicking BestEffort & Stateless is:
-  //  1. Make sure no heartbeats, acknacks, or anything related to Reliable behaviour is processed
+  //  1. Make sure no heartbeats, acknacks, or anything related to Reliable behavior is processed
   //  2. Use the RtpsReaderProxies merely as locators, do not utilize/modify their state
   // Note that unlike the Best-Effort StatelessWriter in the specification, here we don't send
   // GAP messages. But this shouldn't matter since the expected remote Reader is also BestEffort &
@@ -263,7 +263,7 @@ impl Writer {
       );
     }
 
-    // If writer should behave statelessly, only BestEffor QoS is currently
+    // If writer should behave statelessly, only BestEffort QoS is currently
     // supported
     if i.like_stateless && i.qos_policies.is_reliable() {
       panic!("Attempted to create a stateless-like Writer with other than BestEffort reliability");
@@ -687,7 +687,7 @@ impl Writer {
             // all acked already: try to signal app waiting at DataWriter
             let _ = all_acked.try_send(());
             // but we ignore any failure to signal, if no-one is listening
-            // since that is normal. They may have timeouted and stopped waiting.
+            // since that is normal. They may have timed out and stopped waiting.
             None
           } else {
             // Someone still needs to ack. Wait for them.
@@ -768,7 +768,7 @@ impl Writer {
     if self.like_stateless {
       info!(
         "Ignoring handling heartbeat tick in a stateless-like Writer, since it currently supports \
-         only BestEffor QoS. topic={:?}",
+         only BestEffort QoS. topic={:?}",
         self.my_topic_name
       );
       return;
@@ -957,7 +957,7 @@ impl Writer {
     if self.like_stateless {
       warn!(
         "Not sending repair data in a stateless-like Writer, since it currently supports only \
-         BestEffor behaviour. topic={:?}",
+         BestEffort behavior. topic={:?}",
         self.my_topic_name
       );
       return;
@@ -984,7 +984,7 @@ impl Writer {
     if self.like_stateless {
       warn!(
         "Not sending repair frags in a stateless-like Writer, since it currently supports only \
-         BestEffor behaviour. topic={:?}",
+         BestEffort behavior. topic={:?}",
         self.my_topic_name
       );
       return;
@@ -1188,7 +1188,7 @@ impl Writer {
   /// This is called repeatedly by handle_cache_cleaning action.
   fn remove_all_acked_changes_but_keep_depth(&mut self, depth: usize) {
     let first_keeper = if !self.like_stateless {
-      // Regular stateful writer behaviour
+      // Regular stateful writer behavior
       // All readers have acked up to this point (SequenceNumber)
       let acked_by_all_readers = self
         .readers
@@ -1203,7 +1203,7 @@ impl Writer {
         self.first_change_sequence_number,
       )
     } else {
-      // Stateless-like writer currently supports only BestEffor behaviour, so here we
+      // Stateless-like writer currently supports only BestEffort behavior, so here we
       // make it explicit that it does not care about acked sequence numbers
       self.first_change_sequence_number
     };
