@@ -314,7 +314,10 @@ impl MessageReceiver {
                       prefix: self.dest_guid_prefix,
                       entity_id: target_entity_id,
                     };
-                    if plugins_handle.get_plugins().submessage_not_protected(&destination_guid) {
+                    if plugins_handle
+                      .get_plugins()
+                      .submessage_not_protected(&destination_guid)
+                    {
                       self.handle_writer_submessage(target_entity_id, submessage.clone());
                     }
                   }
@@ -328,7 +331,10 @@ impl MessageReceiver {
                     prefix: self.dest_guid_prefix,
                     entity_id: receiver_entity_id,
                   };
-                  if plugins_handle.get_plugins().submessage_not_protected(&destination_guid) {
+                  if plugins_handle
+                    .get_plugins()
+                    .submessage_not_protected(&destination_guid)
+                  {
                     self.handle_writer_submessage(receiver_entity_id, submessage);
                   } else {
                     error!(

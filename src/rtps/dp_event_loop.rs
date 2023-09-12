@@ -569,35 +569,6 @@ impl DPEventLoop {
             qos = Discovery::PARTICIPANT_STATELESS_MESSAGE_QOS;
           }
 
-          // common processing for all builtin topics
-          if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-            // Security enabled
-            // If reader is one of the secure built-in readers, it needs to be registered
-            if SECURE_BUILTIN_READER_ENTITY_IDS.contains(reader_eid) {
-              let remote_reader_guid = reader_proxy.remote_reader_guid;
-              let local_writer_guid = self
-                .domain_info
-                .domain_participant_guid
-                .from_prefix(*writer_eid);
-
-              if let Err(e) = plugins_handle.get_plugins().register_matched_remote_reader(
-                remote_reader_guid,
-                local_writer_guid,
-                false,
-              ) {
-                error!(
-                  "Failed to register remote reader with the crypto plugin: {} GUID: {:?}",
-                  e, remote_reader_guid
-                );
-              } else {
-                info!(
-                  "Registered remote reader with the crypto plugin. GUID: {:?}",
-                  remote_reader_guid
-                );
-              }
-            }
-          }
-
           writer.update_reader_proxy(&reader_proxy, &qos);
           debug!(
             "update_discovery writer - endpoint {:?} - {:?}",
@@ -627,33 +598,6 @@ impl DPEventLoop {
           .available_builtin_endpoints
           .contains(*endpoint)
         {
-          if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-            // Security enabled
-            // If writer is one of the secure built-in writers, it needs to be registered
-            if SECURE_BUILTIN_WRITER_ENTITY_IDS.contains(writer_eid) {
-              let remote_writer_guid = wp.remote_writer_guid;
-              let local_reader_guid = self
-                .domain_info
-                .domain_participant_guid
-                .from_prefix(*reader_eid);
-
-              if let Err(e) = plugins_handle
-                .get_plugins()
-                .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
-              {
-                error!(
-                  "Failed to register remote writer with the crypto plugin: {} GUID: {:?}",
-                  e, remote_writer_guid
-                );
-              } else {
-                info!(
-                  "Registered remote writer with the crypto plugin. GUID: {:?}",
-                  remote_writer_guid
-                );
-              }
-            }
-          }
-
           reader.update_writer_proxy(wp, &qos);
           debug!(
             "update_discovery_reader - endpoint {:?} - {:?}",
