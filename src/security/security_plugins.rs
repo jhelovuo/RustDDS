@@ -73,7 +73,7 @@ impl SecurityPlugins {
       submessage_not_protected: HashSet::new(),
       payload_not_protected: HashSet::new(),
 
-      test_disable_crypto_transform: true, // TODO Remove after testing
+      test_disable_crypto_transform: false, // TODO Remove after testing
     }
   }
 

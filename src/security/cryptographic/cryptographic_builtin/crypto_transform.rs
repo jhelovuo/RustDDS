@@ -234,7 +234,7 @@ impl CryptoTransform for CryptographicBuiltin {
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
         if transformation_kind == BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
           warn!(
-            "decode_serialized_payload with crypto transformation kind = none. Does not make \
+            "encode_serialized_payload with crypto transformation kind = none. Does not make \
              sense, but validating MAC anyway."
           );
         }
@@ -476,7 +476,7 @@ impl CryptoTransform for CryptographicBuiltin {
           // unauthorized data injection attack.
           if decode_key_material.transformation_kind ==
             BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
-            warn!("decode_serialized_payload with crypto transformation kind = none. \
+            warn!("decode_rtps_message with crypto transformation kind = none. \
               Does not make sense, but validating MAC anyway.");
           }
           let submessages_with_info_source = encoded_content; // rename for clarity

@@ -768,7 +768,6 @@ pub(crate) struct DomainParticipantInner {
 
   // RTPS locators describing how to reach this DP
   self_locators: HashMap<Token, Vec<Locator>>,
-  #[allow(dead_code)] // TODO: use or remove
   security_plugins_handle: Option<SecurityPluginsHandle>,
 }
 
@@ -1007,6 +1006,7 @@ impl DomainParticipantInner {
       self.add_writer_sender.clone(),
       self.remove_writer_sender.clone(),
       discovery_command,
+      self.security_plugins_handle.clone(),
     ))
   }
 
@@ -1023,6 +1023,7 @@ impl DomainParticipantInner {
       self.sender_add_reader.clone(),
       self.sender_remove_reader.clone(),
       discovery_command,
+      self.security_plugins_handle.clone(),
     ))
   }
 

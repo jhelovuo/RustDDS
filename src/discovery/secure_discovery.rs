@@ -11,7 +11,7 @@ use crate::{
   dds::{
     no_key,
     participant::DomainParticipantWeak,
-    with_key::{DataSample, Sample},
+    with_key::{DataSample, Sample, WriteOptionsBuilder},
   },
   qos, rpc,
   rtps::constant::{
@@ -1359,8 +1359,14 @@ impl SecureDiscovery {
       .map(ParticipantVolatileMessageSecure::from)
       // Send with writer
       .and_then(|vol_msg| {
+        let opts = WriteOptionsBuilder::new()
+          .to_single_reader(GUID::new(
+            remote_guid_prefix,
+            EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
+          ))
+          .build();
         key_exchange_writer
-          .write(vol_msg, None)
+          .write_with_options(vol_msg, opts)
           .map_err(|write_err| {
             security_error(&format!("DataWriter write operation failed: {}", write_err))
           })
@@ -1431,8 +1437,14 @@ impl SecureDiscovery {
           .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
           .and_then(|vol_msg| {
+            let opts = WriteOptionsBuilder::new()
+              .to_single_reader(GUID::new(
+                remote_guid_prefix,
+                EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
+              ))
+              .build();
             key_exchange_writer
-              .write(vol_msg, None)
+              .write_with_options(vol_msg, opts)
               .map_err(|write_err| {
                 security_error(&format!("DataWriter write operation failed: {}", write_err))
               })
@@ -1509,8 +1521,14 @@ impl SecureDiscovery {
           .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
           .and_then(|vol_msg| {
+            let opts = WriteOptionsBuilder::new()
+              .to_single_reader(GUID::new(
+                remote_guid_prefix,
+                EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
+              ))
+              .build();
             key_exchange_writer
-              .write(vol_msg, None)
+              .write_with_options(vol_msg, opts)
               .map_err(|write_err| {
                 security_error(&format!("DataWriter write operation failed: {}", write_err))
               })
