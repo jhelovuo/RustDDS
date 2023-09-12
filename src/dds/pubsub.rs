@@ -38,6 +38,7 @@ use crate::{
     reader::ReaderIngredients,
     writer::{WriterCommand, WriterIngredients},
   },
+  security::security_plugins::SecurityPluginsHandle,
   serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter},
   structure::{
     entity::RTPSEntity,
@@ -88,6 +89,7 @@ pub struct Publisher {
 }
 
 impl Publisher {
+  #[allow(clippy::too_many_arguments)]
   pub(super) fn new(
     dp: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -96,6 +98,7 @@ impl Publisher {
     add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
     remove_writer_sender: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+    security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> Self {
     Self {
       inner: Arc::new(Mutex::new(InnerPublisher::new(
@@ -106,6 +109,7 @@ impl Publisher {
         add_writer_sender,
         remove_writer_sender,
         discovery_command,
+        security_plugins_handle,
       ))),
     }
   }
@@ -401,10 +405,12 @@ struct InnerPublisher {
   add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
   remove_writer_sender: mio_channel::SyncSender<GUID>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+  security_plugins_handle: Option<SecurityPluginsHandle>,
 }
 
 // public interface for Publisher
 impl InnerPublisher {
+  #[allow(clippy::too_many_arguments)]
   fn new(
     dp: DomainParticipantWeak,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -413,6 +419,7 @@ impl InnerPublisher {
     add_writer_sender: mio_channel::SyncSender<WriterIngredients>,
     remove_writer_sender: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+    security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> Self {
     // We generate an arbitrary but unique id to distinguish Publishers from each
     // other. EntityKind is just some value, since we do not show it to anyone.
@@ -428,6 +435,7 @@ impl InnerPublisher {
       add_writer_sender,
       remove_writer_sender,
       discovery_command,
+      security_plugins_handle,
     }
   }
 
@@ -485,7 +493,7 @@ impl InnerPublisher {
       like_stateless: writer_like_stateless,
       qos_policies: writer_qos.clone(),
       status_sender,
-      security_plugins: None, // TODO pass security plugins
+      security_plugins: self.security_plugins_handle.clone(),
     };
 
     self
@@ -623,6 +631,7 @@ impl Subscriber {
     sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
     sender_remove_reader: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+    security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> Self {
     Self {
       inner: Arc::new(InnerSubscriber::new(
@@ -632,6 +641,7 @@ impl Subscriber {
         sender_add_reader,
         sender_remove_reader,
         discovery_command,
+        security_plugins_handle,
       )),
     }
   }
@@ -844,6 +854,7 @@ pub struct InnerSubscriber {
   sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
   sender_remove_reader: mio_channel::SyncSender<GUID>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+  security_plugins_handle: Option<SecurityPluginsHandle>,
 }
 
 impl InnerSubscriber {
@@ -854,6 +865,7 @@ impl InnerSubscriber {
     sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
     sender_remove_reader: mio_channel::SyncSender<GUID>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
+    security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> Self {
     Self {
       domain_participant,
@@ -862,6 +874,7 @@ impl InnerSubscriber {
       sender_add_reader,
       sender_remove_reader,
       discovery_command,
+      security_plugins_handle,
     }
   }
 
@@ -955,7 +968,7 @@ impl InnerSubscriber {
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker: data_reader_waker.clone(),
       poll_event_sender,
-      security_plugins: None, // TODO pass security plugins
+      security_plugins: self.security_plugins_handle.clone(),
     };
 
     {
