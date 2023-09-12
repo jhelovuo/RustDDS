@@ -39,8 +39,7 @@ use crate::{
     fragment_assembler::FragmentAssembler, message_receiver::MessageReceiverState,
     rtps_writer_proxy::RtpsWriterProxy, Message,
   },
-  security::{security_plugins::SecurityPluginsHandle, SecurityError, SecurityResult},
-  security_error,
+  security::{security_plugins::SecurityPluginsHandle, SecurityResult},
   structure::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::TopicCache,
@@ -1160,11 +1159,6 @@ impl Reader {
   fn security_encode(&self, message: Message, destination_guid: GUID) -> SecurityResult<Message> {
     // If we have security plugins, use them, otherwise pass through
     if let Some(security_plugins_handle) = &self.security_plugins {
-      // Get a MutexGuard for the security plugins
-      let security_plugins = security_plugins_handle.lock().map_err(|e| {
-        security_error!("SecurityPluginHandle poisoned! {e:?}")
-        // TODO: Send signal to exit RTPS thread, as there is no way to recover.
-      })?;
       // Get the source GUID
       let source_guid = self.guid();
       // Destructure
@@ -1175,7 +1169,8 @@ impl Reader {
 
       // Encode submessages
       SecurityResult::<Vec<Vec<Submessage>>>::from_iter(submessages.iter().map(|submessage| {
-        security_plugins
+        security_plugins_handle
+          .get_plugins()
           .encode_datareader_submessage(submessage.clone(), &source_guid, &[destination_guid])
           // Convert each encoding output to a Vec of 1 or 3 submessages
           .map(Vec::from)
@@ -1191,7 +1186,11 @@ impl Reader {
         let source_guid_prefix = source_guid.prefix;
         let destination_guid_prefix = destination_guid.prefix;
         // Encode message
-        security_plugins.encode_message(message, &source_guid_prefix, &[destination_guid_prefix])
+        security_plugins_handle.get_plugins().encode_message(
+          message,
+          &source_guid_prefix,
+          &[destination_guid_prefix],
+        )
       })
     } else {
       Ok(message)

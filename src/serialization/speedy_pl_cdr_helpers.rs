@@ -78,7 +78,7 @@ impl<C: Context> Writable<C> for StringWithNul {
     // GBytes? RTPS does not support that.
 
     // TODO: Should align to 4 before writing
-    writer.write_u32((self.string.len() + 1).try_into().unwrap())?; // +1 for NUL character
+    writer.write_u32((self.string.as_bytes().len() + 1).try_into().unwrap())?; // +1 for NUL character
     writer.write_slice(self.string.as_bytes())?;
     writer.write_u8(0)?; // NUL character
     Ok(())
@@ -125,7 +125,7 @@ pub(crate) fn write_pad<C: Context, T: ?Sized + Writer<C>>(
   let m = previous_length % align;
   if m > 0 {
     for _ in 0..(align - m) {
-      writer.write_u8(0)?;
+      writer.write_u8(0xCC)?; // Write pad as 0xCC for easy recognition
     }
   }
   Ok(())

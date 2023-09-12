@@ -1064,7 +1064,6 @@ impl SecureDiscovery {
       .map(|dh| CryptoToken::from(dh.clone()))
       .collect();
 
-    let mut sec_plugins = self.security_plugins.get_plugins();
     match msg.generic.message_class_id.as_str() {
       GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS => {
         // Got participant crypto tokens, see "7.4.4.6.1 Data for message class
@@ -1077,11 +1076,15 @@ impl SecureDiscovery {
         }
 
         let remote_participant_guidp = msg.generic.message_identity.writer_guid.prefix;
-        if let Err(e) = sec_plugins.set_remote_participant_crypto_tokens(
-          self.local_participant_guid.prefix,
-          remote_participant_guidp,
-          crypto_tokens,
-        ) {
+        if let Err(e) = self
+          .security_plugins
+          .get_plugins()
+          .set_remote_participant_crypto_tokens(
+            self.local_participant_guid.prefix,
+            remote_participant_guidp,
+            crypto_tokens,
+          )
+        {
           security_error!(
             "Failed to set remote participant crypto tokens: {}. Remote: {:?}",
             e,
@@ -1099,11 +1102,15 @@ impl SecureDiscovery {
         // Got data writer crypto tokens, see "7.4.4.6.2 Data for message class
         // GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS" of the security spec
 
-        if let Err(e) = sec_plugins.set_remote_writer_crypto_tokens(
-          msg.generic.source_endpoint_guid,
-          msg.generic.destination_endpoint_guid,
-          crypto_tokens,
-        ) {
+        if let Err(e) = self
+          .security_plugins
+          .get_plugins()
+          .set_remote_writer_crypto_tokens(
+            msg.generic.source_endpoint_guid,
+            msg.generic.destination_endpoint_guid,
+            crypto_tokens,
+          )
+        {
           security_error!(
             "Failed to set remote writer crypto tokens: {}. Remote: {:?}",
             e,
@@ -1121,11 +1128,15 @@ impl SecureDiscovery {
         // Got data reader crypto tokens, see "7.4.4.6.3 Data for message class
         // GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS" of the security spec
 
-        if let Err(e) = sec_plugins.set_remote_reader_crypto_tokens(
-          msg.generic.source_endpoint_guid,
-          msg.generic.destination_endpoint_guid,
-          crypto_tokens,
-        ) {
+        if let Err(e) = self
+          .security_plugins
+          .get_plugins()
+          .set_remote_reader_crypto_tokens(
+            msg.generic.source_endpoint_guid,
+            msg.generic.destination_endpoint_guid,
+            crypto_tokens,
+          )
+        {
           security_error!(
             "Failed to set remote reader crypto tokens: {}. Remote: {:?}",
             e,
@@ -1226,17 +1237,22 @@ impl SecureDiscovery {
   ) {
     // Register remote participant to crypto plugin with the shared secret which
     // resulted from the successful handshake
-    let mut sec_plugins = self.security_plugins.get_plugins();
-    if let Err(e) = sec_plugins
-      .get_shared_secret(remote_guid_prefix)
-      .and_then(|shared_secret| {
-        sec_plugins.register_matched_remote_participant(
-          self.local_participant_guid.prefix,
-          remote_guid_prefix,
-          shared_secret,
-        )
+    if let Err(e) = {
+      let shared_secret = self
+        .security_plugins
+        .get_plugins()
+        .get_shared_secret(remote_guid_prefix); // Release lock
+      shared_secret.and_then(|shared_secret| {
+        self
+          .security_plugins
+          .get_plugins()
+          .register_matched_remote_participant(
+            self.local_participant_guid.prefix,
+            remote_guid_prefix,
+            shared_secret,
+          )
       })
-    {
+    } {
       security_error!(
         "Failed to register remote participant with the crypto plugin: {}. Remote: {:?}",
         e,
@@ -1283,17 +1299,22 @@ impl SecureDiscovery {
       EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
     );
 
-    if let Err(e) = sec_plugins
-      .register_matched_remote_reader(
-        remote_volatile_reader_guid,
-        local_volatile_writer_guid,
-        false,
-      )
-      .and_then(|()| {
-        sec_plugins
+    if let Err(e) = {
+      let register_result = self
+        .security_plugins
+        .get_plugins()
+        .register_matched_remote_reader(
+          remote_volatile_reader_guid,
+          local_volatile_writer_guid,
+          false,
+        ); // Release lock
+      register_result.and_then(|()| {
+        self
+          .security_plugins
+          .get_plugins()
           .register_matched_remote_writer(remote_volatile_writer_guid, local_volatile_reader_guid)
       })
-    {
+    } {
       security_error!(
         "Failed to register remote volatile reader/writer to crypto plugin {}. Remote: {:?}",
         e,
@@ -1306,21 +1327,24 @@ impl SecureDiscovery {
 
     // Send local participant crypto tokens to remote
     // TODO: do this only if needed?
-    let res = sec_plugins
+    let local_participant_crypto_tokens = self
+      .security_plugins
+      .get_plugins()
       // Get participant crypto tokens
       .create_local_participant_crypto_tokens(
         self.local_participant_guid.prefix,
         remote_guid_prefix,
-      )
+      ); // Release lock
+    let res = local_participant_crypto_tokens
       // Map to vector of data holders
       .map(|crypto_token_vec| {
         crypto_token_vec
           .iter()
-          .map(|ctoken| ctoken.data_holder.clone())
+          .map(|crypto_token| crypto_token.data_holder.clone())
           .collect::<Vec<_>>()
       })
       // Create a GenericParticipantMessage
-      .map(|dataholders| {
+      .map(|data_holders| {
         self.generic_message_helper.new_message(
           GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS, // Message id
           key_exchange_writer.guid(),
@@ -1328,26 +1352,24 @@ impl SecureDiscovery {
           None,               // No related message
           remote_guid_prefix,
           GUID::GUID_UNKNOWN, // No destination endpoint guid
-          dataholders,
+          data_holders,
         )
       })
       // Create the volatile message
       .map(ParticipantVolatileMessageSecure::from)
       // Send with writer
-      .map(|vol_msg| {
+      .and_then(|vol_msg| {
         let opts = WriteOptionsBuilder::new()
           .to_single_reader(GUID::new(
             remote_guid_prefix,
             EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
           ))
           .build();
-        match key_exchange_writer.write_with_options(vol_msg, opts) {
-          Ok(_) => Ok(()),
-          Err(write_err) => Err(security_error(&format!(
-            "DataWriter write operation failed: {}",
-            write_err
-          ))),
-        }
+        key_exchange_writer
+          .write_with_options(vol_msg, opts)
+          .map_err(|write_err| {
+            security_error(&format!("DataWriter write operation failed: {}", write_err))
+          })
       });
 
     if let Err(e) = res {
@@ -1369,8 +1391,10 @@ impl SecureDiscovery {
         let local_writer_guid = self.local_participant_guid.from_prefix(*writer_eid);
 
         // First register remote reader
-        if let Err(e) =
-          sec_plugins.register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
+        if let Err(e) = self
+          .security_plugins
+          .get_plugins()
+          .register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
         {
           security_error!(
             "Failed to register remote built-in reader {:?} to crypto plugin: {}",
@@ -1385,17 +1409,20 @@ impl SecureDiscovery {
         );
 
         // Then send local writer crypto tokens to the remote reader
-        let res = sec_plugins
-          .create_local_writer_crypto_tokens(local_writer_guid, remote_reader_guid)
+        let local_writer_crypto_tokens = self
+          .security_plugins
+          .get_plugins()
+          .create_local_writer_crypto_tokens(local_writer_guid, remote_reader_guid); // Release lock
+        let res = local_writer_crypto_tokens
           // Map crypto tokens to vector of data holders
           .map(|crypto_token_vec| {
             crypto_token_vec
               .iter()
-              .map(|ctoken| ctoken.data_holder.clone())
+              .map(|crypto_token| crypto_token.data_holder.clone())
               .collect::<Vec<_>>()
           })
           // Create a GenericParticipantMessage
-          .map(|dataholders| {
+          .map(|data_holders| {
             self.generic_message_helper.new_message(
               GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS, // Message id
               key_exchange_writer.guid(),
@@ -1403,26 +1430,24 @@ impl SecureDiscovery {
               None,              // No related message
               remote_guid_prefix,
               remote_reader_guid, // Destination endpoint guid is the remote reader
-              dataholders,
+              data_holders,
             )
           })
           // Create the volatile message
           .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
-          .map(|vol_msg| {
+          .and_then(|vol_msg| {
             let opts = WriteOptionsBuilder::new()
               .to_single_reader(GUID::new(
                 remote_guid_prefix,
                 EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
               ))
               .build();
-            match key_exchange_writer.write_with_options(vol_msg, opts) {
-              Ok(_) => Ok(()),
-              Err(write_err) => Err(security_error(&format!(
-                "DataWriter write operation failed: {}",
-                write_err
-              ))),
-            }
+            key_exchange_writer
+              .write_with_options(vol_msg, opts)
+              .map_err(|write_err| {
+                security_error(&format!("DataWriter write operation failed: {}", write_err))
+              })
           });
 
         if let Err(e) = res {
@@ -1449,8 +1474,10 @@ impl SecureDiscovery {
         let local_reader_guid = self.local_participant_guid.from_prefix(*reader_eid);
 
         // First register remote writer
-        if let Err(e) =
-          sec_plugins.register_matched_remote_writer(remote_writer_guid, local_reader_guid)
+        if let Err(e) = self
+          .security_plugins
+          .get_plugins()
+          .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
         {
           security_error!(
             "Failed to register remote built-in writer {:?} to crypto plugin: {}",
@@ -1466,17 +1493,20 @@ impl SecureDiscovery {
         }
 
         // Then send local reader crypto tokens to the remote writer
-        let res = sec_plugins
-          .create_local_reader_crypto_tokens(local_reader_guid, remote_writer_guid)
+        let local_reader_crypto_tokens = self
+          .security_plugins
+          .get_plugins()
+          .create_local_reader_crypto_tokens(local_reader_guid, remote_writer_guid); // Release lock
+        let res = local_reader_crypto_tokens
           // Map crypto tokens to vector of data holders
           .map(|crypto_token_vec| {
             crypto_token_vec
               .iter()
-              .map(|ctoken| ctoken.data_holder.clone())
+              .map(|crypto_token| crypto_token.data_holder.clone())
               .collect::<Vec<_>>()
           })
           // Create a GenericParticipantMessage
-          .map(|dataholders| {
+          .map(|data_holders| {
             self.generic_message_helper.new_message(
               GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS, // Message id
               key_exchange_writer.guid(),
@@ -1484,26 +1514,24 @@ impl SecureDiscovery {
               None,              // No related message
               remote_guid_prefix,
               remote_writer_guid, // Destination endpoint guid is the remote writer
-              dataholders,
+              data_holders,
             )
           })
           // Create the volatile message
           .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
-          .map(|vol_msg| {
+          .and_then(|vol_msg| {
             let opts = WriteOptionsBuilder::new()
               .to_single_reader(GUID::new(
                 remote_guid_prefix,
                 EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
               ))
               .build();
-            match key_exchange_writer.write_with_options(vol_msg, opts) {
-              Ok(_) => Ok(()),
-              Err(write_err) => Err(security_error(&format!(
-                "DataWriter write operation failed: {}",
-                write_err
-              ))),
-            }
+            key_exchange_writer
+              .write_with_options(vol_msg, opts)
+              .map_err(|write_err| {
+                security_error(&format!("DataWriter write operation failed: {}", write_err))
+              })
           });
 
         if let Err(e) = res {
