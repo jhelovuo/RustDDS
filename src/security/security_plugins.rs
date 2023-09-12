@@ -747,6 +747,10 @@ impl SecurityPlugins {
       return Ok((serialized_payload, ParameterList::new()));
     }
 
+    if self.payload_not_protected(sending_datawriter_guid) {
+      return Ok((serialized_payload, ParameterList::new()));
+    }
+
     self.crypto.encode_serialized_payload(
       serialized_payload,
       self.get_local_endpoint_crypto_handle(sending_datawriter_guid)?,
@@ -761,6 +765,10 @@ impl SecurityPlugins {
   ) -> SecurityResult<EncodedSubmessage> {
     // TODO remove after testing, skips encoding
     if self.test_disable_crypto_transform {
+      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+    }
+
+    if self.submessage_not_protected(source_guid) {
       return Ok(EncodedSubmessage::Unencoded(plain_submessage));
     }
 
@@ -791,6 +799,10 @@ impl SecurityPlugins {
       return Ok(EncodedSubmessage::Unencoded(plain_submessage));
     }
 
+    if self.submessage_not_protected(source_guid) {
+      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+    }
+
     // Convert the destination GUIDs to crypto handles
     let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
       SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
@@ -815,6 +827,10 @@ impl SecurityPlugins {
   ) -> SecurityResult<Message> {
     // TODO remove after testing, skips encoding
     if self.test_disable_crypto_transform {
+      return Ok(plain_message);
+    }
+
+    if self.rtps_not_protected(source_guid_prefix) {
       return Ok(plain_message);
     }
 
