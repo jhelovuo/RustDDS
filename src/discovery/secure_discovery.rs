@@ -11,7 +11,7 @@ use crate::{
   dds::{
     no_key,
     participant::DomainParticipantWeak,
-    with_key::{DataSample, Sample},
+    with_key::{DataSample, Sample, WriteOptionsBuilder},
   },
   qos, rpc,
   rtps::constant::{
@@ -1401,12 +1401,17 @@ impl SecureDiscovery {
           // Create the volatile message
           .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
-          .map(|vol_msg| match key_exchange_writer.write(vol_msg, None) {
-            Ok(()) => Ok(()),
-            Err(write_err) => Err(security_error(&format!(
-              "DataWriter write operation failed: {}",
-              write_err
-            ))),
+          .map(|vol_msg| {
+              let opts = WriteOptionsBuilder::new()
+                .to_single_reader(GUID::new(remote_guid_prefix, EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER))
+                .build();
+              match key_exchange_writer.write_with_options(vol_msg, opts) {
+              Ok(_) => Ok(()),
+              Err(write_err) => Err(security_error(&format!(
+                "DataWriter write operation failed: {}",
+                write_err
+              )))
+            }
           });
 
         if let Err(e) = res {
@@ -1474,13 +1479,18 @@ impl SecureDiscovery {
           // Create the volatile message
           .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
-          .map(|vol_msg| match key_exchange_writer.write(vol_msg, None) {
-            Ok(()) => Ok(()),
-            Err(write_err) => Err(security_error(&format!(
-              "DataWriter write operation failed: {}",
-              write_err
-            ))),
-          });
+          .map(|vol_msg| {
+              let opts = WriteOptionsBuilder::new()
+                .to_single_reader(GUID::new(remote_guid_prefix, EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER))
+                .build();
+              match key_exchange_writer.write_with_options(vol_msg, opts) {
+                Ok(_) => Ok(()),
+                Err(write_err) => Err(security_error(&format!(
+                  "DataWriter write operation failed: {}",
+                  write_err
+                )))
+              }
+            });
 
         if let Err(e) = res {
           security_error!(
