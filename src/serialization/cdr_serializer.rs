@@ -166,7 +166,7 @@ where
     if modulo != 0 {
       let padding_need: usize = alignment - modulo;
       for _x in 0..padding_need {
-        self.writer.write_u8(0xBB)?;
+        self.writer.write_u8(0)?;
       }
     }
     Ok(())

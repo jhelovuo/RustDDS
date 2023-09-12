@@ -125,7 +125,7 @@ pub(crate) fn write_pad<C: Context, T: ?Sized + Writer<C>>(
   let m = previous_length % align;
   if m > 0 {
     for _ in 0..(align - m) {
-      writer.write_u8(0xCC)?; // Write pad as 0xCC for easy recognition
+      writer.write_u8(0)?;
     }
   }
   Ok(())
