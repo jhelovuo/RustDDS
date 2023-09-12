@@ -4,6 +4,9 @@ use std::{
   sync::{Arc, Mutex, MutexGuard},
 };
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use crate::{
   messages::submessages::{
     elements::parameter_list::ParameterList,
@@ -938,11 +941,24 @@ impl SecurityPluginsHandle {
   }
 
   pub(crate) fn get_plugins(&self) -> MutexGuard<SecurityPlugins> {
-    self.lock().unwrap_or_else(|e| {
-      security_error!("Security plugins are poisoned! {}", e);
-      panic!("Security plugins are poisoned!");
-    })
-  }
+    let mut count = 0;
+    loop {
+      match self.try_lock() {
+        Ok(guard) => return guard,
+        Err(std::sync::TryLockError::WouldBlock) => {
+          if count > 10 {
+            error!("I need my lock!! {count:?}");
+          }
+          count += 1;
+          std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        Err(poisoned) => {
+          security_error!("Security plugins are poisoned! {poisoned:?}");
+          panic!("Security plugins are poisoned!");
+        }
+      }
+    } // loop
+  } // fn 
 }
 
 impl fmt::Debug for SecurityPluginsHandle {
