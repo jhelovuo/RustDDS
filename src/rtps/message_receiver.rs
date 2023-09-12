@@ -275,10 +275,7 @@ impl MessageReceiver {
         match submessage.body {
           SubmessageBody::Interpreter(m) => self.handle_interpreter_submessage(m),
           SubmessageBody::Writer(submessage) => {
-            let security_plugins_option = self.security_plugins.clone();
-            let security_plugins_option = security_plugins_option
-              .as_ref()
-              .map(SecurityPluginsHandle::get_plugins);
+            let security_plugins_clone = self.security_plugins.clone();
             let receiver_entity_id = submessage.receiver_entity_id();
 
             // For writer submessages, if the receiver entity ID is unknown, we have to try
@@ -305,33 +302,33 @@ impl MessageReceiver {
                 })
                 .map(Reader::entity_id).collect();
 
-              match security_plugins_option {
+              match security_plugins_clone {
                 None => {
                   for target_entity_id in available_target_entity_ids {
                     self.handle_writer_submessage(target_entity_id, submessage.clone());
                   }
                 }
-                Some(security_plugins) => {
+                Some(plugins_handle) => {
                   for target_entity_id in available_target_entity_ids {
                     let destination_guid = GUID {
                       prefix: self.dest_guid_prefix,
                       entity_id: target_entity_id,
                     };
-                    if security_plugins.submessage_not_protected(&destination_guid) {
+                    if plugins_handle.get_plugins().submessage_not_protected(&destination_guid) {
                       self.handle_writer_submessage(target_entity_id, submessage.clone());
                     }
                   }
                 }
               }
             } else {
-              match security_plugins_option {
+              match security_plugins_clone {
                 None => self.handle_writer_submessage(receiver_entity_id, submessage),
-                Some(security_plugins) => {
+                Some(plugins_handle) => {
                   let destination_guid = GUID {
                     prefix: self.dest_guid_prefix,
                     entity_id: receiver_entity_id,
                   };
-                  if security_plugins.submessage_not_protected(&destination_guid) {
+                  if plugins_handle.get_plugins().submessage_not_protected(&destination_guid) {
                     self.handle_writer_submessage(receiver_entity_id, submessage);
                   } else {
                     error!(
