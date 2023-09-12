@@ -931,12 +931,14 @@ impl SecurityPlugins {
 #[derive(Clone)]
 pub(crate) struct SecurityPluginsHandle {
   inner: Arc<Mutex<SecurityPlugins>>,
+  who_has_it: Arc<Mutex<Option<String>>>,
 }
 
 impl SecurityPluginsHandle {
   pub(crate) fn new(s: SecurityPlugins) -> Self {
     Self {
       inner: Arc::new(Mutex::new(s)),
+      who_has_it: Arc::new(Mutex::new(None)),
     }
   }
 
@@ -944,10 +946,13 @@ impl SecurityPluginsHandle {
     let mut count = 0;
     loop {
       match self.try_lock() {
-        Ok(guard) => return guard,
+        Ok(guard) => {
+          *self.who_has_it.lock().unwrap() = std::thread::current().name().map(|s| s.to_owned());
+          return guard
+        },
         Err(std::sync::TryLockError::WouldBlock) => {
           if count > 10 {
-            error!("I need my lock!! {count:?}");
+            error!("I need my lock!! {:?} Looks like {:?} has it.", count, self.who_has_it.lock().unwrap());
           }
           count += 1;
           std::thread::sleep(std::time::Duration::from_millis(100));
