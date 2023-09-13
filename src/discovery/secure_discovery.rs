@@ -87,7 +87,6 @@ pub(crate) struct SecureDiscovery {
   pub local_dp_property_qos: qos::policy::Property,
   pub local_dp_sec_attributes: ParticipantSecurityAttributes,
 
-  stateless_message_helper: ParticipantStatelessMessageHelper,
   generic_message_helper: ParticipantGenericMessageHelper,
   // SecureDiscovery maintains states of handshake with remote participants.
   // We use the same states as the built-in authentication plugin, since
@@ -173,7 +172,6 @@ impl SecureDiscovery {
       local_dp_permissions_token: permissions_token,
       local_dp_property_qos: property_qos,
       local_dp_sec_attributes: security_attributes,
-      stateless_message_helper: ParticipantStatelessMessageHelper::new(),
       generic_message_helper: ParticipantGenericMessageHelper::new(),
       handshake_states: HashMap::new(),
       stored_authentication_messages: HashMap::new(),
@@ -582,11 +580,10 @@ impl SecureDiscovery {
     }
 
     // Create the request message with the request token
-    let request_message = self.stateless_message_helper.new_message(
-      self.local_participant_guid,
-      None,
-      remote_guid_prefix,
+    let request_message = self.new_stateless_message(
       GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+      remote_guid_prefix,
+      None,
       request_token,
     );
     Ok(request_message)
@@ -797,20 +794,20 @@ impl SecureDiscovery {
       };
 
     // Now call the security functionality
-    match self.security_plugins.get_plugins().begin_handshake_reply(
+    let result = self.security_plugins.get_plugins().begin_handshake_reply(
       local_guid_prefix,
       remote_guid_prefix,
       handshake_token,
       my_serialized_data,
-    ) {
+    );
+    match result {
       Ok((ValidationOutcome::PendingHandshakeMessage, reply_token)) => {
         // Request token was OK and we got a reply token to send back
         // Create a ParticipantStatelessMessage with the token
-        let reply_message = self.stateless_message_helper.new_message(
-          self.local_participant_guid,
-          Some(received_message),
-          remote_guid_prefix,
+        let reply_message = self.new_stateless_message(
           GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+          remote_guid_prefix,
+          Some(received_message),
           reply_token,
         );
 
@@ -906,11 +903,10 @@ impl SecureDiscovery {
       Ok((ValidationOutcome::OkFinalMessage, Some(final_message_token))) => {
         // Everything went OK. Still need to send the final message to remote.
         // Create a ParticipantStatelessMessage with the token
-        let final_message = self.stateless_message_helper.new_message(
-          self.local_participant_guid,
-          Some(received_message),
-          remote_guid_prefix,
+        let final_message = self.new_stateless_message(
           GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+          remote_guid_prefix,
+          Some(received_message),
           final_message_token,
         );
 
@@ -1349,27 +1345,16 @@ impl SecureDiscovery {
         remote_guid_prefix,
       ); // Release lock
     let res = local_participant_crypto_tokens
-      // Map to vector of data holders
-      .map(|crypto_token_vec| {
-        crypto_token_vec
-          .iter()
-          .map(|crypto_token| crypto_token.data_holder.clone())
-          .collect::<Vec<_>>()
-      })
-      // Create a GenericParticipantMessage
-      .map(|data_holders| {
-        self.generic_message_helper.new_message(
-          GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS, // Message id
+      .map(|crypto_tokens| {
+        self.new_volatile_message(
+          GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS,
           key_exchange_writer.guid(),
-          GUID::GUID_UNKNOWN, // No source endpoint guid
-          None,               // No related message
+          GUID::GUID_UNKNOWN, // No source endpoint, just the participant
           remote_guid_prefix,
-          GUID::GUID_UNKNOWN, // No destination endpoint guid
-          data_holders,
+          GUID::GUID_UNKNOWN, // No destination endpoint, just the participant
+          crypto_tokens.as_ref(),
         )
       })
-      // Create the volatile message
-      .map(ParticipantVolatileMessageSecure::from)
       // Send with writer
       .and_then(|vol_msg| {
         let opts = WriteOptionsBuilder::new()
@@ -1427,27 +1412,16 @@ impl SecureDiscovery {
           .get_plugins()
           .create_local_writer_crypto_tokens(local_writer_guid, remote_reader_guid); // Release lock
         let res = local_writer_crypto_tokens
-          // Map crypto tokens to vector of data holders
-          .map(|crypto_token_vec| {
-            crypto_token_vec
-              .iter()
-              .map(|crypto_token| crypto_token.data_holder.clone())
-              .collect::<Vec<_>>()
-          })
-          // Create a GenericParticipantMessage
-          .map(|data_holders| {
-            self.generic_message_helper.new_message(
-              GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS, // Message id
+          .map(|crypto_tokens| {
+            self.new_volatile_message(
+              GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS,
               key_exchange_writer.guid(),
-              local_writer_guid, // Source endpoint guid is our writer
-              None,              // No related message
+              local_writer_guid,
               remote_guid_prefix,
-              remote_reader_guid, // Destination endpoint guid is the remote reader
-              data_holders,
+              remote_reader_guid,
+              crypto_tokens.as_ref(),
             )
           })
-          // Create the volatile message
-          .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
           .and_then(|vol_msg| {
             let opts = WriteOptionsBuilder::new()
@@ -1511,27 +1485,16 @@ impl SecureDiscovery {
           .get_plugins()
           .create_local_reader_crypto_tokens(local_reader_guid, remote_writer_guid); // Release lock
         let res = local_reader_crypto_tokens
-          // Map crypto tokens to vector of data holders
-          .map(|crypto_token_vec| {
-            crypto_token_vec
-              .iter()
-              .map(|crypto_token| crypto_token.data_holder.clone())
-              .collect::<Vec<_>>()
-          })
-          // Create a GenericParticipantMessage
-          .map(|data_holders| {
-            self.generic_message_helper.new_message(
-              GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS, // Message id
+          .map(|crypto_tokens| {
+            self.new_volatile_message(
+              GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS,
               key_exchange_writer.guid(),
-              local_reader_guid, // Source endpoint guid is our reader
-              None,              // No related message
+              local_reader_guid,
               remote_guid_prefix,
-              remote_writer_guid, // Destination endpoint guid is the remote writer
-              data_holders,
+              remote_writer_guid,
+              crypto_tokens.as_ref(),
             )
           })
-          // Create the volatile message
-          .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
           .and_then(|vol_msg| {
             let opts = WriteOptionsBuilder::new()
@@ -1659,6 +1622,53 @@ impl SecureDiscovery {
 
     Ok(my_ser_data.to_vec())
   }
+
+  // Create a message for the DCPSParticipantStatelessMessage builtin Topic
+  fn new_stateless_message(
+    &mut self,
+    message_class_id: &str,
+    destination_guid_prefix: GuidPrefix,
+    related_message_opt: Option<&ParticipantStatelessMessage>,
+    handshake_token: HandshakeMessageToken,
+  ) -> ParticipantStatelessMessage {
+    let generic_message = self.generic_message_helper.new_message(
+      message_class_id,
+      self.local_participant_guid, // Writer guid for message identity
+      GUID::GUID_UNKNOWN,          // Do not specify source endpoint guid
+      related_message_opt.map(|msg| &msg.generic),
+      destination_guid_prefix,
+      GUID::GUID_UNKNOWN, // Do not specify destination endpoint guid
+      vec![handshake_token.data_holder],
+    );
+
+    ParticipantStatelessMessage::from(generic_message)
+  }
+
+  // Create a message for the DCPSParticipantVolatileMessageSecure builtin Topic
+  fn new_volatile_message(
+    &mut self,
+    message_class_id: &str,
+    volatile_writer_guid: GUID,
+    source_endpoint_guid: GUID,
+    destination_guid_prefix: GuidPrefix,
+    destination_endpoint_guid: GUID,
+    crypto_tokens: &[CryptoToken],
+  ) -> ParticipantVolatileMessageSecure {
+    let generic_message = self.generic_message_helper.new_message(
+      message_class_id,
+      volatile_writer_guid,
+      source_endpoint_guid,
+      None, // No related message
+      destination_guid_prefix,
+      destination_endpoint_guid,
+      crypto_tokens
+        .iter()
+        .map(|token| token.data_holder.clone())
+        .collect(),
+    );
+
+    ParticipantVolatileMessageSecure::from(generic_message)
+  }
 }
 
 fn send_discovery_notification(
@@ -1690,71 +1700,8 @@ fn get_handshake_token_from_stateless_message(
     .map(|data_holder| HandshakeMessageToken::from(data_holder.clone()))
 }
 
-// A helper to construct/readParticipantStatelessMessages. Takes care of the
-// sequence numbering of the messages
-struct ParticipantStatelessMessageHelper {
-  next_seqnum: SequenceNumber,
-}
-
-impl ParticipantStatelessMessageHelper {
-  pub fn new() -> Self {
-    Self {
-      next_seqnum: SequenceNumber::new(1), /* Sequence numbering starts at 1 (see section 7.4.3.3
-                                            * 'Contents of the ParticipantStatelessMessage' of
-                                            * Security spec) */
-    }
-  }
-
-  pub fn new_message(
-    &mut self,
-    local_participant_guid: GUID,
-    related_message_opt: Option<&ParticipantStatelessMessage>,
-    destination_guid_prefix: GuidPrefix,
-    message_class_id: &str,
-    handshake_token: HandshakeMessageToken,
-  ) -> ParticipantStatelessMessage {
-    // See Section 7.4.3.3 Contents of the ParticipantStatelessMessage of the
-    // Security specification
-
-    let message_identity = rpc::SampleIdentity {
-      writer_guid: local_participant_guid
-        .from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER),
-      sequence_number: self.next_seqnum,
-    };
-
-    let related_message_identity = if let Some(msg) = related_message_opt {
-      msg.generic.message_identity
-    } else {
-      rpc::SampleIdentity {
-        writer_guid: GUID::GUID_UNKNOWN,
-        sequence_number: SequenceNumber::zero(),
-      }
-    };
-
-    // Make sure destination GUID has correct EntityId
-    let destination_participant_guid = GUID::new(destination_guid_prefix, EntityId::PARTICIPANT);
-
-    // Increment next sequence number
-    self.next_seqnum = self.next_seqnum + SequenceNumber::new(1);
-
-    let generic = ParticipantGenericMessage {
-      message_identity,
-      related_message_identity,
-      destination_participant_guid,
-      destination_endpoint_guid: GUID::GUID_UNKNOWN,
-      source_endpoint_guid: GUID::GUID_UNKNOWN,
-      message_class_id: message_class_id.to_string(),
-      message_data: vec![handshake_token.data_holder],
-    };
-
-    ParticipantStatelessMessage { generic }
-  }
-}
-
-// A helper to construct/readParticipantStatelessMessages. Takes care of the
-// sequence numbering of the messages
-// TODO: use this also with ParticipantStatelessMessages, i.e. get rid of
-// ParticipantStatelessMessageHelper
+// A helper to construct ParticipantGenericMessages. Takes care of
+// sequence numbering the messages
 struct ParticipantGenericMessageHelper {
   next_seqnum: SequenceNumber,
 }
