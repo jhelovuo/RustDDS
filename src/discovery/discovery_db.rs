@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, time::Instant};
+use std::{
+  collections::BTreeMap,
+  sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+  time::Instant,
+};
 
 use chrono::Utc;
 #[allow(unused_imports)]
@@ -85,6 +89,24 @@ fn move_by_guid_prefix<D>(
   let to_move: Vec<GUID> = from.range(guid_prefix.range()).map(|(g, _)| *g).collect();
   for guid in to_move {
     from.remove(&guid).map(|d| to.insert(guid, d));
+  }
+}
+
+pub(crate) fn discovery_db_read(
+  discovery_db: &Arc<RwLock<DiscoveryDB>>,
+) -> RwLockReadGuard<DiscoveryDB> {
+  match discovery_db.read() {
+    Ok(db) => db,
+    Err(e) => panic!("DiscoveryDB is poisoned {:?}.", e),
+  }
+}
+
+pub(crate) fn discovery_db_write(
+  discovery_db: &Arc<RwLock<DiscoveryDB>>,
+) -> RwLockWriteGuard<DiscoveryDB> {
+  match discovery_db.write() {
+    Ok(db) => db,
+    Err(e) => panic!("DiscoveryDB is poisoned {:?}.", e),
   }
 }
 

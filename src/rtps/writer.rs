@@ -35,8 +35,7 @@ use crate::{
     rtps_reader_proxy::RtpsReaderProxy,
     Message, MessageBuilder, Submessage,
   },
-  security::{security_plugins::SecurityPluginsHandle, SecurityError, SecurityResult},
-  security_error,
+  security::{security_plugins::SecurityPluginsHandle, SecurityResult},
   structure::{
     cache_change::CacheChange,
     dds_cache::TopicCache,
@@ -186,11 +185,11 @@ pub(crate) struct Writer {
   udp_sender: Rc<UDPSender>,
 
   // By default, this writer is a StatefulWriter (see RTPS spec section 8.4.9)
-  // If like_stateless is true, then the writer mimics the behaviour of a Best-Effort
-  // StatelessWriter. This behaviour is needed only for a single built-in discovery topic of
+  // If like_stateless is true, then the writer mimics the behavior of a Best-Effort
+  // StatelessWriter. This behavior is needed only for a single built-in discovery topic of
   // Secure DDS (topic DCPSParticipantStatelessMessage).
   // The basic idea in mimicking BestEffort & Stateless is:
-  //  1. Make sure no heartbeats, acknacks, or anything related to Reliable behaviour is processed
+  //  1. Make sure no heartbeats, acknacks, or anything related to Reliable behavior is processed
   //  2. Use the RtpsReaderProxies merely as locators, do not utilize/modify their state
   // Note that unlike the Best-Effort StatelessWriter in the specification, here we don't send
   // GAP messages. But this shouldn't matter since the expected remote Reader is also BestEffort &
@@ -264,7 +263,7 @@ impl Writer {
       );
     }
 
-    // If writer should behave statelessly, only BestEffor QoS is currently
+    // If writer should behave statelessly, only BestEffort QoS is currently
     // supported
     if i.like_stateless && i.qos_policies.is_reliable() {
       panic!("Attempted to create a stateless-like Writer with other than BestEffort reliability");
@@ -512,11 +511,14 @@ impl Writer {
           // Check if this is for single Reader only.
           // If so, insert GAP for others.
           // And additionally send any pending gap for the single reader.
+          let mut to_single_reader = false;
           if let Some(single_reader) = write_options.to_single_reader() {
+            to_single_reader = true;
             let writer_entity_id = self.entity_id();
             for (reader_guid, reader_proxy) in self.readers.iter_mut() {
               if *reader_guid == single_reader {
                 if !reader_proxy.get_pending_gap().is_empty() {
+                  info!("Insert GAP to single reader message");
                   message_builder = message_builder.gap_msg(
                     reader_proxy.get_pending_gap(),
                     writer_entity_id,
@@ -545,10 +547,14 @@ impl Writer {
                   message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
                 }
                 // TODO: insert info_destination if sending to single reader
+
+                let reader_entity_id = write_options
+                  .to_single_reader()
+                  .map_or(EntityId::UNKNOWN, |g| g.entity_id);
                 message_builder = message_builder.data_msg(
                   cache_change,
-                  EntityId::UNKNOWN, // reader
-                  self.my_guid,      // writer
+                  reader_entity_id,
+                  self.my_guid, // writer
                   self.endianness,
                   self.security_plugins.as_ref(),
                 );
@@ -581,7 +587,11 @@ impl Writer {
             }
 
             let data_hb_message = message_builder.add_header_and_build(self.my_guid.prefix);
-
+            // debug
+            if to_single_reader {
+              debug!("Single reader send: {data_hb_message:?}");
+            }
+            // end debug
             self.send_message_to_readers(
               DeliveryMode::Multicast,
               data_hb_message,
@@ -677,7 +687,7 @@ impl Writer {
             // all acked already: try to signal app waiting at DataWriter
             let _ = all_acked.try_send(());
             // but we ignore any failure to signal, if no-one is listening
-            // since that is normal. They may have timeouted and stopped waiting.
+            // since that is normal. They may have timed out and stopped waiting.
             None
           } else {
             // Someone still needs to ack. Wait for them.
@@ -758,7 +768,7 @@ impl Writer {
     if self.like_stateless {
       info!(
         "Ignoring handling heartbeat tick in a stateless-like Writer, since it currently supports \
-         only BestEffor QoS. topic={:?}",
+         only BestEffort QoS. topic={:?}",
         self.my_topic_name
       );
       return;
@@ -947,7 +957,7 @@ impl Writer {
     if self.like_stateless {
       warn!(
         "Not sending repair data in a stateless-like Writer, since it currently supports only \
-         BestEffor behaviour. topic={:?}",
+         BestEffort behavior. topic={:?}",
         self.my_topic_name
       );
       return;
@@ -974,7 +984,7 @@ impl Writer {
     if self.like_stateless {
       warn!(
         "Not sending repair frags in a stateless-like Writer, since it currently supports only \
-         BestEffor behaviour. topic={:?}",
+         BestEffort behavior. topic={:?}",
         self.my_topic_name
       );
       return;
@@ -1178,7 +1188,7 @@ impl Writer {
   /// This is called repeatedly by handle_cache_cleaning action.
   fn remove_all_acked_changes_but_keep_depth(&mut self, depth: usize) {
     let first_keeper = if !self.like_stateless {
-      // Regular stateful writer behaviour
+      // Regular stateful writer behavior
       // All readers have acked up to this point (SequenceNumber)
       let acked_by_all_readers = self
         .readers
@@ -1193,7 +1203,7 @@ impl Writer {
         self.first_change_sequence_number,
       )
     } else {
-      // Stateless-like writer currently supports only BestEffor behaviour, so here we
+      // Stateless-like writer currently supports only BestEffort behavior, so here we
       // make it explicit that it does not care about acked sequence numbers
       self.first_change_sequence_number
     };
@@ -1235,11 +1245,6 @@ impl Writer {
   ) -> SecurityResult<Message> {
     // If we have security plugins, use them, otherwise pass through
     if let Some(security_plugins_handle) = &self.security_plugins {
-      // Get a MutexGuard for the security plugins
-      let security_plugins = security_plugins_handle.lock().map_err(|e| {
-        security_error!("SecurityPluginHandle poisoned! {e:?}")
-        // TODO: Send signal to exit RTPS thread, as there is no way to recover.
-      })?;
       // Get the source and destination GUIDs
       let source_guid = self.guid();
       let destination_guid_list: Vec<GUID> = readers
@@ -1253,7 +1258,8 @@ impl Writer {
 
       // Encode submessages
       SecurityResult::<Vec<Vec<Submessage>>>::from_iter(submessages.iter().map(|submessage| {
-        security_plugins
+        security_plugins_handle
+          .get_plugins()
           .encode_datawriter_submessage(submessage.clone(), &source_guid, &destination_guid_list)
           // Convert each encoding output to a Vec of 1 or 3 submessages
           .map(Vec::from)
@@ -1272,7 +1278,11 @@ impl Writer {
           .map(|guid| guid.prefix)
           .collect();
         // Encode message
-        security_plugins.encode_message(message, &source_guid_prefix, &destination_guid_prefix_list)
+        security_plugins_handle.get_plugins().encode_message(
+          message,
+          &source_guid_prefix,
+          &destination_guid_prefix_list,
+        )
       })
     } else {
       Ok(message)

@@ -1,6 +1,6 @@
 use std::{
   collections::HashMap,
-  sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+  sync::{Arc, RwLock},
   time::{Duration as StdDuration, Instant},
 };
 
@@ -24,7 +24,7 @@ use crate::{
     result::{CreateError, CreateResult},
   },
   discovery::{
-    discovery_db::{DiscoveredVia, DiscoveryDB},
+    discovery_db::{discovery_db_read, discovery_db_write, DiscoveredVia, DiscoveryDB},
     secure_discovery::SecureDiscovery,
     sedp_messages::{
       DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, Endpoint_GUID,
@@ -664,7 +664,7 @@ impl Discovery {
                 DiscoveryCommand::StopDiscovery => {
                   info!("Stopping Discovery");
                   // disposing readers
-                  let db = self.discovery_db_read();
+                  let db = discovery_db_read(&self.discovery_db);
                   for reader in db.get_all_local_topic_readers() {
                     self
                       .dcps_subscription
@@ -699,13 +699,7 @@ impl Discovery {
                     .dispose(&Endpoint_GUID(guid), None)
                     .unwrap_or_else(|e| error!("Disposing local Writer: {e:?}"));
 
-                  match self.discovery_db.write() {
-                    Ok(mut db) => db.remove_local_topic_writer(guid),
-                    Err(e) => {
-                      error!("DiscoveryDB is poisoned. {e:?}");
-                      return;
-                    }
-                  }
+                  discovery_db_write(&self.discovery_db).remove_local_topic_writer(guid);
                 }
                 DiscoveryCommand::RemoveLocalReader { guid } => {
                   if guid == self.dcps_subscription.writer.guid() {
@@ -718,13 +712,7 @@ impl Discovery {
                     .dispose(&Endpoint_GUID(guid), None)
                     .unwrap_or_else(|e| error!("Disposing local Reader: {e:?}"));
 
-                  match self.discovery_db.write() {
-                    Ok(mut db) => db.remove_local_topic_reader(guid),
-                    Err(e) => {
-                      error!("DiscoveryDB is poisoned. {e:?}");
-                      return;
-                    }
-                  }
+                  discovery_db_write(&self.discovery_db).remove_local_topic_reader(guid);
                 }
                 DiscoveryCommand::ManualAssertLiveliness => {
                   self.liveliness_state.last_manual_participant_update = Timestamp::now();
@@ -849,13 +837,7 @@ impl Discovery {
           }
           SPDP_LIVENESS_TOKEN => {
             while let Ok(guid_prefix) = self.spdp_liveness_receiver.try_recv() {
-              match self.discovery_db.write() {
-                Ok(mut db) => db.participant_is_alive(guid_prefix),
-                Err(e) => {
-                  error!("DiscoveryDB is poisoned. {e:?}");
-                  return;
-                }
-              }
+              discovery_db_write(&self.discovery_db).participant_is_alive(guid_prefix);
             }
           }
           P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN => {
@@ -906,9 +888,7 @@ impl Discovery {
 
     // Initialize our own participant data into the Discovery DB, so we can talk to
     // ourself.
-    self
-      .discovery_db_write()
-      .update_participant(&participant_data);
+    discovery_db_write(&self.discovery_db).update_participant(&participant_data);
 
     // This will read the participant from Discovery DB and construct
     // ReaderProxy and WriterProxy objects for built-in Readers and Writers
@@ -1025,9 +1005,8 @@ impl Discovery {
                   "handle_participant_reader discovered {:?}",
                   &participant_data
                 );
-                let was_new = self
-                  .discovery_db_write()
-                  .update_participant(&participant_data);
+                let was_new =
+                  discovery_db_write(&self.discovery_db).update_participant(&participant_data);
                 let guid_prefix = participant_data.participant_guid.prefix;
                 self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated {
                   guid_prefix,
@@ -1045,8 +1024,7 @@ impl Discovery {
               }
               // Sample::Dispose means that DomainParticipant was disposed
               Sample::Dispose(participant_guid) => {
-                self
-                  .discovery_db_write()
+                discovery_db_write(&self.discovery_db)
                   .remove_participant(participant_guid.0.prefix, true); // true = actively removed
                 self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
                   guid_prefix: participant_guid.0.prefix,
@@ -1092,7 +1070,7 @@ impl Discovery {
     for d in drds {
       match d {
         Sample::Value(d) => {
-          let drd = self.discovery_db_write().update_subscription(&d);
+          let drd = discovery_db_write(&self.discovery_db).update_subscription(&d);
           debug!(
             "handle_subscription_reader - send_discovery_notification ReaderUpdated  {:?}",
             &drd
@@ -1110,7 +1088,7 @@ impl Discovery {
         }
         Sample::Dispose(reader_key) => {
           info!("Dispose Reader {:?}", reader_key);
-          self.discovery_db_write().remove_topic_reader(reader_key);
+          discovery_db_write(&self.discovery_db).remove_topic_reader(reader_key);
           self.send_discovery_notification(DiscoveryNotificationType::ReaderLost {
             reader_guid: reader_key,
           });
@@ -1148,14 +1126,15 @@ impl Discovery {
       match d {
         Sample::Value(dwd) => {
           trace!("handle_publication_reader discovered {:?}", &dwd);
-          let discovered_writer_data = self.discovery_db_write().update_publication(&dwd);
+          let discovered_writer_data =
+            discovery_db_write(&self.discovery_db).update_publication(&dwd);
           self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
             discovered_writer_data,
           });
           debug!("Discovered Writer {:?}", &dwd);
         }
         Sample::Dispose(writer_key) => {
-          self.discovery_db_write().remove_topic_writer(writer_key);
+          discovery_db_write(&self.discovery_db).remove_topic_writer(writer_key);
           self.send_discovery_notification(DiscoveryNotificationType::WriterLost {
             writer_guid: writer_key,
           });
@@ -1195,17 +1174,18 @@ impl Discovery {
       match t {
         Sample::Value((topic_data, writer)) => {
           debug!("handle_topic_reader discovered {:?}", &topic_data);
-          self
-            .discovery_db_write()
-            .update_topic_data(&topic_data, writer, DiscoveredVia::Topic);
+          discovery_db_write(&self.discovery_db).update_topic_data(
+            &topic_data,
+            writer,
+            DiscoveredVia::Topic,
+          );
           // Now check if we know any readers of writers to this topic. The topic QoS
           // could cause these to became viable matches against local
           // writers/readers. This is because at least RTI Connext sends QoS
           // policies on a Topic, and then (apparently) assumes that its
           // readers/writers inherit those policies unless specified otherwise.
 
-          let writers = self
-            .discovery_db_read()
+          let writers = discovery_db_read(&self.discovery_db)
             .writers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
           debug!("writers {:?}", &writers);
           for discovered_writer_data in writers {
@@ -1214,8 +1194,7 @@ impl Discovery {
             });
           }
 
-          let readers = self
-            .discovery_db_read()
+          let readers = discovery_db_read(&self.discovery_db)
             .readers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
           for discovered_reader_data in readers {
             self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
@@ -1255,7 +1234,7 @@ impl Discovery {
       None => return,
     };
 
-    let mut db = self.discovery_db_write();
+    let mut db = discovery_db_write(&self.discovery_db);
     for msg in msgs.into_iter() {
       db.update_lease_duration(&msg);
     }
@@ -1263,8 +1242,7 @@ impl Discovery {
 
   // TODO: Explain what happens here and by what logic
   pub fn write_participant_message(&mut self) {
-    let writer_liveliness: Vec<Liveliness> = self
-      .discovery_db_read()
+    let writer_liveliness: Vec<Liveliness> = discovery_db_read(&self.discovery_db)
       .get_all_local_topic_writers()
       .filter_map(|p| {
         let liveliness = match p.publication_topic_data.liveliness {
@@ -1419,7 +1397,7 @@ impl Discovery {
   }
 
   pub fn participant_cleanup(&self) {
-    let removed_guid_prefixes = self.discovery_db_write().participant_cleanup();
+    let removed_guid_prefixes = discovery_db_write(&self.discovery_db).participant_cleanup();
     for guid_prefix in removed_guid_prefixes {
       debug!("participant cleanup - timeout for {:?}", guid_prefix);
       self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost { guid_prefix });
@@ -1427,11 +1405,11 @@ impl Discovery {
   }
 
   pub fn topic_cleanup(&self) {
-    self.discovery_db_write().topic_cleanup();
+    discovery_db_write(&self.discovery_db).topic_cleanup();
   }
 
   pub fn write_readers_info(&self) {
-    let db = self.discovery_db_read();
+    let db = discovery_db_read(&self.discovery_db);
     let local_user_readers = db.get_all_local_topic_readers().filter(|p| {
       p.reader_proxy
         .remote_reader_guid
@@ -1452,7 +1430,7 @@ impl Discovery {
   }
 
   pub fn write_writers_info(&self) {
-    let db = self.discovery_db_read();
+    let db = discovery_db_read(&self.discovery_db);
     let local_user_writers = db.get_all_local_topic_writers().filter(|p| {
       p.writer_proxy
         .remote_writer_guid
@@ -1477,7 +1455,7 @@ impl Discovery {
   }
 
   pub fn write_topic_info(&self) {
-    let db = self.discovery_db_read();
+    let db = discovery_db_read(&self.discovery_db);
     let datas = db.local_user_topics();
     for data in datas {
       if let Err(e) = self.dcps_topic.writer.write(data.clone(), None) {
@@ -1550,20 +1528,6 @@ impl Discovery {
       .reliability(Reliability::BestEffort)
       .history(History::KeepLast { depth: 1 })
       .build()
-  }
-
-  fn discovery_db_read(&self) -> RwLockReadGuard<DiscoveryDB> {
-    match self.discovery_db.read() {
-      Ok(db) => db,
-      Err(e) => panic!("DiscoveryDB is poisoned {:?}.", e),
-    }
-  }
-
-  fn discovery_db_write(&self) -> RwLockWriteGuard<DiscoveryDB> {
-    match self.discovery_db.write() {
-      Ok(db) => db,
-      Err(e) => panic!("DiscoveryDB is poisoned {:?}.", e),
-    }
   }
 
   fn send_discovery_notification(&self, dntype: DiscoveryNotificationType) {

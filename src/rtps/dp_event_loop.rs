@@ -13,7 +13,7 @@ use crate::{
   dds::{qos::policy, typedesc::TypeDesc},
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
-    discovery_db::DiscoveryDB,
+    discovery_db::{discovery_db_read, DiscoveryDB},
     secure_discovery::AuthenticationStatus,
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
@@ -475,7 +475,7 @@ impl DPEventLoop {
       participant_guid_prefix == self.domain_info.domain_participant_guid.prefix
     );
 
-    let db = self.discovery_db.read().unwrap();
+    let db = discovery_db_read(&self.discovery_db);
     // new Remote Participant discovered
     let discovered_participant =
       if let Some(dpd) = db.find_participant_proxy(participant_guid_prefix) {
@@ -569,35 +569,6 @@ impl DPEventLoop {
             qos = Discovery::PARTICIPANT_STATELESS_MESSAGE_QOS;
           }
 
-          // common processing for all builtin topics
-          if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-            // Security enabled
-            // If reader is one of the secure built-in readers, it needs to be registered
-            if SECURE_BUILTIN_READER_ENTITY_IDS.contains(reader_eid) {
-              let remote_reader_guid = reader_proxy.remote_reader_guid;
-              let local_writer_guid = self
-                .domain_info
-                .domain_participant_guid
-                .from_prefix(*writer_eid);
-
-              if let Err(e) = plugins_handle.get_plugins().register_matched_remote_reader(
-                remote_reader_guid,
-                local_writer_guid,
-                false,
-              ) {
-                error!(
-                  "Failed to register remote reader with the crypto plugin: {} GUID: {:?}",
-                  e, remote_reader_guid
-                );
-              } else {
-                info!(
-                  "Registered remote reader with the crypto plugin. GUID: {:?}",
-                  remote_reader_guid
-                );
-              }
-            }
-          }
-
           writer.update_reader_proxy(&reader_proxy, &qos);
           debug!(
             "update_discovery writer - endpoint {:?} - {:?}",
@@ -627,33 +598,6 @@ impl DPEventLoop {
           .available_builtin_endpoints
           .contains(*endpoint)
         {
-          if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-            // Security enabled
-            // If writer is one of the secure built-in writers, it needs to be registered
-            if SECURE_BUILTIN_WRITER_ENTITY_IDS.contains(writer_eid) {
-              let remote_writer_guid = wp.remote_writer_guid;
-              let local_reader_guid = self
-                .domain_info
-                .domain_participant_guid
-                .from_prefix(*reader_eid);
-
-              if let Err(e) = plugins_handle
-                .get_plugins()
-                .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
-              {
-                error!(
-                  "Failed to register remote writer with the crypto plugin: {} GUID: {:?}",
-                  e, remote_writer_guid
-                );
-              } else {
-                info!(
-                  "Registered remote writer with the crypto plugin. GUID: {:?}",
-                  remote_writer_guid
-                );
-              }
-            }
-          }
-
           reader.update_writer_proxy(wp, &qos);
           debug!(
             "update_discovery_reader - endpoint {:?} - {:?}",
@@ -806,14 +750,18 @@ impl DPEventLoop {
 
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
       // Security is enabled. Register Reader to crypto plugin
-      let mut sec_plugins = plugins_handle.get_plugins();
-
-      if let Err(e) = sec_plugins
-        .get_reader_sec_attributes(reader_guid, topic_name)
-        .and_then(|attributes| {
-          sec_plugins.register_local_reader(reader_guid, reader_property_qos, attributes)
+      if let Err(e) = {
+        let reader_security_attributes = plugins_handle
+          .get_plugins()
+          .get_reader_sec_attributes(reader_guid, topic_name); // Release lock
+        reader_security_attributes.and_then(|attributes| {
+          plugins_handle.get_plugins().register_local_reader(
+            reader_guid,
+            reader_property_qos,
+            attributes,
+          )
         })
-      {
+      } {
         error!(
           "Failed to register reader to crypto plugin: {} . GUID: {:?}",
           e, reader_guid
@@ -889,14 +837,19 @@ impl DPEventLoop {
 
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
       // Security is enabled. Register Writer to crypto plugin
-      let mut sec_plugins = plugins_handle.get_plugins();
 
-      if let Err(e) = sec_plugins
-        .get_writer_sec_attributes(writer_guid, topic_name)
-        .and_then(|attributes| {
-          sec_plugins.register_local_writer(writer_guid, writer_property_qos, attributes)
+      if let Err(e) = {
+        let writer_security_attributes = plugins_handle
+          .get_plugins()
+          .get_writer_sec_attributes(writer_guid, topic_name); // Release lock
+        writer_security_attributes.and_then(|attributes| {
+          plugins_handle.get_plugins().register_local_writer(
+            writer_guid,
+            writer_property_qos,
+            attributes,
+          )
         })
-      {
+      } {
         error!(
           "Failed to register writer to crypto plugin: {} . GUID: {:?}",
           e, writer_guid

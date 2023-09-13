@@ -8,3 +8,4 @@ src/.vscode/launch.json
 .vscode/*
 .idea/
 logging-config.yaml
+dev
