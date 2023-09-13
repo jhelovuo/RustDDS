@@ -15,7 +15,7 @@ use mio_06::Token;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  create_error_internal, create_error_not_allowed_by_security, create_error_out_of_resources,
+  create_error_internal, create_error_out_of_resources,
   create_error_poisoned,
   dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
   discovery::{
@@ -29,14 +29,21 @@ use crate::{
     dp_event_loop::{DPEventLoop, DomainInfo, EventLoopCommand},
     reader::*,
     writer::WriterIngredients,
-  },
+  },  
+  structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::*, locator::Locator},
+};
+
+#[cfg(feature="security")]
+use crate::{
+  create_error_not_allowed_by_security,
   security::{
     self,
     security_plugins::{SecurityPlugins, SecurityPluginsHandle},
     AccessControl, Authentication, Cryptographic,
-  },
-  structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::*, locator::Locator},
+  }
 };
+#[cfg(not(feature="security"))]
+use crate::no_security::SecurityPluginsHandle;
 
 pub struct DomainParticipantBuilder {
   domain_id: u16,
@@ -45,7 +52,9 @@ pub struct DomainParticipantBuilder {
   which interfaces the DomainParticiapnt will talk to. */
   only_networks: Option<Vec<String>>, // if specified, run RTPS only over these interfaces
 
+  #[cfg(feature="security")]
   security_plugins: Option<SecurityPlugins>,
+  #[cfg(feature="security")]
   sec_properties: Option<policy::Property>, // Properties for configuring security plugins
 }
 
@@ -54,11 +63,14 @@ impl DomainParticipantBuilder {
     DomainParticipantBuilder {
       domain_id,
       only_networks: None,
+      #[cfg(feature="security")]
       security_plugins: None,
+      #[cfg(feature="security")]
       sec_properties: None,
     }
   }
 
+  #[cfg(feature="security")]
   pub fn security(
     &mut self,
     auth: Box<impl Authentication + 'static>,
@@ -71,6 +83,7 @@ impl DomainParticipantBuilder {
     self
   }
 
+  #[cfg(feature="security")]
   pub fn add_builtin_security(&mut self) -> &mut DomainParticipantBuilder {
     let security_test_configs = security::config::test_config();
 
@@ -88,11 +101,12 @@ impl DomainParticipantBuilder {
 
     // QosPolicies with possible security properties, otherwise default
     let participant_qos = QosPolicies {
-      property: self.sec_properties,
+      #[cfg(feature="security")] property: self.sec_properties,
       ..Default::default()
     };
 
     // If security plugins are present, security is enabled
+    #[cfg(feature="security")]
     if let Some(ref mut security_plugins) = self.security_plugins.as_mut() {
       trace!("DomainParticipant security construction start");
       // Do the security checks according to DDS Security spec v1.1
@@ -182,6 +196,9 @@ impl DomainParticipantBuilder {
     let (discovery_command_sender, discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(64);
 
+    #[cfg(not(feature="security"))]
+    let security_plugins_handle = None;  
+    #[cfg(feature="security")]
     let security_plugins_handle = self.security_plugins.map(SecurityPluginsHandle::new);
 
     // intermediate DP wrapper
@@ -273,7 +290,10 @@ impl DomainParticipant {
     let mut dp_builder = DomainParticipantBuilder::new(domain_id);
     // Add security if so configured in security configs
     // This is meant to be included only in the development phase for convenience
-    dp_builder.add_builtin_security();
+    #[cfg(feature="security")]
+    { 
+      dp_builder.add_builtin_security();
+    }
     dp_builder.build()
   }
 
@@ -768,6 +788,7 @@ pub(crate) struct DomainParticipantInner {
 
   // RTPS locators describing how to reach this DP
   self_locators: HashMap<Token, Vec<Locator>>,
+  #[allow(dead_code)] // TODO: use or remove
   security_plugins_handle: Option<SecurityPluginsHandle>,
 }
 

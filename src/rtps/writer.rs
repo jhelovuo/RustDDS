@@ -35,7 +35,6 @@ use crate::{
     rtps_reader_proxy::RtpsReaderProxy,
     Message, MessageBuilder, Submessage,
   },
-  security::{security_plugins::SecurityPluginsHandle, SecurityResult},
   structure::{
     cache_change::CacheChange,
     dds_cache::TopicCache,
@@ -47,6 +46,12 @@ use crate::{
     time::Timestamp,
   },
 };
+
+#[cfg(feature="security")]
+use crate::security::{security_plugins::SecurityPluginsHandle, SecurityResult};
+
+#[cfg(not(feature="security"))]
+use crate::no_security::SecurityPluginsHandle;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum DeliveryMode {
@@ -1237,6 +1242,7 @@ impl Writer {
     self.heartbeat_message_counter += 1;
   }
 
+  #[cfg(feature="security")]
   fn security_encode(
     &self,
     message: Message,
@@ -1298,7 +1304,12 @@ impl Writer {
     // unicast and multicast locators for each reader only on every reader update,
     // and not find it dynamically on every message.
 
-    match self.security_encode(message, readers) {
+    #[cfg(feature="security")]
+    let encoded = self.security_encode(message, readers);
+    #[cfg(not(feature="security"))]
+    let encoded : Result<Message,()> = Ok(message);
+
+    match encoded {
       Ok(message) => {
         let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
         let mut already_sent_to = BTreeSet::new();

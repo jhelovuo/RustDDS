@@ -14,7 +14,7 @@ use crate::{
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
     discovery_db::DiscoveryDB,
-    secure_discovery::AuthenticationStatus,
+    
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
   messages::submessages::submessages::AckSubmessage,
@@ -33,6 +33,11 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
   },
+};
+
+#[cfg(feature="security")]
+use crate::{
+  discovery::secure_discovery::AuthenticationStatus,
 };
 
 pub struct DomainInfo {
@@ -487,6 +492,12 @@ impl DPEventLoop {
 
     // Select which builtin endpoints of the remote participant are updated to local
     // readers & writers
+    #[cfg(not(feature="security"))]
+    let (readers_init_list,writers_init_list) = 
+      ( STANDARD_BUILTIN_READERS_INIT_LIST.to_vec(),
+        STANDARD_BUILTIN_WRITERS_INIT_LIST.to_vec() );
+
+    #[cfg(feature="security")] 
     let (readers_init_list, writers_init_list) = match &self.security_plugins_opt {
       None => {
         // No security enabled, just the standard endpoints
@@ -609,6 +620,7 @@ impl DPEventLoop {
 
     // If appropriate, send a signal to Discovery to start key exchange with the
     // participant
+    #[cfg(feature="security")]
     if let Some(AuthenticationStatus::Authenticated) =
       db.get_authentication_status(participant_guid_prefix)
     {
@@ -732,6 +744,7 @@ impl DPEventLoop {
 
     // Clone these before handing ingredients to Reader builder
     let reader_guid = reader_ing.guid;
+    #[cfg(feature="security")]
     let reader_property_qos = reader_ing.qos_policy.property();
     let topic_name = reader_ing.topic_name.clone();
 
@@ -748,6 +761,7 @@ impl DPEventLoop {
       )
       .expect("Reader command channel registration failed!!!");
 
+    #[cfg(feature="security")]
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
       // Security is enabled. Register Reader to crypto plugin
       if let Err(e) = {
@@ -792,6 +806,7 @@ impl DPEventLoop {
           error!("Cannot deregister data_reader_command_receiver: {e:?}");
         });
 
+      #[cfg(feature="security")]
       if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
         // Security is enabled. Unregister the reader with the crypto plugin.
         // Currently the unregister method is called for every reader, and errors are
@@ -820,6 +835,7 @@ impl DPEventLoop {
 
     // Clone these before handing ingredients to Writer builder
     let writer_guid = writer_ing.guid;
+    #[cfg(feature="security")]
     let writer_property_qos = writer_ing.qos_policies.property();
     let topic_name = writer_ing.topic_name.clone();
 
@@ -835,6 +851,7 @@ impl DPEventLoop {
       )
       .expect("Writer command channel registration failed!!");
 
+    #[cfg(feature="security")]
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
       // Security is enabled. Register Writer to crypto plugin
 
@@ -876,6 +893,7 @@ impl DPEventLoop {
         .deregister(&w.timed_event_timer)
         .unwrap_or_else(|e| error!("Deregister fail (writer timer) {e:?}"));
 
+      #[cfg(feature="security")]
       if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
         // Security is enabled. Unregister the writer with the crypto plugin.
         // Currently the unregister method is called for every writer, and errors are
