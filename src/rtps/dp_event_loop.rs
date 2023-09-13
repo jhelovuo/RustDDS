@@ -566,7 +566,7 @@ impl DPEventLoop {
             // );
           } else if *writer_eid == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER {
             // Also ParticipantStatelessMessage reader has special Qos
-            qos = Discovery::PARTICIPANT_STATELESS_MESSAGE_QOS;
+            qos = Discovery::create_participant_stateless_message_qos();
           }
 
           writer.update_reader_proxy(&reader_proxy, &qos);
@@ -588,7 +588,7 @@ impl DPEventLoop {
         let qos = match *reader_eid {
           EntityId::SPDP_BUILTIN_PARTICIPANT_READER => Discovery::create_spdp_participant_qos(),
           EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER => {
-            Discovery::PARTICIPANT_STATELESS_MESSAGE_QOS
+            Discovery::create_participant_stateless_message_qos()
           }
           _ => Discovery::publisher_qos(), // For all others
         };

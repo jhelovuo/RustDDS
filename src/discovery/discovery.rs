@@ -25,7 +25,7 @@ use crate::{
   },
   discovery::{
     discovery_db::{discovery_db_read, discovery_db_write, DiscoveredVia, DiscoveryDB},
-    secure_discovery::SecureDiscovery,
+    secure_discovery::{NormalDiscoveryPermission, SecureDiscovery},
     sedp_messages::{
       DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, Endpoint_GUID,
       ParticipantMessageData, ParticipantMessageDataKind, PublicationBuiltinTopicData, ReaderProxy,
@@ -244,22 +244,6 @@ impl Discovery {
     reliability: Some(Reliability::Reliable {
       max_blocking_time: Duration::DURATION_ZERO,
     }),
-    destination_order: None,
-    history: Some(History::KeepLast { depth: 1 }),
-    resource_limits: None,
-    lifespan: None,
-    property: None,
-  };
-
-  pub(crate) const PARTICIPANT_STATELESS_MESSAGE_QOS: QosPolicies = QosPolicies {
-    durability: None,
-    presentation: None,
-    deadline: None,
-    latency_budget: None,
-    ownership: None,
-    liveliness: None,
-    time_based_filter: None,
-    reliability: Some(Reliability::BestEffort), // Important (see Security spec section 7.3.4)
     destination_order: None,
     history: Some(History::KeepLast { depth: 1 }),
     resource_limits: None,
@@ -578,7 +562,7 @@ impl Discovery {
       builtin_topic_names::DCPS_PARTICIPANT_STATELESS_MESSAGE,
       builtin_topic_type_names::DCPS_PARTICIPANT_STATELESS_MESSAGE,
       ParticipantStatelessMessage,
-      Some(Self::PARTICIPANT_STATELESS_MESSAGE_QOS),
+      Some(Self::create_participant_stateless_message_qos()),
       true, // Important: STATELESS RTPS Reader & Writer (see Security spec. section 7.4.3)
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
       P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN,
@@ -586,15 +570,15 @@ impl Discovery {
       Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD,
       CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN,
     );
-    //TODO: NO_KEY topic
+    // p2p Participant volatile message secure, used for key exchange
     let dcps_participant_volatile_message_secure = construct_topic_and_poll!(
       CDR,
       no_key,
       builtin_topic_names::DCPS_PARTICIPANT_VOLATILE_MESSAGE_SECURE,
       builtin_topic_type_names::DCPS_PARTICIPANT_VOLATILE_MESSAGE_SECURE,
       ParticipantVolatileMessageSecure, // actually reuse the non-secure data type
-      None,                             // QoS
-      false,                            // Regular stateful RTPS Reader & Writer
+      Some(Self::create_participant_volatile_message_secure_qos()),
+      false, // Regular stateful RTPS Reader & Writer
       EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
       P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
@@ -983,10 +967,10 @@ impl Discovery {
       debug!("handle_participant_reader read {:?}", &s);
       match s {
         Ok(Some(ds)) => {
-          let allowed_to_use = if let Some(security) = self.security_opt.as_mut() {
+          let permission = if let Some(security) = self.security_opt.as_mut() {
             // Security is enabled. Do a secure read, potentially starting the
-            // authentication protocol. The returned boolean tells if normal Discovery
-            // is allowed to process the message.
+            // authentication protocol. The return value tells if normal Discovery is
+            // allowed to process the message.
             security.participant_read(
               &ds,
               &self.discovery_db,
@@ -995,10 +979,10 @@ impl Discovery {
             )
           } else {
             // No security, always allowed
-            true
+            NormalDiscoveryPermission::Allow
           };
 
-          if allowed_to_use {
+          if permission == NormalDiscoveryPermission::Allow {
             match ds.value {
               Sample::Value(participant_data) => {
                 debug!(
@@ -1527,6 +1511,27 @@ impl Discovery {
     QosPolicyBuilder::new()
       .reliability(Reliability::BestEffort)
       .history(History::KeepLast { depth: 1 })
+      .build()
+  }
+
+  pub fn create_participant_stateless_message_qos() -> QosPolicies {
+    // See section 7.4.3 "New DCPSParticipantStatelessMessage builtin Topic" of the
+    // Security spec
+    QosPolicyBuilder::new()
+      .reliability(Reliability::BestEffort) // Important!
+      .history(History::KeepLast { depth: 1 })
+      .build()
+  }
+
+  pub fn create_participant_volatile_message_secure_qos() -> QosPolicies {
+    // See Table 18 – Non-default Qos policies for
+    // BuiltinParticipantVolatileMessageSecureWriter of the Security spec
+    QosPolicyBuilder::new()
+      .reliability(Reliability::Reliable {
+        max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
+      })
+      .history(History::KeepAll)
+      .durability(Durability::Volatile)
       .build()
   }
 

@@ -964,6 +964,12 @@ impl Keyed for ParticipantStatelessMessage {
   }
 }
 
+impl From<ParticipantGenericMessage> for ParticipantStatelessMessage {
+  fn from(msg: ParticipantGenericMessage) -> Self {
+    Self { generic: msg }
+  }
+}
+
 // ParticipantVolatileMessageSecure from section 7.4.4.3 of the Security
 // specification
 //
