@@ -1,6 +1,6 @@
 use std::{
   collections::HashMap,
-  sync::{Arc, MutexGuard, RwLock, RwLockReadGuard, RwLockWriteGuard},
+  sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 #[allow(unused_imports)]
@@ -28,7 +28,7 @@ use crate::{
       GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS, GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS,
     },
     security_error,
-    security_plugins::{SecurityPlugins, SecurityPluginsHandle},
+    security_plugins::SecurityPluginsHandle,
     DataHolder, ParticipantGenericMessage, ParticipantSecurityInfo, ParticipantStatelessMessage,
     ParticipantVolatileMessageSecure, SecurityError, SecurityResult,
   },
@@ -438,7 +438,9 @@ impl SecureDiscovery {
       .expect("IdentityToken disappeared"); // Identity token is here since compatibility test passed
 
     // First validate the remote identity
-    let outcome: ValidationOutcome = match get_security_plugins(&self.security_plugins)
+    let outcome: ValidationOutcome = match self
+      .security_plugins
+      .get_plugins()
       .validate_remote_identity(
         my_guid.prefix,
         remote_identity_token,
@@ -559,7 +561,9 @@ impl SecureDiscovery {
     let my_ser_data = self.get_serialized_local_participant_data(discovery_db)?;
 
     // Get the handshake request token
-    let (validation_outcome, request_token) = get_security_plugins(&self.security_plugins)
+    let (validation_outcome, request_token) = self
+      .security_plugins
+      .get_plugins()
       .begin_handshake_request(
         self.local_participant_guid.prefix,
         remote_guid_prefix,
@@ -790,7 +794,7 @@ impl SecureDiscovery {
       };
 
     // Now call the security functionality
-    match get_security_plugins(&self.security_plugins).begin_handshake_reply(
+    match self.security_plugins.get_plugins().begin_handshake_reply(
       local_guid_prefix,
       remote_guid_prefix,
       handshake_token,
@@ -891,7 +895,9 @@ impl SecureDiscovery {
     };
 
     // Now call the security functionality
-    let result = get_security_plugins(&self.security_plugins)
+    let result = self
+      .security_plugins
+      .get_plugins()
       .process_handshake(remote_guid_prefix, handshake_token);
     match result {
       Ok((ValidationOutcome::OkFinalMessage, Some(final_message_token))) => {
@@ -998,7 +1004,9 @@ impl SecureDiscovery {
     };
 
     // Now call the security functionality
-    let result = get_security_plugins(&self.security_plugins)
+    let result = self
+      .security_plugins
+      .get_plugins()
       .process_handshake(remote_guid_prefix, handshake_token);
     match result {
       Ok((ValidationOutcome::Ok, None)) => {
@@ -1190,7 +1198,9 @@ impl SecureDiscovery {
 
     // If needed, check is remote allowed to join the domain
     if self.local_dp_sec_attributes.is_access_protected {
-      match get_security_plugins(&self.security_plugins)
+      match self
+        .security_plugins
+        .get_plugins()
         .check_remote_participant(self.domain_id, remote_guid_prefix)
       {
         Ok(()) => {
@@ -1555,7 +1565,7 @@ impl SecureDiscovery {
     remote_guid_prefix: GuidPrefix,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
   ) -> SecurityResult<()> {
-    let mut sec_plugins = get_security_plugins(&self.security_plugins);
+    let mut sec_plugins = self.security_plugins.get_plugins();
 
     // Get PermissionsToken
     let permissions_token = discovery_db_read(discovery_db)
@@ -1646,12 +1656,6 @@ impl SecureDiscovery {
 
     Ok(my_ser_data.to_vec())
   }
-}
-
-fn get_security_plugins(plugins_handle: &SecurityPluginsHandle) -> MutexGuard<SecurityPlugins> {
-  plugins_handle
-    .lock()
-    .expect("Security plugins are poisoned")
 }
 
 fn discovery_db_read(discovery_db: &Arc<RwLock<DiscoveryDB>>) -> RwLockReadGuard<DiscoveryDB> {
