@@ -1241,13 +1241,14 @@ impl Writer {
   fn security_encode(
     &self,
     message: Message,
-    readers: &Vec<&RtpsReaderProxy>,
+    readers: &[&RtpsReaderProxy],
   ) -> SecurityResult<Message> {
     // If we have security plugins, use them, otherwise pass through
     if let Some(security_plugins_handle) = &self.security_plugins {
       // Get the source and destination GUIDs
       let source_guid = self.guid();
-      let destination_guid_list: Vec<GUID> = readers.iter()
+      let destination_guid_list: Vec<GUID> = readers
+        .iter()
         .map(|reader_proxy| reader_proxy.remote_reader_guid)
         .collect();
       // Destructure
@@ -1299,7 +1300,7 @@ impl Writer {
     // unicast and multicast locators for each reader only on every reader update,
     // and not find it dynamically on every message.
 
-    let readers=readers.collect::<Vec<_>>();
+    let readers = readers.collect::<Vec<_>>();
     match self.security_encode(message, &readers) {
       Ok(message) => {
         let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
