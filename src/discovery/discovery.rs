@@ -25,7 +25,7 @@ use crate::{
   },
   discovery::{
     discovery_db::{discovery_db_read, discovery_db_write, DiscoveredVia, DiscoveryDB},
-    secure_discovery::SecureDiscovery,
+    secure_discovery::{NormalDiscoveryPermission, SecureDiscovery},
     sedp_messages::{
       DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, Endpoint_GUID,
       ParticipantMessageData, ParticipantMessageDataKind, PublicationBuiltinTopicData, ReaderProxy,
@@ -967,10 +967,10 @@ impl Discovery {
       debug!("handle_participant_reader read {:?}", &s);
       match s {
         Ok(Some(ds)) => {
-          let allowed_to_use = if let Some(security) = self.security_opt.as_mut() {
+          let permission = if let Some(security) = self.security_opt.as_mut() {
             // Security is enabled. Do a secure read, potentially starting the
-            // authentication protocol. The returned boolean tells if normal Discovery
-            // is allowed to process the message.
+            // authentication protocol. The return value tells if normal Discovery is
+            // allowed to process the message.
             security.participant_read(
               &ds,
               &self.discovery_db,
@@ -979,10 +979,10 @@ impl Discovery {
             )
           } else {
             // No security, always allowed
-            true
+            NormalDiscoveryPermission::Allow
           };
 
-          if allowed_to_use {
+          if permission == NormalDiscoveryPermission::Allow {
             match ds.value {
               Sample::Value(participant_data) => {
                 debug!(

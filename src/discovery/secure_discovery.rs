@@ -45,6 +45,14 @@ use super::{
   Participant_GUID, SpdpDiscoveredParticipantData,
 };
 
+// Enum indicating if secure discovery allows normal discovery to process
+// something
+#[derive(PartialEq)]
+pub(crate) enum NormalDiscoveryPermission {
+  Allow,
+  Deny,
+}
+
 // Enum for authentication status of a remote participant
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum AuthenticationStatus {
@@ -180,14 +188,15 @@ impl SecureDiscovery {
 
   // Inspect a new sample from the standard DCPSParticipant Builtin Topic
   // Possibly start the authentication protocol
-  // Return boolean indicating if normal Discovery can process the sample as usual
+  // Return return value indicates if normal Discovery can process the sample as
+  // usual
   pub fn participant_read(
     &mut self,
     ds: &DataSample<SpdpDiscoveredParticipantData>,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
     discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
     auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
-  ) -> bool {
+  ) -> NormalDiscoveryPermission {
     match &ds.value {
       Sample::Value(participant_data) => self.participant_data_read(
         participant_data,
@@ -203,7 +212,7 @@ impl SecureDiscovery {
 
   // This function inspects a data message from normal DCPSParticipant topic
   // The authentication protocol is possibly started
-  // The returned boolean tells if normal Discovery is allowed to process
+  // The return value tells if normal Discovery is allowed to process
   // the message.
   #[allow(clippy::needless_bool)] // for return value clarity
   fn participant_data_read(
@@ -212,7 +221,7 @@ impl SecureDiscovery {
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
     discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
     auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
-  ) -> bool {
+  ) -> NormalDiscoveryPermission {
     let guid_prefix = participant_data.participant_guid.prefix;
 
     // Our action depends on the current authentication status of the remote
@@ -286,9 +295,9 @@ impl SecureDiscovery {
     if updated_auth_status == AuthenticationStatus::Unauthenticated
       || updated_auth_status == AuthenticationStatus::Authenticating
     {
-      true
+      NormalDiscoveryPermission::Allow
     } else {
-      false
+      NormalDiscoveryPermission::Deny
     }
   }
 
@@ -298,7 +307,7 @@ impl SecureDiscovery {
     &self,
     participant_guid: &Participant_GUID,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
-  ) -> bool {
+  ) -> NormalDiscoveryPermission {
     let guid_prefix = participant_guid.0.prefix;
 
     let db = discovery_db_read(discovery_db);
@@ -308,11 +317,11 @@ impl SecureDiscovery {
     match db.get_authentication_status(guid_prefix) {
       None => {
         // No prior info on this participant. Let the dispose message be processed
-        true
+        NormalDiscoveryPermission::Allow
       }
       Some(AuthenticationStatus::Unauthenticated) => {
         // Participant has been marked as Unauthenticated. Allow to process.
-        true
+        NormalDiscoveryPermission::Allow
       }
       Some(other_status) => {
         debug!(
@@ -321,7 +330,7 @@ impl SecureDiscovery {
           other_status, guid_prefix
         );
         // Do not allow with any other status
-        false
+        NormalDiscoveryPermission::Deny
       }
     }
   }
