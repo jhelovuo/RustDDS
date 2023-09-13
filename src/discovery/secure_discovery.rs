@@ -1,6 +1,6 @@
 use std::{
   collections::HashMap,
-  sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+  sync::{Arc, RwLock},
 };
 
 #[allow(unused_imports)]
@@ -40,7 +40,10 @@ use crate::{
   },
   RepresentationIdentifier, SequenceNumber, GUID,
 };
-use super::{discovery_db::DiscoveryDB, Participant_GUID, SpdpDiscoveredParticipantData};
+use super::{
+  discovery_db::{discovery_db_read, discovery_db_write, DiscoveryDB},
+  Participant_GUID, SpdpDiscoveredParticipantData,
+};
 
 // Enum for authentication status of a remote participant
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -1655,20 +1658,6 @@ impl SecureDiscovery {
       .map_err(|e| security_error!("Serializing participant data failed: {e}"))?;
 
     Ok(my_ser_data.to_vec())
-  }
-}
-
-fn discovery_db_read(discovery_db: &Arc<RwLock<DiscoveryDB>>) -> RwLockReadGuard<DiscoveryDB> {
-  match discovery_db.read() {
-    Ok(db) => db,
-    Err(e) => panic!("DiscoveryDB is poisoned {:?}.", e),
-  }
-}
-
-fn discovery_db_write(discovery_db: &Arc<RwLock<DiscoveryDB>>) -> RwLockWriteGuard<DiscoveryDB> {
-  match discovery_db.write() {
-    Ok(db) => db,
-    Err(e) => panic!("DiscoveryDB is poisoned {:?}.", e),
   }
 }
 

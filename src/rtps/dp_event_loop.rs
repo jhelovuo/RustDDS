@@ -13,7 +13,7 @@ use crate::{
   dds::{qos::policy, typedesc::TypeDesc},
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
-    discovery_db::DiscoveryDB,
+    discovery_db::{discovery_db_read, DiscoveryDB},
     secure_discovery::AuthenticationStatus,
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
@@ -475,7 +475,7 @@ impl DPEventLoop {
       participant_guid_prefix == self.domain_info.domain_participant_guid.prefix
     );
 
-    let db = self.discovery_db.read().unwrap();
+    let db = discovery_db_read(&self.discovery_db);
     // new Remote Participant discovered
     let discovered_participant =
       if let Some(dpd) = db.find_participant_proxy(participant_guid_prefix) {
