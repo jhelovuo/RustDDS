@@ -25,8 +25,7 @@ use crate::{
   },
   Timestamp,
 };
-
-#[cfg(feature="security")] 
+#[cfg(feature = "security")]
 use crate::messages::submessages::{
   secure_body::SecureBody,
   secure_postfix::SecurePostfix,
@@ -35,9 +34,9 @@ use crate::messages::submessages::{
   secure_rtps_prefix::SecureRTPSPrefix,
   submessage::SecuritySubmessage,
   submessage_flag::{
-    SECUREBODY_Flags, SECUREPOSTFIX_Flags, SECUREPREFIX_Flags,
-    SECURERTPSPOSTFIX_Flags, SECURERTPSPREFIX_Flags,
-  }
+    SECUREBODY_Flags, SECUREPOSTFIX_Flags, SECUREPREFIX_Flags, SECURERTPSPOSTFIX_Flags,
+    SECURERTPSPREFIX_Flags,
+  },
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -114,10 +113,10 @@ impl Submessage {
         original_bytes,
       }))
     };
-    
-    #[cfg(feature="security")]
+
+    #[cfg(feature = "security")]
     let original_bytes = Some(original_submessage_bytes.clone());
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let mk_s_subm = move |s: SecuritySubmessage| {
       io::Result::<Option<Self>>::Ok(Some(Submessage {
         header: sub_header,
@@ -227,7 +226,7 @@ impl Submessage {
         Ok(None) // nothing to do here
       }
 
-      #[cfg(feature="security")] 
+      #[cfg(feature = "security")]
       SubmessageKind::SEC_BODY => {
         let f = BitFlags::<SECUREBODY_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecureBody(
@@ -236,7 +235,7 @@ impl Submessage {
         ))
       }
 
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       SubmessageKind::SEC_PREFIX => {
         let f = BitFlags::<SECUREPREFIX_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecurePrefix(
@@ -244,7 +243,7 @@ impl Submessage {
           f,
         ))
       }
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       SubmessageKind::SEC_POSTFIX => {
         let f = BitFlags::<SECUREPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecurePostfix(
@@ -252,7 +251,7 @@ impl Submessage {
           f,
         ))
       }
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       SubmessageKind::SRTPS_PREFIX => {
         let f = BitFlags::<SECURERTPSPREFIX_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecureRTPSPrefix(
@@ -260,7 +259,7 @@ impl Submessage {
           f,
         ))
       }
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       SubmessageKind::SRTPS_POSTFIX => {
         let f = BitFlags::<SECURERTPSPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecureRTPSPostfix(
@@ -295,10 +294,10 @@ impl Submessage {
 pub enum SubmessageBody {
   Writer(WriterSubmessage),
   Reader(ReaderSubmessage),
-  
-  #[cfg(feature="security")] 
+
+  #[cfg(feature = "security")]
   Security(SecuritySubmessage),
-  
+
   Interpreter(InterpreterSubmessage),
 }
 
@@ -309,7 +308,8 @@ impl<C: Context> Writable<C> for Submessage {
       SubmessageBody::Writer(m) => writer.write_value(&m),
       SubmessageBody::Reader(m) => writer.write_value(&m),
       SubmessageBody::Interpreter(m) => writer.write_value(&m),
-      #[cfg(feature="security")] SubmessageBody::Security(m) => writer.write_value(&m),
+      #[cfg(feature = "security")]
+      SubmessageBody::Security(m) => writer.write_value(&m),
     }
   }
 }

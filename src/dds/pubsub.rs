@@ -250,7 +250,7 @@ impl Publisher {
       .create_datawriter(self, Some(entity_id), topic, qos, writer_like_stateless)
   }
 
-  #[cfg(feature="security")]  // to avoid "never used" warning
+  #[cfg(feature = "security")] // to avoid "never used" warning
   pub(crate) fn create_datawriter_with_entity_id_no_key<D, SA>(
     &self,
     entity_id: EntityId,
@@ -791,7 +791,7 @@ impl Subscriber {
       .create_datareader(self, topic, Some(entity_id), qos, reader_like_stateless)
   }
 
-  #[cfg(feature="security")]  // to avoid "never used" warning
+  #[cfg(feature = "security")] // to avoid "never used" warning
   pub(crate) fn create_datareader_with_entity_id_no_key<D: 'static, SA>(
     &self,
     topic: &Topic,

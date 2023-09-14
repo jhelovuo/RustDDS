@@ -32,14 +32,12 @@ use crate::{
   },
   RepresentationIdentifier,
 };
-
-#[cfg(feature="security")] 
+#[cfg(feature = "security")]
 use crate::{
   security::{security_plugins::SecurityPluginsHandle, SecurityError},
-  security_error, 
+  security_error,
 };
-
-#[cfg(not(feature="security"))]
+#[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
 
 #[derive(Debug, Clone)]
@@ -240,11 +238,10 @@ impl MessageBuilder {
       }
     });
 
-
-    #[cfg(not(feature="security"))]
+    #[cfg(not(feature = "security"))]
     let encoded_payload = serialized_payload;
 
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let encoded_payload = match serialized_payload
       // Encode payload if it exists
       .map(|serialized_payload| {
@@ -378,10 +375,10 @@ impl MessageBuilder {
         .bytes_slice(from_byte, up_to_before_byte),
     );
 
-    #[cfg(not(feature="security"))]
+    #[cfg(not(feature = "security"))]
     let encoded_payload = serialized_payload;
 
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let encoded_payload = match _security_plugins
       .map(SecurityPluginsHandle::get_plugins)
       .map_or(

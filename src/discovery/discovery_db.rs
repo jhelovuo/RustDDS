@@ -31,8 +31,7 @@ use super::{
   },
   spdp_participant_data::SpdpDiscoveredParticipantData,
 };
-
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 use super::secure_discovery::AuthenticationStatus;
 
 // If remote participant does not specify lease duration, how long silence
@@ -50,7 +49,7 @@ pub(crate) struct DiscoveryDB {
   participant_last_life_signs: BTreeMap<GuidPrefix, Instant>,
 
   // Authentication statuses of participants
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   authentication_statuses: BTreeMap<GuidPrefix, AuthenticationStatus>,
 
   // local writer proxies for topics (topic name acts as key)
@@ -119,7 +118,7 @@ impl DiscoveryDB {
       my_guid,
       participant_proxies: BTreeMap::new(),
       participant_last_life_signs: BTreeMap::new(),
-      #[cfg(feature="security")] 
+      #[cfg(feature = "security")]
       authentication_statuses: BTreeMap::new(),
       local_topic_writers: BTreeMap::new(),
       local_topic_readers: BTreeMap::new(),
@@ -215,7 +214,7 @@ impl DiscoveryDB {
     info!("removing participant {:?}", guid_prefix);
     self.participant_proxies.remove(&guid_prefix);
     self.participant_last_life_signs.remove(&guid_prefix);
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     self.authentication_statuses.remove(&guid_prefix);
 
     if active_disposal {
@@ -710,12 +709,12 @@ impl DiscoveryDB {
       .for_each(|(_guid, p)| p.last_updated = now);
   }
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   pub fn get_authentication_status(&self, guid_prefix: GuidPrefix) -> Option<AuthenticationStatus> {
     self.authentication_statuses.get(&guid_prefix).copied()
   }
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   pub fn update_authentication_status(
     &mut self,
     guid_prefix: GuidPrefix,

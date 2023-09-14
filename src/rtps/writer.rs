@@ -46,14 +46,12 @@ use crate::{
     time::Timestamp,
   },
 };
-
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 use crate::{
   rtps::Submessage,
-  security::{security_plugins::SecurityPluginsHandle, SecurityResult}
+  security::{security_plugins::SecurityPluginsHandle, SecurityResult},
 };
-
-#[cfg(not(feature="security"))]
+#[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -1246,7 +1244,7 @@ impl Writer {
     self.heartbeat_message_counter += 1;
   }
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   fn security_encode(
     &self,
     message: Message,
@@ -1310,11 +1308,11 @@ impl Writer {
     // and not find it dynamically on every message.
 
     let readers = readers.collect::<Vec<_>>(); // clone itterator
- 
-    #[cfg(feature="security")]
+
+    #[cfg(feature = "security")]
     let encoded = self.security_encode(message, &readers);
-    #[cfg(not(feature="security"))]
-    let encoded : Result<Message,()> = Ok(message);
+    #[cfg(not(feature = "security"))]
+    let encoded: Result<Message, ()> = Ok(message);
 
     match encoded {
       Ok(message) => {

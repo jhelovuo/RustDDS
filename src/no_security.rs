@@ -5,7 +5,7 @@
 // depending on security enabled status.
 
 pub mod security_plugins {
-  #[derive(Debug,Clone)]
+  #[derive(Debug, Clone)]
   pub struct SecurityPluginsHandle {}
 }
 pub use security_plugins::SecurityPluginsHandle;
@@ -13,4 +13,3 @@ pub use security_plugins::SecurityPluginsHandle;
 pub struct EndpointSecurityInfo {}
 
 pub struct SecureDiscovery {}
-

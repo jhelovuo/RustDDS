@@ -6,7 +6,7 @@ pub mod heartbeat;
 pub mod heartbeat_frag;
 pub mod nack_frag;
 
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 pub mod secure_body;
 
 pub mod info_destination;
@@ -16,13 +16,13 @@ pub mod info_timestamp;
 
 pub mod elements;
 
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 pub mod secure_postfix;
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 pub mod secure_prefix;
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 pub mod secure_rtps_postfix;
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 pub mod secure_rtps_prefix;
 
 pub mod submessage;

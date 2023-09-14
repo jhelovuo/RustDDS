@@ -15,8 +15,7 @@ use mio_06::Token;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  create_error_out_of_resources,
-  create_error_poisoned,
+  create_error_out_of_resources, create_error_poisoned,
   dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
@@ -29,21 +28,19 @@ use crate::{
     dp_event_loop::{DPEventLoop, DomainInfo, EventLoopCommand},
     reader::*,
     writer::WriterIngredients,
-  },  
+  },
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::*, locator::Locator},
 };
-
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 use crate::{
-  create_error_internal,
-  create_error_not_allowed_by_security,
+  create_error_internal, create_error_not_allowed_by_security,
   security::{
     self,
     security_plugins::{SecurityPlugins, SecurityPluginsHandle},
     AccessControl, Authentication, Cryptographic,
-  }
+  },
 };
-#[cfg(not(feature="security"))]
+#[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
 
 pub struct DomainParticipantBuilder {
@@ -53,9 +50,9 @@ pub struct DomainParticipantBuilder {
   which interfaces the DomainParticiapnt will talk to. */
   only_networks: Option<Vec<String>>, // if specified, run RTPS only over these interfaces
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   security_plugins: Option<SecurityPlugins>,
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   sec_properties: Option<policy::Property>, // Properties for configuring security plugins
 }
 
@@ -64,14 +61,14 @@ impl DomainParticipantBuilder {
     DomainParticipantBuilder {
       domain_id,
       only_networks: None,
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       security_plugins: None,
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       sec_properties: None,
     }
   }
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   pub fn security(
     &mut self,
     auth: Box<impl Authentication + 'static>,
@@ -84,7 +81,7 @@ impl DomainParticipantBuilder {
     self
   }
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   pub fn add_builtin_security(&mut self) -> &mut DomainParticipantBuilder {
     let security_test_configs = security::config::test_config();
 
@@ -97,18 +94,19 @@ impl DomainParticipantBuilder {
     self
   }
 
-  pub fn build(#[allow(unused_mut)]  mut self) -> CreateResult<DomainParticipant> {
+  pub fn build(#[allow(unused_mut)] mut self) -> CreateResult<DomainParticipant> {
     #[allow(unused_mut)] // only security feature mutates this
     let mut participant_guid = GUID::new_participant_guid();
 
     // QosPolicies with possible security properties, otherwise default
     let participant_qos = QosPolicies {
-      #[cfg(feature="security")] property: self.sec_properties,
+      #[cfg(feature = "security")]
+      property: self.sec_properties,
       ..Default::default()
     };
 
     // If security plugins are present, security is enabled
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     if let Some(ref mut security_plugins) = self.security_plugins.as_mut() {
       trace!("DomainParticipant security construction start");
       // Do the security checks according to DDS Security spec v1.1
@@ -198,9 +196,9 @@ impl DomainParticipantBuilder {
     let (discovery_command_sender, discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(64);
 
-    #[cfg(not(feature="security"))]
-    let security_plugins_handle = None;  
-    #[cfg(feature="security")]
+    #[cfg(not(feature = "security"))]
+    let security_plugins_handle = None;
+    #[cfg(feature = "security")]
     let security_plugins_handle = self.security_plugins.map(SecurityPluginsHandle::new);
 
     // intermediate DP wrapper
@@ -293,8 +291,8 @@ impl DomainParticipant {
     let mut dp_builder = DomainParticipantBuilder::new(domain_id);
     // Add security if so configured in security configs
     // This is meant to be included only in the development phase for convenience
-    #[cfg(feature="security")]
-    { 
+    #[cfg(feature = "security")]
+    {
       dp_builder.add_builtin_security();
     }
     dp_builder.build()
@@ -446,7 +444,7 @@ impl DomainParticipant {
     self.dpi.lock().unwrap().dds_cache()
   }
 
-  #[cfg(feature="security")] // just to avoid warning
+  #[cfg(feature = "security")] // just to avoid warning
   pub(crate) fn qos(&self) -> QosPolicies {
     self.dpi.lock().unwrap().qos()
   }
@@ -484,10 +482,10 @@ impl PartialEq for DomainParticipant {
 pub struct DomainParticipantWeak {
   dpi: Weak<Mutex<DomainParticipantDisc>>,
   // This struct caches some items to avoid construction deadlocks
-  #[cfg(feature="security")] // just to avoid warning
+  #[cfg(feature = "security")] // just to avoid warning
   domain_id: u16,
   guid: GUID,
-  #[cfg(feature="security")] // just to avoid warning
+  #[cfg(feature = "security")] // just to avoid warning
   qos: QosPolicies,
 }
 
@@ -523,12 +521,12 @@ impl DomainParticipantWeak {
       .and_then(|dpi| dpi.lock()?.create_subscriber(self, qos))
   }
 
-  #[cfg(feature="security")] // just to avoid warning
+  #[cfg(feature = "security")] // just to avoid warning
   pub fn domain_id(&self) -> u16 {
     self.domain_id
   }
 
-  #[cfg(feature="security")] // just to avoid warning
+  #[cfg(feature = "security")] // just to avoid warning
   pub fn qos(&self) -> QosPolicies {
     self.qos.clone()
   }
@@ -713,7 +711,7 @@ impl DomainParticipantDisc {
     self.dpi.lock().unwrap().dds_cache()
   }
 
-  #[cfg(feature="security")] // just to avoid warning
+  #[cfg(feature = "security")] // just to avoid warning
   pub(crate) fn qos(&self) -> QosPolicies {
     self.dpi.lock().unwrap().qos()
   }
@@ -778,7 +776,7 @@ pub(crate) struct DomainParticipantInner {
   participant_id: u16,
 
   my_guid: GUID,
-  #[cfg(feature="security")] // just to avoid warning
+  #[cfg(feature = "security")] // just to avoid warning
   my_qos_policies: QosPolicies,
 
   // Adding Readers
@@ -996,7 +994,7 @@ impl DomainParticipantInner {
     Ok(Self {
       domain_id,
       participant_id,
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       my_qos_policies: _qos_policies,
       my_guid: participant_guid,
       sender_add_reader,
@@ -1017,7 +1015,7 @@ impl DomainParticipantInner {
     self.dds_cache.clone()
   }
 
-  #[cfg(feature="security")] // just to avoid warning
+  #[cfg(feature = "security")] // just to avoid warning
   pub(crate) fn qos(&self) -> QosPolicies {
     self.my_qos_policies.clone()
   }

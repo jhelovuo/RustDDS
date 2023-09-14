@@ -25,7 +25,7 @@ use crate::{
   discovery::content_filter_property::ContentFilterProperty,
   messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
-  rtps::{rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},  
+  rtps::{rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
   serialization::{
     pl_cdr_adapters::{
       PlCdrDeserialize, PlCdrDeserializeError, PlCdrSerialize, PlCdrSerializeError,
@@ -42,13 +42,10 @@ use crate::{
   },
   Key, Keyed,
 };
-
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 use crate::security::EndpointSecurityInfo;
-
-#[cfg(not(feature="security"))]
+#[cfg(not(feature = "security"))]
 use crate::no_security::EndpointSecurityInfo;
-
 #[cfg(test)]
 use crate::structure::guid::EntityKind;
 
@@ -177,7 +174,7 @@ pub struct SubscriptionBuiltinTopicData {
   topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates if the
                                        * parameter was present or not */
   // DDS Security:
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   security_info: Option<EndpointSecurityInfo>,
 }
 
@@ -211,9 +208,9 @@ impl SubscriptionBuiltinTopicData {
       service_instance_name: None,  // Note: Not implemented
       related_datawriter_key: None, // Note: Not implemented
       topic_aliases: None,          // Note: Not implemented
-      
+
       // DDS Security
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       security_info: _security_info,
     };
 
@@ -237,7 +234,7 @@ impl SubscriptionBuiltinTopicData {
     &self.type_name
   }
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   pub fn security_info(&self) -> &Option<EndpointSecurityInfo> {
     &self.security_info
   }
@@ -271,8 +268,8 @@ impl SubscriptionBuiltinTopicData {
       history: None, // SubscriptionBuiltinTopicData does not contain History QoS
       resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
-      
-      #[cfg(feature="security")]
+
+      #[cfg(feature = "security")]
       property: None, // TODO: no property QoS?
     }
   }
@@ -389,9 +386,9 @@ impl PlCdrDeserialize for DiscoveredReaderData {
       e
     })?;
 
-    #[cfg(not(feature="security"))]
+    #[cfg(not(feature = "security"))]
     let security_info = None;
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let security_info: Option<EndpointSecurityInfo> = get_option_from_pl_map(
       &pl_map,
       ctx,
@@ -457,7 +454,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
           related_datawriter_key,
           topic_aliases,
 
-          #[cfg(feature="security")]
+          #[cfg(feature = "security")]
           security_info, // TODO: missing implementation
         },
       content_filter,
@@ -535,7 +532,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
       ContentFilterProperty
     );
 
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     emit_option!(
       PID_ENDPOINT_SECURITY_INFO,
       security_info,
@@ -614,7 +611,7 @@ pub struct PublicationBuiltinTopicData {
   pub topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates
                                            * if the parameter was present or not */
   // DDS Security:
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   pub security_info: Option<EndpointSecurityInfo>,
 }
 
@@ -647,7 +644,8 @@ impl PublicationBuiltinTopicData {
       related_datareader_key: None, // TODO
       topic_aliases: None,          // TODO
 
-      #[cfg(feature="security")] security_info: _security_info,
+      #[cfg(feature = "security")]
+      security_info: _security_info,
     }
   }
 
@@ -691,7 +689,8 @@ impl PublicationBuiltinTopicData {
       history: None,         // PublicationBuiltinTopicData does not contain History QoS
       resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
-      #[cfg(feature="security")] property: None, // TODO: no property Qos?
+      #[cfg(feature = "security")]
+      property: None, // TODO: no property Qos?
     }
   }
 
@@ -806,7 +805,7 @@ impl PlCdrDeserialize for DiscoveredWriterData {
       "Max size serialized",
     )?;
 
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let security_info: Option<EndpointSecurityInfo> = get_option_from_pl_map(
       &pl_map,
       ctx,
@@ -814,7 +813,7 @@ impl PlCdrDeserialize for DiscoveredWriterData {
       "endpoint security info",
     )?;
 
-    #[cfg(not(feature="security"))]
+    #[cfg(not(feature = "security"))]
     let security_info: Option<EndpointSecurityInfo> = None;
 
     let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
@@ -875,7 +874,8 @@ impl PlCdrSerialize for DiscoveredWriterData {
           service_instance_name,
           related_datareader_key,
           topic_aliases,
-          #[cfg(feature="security")] security_info,
+          #[cfg(feature = "security")]
+          security_info,
         },
     } = self;
 
@@ -946,7 +946,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
       );
     }
 
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     emit_option!(
       PID_ENDPOINT_SECURITY_INFO,
       security_info,
@@ -1017,7 +1017,7 @@ impl HasQoSPolicy for TopicBuiltinTopicData {
       history: self.history,
       resource_limits: self.resource_limits,
       lifespan: self.lifespan,
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       property: None, // TODO: no property Qos?
     }
   }

@@ -23,21 +23,14 @@ use crate::{
     time::Timestamp,
   },
 };
-
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 use crate::security::{
-    cryptographic::types::SecureSubmessageCategory, security_plugins::SecurityPluginsHandle,
+  cryptographic::types::SecureSubmessageCategory, security_plugins::SecurityPluginsHandle,
 };
-#[cfg(feature="security")]
-use crate::messages::submessages::{
-      secure_postfix::SecurePostfix,
-      secure_prefix::SecurePrefix,
-};
-
-#[cfg(not(feature="security"))]
+#[cfg(feature = "security")]
+use crate::messages::submessages::{secure_postfix::SecurePostfix, secure_prefix::SecurePrefix};
+#[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
-
-
 #[cfg(test)]
 use crate::dds::ddsdata::DDSData;
 #[cfg(test)]
@@ -55,11 +48,11 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 // If the submessage sequence does not follow either of these, we fail and reset
 // to [None].
 //
-#[cfg(not(feature="security"))]
+#[cfg(not(feature = "security"))]
 #[derive(Clone, Eq, PartialEq, Debug)]
 struct SecureReceiverState {}
 
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 #[derive(Clone, Eq, PartialEq, Debug)]
 enum SecureReceiverState {
   // SecurePrefix received
@@ -72,7 +65,7 @@ enum SecureReceiverState {
 // resulting submessage. There may be several layers, such as entire RTPS
 // message was secured, or individual submessage was secured, or both. The
 // purpose is to communicate the wrapping to Readers and Writers.
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 #[derive(Clone, Debug)]
 pub struct SecureWrapping {
   // TODO
@@ -84,7 +77,8 @@ pub struct MessageReceiverState {
   pub unicast_reply_locator_list: Vec<Locator>,
   pub multicast_reply_locator_list: Vec<Locator>,
   pub source_timestamp: Option<Timestamp>,
-  #[cfg(feature="security")] pub secure_rtps_wrapped: Option<SecureWrapping>,
+  #[cfg(feature = "security")]
+  pub secure_rtps_wrapped: Option<SecureWrapping>,
 }
 
 impl Default for MessageReceiverState {
@@ -94,7 +88,8 @@ impl Default for MessageReceiverState {
       unicast_reply_locator_list: Vec::default(),
       multicast_reply_locator_list: Vec::default(),
       source_timestamp: Some(Timestamp::INVALID),
-      #[cfg(feature="security")] secure_rtps_wrapped: None,
+      #[cfg(feature = "security")]
+      secure_rtps_wrapped: None,
     }
   }
 }
@@ -128,7 +123,8 @@ pub(crate) struct MessageReceiver {
 
   submessage_count: usize, // Used in tests only?
   secure_receiver_state: Option<SecureReceiverState>,
-  #[cfg(feature="security")] secure_rtps_wrapped: Option<SecureWrapping>,
+  #[cfg(feature = "security")]
+  secure_rtps_wrapped: Option<SecureWrapping>,
 }
 
 impl MessageReceiver {
@@ -155,7 +151,8 @@ impl MessageReceiver {
 
       submessage_count: 0,
       secure_receiver_state: None,
-      #[cfg(feature="security")] secure_rtps_wrapped: None,
+      #[cfg(feature = "security")]
+      secure_rtps_wrapped: None,
     }
   }
 
@@ -169,11 +166,11 @@ impl MessageReceiver {
     self.source_timestamp = None;
 
     self.submessage_count = 0;
-    
+
     self.secure_receiver_state = None; // This exists regardless of security
 
-    
-    #[cfg(feature="security")] {
+    #[cfg(feature = "security")]
+    {
       self.secure_rtps_wrapped = None;
     }
   }
@@ -184,7 +181,8 @@ impl MessageReceiver {
       unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
       multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
       source_timestamp: self.source_timestamp,
-      #[cfg(feature="security")] secure_rtps_wrapped: self.secure_rtps_wrapped.clone(),
+      #[cfg(feature = "security")]
+      secure_rtps_wrapped: self.secure_rtps_wrapped.clone(),
     }
   }
 
@@ -247,10 +245,10 @@ impl MessageReceiver {
     self.source_version = rtps_message.header.protocol_version;
     self.source_vendor_id = rtps_message.header.vendor_id;
 
-    #[cfg(not(feature="security"))]
+    #[cfg(not(feature = "security"))]
     let decoded_message = rtps_message;
 
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let decoded_message = match &self.security_plugins {
       None => rtps_message,
 
@@ -335,10 +333,10 @@ impl MessageReceiver {
                   }
                 }
 
-                #[cfg(not(feature="security"))]
+                #[cfg(not(feature = "security"))]
                 Some(_) => {}
 
-                #[cfg(feature="security")]
+                #[cfg(feature = "security")]
                 Some(plugins_handle) => {
                   for target_entity_id in available_target_entity_ids {
                     let destination_guid = GUID {
@@ -358,10 +356,10 @@ impl MessageReceiver {
               match security_plugins_clone {
                 None => self.handle_writer_submessage(receiver_entity_id, submessage),
 
-                #[cfg(not(feature="security"))]
+                #[cfg(not(feature = "security"))]
                 Some(_) => {}
 
-                #[cfg(feature="security")]
+                #[cfg(feature = "security")]
                 Some(plugins_handle) => {
                   let destination_guid = GUID {
                     prefix: self.dest_guid_prefix,
@@ -384,10 +382,11 @@ impl MessageReceiver {
           }
 
           SubmessageBody::Reader(submessage) => {
-            #[cfg(not(feature="security"))] {
-              self.handle_reader_submessage(submessage) 
+            #[cfg(not(feature = "security"))]
+            {
+              self.handle_reader_submessage(submessage)
             }
-            #[cfg(feature="security")] 
+            #[cfg(feature = "security")]
             match self
               .security_plugins
               .as_ref()
@@ -399,7 +398,8 @@ impl MessageReceiver {
                   prefix: self.dest_guid_prefix,
                   entity_id: submessage.receiver_entity_id(),
                 };
-                #[cfg(feature="security")] // This match branch can only be taken with security feature
+                #[cfg(feature = "security")]
+                // This match branch can only be taken with security feature
                 if plugins.submessage_not_protected(&destination_guid) {
                   self.handle_reader_submessage(submessage);
                 } else {
@@ -412,7 +412,7 @@ impl MessageReceiver {
             }
           }
 
-          #[cfg(feature="security")]
+          #[cfg(feature = "security")]
           SubmessageBody::Security(m) => {
             if self.dest_guid_prefix != self.own_guid_prefix
               && self.dest_guid_prefix != GuidPrefix::UNKNOWN
@@ -457,18 +457,17 @@ impl MessageReceiver {
         } // match submessage kind
       } // state None
 
-      #[cfg(not(feature="security"))]
-      Some(_) => {} 
+      #[cfg(not(feature = "security"))]
+      Some(_) => {}
       // No security feature => secure_receiver_state is always None.
-
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       Some(SecureReceiverState::Prefix(sec_prefix)) => {
         self.secure_receiver_state = Some(SecureReceiverState::SecureSubmessage(
           sec_prefix, submessage,
         ));
       } // state Prefix
 
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       Some(SecureReceiverState::SecureSubmessage(sec_prefix, sec_submessage)) => {
         // Secure prefix and a single other submessage received.
         // Now expecting postfix, and only that.
@@ -576,7 +575,7 @@ impl MessageReceiver {
   }
 
   // see security version of the same function below
-  #[cfg(not(feature="security"))]
+  #[cfg(not(feature = "security"))]
   fn decode_and_handle_data(
     _security_plugins: Option<&SecurityPluginsHandle>,
     _source_guid: &GUID,
@@ -587,17 +586,17 @@ impl MessageReceiver {
   ) {
     let encoded_payload = data.encoded_payload.clone();
 
-    let sp :Option<SerializedPayload> = 
-      encoded_payload.map(|encoded_payload| SerializedPayload::from_bytes(&encoded_payload))
-        .transpose()
-        .map_err(|e| error!("{e:?}"))
-        .ok().flatten();
+    let sp: Option<SerializedPayload> = encoded_payload
+      .map(|encoded_payload| SerializedPayload::from_bytes(&encoded_payload))
+      .transpose()
+      .map_err(|e| error!("{e:?}"))
+      .ok()
+      .flatten();
 
     reader.handle_data_msg(data.decoded(sp), data_flags, mr_state);
-
   }
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   fn decode_and_handle_data(
     security_plugins: Option<&SecurityPluginsHandle>,
     source_guid: &GUID,
@@ -650,8 +649,7 @@ impl MessageReceiver {
       .ok();
   }
 
-
-  #[cfg(not(feature="security"))]
+  #[cfg(not(feature = "security"))]
   // see security version below
   fn decode_and_handle_datafrag(
     _security_plugins: Option<&SecurityPluginsHandle>,
@@ -685,7 +683,7 @@ impl MessageReceiver {
     }
   }
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   fn decode_and_handle_datafrag(
     security_plugins: Option<&SecurityPluginsHandle>,
     source_guid: &GUID,
@@ -785,7 +783,7 @@ impl MessageReceiver {
     }
   }
 
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   fn handle_secure_submessage(
     &mut self,
     sec_prefix: &SecurePrefix,

@@ -33,11 +33,8 @@ use crate::{
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
   },
 };
-
-#[cfg(feature="security")]
-use crate::{
-  discovery::secure_discovery::AuthenticationStatus,
-};
+#[cfg(feature = "security")]
+use crate::discovery::secure_discovery::AuthenticationStatus;
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,
@@ -59,7 +56,7 @@ pub struct DPEventLoop {
   message_receiver: MessageReceiver, // This contains our Readers
 
   // If security is enabled, this contains the security plugins
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   security_plugins_opt: Option<SecurityPluginsHandle>,
 
   // Adding readers
@@ -78,7 +75,7 @@ pub struct DPEventLoop {
   udp_sender: Rc<UDPSender>,
 
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
-  #[cfg(feature="security")]
+  #[cfg(feature = "security")]
   discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
@@ -192,9 +189,13 @@ impl DPEventLoop {
         participant_guid_prefix,
         acknack_sender,
         spdp_liveness_sender,
-        if cfg!(security) {security_plugins_opt.clone()} else {None},
+        if cfg!(security) {
+          security_plugins_opt.clone()
+        } else {
+          None
+        },
       ),
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       security_plugins_opt,
       add_reader_receiver,
       remove_reader_receiver,
@@ -204,7 +205,7 @@ impl DPEventLoop {
       writers: HashMap::new(),
       ack_nack_receiver: acknack_receiver,
       discovery_update_notification_receiver,
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       discovery_command_sender: _discovery_command_sender,
     }
   }
@@ -495,12 +496,13 @@ impl DPEventLoop {
 
     // Select which builtin endpoints of the remote participant are updated to local
     // readers & writers
-    #[cfg(not(feature="security"))]
-    let (readers_init_list,writers_init_list) = 
-      ( STANDARD_BUILTIN_READERS_INIT_LIST.to_vec(),
-        STANDARD_BUILTIN_WRITERS_INIT_LIST.to_vec() );
+    #[cfg(not(feature = "security"))]
+    let (readers_init_list, writers_init_list) = (
+      STANDARD_BUILTIN_READERS_INIT_LIST.to_vec(),
+      STANDARD_BUILTIN_WRITERS_INIT_LIST.to_vec(),
+    );
 
-    #[cfg(feature="security")] 
+    #[cfg(feature = "security")]
     let (readers_init_list, writers_init_list) = match &self.security_plugins_opt {
       None => {
         // No security enabled, just the standard endpoints
@@ -623,7 +625,7 @@ impl DPEventLoop {
 
     // If appropriate, send a signal to Discovery to start key exchange with the
     // participant
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     if let Some(AuthenticationStatus::Authenticated) =
       db.get_authentication_status(participant_guid_prefix)
     {
@@ -746,11 +748,11 @@ impl DPEventLoop {
       .expect("Reader timer channel registration failed!");
 
     // Clone these before handing ingredients to Reader builder
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let reader_guid = reader_ing.guid;
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let reader_property_qos = reader_ing.qos_policy.property();
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let topic_name = reader_ing.topic_name.clone();
 
     let mut new_reader = Reader::new(reader_ing, self.udp_sender.clone(), timer);
@@ -766,7 +768,7 @@ impl DPEventLoop {
       )
       .expect("Reader command channel registration failed!!!");
 
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
       // Security is enabled. Register Reader to crypto plugin
       if let Err(e) = {
@@ -811,7 +813,7 @@ impl DPEventLoop {
           error!("Cannot deregister data_reader_command_receiver: {e:?}");
         });
 
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
         // Security is enabled. Unregister the reader with the crypto plugin.
         // Currently the unregister method is called for every reader, and errors are
@@ -839,11 +841,11 @@ impl DPEventLoop {
       .expect("Writer heartbeat timer channel registration failed!!");
 
     // Clone these before handing ingredients to Writer builder
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let writer_guid = writer_ing.guid;
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let writer_property_qos = writer_ing.qos_policies.property();
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     let topic_name = writer_ing.topic_name.clone();
 
     let new_writer = Writer::new(writer_ing, self.udp_sender.clone(), timer);
@@ -858,7 +860,7 @@ impl DPEventLoop {
       )
       .expect("Writer command channel registration failed!!");
 
-    #[cfg(feature="security")]
+    #[cfg(feature = "security")]
     if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
       // Security is enabled. Register Writer to crypto plugin
 
@@ -900,7 +902,7 @@ impl DPEventLoop {
         .deregister(&w.timed_event_timer)
         .unwrap_or_else(|e| error!("Deregister fail (writer timer) {e:?}"));
 
-      #[cfg(feature="security")]
+      #[cfg(feature = "security")]
       if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
         // Security is enabled. Unregister the writer with the crypto plugin.
         // Currently the unregister method is called for every writer, and errors are

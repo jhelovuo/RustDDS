@@ -172,12 +172,12 @@ mod messages;
 mod network;
 mod rtps;
 
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 mod security;
 
-#[cfg(not(feature="security"))]
+#[cfg(not(feature = "security"))]
 mod no_security;
-#[cfg(not(feature="security"))]
+#[cfg(not(feature = "security"))]
 use no_security as security;
 
 pub(crate) mod structure;

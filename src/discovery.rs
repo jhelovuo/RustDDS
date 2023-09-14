@@ -4,7 +4,7 @@ pub(crate) mod content_filter_property;
 pub(crate) mod discovery;
 pub(crate) mod discovery_db;
 
-#[cfg(feature="security")]
+#[cfg(feature = "security")]
 pub(crate) mod secure_discovery;
 
 pub(crate) mod sedp_messages;
