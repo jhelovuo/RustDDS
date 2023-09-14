@@ -777,8 +777,6 @@ impl SecurityPlugins {
           return Ok(EncodedSubmessage::Unencoded(plain_submessage));
         }
 
-        println!("Submessage protected: {:?}", plain_submessage.header.kind);
-
         // Convert the destination GUIDs to crypto handles
         let mut receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle> =
           SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
