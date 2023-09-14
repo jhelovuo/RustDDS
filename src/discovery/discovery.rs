@@ -25,7 +25,6 @@ use crate::{
   },
   discovery::{
     discovery_db::{discovery_db_read, discovery_db_write, DiscoveredVia, DiscoveryDB},
-    secure_discovery::{NormalDiscoveryPermission, SecureDiscovery},
     sedp_messages::{
       DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, Endpoint_GUID,
       ParticipantMessageData, ParticipantMessageDataKind, PublicationBuiltinTopicData, ReaderProxy,
@@ -34,7 +33,6 @@ use crate::{
     spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
   rtps::constant::*,
-  security::{security_plugins::SecurityPluginsHandle, types::*},
   serialization::{
     cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter,
     pl_cdr_adapters::*,
@@ -48,6 +46,16 @@ use crate::{
   },
   with_key::{DataReader, DataWriter, Sample},
 };
+
+#[cfg(feature="security")]
+use crate::{
+  discovery::secure_discovery::{NormalDiscoveryPermission, SecureDiscovery},
+  security::{security_plugins::SecurityPluginsHandle, types::*},
+};
+
+#[cfg(not(feature="security"))]
+use crate::no_security::*;
+
 
 #[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum DiscoveryCommand {
@@ -63,6 +71,8 @@ pub enum DiscoveryCommand {
     writer_guid: GUID,
     manual_assertion: bool,
   },
+
+  #[cfg(feature="security")] 
   StartKeyExchangeWithRemoteParticipant {
     participant_guid_prefix: GuidPrefix,
   },
@@ -122,6 +132,7 @@ mod with_key {
   }
 }
 
+#[cfg(feature="security")] // only used with security feature for now, this is to avoid warning
 mod no_key {
   use serde::{de::DeserializeOwned, Serialize};
   use mio_extras::timer::Timer;
@@ -194,19 +205,23 @@ pub(crate) struct Discovery {
 
   // DCPSParticipantSecure - 7.4.1.6 New DCPSParticipantSecure Builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
+  #[cfg(feature="security")]
   dcps_participant_secure: with_key::DiscoveryTopicPlCdr<ParticipantBuiltinTopicDataSecure>,
 
   // DCPSPublicationsSecure - 7.4.1.7 New DCPSPublicationsSecure Builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
+  #[cfg(feature="security")]
   dcps_publications_secure: with_key::DiscoveryTopicPlCdr<PublicationBuiltinTopicDataSecure>,
 
   // DCPSSubscriptionsSecure - 7.4.1.8 New DCPSSubscriptionsSecure Builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
+  #[cfg(feature="security")]
   dcps_subscriptions_secure: with_key::DiscoveryTopicPlCdr<SubscriptionBuiltinTopicDataSecure>,
 
   // DCPSParticipantMessageSecure - used by participants to communicate secure liveness
   // 7.4.2 New DCPSParticipantMessageSecure builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
+  #[cfg(feature="security")]
   dcps_participant_message_secure: with_key::DiscoveryTopicCDR<ParticipantMessageData>, /* CDR, not PL_CDR */
 
   // DCPSParticipantStatelessMessageSecure
@@ -214,11 +229,13 @@ pub(crate) struct Discovery {
   // !!! TODO: By the spec, this topic must use _stateless_ reader and writer, which are
   // insensitive to sequence number attacks.
   #[allow(dead_code)] // TODO: Remove when handlers implemented
+  #[cfg(feature="security")]
   dcps_participant_stateless_message: no_key::DiscoveryTopicCDR<ParticipantStatelessMessage>,
 
   // DCPSParticipantVolatileMessageSecure
   // 7.4.4 New DCPSParticipantVolatileMessageSecure builtin Topic
   #[allow(dead_code)] // TODO: Remove when handlers implemented
+  #[cfg(feature="security")]
   dcps_participant_volatile_message_secure:
     no_key::DiscoveryTopicCDR<ParticipantVolatileMessageSecure>, // CDR?
 }
@@ -231,6 +248,7 @@ impl Discovery {
   const SEND_WRITERS_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
   const SEND_TOPIC_INFO_PERIOD: StdDuration = StdDuration::from_secs(10);
   const CHECK_PARTICIPANT_MESSAGES: StdDuration = StdDuration::from_secs(1);
+  #[cfg(feature="security")]
   const AUTHENTICATION_MESSAGE_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
 
   pub(crate) const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
@@ -248,8 +266,24 @@ impl Discovery {
     history: Some(History::KeepLast { depth: 1 }),
     resource_limits: None,
     lifespan: None,
-    property: None,
+    #[cfg(feature="security")] property: None,
   };
+
+  // pub(crate) const PARTICIPANT_STATELESS_MESSAGE_QOS: QosPolicies = QosPolicies {
+  //   durability: None,
+  //   presentation: None,
+  //   deadline: None,
+  //   latency_budget: None,
+  //   ownership: None,
+  //   liveliness: None,
+  //   time_based_filter: None,
+  //   reliability: Some(Reliability::BestEffort), // Important (see Security spec section 7.3.4)
+  //   destination_order: None,
+  //   history: Some(History::KeepLast { depth: 1 }),
+  //   resource_limits: None,
+  //   lifespan: None,
+  //   #[cfg(feature="security")] property: None,
+  // };
 
   #[allow(clippy::too_many_arguments)]
   pub fn new(
@@ -478,7 +512,10 @@ impl Discovery {
     );
 
     // DDS Security
+    #[cfg(not(feature="security"))]
+    let security_opt = security_plugins_opt.map(|_|None).flatten(); // = None, but avoid warning.
 
+    #[cfg(feature="security")]
     let security_opt = if let Some(plugins_handle) = security_plugins_opt {
       // Plugins is Some so security is enabled. Initialize SecureDiscovery
       let security = try_construct!(
@@ -487,11 +524,11 @@ impl Discovery {
       );
       Some(security)
     } else {
-      // Return None to indicate no security
-      None
+      None // no security configured
     };
 
     // Participant
+    #[cfg(feature="security")]
     let dcps_participant_secure = construct_topic_and_poll!(
       PlCdr,
       with_key,
@@ -509,6 +546,7 @@ impl Discovery {
 
     // Subscriptions: What are the Readers on the network and what are they
     // subscribing to?
+    #[cfg(feature="security")]
     let dcps_subscriptions_secure = construct_topic_and_poll!(
       PlCdr,
       with_key,
@@ -525,6 +563,7 @@ impl Discovery {
     );
 
     // Publication : Who are the Writers here and elsewhere
+    #[cfg(feature="security")]
     let dcps_publications_secure = construct_topic_and_poll!(
       PlCdr,
       with_key,
@@ -541,6 +580,7 @@ impl Discovery {
     );
 
     // p2p Participant message secure
+    #[cfg(feature="security")]
     let dcps_participant_message_secure = construct_topic_and_poll!(
       CDR,
       with_key,
@@ -555,7 +595,8 @@ impl Discovery {
       Self::CHECK_PARTICIPANT_MESSAGES,
       P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
     );
-    // p2p Participant stateless message, used for authentication
+    // p2p Participant stateless message, used for authentication and Diffie-Hellman key exchange
+    #[cfg(feature="security")]
     let dcps_participant_stateless_message = construct_topic_and_poll!(
       CDR,
       no_key,
@@ -570,7 +611,10 @@ impl Discovery {
       Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD,
       CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN,
     );
+
     // p2p Participant volatile message secure, used for key exchange
+    // Used for distributing symmetric (AES) crypto keys
+    #[cfg(feature="security")]
     let dcps_participant_volatile_message_secure = construct_topic_and_poll!(
       CDR,
       no_key,
@@ -609,12 +653,12 @@ impl Discovery {
       dcps_participant_message, // liveliness messages
 
       security_opt,
-      dcps_participant_secure,
-      dcps_publications_secure,
-      dcps_subscriptions_secure,
-      dcps_participant_message_secure,
-      dcps_participant_stateless_message,
-      dcps_participant_volatile_message_secure,
+      #[cfg(feature="security")] dcps_participant_secure,
+      #[cfg(feature="security")] dcps_publications_secure,
+      #[cfg(feature="security")] dcps_subscriptions_secure,
+      #[cfg(feature="security")] dcps_participant_message_secure,
+      #[cfg(feature="security")] dcps_participant_stateless_message,
+      #[cfg(feature="security")] dcps_participant_volatile_message_secure,
     })
   }
 
@@ -712,6 +756,7 @@ impl Discovery {
                     },
                   );
                 }
+                #[cfg(feature="security")] 
                 DiscoveryCommand::StartKeyExchangeWithRemoteParticipant {
                   participant_guid_prefix,
                 } => {
@@ -825,12 +870,15 @@ impl Discovery {
             }
           }
           P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN => {
+            #[cfg(feature="security")]
             self.handle_participant_stateless_message_reader();
           }
           CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN => {
+            #[cfg(feature="security")]
             self.on_authentication_message_resend_triggered();
           }
           P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN => {
+            #[cfg(feature="security")]
             self.handle_volatile_message_secure_reader();
           }
           SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN
@@ -967,7 +1015,11 @@ impl Discovery {
       debug!("handle_participant_reader read {:?}", &s);
       match s {
         Ok(Some(ds)) => {
-          let permission = if let Some(security) = self.security_opt.as_mut() {
+          #[cfg(not(feature="security"))]
+          let unsecure_discvery_permission = true;
+
+          #[cfg(feature="security")]
+          let unsecure_discvery_permission = if let Some(security) = self.security_opt.as_mut() {
             // Security is enabled. Do a secure read, potentially starting the
             // authentication protocol. The return value tells if normal Discovery is
             // allowed to process the message.
@@ -976,13 +1028,13 @@ impl Discovery {
               &self.discovery_db,
               &self.discovery_updated_sender,
               &self.dcps_participant_stateless_message.writer,
-            )
+            ) == NormalDiscoveryPermission::Allow
           } else {
-            // No security, always allowed
-            NormalDiscoveryPermission::Allow
+            // No security configured, always allowed
+            true
           };
 
-          if permission == NormalDiscoveryPermission::Allow {
+          if unsecure_discvery_permission {
             match ds.value {
               Sample::Value(participant_data) => {
                 debug!(
@@ -1319,6 +1371,7 @@ impl Discovery {
     }
   }
 
+  #[cfg(feature="security")] 
   fn handle_participant_stateless_message_reader(&mut self) {
     if let Some(security) = self.security_opt.as_mut() {
       // Security enabled. Get messages from the stateless data reader & feed to
@@ -1345,6 +1398,7 @@ impl Discovery {
     }
   }
 
+  #[cfg(feature="security")] 
   fn handle_volatile_message_secure_reader(&mut self) {
     if let Some(security) = self.security_opt.as_mut() {
       // Security enabled. Get messages from the volatile message reader & feed to
@@ -1366,6 +1420,7 @@ impl Discovery {
     }
   }
 
+  #[cfg(feature="security")] 
   fn on_authentication_message_resend_triggered(&mut self) {
     if let Some(security) = self.security_opt.as_mut() {
       // Security is enabled
@@ -1522,7 +1577,8 @@ impl Discovery {
       .history(History::KeepLast { depth: 1 })
       .build()
   }
-
+  
+  #[cfg(feature="security")]
   pub fn create_participant_volatile_message_secure_qos() -> QosPolicies {
     // See Table 18 – Non-default Qos policies for
     // BuiltinParticipantVolatileMessageSecureWriter of the Security spec
@@ -1767,6 +1823,7 @@ mod tests {
         },
         SubmessageBody::Writer(_) => (),
         SubmessageBody::Reader(_) => (),
+        #[cfg(feature="security")]
         SubmessageBody::Security(_) => (),
       }
     }

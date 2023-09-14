@@ -39,7 +39,6 @@ use crate::{
     fragment_assembler::FragmentAssembler, message_receiver::MessageReceiverState,
     rtps_writer_proxy::RtpsWriterProxy, Message,
   },
-  security::{security_plugins::SecurityPluginsHandle, SecurityResult},
   structure::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::TopicCache,
@@ -50,7 +49,15 @@ use crate::{
     time::Timestamp,
   },
 };
+
+#[cfg(feature="security")]
 use super::Submessage;
+#[cfg(feature="security")]
+use crate::security::{security_plugins::SecurityPluginsHandle, SecurityResult};
+
+#[cfg(not(feature="security"))]
+use crate::no_security::SecurityPluginsHandle;
+
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TimedEvent {
@@ -141,6 +148,7 @@ pub(crate) struct Reader {
   data_reader_waker: Arc<Mutex<Option<Waker>>>,
   poll_event_sender: mio_source::PollEventSender,
 
+  #[allow(dead_code)] // to avoid warning if no security feature
   security_plugins: Option<SecurityPluginsHandle>,
 }
 
@@ -1156,6 +1164,31 @@ impl Reader {
     }
   }
 
+  #[cfg(not(feature="security"))]
+  fn encode_and_send(&self, message: Message, _destination_guid: GUID, dst_locator_list: &[Locator]) {
+    let bytes = message
+      .write_to_vec_with_ctx(Endianness::LittleEndian)
+      .unwrap(); //TODO!
+    self.udp_sender.send_to_locator_list(&bytes, dst_locator_list);
+  }
+
+
+  #[cfg(feature="security")]
+  fn encode_and_send(&self, message: Message, destination_guid: GUID, dst_locator_list: &[Locator]) {
+    match self.security_encode(message, destination_guid) {
+      Ok(message) => {
+        let bytes = message
+          .write_to_vec_with_ctx(Endianness::LittleEndian)
+          .unwrap();
+        self
+          .udp_sender
+          .send_to_locator_list(&bytes, dst_locator_list);
+      }
+      Err(e) => error!("Failed to send message to writers. Encoding failed: {e:?}"),
+    }
+  }
+
+  #[cfg(feature="security")]
   fn security_encode(&self, message: Message, destination_guid: GUID) -> SecurityResult<Message> {
     // If we have security plugins, use them, otherwise pass through
     if let Some(security_plugins_handle) = &self.security_plugins {
@@ -1219,17 +1252,7 @@ impl Reader {
 
     message.add_submessage(acknack.create_submessage(flags));
 
-    match self.security_encode(message, destination_guid) {
-      Ok(message) => {
-        let bytes = message
-          .write_to_vec_with_ctx(Endianness::LittleEndian)
-          .unwrap();
-        self
-          .udp_sender
-          .send_to_locator_list(&bytes, dst_locator_list);
-      }
-      Err(e) => error!("Failed to send message to writers. Encoding failed: {e:?}"),
-    }
+    self.encode_and_send(message, destination_guid, dst_locator_list);
   }
 
   fn send_nackfrags_to(
@@ -1256,17 +1279,7 @@ impl Reader {
       message.add_submessage(nf.create_submessage(flags));
     }
 
-    match self.security_encode(message, destination_guid) {
-      Ok(message) => {
-        let bytes = message
-          .write_to_vec_with_ctx(Endianness::LittleEndian)
-          .unwrap();
-        self
-          .udp_sender
-          .send_to_locator_list(&bytes, dst_locator_list);
-      }
-      Err(e) => error!("Failed to send message to writers. Encoding failed: {e:?}"),
-    }
+    self.encode_and_send(message, destination_guid, dst_locator_list);
   }
 
   pub fn send_preemptive_acknacks(&mut self) {
