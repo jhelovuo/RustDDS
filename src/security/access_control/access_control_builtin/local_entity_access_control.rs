@@ -219,10 +219,10 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
   fn get_topic_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
-    topic_name: String,
+    topic_name: &str,
   ) -> SecurityResult<TopicSecurityAttributes> {
     self
-      .get_endpoint_security_attributes(permissions_handle, &topic_name)
+      .get_endpoint_security_attributes(permissions_handle, topic_name)
       .map(
         |EndpointSecurityAttributes {
            topic_security_attributes,

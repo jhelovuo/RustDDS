@@ -898,6 +898,15 @@ impl Keyed for SubscriptionBuiltinTopicDataSecure {
     self.discovered_reader_data.key()
   }
 }
+impl From<discovery::sedp_messages::DiscoveredReaderData> for SubscriptionBuiltinTopicDataSecure {
+  fn from(drd: discovery::sedp_messages::DiscoveredReaderData) -> Self {
+    Self {
+      discovered_reader_data: drd,
+      data_tags: qos::policy::DataTag::default(),
+    }
+  }
+}
+
 impl PlCdrDeserialize for SubscriptionBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],

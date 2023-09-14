@@ -260,6 +260,11 @@ impl DiscoveryDB {
     self.external_topic_readers.remove(&guid);
   }
 
+  #[allow(dead_code)] // Currently used only if security is on
+  pub fn get_topic_reader(&self, guid: &GUID) -> Option<&DiscoveredReaderData> {
+    self.external_topic_readers.get(guid)
+  }
+
   fn remove_topic_writer_with_prefix(&mut self, guid_prefix: GuidPrefix) {
     // TODO: Implement this using .drain_filter() in BTreeMap once it lands in
     // stable.

@@ -5,6 +5,7 @@ use std::{
 };
 
 use crate::{
+  discovery::DiscoveredReaderData,
   messages::submessages::{
     elements::parameter_list::ParameterList,
     secure_postfix::SecurePostfix,
@@ -416,6 +417,23 @@ impl SecurityPlugins {
       .check_remote_participant(handle, domain_id, None)
   }
 
+  // This function is called when DataReaders from non-secure discovery
+  // need to be checked
+  pub fn check_remote_datareader_from_nonsecure(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    reader_data: &DiscoveredReaderData,
+  ) -> SecurityResult<bool> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    // Convert normal DiscoveredReaderData to SubscriptionBuiltinTopicDataSecure,
+    // which is what Access control plugin expects
+    let secure_sub_data = SubscriptionBuiltinTopicDataSecure::from(reader_data.clone());
+    self
+      .access
+      .check_remote_datareader(handle, domain_id, &secure_sub_data)
+  }
+
   pub fn get_permissions_token(
     &self,
     participant_guidp: GuidPrefix,
@@ -438,6 +456,17 @@ impl SecurityPlugins {
   ) -> SecurityResult<ParticipantSecurityAttributes> {
     let handle: PermissionsHandle = self.get_permissions_handle(&participant_guidp)?;
     self.access.get_participant_sec_attributes(handle)
+  }
+
+  pub fn get_topic_sec_attributes(
+    &self,
+    participant_guidp: GuidPrefix,
+    topic_name: &str,
+  ) -> SecurityResult<TopicSecurityAttributes> {
+    let permissions_handle = self.get_permissions_handle(&participant_guidp)?;
+    self
+      .access
+      .get_topic_sec_attributes(permissions_handle, topic_name)
   }
 
   pub fn get_reader_sec_attributes(

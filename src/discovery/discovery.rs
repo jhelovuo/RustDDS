@@ -1118,30 +1118,44 @@ impl Discovery {
       };
 
     for d in drds {
-      match d {
-        Sample::Value(d) => {
-          let drd = discovery_db_write(&self.discovery_db).update_subscription(&d);
-          debug!(
-            "handle_subscription_reader - send_discovery_notification ReaderUpdated  {:?}",
-            &drd
-          );
-          self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-            discovered_reader_data: drd,
-          });
-          if read_history.is_some() {
-            info!(
-              "Rediscovered reader {:?} topic={:?}",
-              d.reader_proxy.remote_reader_guid,
-              d.subscription_topic_data.topic_name()
+      #[cfg(not(feature = "security"))]
+      let permission = NormalDiscoveryPermission::Allow;
+
+      #[cfg(feature = "security")]
+      let permission = if let Some(security) = self.security_opt.as_mut() {
+        // Security is enabled. Do a secure read
+        security.check_nonsecure_subscription_read(&d, &self.discovery_db)
+      } else {
+        // No security configured, always allowed
+        NormalDiscoveryPermission::Allow
+      };
+
+      if permission == NormalDiscoveryPermission::Allow {
+        match d {
+          Sample::Value(d) => {
+            let drd = discovery_db_write(&self.discovery_db).update_subscription(&d);
+            debug!(
+              "handle_subscription_reader - send_discovery_notification ReaderUpdated  {:?}",
+              &drd
             );
+            self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
+              discovered_reader_data: drd,
+            });
+            if read_history.is_some() {
+              info!(
+                "Rediscovered reader {:?} topic={:?}",
+                d.reader_proxy.remote_reader_guid,
+                d.subscription_topic_data.topic_name()
+              );
+            }
           }
-        }
-        Sample::Dispose(reader_key) => {
-          info!("Dispose Reader {:?}", reader_key);
-          discovery_db_write(&self.discovery_db).remove_topic_reader(reader_key);
-          self.send_discovery_notification(DiscoveryNotificationType::ReaderLost {
-            reader_guid: reader_key,
-          });
+          Sample::Dispose(reader_key) => {
+            info!("Dispose Reader {:?}", reader_key);
+            discovery_db_write(&self.discovery_db).remove_topic_reader(reader_key);
+            self.send_discovery_notification(DiscoveryNotificationType::ReaderLost {
+              reader_guid: reader_key,
+            });
+          }
         }
       }
     } // loop
