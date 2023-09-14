@@ -44,7 +44,7 @@ impl CryptographicBuiltin {
       .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
 
     // Get the key material for encoding
-    let EncryptSessionMaterials {
+    let EncodeSessionMaterials {
       key_id,
       transformation_kind,
       session_key,
@@ -201,7 +201,7 @@ impl CryptoTransform for CryptographicBuiltin {
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
     // Get the key material for encrypting serialized payloads
-    let EncryptSessionMaterials {
+    let EncodeSessionMaterials {
       key_id,
       transformation_kind,
       session_key,
@@ -317,7 +317,7 @@ impl CryptoTransform for CryptographicBuiltin {
     .concat();
 
     // Get the key material for encoding
-    let EncryptSessionMaterials {
+    let EncodeSessionMaterials {
       key_id,
       transformation_kind,
       session_key,

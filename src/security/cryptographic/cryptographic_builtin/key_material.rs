@@ -16,7 +16,7 @@ use super::{
 /// KeyMaterial_AES_GCM_GMAC type from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the name from the spec
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct KeyMaterial_AES_GCM_GMAC {
   pub transformation_kind: BuiltinCryptoTransformationKind,
   pub master_salt: BuiltinKey, // Salt length should match the keys by 9.5.3.3.2
@@ -78,7 +78,7 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for CryptoToken {
 /// In case of Two, the first one is for metadata(headers) and payload and
 /// the second for payload only.
 #[allow(non_camel_case_types)] // We use the name from the spec
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) enum KeyMaterial_AES_GCM_GMAC_seq {
   One(KeyMaterial_AES_GCM_GMAC),
   Two(KeyMaterial_AES_GCM_GMAC, KeyMaterial_AES_GCM_GMAC),
@@ -276,6 +276,7 @@ impl KeyMaterial_AES_GCM_GMAC {
   }
 }
 
+#[derive(Debug)]
 pub(super) struct ReceiverSpecificKeyMaterial {
   pub key_id: CryptoTransformKeyId,
   pub key: BuiltinKey,
