@@ -38,12 +38,12 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix},
   },
-  RepresentationIdentifier, SequenceNumber, GUID,
+  with_key, RepresentationIdentifier, SequenceNumber, GUID,
 };
 use super::{
   discovery::NormalDiscoveryPermission,
   discovery_db::{discovery_db_read, discovery_db_write, DiscoveryDB},
-  Participant_GUID, SpdpDiscoveredParticipantData,
+  DiscoveredReaderData, Participant_GUID, SpdpDiscoveredParticipantData,
 };
 
 // Enum for authentication status of a remote participant
@@ -324,6 +324,170 @@ impl SecureDiscovery {
         );
         // Do not allow with any other status
         NormalDiscoveryPermission::Deny
+      }
+    }
+  }
+
+  pub fn check_nonsecure_subscription_read(
+    &mut self,
+    sample: &with_key::Sample<DiscoveredReaderData, GUID>,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) -> NormalDiscoveryPermission {
+    // First see if discovery for the topic should be protected
+    let (topic_name, participant_guidp) = match sample {
+      Sample::Value(reader_data) => (
+        reader_data.subscription_topic_data.topic_name().clone(),
+        reader_data.reader_proxy.remote_reader_guid.prefix,
+      ),
+      Sample::Dispose(reader_guid) => {
+        if let Some(reader) = discovery_db_read(discovery_db).get_topic_reader(reader_guid) {
+          // We do know a reader with this guid
+          (
+            reader.subscription_topic_data.topic_name().clone(),
+            reader_guid.prefix,
+          )
+        } else {
+          // We do not now such a reader. Deny processing just in case.
+          return NormalDiscoveryPermission::Deny;
+        }
+      }
+    };
+
+    let topic_sec_attributes = match self
+      .security_plugins
+      .get_plugins()
+      .get_topic_sec_attributes(participant_guidp, &topic_name)
+    {
+      Ok(attr) => attr,
+      Err(e) => {
+        security_error!(
+          "Failed to get topic security attributes: {}. Topic: {topic_name}",
+          e
+        );
+        return NormalDiscoveryPermission::Deny;
+      }
+    };
+
+    if topic_sec_attributes.is_discovery_protected {
+      // Message should come from DCPSSubscriptionsSecure topic. Ignore this one.
+      security_log!(
+        "Received a non-secure DCPSSubscription message for topic {topic_name} whose discovery is \
+         protected. Ignoring message. Participant: {:?}",
+        participant_guidp
+      );
+      return NormalDiscoveryPermission::Deny;
+    }
+    // Topic discovery is not protected. Get the authentication status
+    let auth_status = discovery_db_read(discovery_db).get_authentication_status(participant_guidp);
+
+    match sample {
+      Sample::Value(reader_data) => {
+        // Participant wants to subscribe to the topic
+        match auth_status {
+          Some(AuthenticationStatus::Unauthenticated) => {
+            // Section 8.8.7.1 "AccessControl behavior with discovered endpoints from
+            // “Unauthenticated” DomainParticipant" from the spec
+            if topic_sec_attributes.is_read_protected {
+              security_log!(
+                "Unauthenticated participant {:?} attempted to read protected topic {topic_name}. \
+                 Rejecting.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Deny
+            } else {
+              security_log!(
+                "Unauthenticated participant {:?} wants to read unprotected topic {topic_name}. \
+                 Allowing.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Allow
+            }
+          }
+          Some(AuthenticationStatus::Authenticated) => {
+            // Section 8.8.7.2 "AccessControl behavior with discovered endpoints from
+            // “Authenticated” DomainParticipant" from the spec
+            if topic_sec_attributes.is_read_protected {
+              // We need to check from access control
+              match self
+                .security_plugins
+                .get_plugins()
+                .check_remote_datareader_from_nonsecure(
+                  participant_guidp,
+                  self.domain_id,
+                  reader_data,
+                ) {
+                Ok(check_passed) => {
+                  if check_passed {
+                    security_log!(
+                      "Access control check passed for authenticated participant {:?} to read \
+                       topic {topic_name}.",
+                      participant_guidp
+                    );
+                    NormalDiscoveryPermission::Allow
+                  } else {
+                    security_log!(
+                      "Access control check did not pass for authenticated participant {:?} to \
+                       read topic {topic_name}. Rejecting.",
+                      participant_guidp
+                    );
+                    NormalDiscoveryPermission::Deny
+                  }
+                }
+                Err(e) => {
+                  security_error!(
+                    "Failed to check remote datareader: {}. Topic: {topic_name}",
+                    e
+                  );
+                  NormalDiscoveryPermission::Deny
+                }
+              }
+            } else {
+              // Read is not protected. Allow.
+              security_log!(
+                "Authenticated participant {:?} wants to read unprotected topic {topic_name}. \
+                 Allowing.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Allow
+            }
+          }
+          other => {
+            // Authentication status other than Authenticated/Unauthenticated
+            security_log!(
+              "Received a DCPSSubscription message from a participant with authentication status: \
+               {:?}. Ignoring message. Participant: {:?}",
+              other,
+              participant_guidp
+            );
+            NormalDiscoveryPermission::Deny
+          }
+        }
+      }
+      Sample::Dispose(_reader_guid) => {
+        // Participant wants to dispose its reader
+        match auth_status {
+          Some(AuthenticationStatus::Unauthenticated)
+          | Some(AuthenticationStatus::Authenticated) => {
+            // Allow dispose for Unauthenticated/Authenticated participants
+            security_log!(
+              "Participant {:?} with authentication status {:?} disposes its reader in topic \
+               {topic_name}.",
+              participant_guidp,
+              auth_status,
+            );
+            NormalDiscoveryPermission::Allow
+          }
+          other_status => {
+            // Reject dispose message if authentication status is something else
+            security_log!(
+              "Participant {:?} with authentication status {:?} attempts to disposes its reader \
+               in topic {topic_name}. Rejecting.",
+              other_status,
+              participant_guidp
+            );
+            NormalDiscoveryPermission::Deny
+          }
+        }
       }
     }
   }

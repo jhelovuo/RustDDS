@@ -154,7 +154,7 @@ pub trait LocalEntityAccessControl: Send {
   fn get_topic_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
-    topic_name: String,
+    topic_name: &str,
   ) -> SecurityResult<TopicSecurityAttributes>;
 
   /// get_datawriter_sec_attributes: section 8.4.2.9.24 of the Security
