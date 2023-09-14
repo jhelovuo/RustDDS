@@ -41,6 +41,7 @@ use crate::{
   RepresentationIdentifier, SequenceNumber, GUID,
 };
 use super::{
+  discovery::NormalDiscoveryPermission,
   discovery_db::{discovery_db_read, discovery_db_write, DiscoveryDB},
   Participant_GUID, SpdpDiscoveredParticipantData,
 };
