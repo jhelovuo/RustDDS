@@ -10,16 +10,13 @@ use bytes::Bytes;
 use cdr_encoding_size::CdrEncodingSize;
 
 use crate::{
-  dds::{participant::DomainParticipant, qos, qos::QosPolicies},
+  dds::{participant::DomainParticipant, qos::QosPolicies},
   messages::{
     protocol_version::ProtocolVersion,
     submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
     vendor_id::VendorId,
   },
   rtps::{constant::*, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
-  security::{
-    access_control::PermissionsToken, authentication::IdentityToken, ParticipantSecurityInfo,
-  },
   serialization::{pl_cdr_adapters::*, speedy_pl_cdr_helpers::*},
   structure::{
     duration::Duration,
@@ -31,10 +28,18 @@ use crate::{
   },
   Key, Keyed, RepresentationIdentifier,
 };
-use super::{
-  builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet},
-  secure_discovery::SecureDiscovery,
+use super::builtin_endpoint::{BuiltinEndpointQos, BuiltinEndpointSet};
+#[cfg(feature = "security")]
+use crate::{
+  dds::qos,
+  security::{
+    access_control::PermissionsToken, authentication::IdentityToken, ParticipantSecurityInfo,
+  },
 };
+#[cfg(feature = "security")]
+use super::secure_discovery::SecureDiscovery;
+#[cfg(not(feature = "security"))]
+use crate::no_security::SecureDiscovery;
 
 // This type is used by Discovery to communicate the presence and properties
 // of DomainParticipants. It is sent over topic "DCPSParticipant".
@@ -58,9 +63,16 @@ pub struct SpdpDiscoveredParticipantData {
   pub entity_name: Option<String>,
 
   // security
+  #[cfg(feature = "security")]
   pub identity_token: Option<IdentityToken>,
+
+  #[cfg(feature = "security")]
   pub permissions_token: Option<PermissionsToken>,
+
+  #[cfg(feature = "security")]
   pub property: Option<qos::policy::Property>,
+
+  #[cfg(feature = "security")]
   pub security_info: Option<ParticipantSecurityInfo>,
 }
 
@@ -129,7 +141,7 @@ impl SpdpDiscoveredParticipantData {
   pub(crate) fn from_local_participant(
     participant: &DomainParticipant,
     self_locators: &HashMap<Token, Vec<Locator>>,
-    secure_discovery_opt: &Option<SecureDiscovery>, // If present, security is enabled
+    _secure_discovery_opt: &Option<SecureDiscovery>, // If present, security is enabled
     lease_duration: Duration,
   ) -> Self {
     let metatraffic_multicast_locators = self_locators
@@ -152,6 +164,7 @@ impl SpdpDiscoveredParticipantData {
       .cloned()
       .unwrap_or_default();
 
+    #[allow(unused_mut)] // only security feature mutates this
     let mut builtin_endpoints = BuiltinEndpointSet::PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::PARTICIPANT_DETECTOR
       | BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER
@@ -164,12 +177,17 @@ impl SpdpDiscoveredParticipantData {
       | BuiltinEndpointSet::TOPICS_DETECTOR;
 
     // Security-related items initially None
+    #[cfg(feature = "security")]
     let mut identity_token = None;
+    #[cfg(feature = "security")]
     let mut permissions_token = None;
+    #[cfg(feature = "security")]
     let mut property = None;
+    #[cfg(feature = "security")]
     let mut security_info = None;
 
-    if let Some(secure_discovery) = secure_discovery_opt {
+    #[cfg(feature = "security")]
+    if let Some(secure_discovery) = _secure_discovery_opt {
       // Security enabled, add needed data
       // Builtin security endpoints
       builtin_endpoints = builtin_endpoints
@@ -212,9 +230,13 @@ impl SpdpDiscoveredParticipantData {
       entity_name: None,
 
       // DDS Security
+      #[cfg(feature = "security")]
       identity_token,
+      #[cfg(feature = "security")]
       permissions_token,
+      #[cfg(feature = "security")]
       property,
+      #[cfg(feature = "security")]
       security_info,
     }
   }
@@ -298,24 +320,29 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
       .map( String::from );
 
     // DDS security
+    #[cfg(feature = "security")]
     let identity_token: Option<IdentityToken> = get_option_from_pl_map(
       &pl_map,
       ctx,
       ParameterId::PID_IDENTITY_TOKEN,
       "identity token",
     )?;
+    #[cfg(feature = "security")]
     let permissions_token: Option<PermissionsToken> = get_option_from_pl_map(
       &pl_map,
       ctx,
       ParameterId::PID_PERMISSIONS_TOKEN,
       "permissions token",
     )?;
+    #[cfg(feature = "security")]
     let property: Option<qos::policy::Property> = get_option_from_pl_map(
       &pl_map,
       ctx,
       ParameterId::PID_PROPERTY_LIST,
       "property list",
     )?;
+
+    #[cfg(feature = "security")]
     let security_info: Option<ParticipantSecurityInfo> = get_option_from_pl_map(
       &pl_map,
       ctx,
@@ -338,10 +365,13 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
       manual_liveliness_count,
       builtin_endpoint_qos,
       entity_name,
-
+      #[cfg(feature = "security")]
       identity_token,
+      #[cfg(feature = "security")]
       permissions_token,
+      #[cfg(feature = "security")]
       property,
+      #[cfg(feature = "security")]
       security_info,
     })
   }
@@ -371,10 +401,14 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
       entity_name,
 
       // DDS security
-      identity_token,    // TODO
-      permissions_token, // TODO
-      property,          // TODO
-      security_info,     // TODO
+      #[cfg(feature = "security")]
+      identity_token,
+      #[cfg(feature = "security")]
+      permissions_token,
+      #[cfg(feature = "security")]
+      property,
+      #[cfg(feature = "security")]
+      security_info,
     } = self;
 
     let mut pl = ParameterList::new();
@@ -450,15 +484,17 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
     let entity_name_n: Option<StringWithNul> = entity_name.clone().map(|e| e.into());
     emit_option!(PID_ENTITY_NAME, &entity_name_n, StringWithNul);
 
-    // DDS security
-    emit_option!(PID_IDENTITY_TOKEN, identity_token, IdentityToken);
-    emit_option!(PID_PERMISSIONS_TOKEN, permissions_token, PermissionsToken);
-    emit_option!(PID_PROPERTY_LIST, property, qos::policy::Property);
-    emit_option!(
-      PID_PARTICIPANT_SECURITY_INFO,
-      security_info,
-      ParticipantSecurityInfo
-    );
+    #[cfg(feature = "security")] // DDS security
+    {
+      emit_option!(PID_IDENTITY_TOKEN, identity_token, IdentityToken);
+      emit_option!(PID_PERMISSIONS_TOKEN, permissions_token, PermissionsToken);
+      emit_option!(PID_PROPERTY_LIST, property, qos::policy::Property);
+      emit_option!(
+        PID_PARTICIPANT_SECURITY_INFO,
+        security_info,
+        ParticipantSecurityInfo
+      );
+    }
 
     let bytes = pl.serialize_to_bytes(ctx)?;
 

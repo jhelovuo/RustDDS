@@ -337,6 +337,7 @@ pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopic
     related_datareader_key: None,
     service_instance_name: None,
     topic_aliases: None,
+    #[cfg(feature = "security")]
     security_info: None,
   };
 

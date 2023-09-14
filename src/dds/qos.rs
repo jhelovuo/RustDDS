@@ -60,7 +60,7 @@ pub enum QosPolicyId {
   // TransportPriority, // 20
   Lifespan,
   // DurabilityService, // 22
-  Property, // No Id in the security spec
+  Property, // No Id in the security spec (But this is from older DDS/RTPs spec.)
 }
 
 /// Utility for building [QosPolicies]
@@ -78,6 +78,7 @@ pub struct QosPolicyBuilder {
   history: Option<policy::History>,
   resource_limits: Option<policy::ResourceLimits>,
   lifespan: Option<policy::Lifespan>,
+  #[cfg(feature = "security")]
   property: Option<policy::Property>,
 }
 
@@ -158,6 +159,8 @@ impl QosPolicyBuilder {
     self
   }
 
+  #[cfg(feature = "security")]
+  #[must_use]
   pub fn property(mut self, property: policy::Property) -> Self {
     self.property = Some(property);
     self
@@ -177,6 +180,7 @@ impl QosPolicyBuilder {
       history: self.history,
       resource_limits: self.resource_limits,
       lifespan: self.lifespan,
+      #[cfg(feature = "security")]
       property: self.property,
     }
   }
@@ -200,6 +204,7 @@ pub struct QosPolicies {
   pub(crate) history: Option<policy::History>,
   pub(crate) resource_limits: Option<policy::ResourceLimits>,
   pub(crate) lifespan: Option<policy::Lifespan>,
+  #[cfg(feature = "security")]
   pub(crate) property: Option<policy::Property>,
 }
 
@@ -274,6 +279,7 @@ impl QosPolicies {
     self.lifespan
   }
 
+  #[cfg(feature = "security")]
   pub fn property(&self) -> Option<policy::Property> {
     self.property.clone()
   }
@@ -297,6 +303,7 @@ impl QosPolicies {
       history: other.history.or(self.history),
       resource_limits: other.resource_limits.or(self.resource_limits),
       lifespan: other.lifespan.or(self.lifespan),
+      #[cfg(feature = "security")]
       property: other.property.clone().or(self.property.clone()),
     }
   }
@@ -426,7 +433,8 @@ impl QosPolicies {
       history,
       resource_limits,
       lifespan,
-      property: _, // TODO: properties to parameter list?
+      #[cfg(feature = "security")]
+        property: _, // TODO: properties to parameter list?
     } = self;
 
     macro_rules! emit {
@@ -571,6 +579,7 @@ impl QosPolicies {
     let resource_limits: Option<policy::ResourceLimits> = get_option!(PID_RESOURCE_LIMITS);
     let lifespan: Option<policy::Lifespan> = get_option!(PID_LIFESPAN);
 
+    #[cfg(feature = "security")]
     let property: Option<policy::Property> = None; // TODO: Should also properties be read?
 
     // We construct using the struct syntax directly rather than the builder,
@@ -588,6 +597,7 @@ impl QosPolicies {
       history,
       resource_limits,
       lifespan,
+      #[cfg(feature = "security")]
       property,
     })
   }
@@ -631,11 +641,15 @@ pub const LENGTH_UNLIMITED: i32 = -1;
 pub mod policy {
   use std::cmp::Ordering;
 
-  use speedy::{Context, IsEof, Readable, Reader, Writable, Writer};
+  use speedy::{Readable, Writable};
   #[allow(unused_imports)]
   use log::{debug, error, info, trace, warn};
+  #[cfg(feature = "security")]
+  use speedy::{Context, IsEof, Reader, Writer};
 
-  use crate::{serialization::speedy_pl_cdr_helpers::*, structure::duration::Duration};
+  use crate::structure::duration::Duration;
+  #[cfg(feature = "security")]
+  use crate::serialization::speedy_pl_cdr_helpers::*;
 
   /*
   pub struct UserData {
@@ -821,16 +835,19 @@ pub mod policy {
     pub max_samples_per_instance: i32,
   }
 
+  #[cfg(feature = "security")]
   use crate::security;
   // DDS Security spec v1.1
   // Section 7.2.5 PropertyQosPolicy, DomainParticipantQos, DataWriterQos, and
   // DataReaderQos
+  #[cfg(feature = "security")]
   #[derive(Clone, Debug, PartialEq, Eq)]
   pub struct Property {
     pub value: Vec<security::types::Property>,
     pub binary_value: Vec<security::types::BinaryProperty>,
   }
 
+  #[cfg(feature = "security")]
   impl<'a, C: Context> Readable<'a, C> for Property {
     fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
       let count = reader.read_u32()?;
@@ -880,6 +897,7 @@ pub mod policy {
   // we have to keep track of alignment.
   // Again, alignment comes BEFORE string length, or vector item count, not after
   // string.
+  #[cfg(feature = "security")]
   impl<C: Context> Writable<C> for Property {
     fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
       // First self.value
@@ -924,10 +942,12 @@ pub mod policy {
   // so this is DataTagQosPolicy, which is an alias for "DataTags"
   // We call it qos::policy::DataTag
   #[derive(Clone, Debug, PartialEq, Eq)]
+  #[cfg(feature = "security")]
   pub struct DataTag {
     pub tags: Vec<security::types::Tag>,
   }
 
+  #[cfg(feature = "security")]
   impl<'a, C: Context> Readable<'a, C> for DataTag {
     fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
       let count = reader.read_u32()?;
@@ -948,6 +968,7 @@ pub mod policy {
   // we have to keep track of alignment.
   // Again, alignment comes BEFORE string length, or vector item count, not after
   // string.
+  #[cfg(feature = "security")]
   impl<C: Context> Writable<C> for DataTag {
     fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
       writer.write_u32(self.tags.len() as u32)?;

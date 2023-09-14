@@ -171,7 +171,15 @@ pub mod discovery; // to access some Discovered data in e.g. ros2-client crate
 mod messages;
 mod network;
 mod rtps;
+
+#[cfg(feature = "security")]
 mod security;
+
+#[cfg(not(feature = "security"))]
+mod no_security;
+#[cfg(not(feature = "security"))]
+use no_security as security;
+
 pub(crate) mod structure;
 
 #[cfg(test)]

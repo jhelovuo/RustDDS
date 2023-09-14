@@ -10,6 +10,7 @@ use crate::{
   },
   structure::guid::EntityId,
 };
+#[cfg(feature = "security")]
 use super::{
   secure_body::SecureBody, secure_postfix::SecurePostfix, secure_prefix::SecurePrefix,
   secure_rtps_postfix::SecureRTPSPostfix, secure_rtps_prefix::SecureRTPSPrefix,
@@ -64,6 +65,7 @@ impl<C: Context> Writable<C> for ReaderSubmessage {
 }
 
 /// New submessage types: section 7.3.6 of the Security specification (v. 1.1)
+#[cfg(feature = "security")]
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::enum_variant_names)] // We are using variant names from the spec
 pub enum SecuritySubmessage {
@@ -78,6 +80,7 @@ pub enum SecuritySubmessage {
 // 1) we cannot implement Writable for *Flags defined using enumflags2, as they
 // are foreign types (coherence rules) 2) Writer should not use any enum variant
 // tag in this type, as we have SubmessageHeader already.
+#[cfg(feature = "security")]
 impl<C: Context> Writable<C> for SecuritySubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
