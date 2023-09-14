@@ -837,6 +837,9 @@ impl DomainParticipantInner {
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> CreateResult<Self> {
+    #[cfg(not(feature = "security"))]
+    let _dummy = _qos_policies; // to make clippy happy
+
     let mut listeners = HashMap::new();
 
     match UDPListener::new_multicast(
@@ -991,6 +994,7 @@ impl DomainParticipantInner {
       "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
       domain_id, participant_id, participant_guid
     );
+
     Ok(Self {
       domain_id,
       participant_id,

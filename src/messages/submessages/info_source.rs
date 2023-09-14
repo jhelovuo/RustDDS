@@ -1,17 +1,20 @@
-use enumflags2::BitFlags;
 use speedy::{Readable, Writable};
+#[cfg(feature = "security")]
+use enumflags2::BitFlags;
 
 use crate::{
   messages::{
     header::Header, protocol_id::ProtocolId, protocol_version::ProtocolVersion, vendor_id::VendorId,
   },
-  rtps::{Submessage, SubmessageBody},
   structure::guid::GuidPrefix,
 };
+#[cfg(feature = "security")]
 use super::{
   submessage::InterpreterSubmessage, submessage_flag::INFOSOURCE_Flags,
   submessage_kind::SubmessageKind, submessages::SubmessageHeader,
 };
+#[cfg(feature = "security")]
+use crate::rtps::{Submessage, SubmessageBody};
 
 /// This message modifies the logical source of the Submessages
 /// that follow.
@@ -30,12 +33,14 @@ pub struct InfoSource {
 }
 
 impl InfoSource {
+  #[cfg(feature = "security")] // currently otherwise unused, clippy warns about this
   pub fn len_serialized(&self) -> usize {
     std::mem::size_of::<ProtocolVersion>()
       + std::mem::size_of::<VendorId>()
       + std::mem::size_of::<GuidPrefix>()
   }
 
+  #[cfg(feature = "security")] // currently otherwise unused
   pub fn create_submessage(self, flags: BitFlags<INFOSOURCE_Flags>) -> Submessage {
     Submessage {
       header: SubmessageHeader {

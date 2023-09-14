@@ -384,7 +384,7 @@ impl MessageReceiver {
           SubmessageBody::Reader(submessage) => {
             #[cfg(not(feature = "security"))]
             {
-              self.handle_reader_submessage(submessage)
+              self.handle_reader_submessage(submessage);
             }
             #[cfg(feature = "security")]
             match self

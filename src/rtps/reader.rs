@@ -1171,6 +1171,7 @@ impl Reader {
     let bytes = message
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .unwrap(); //TODO!
+    let _dummy = message; // consume it to avoid clippy warning
     self
       .udp_sender
       .send_to_locator_list(&bytes, dst_locator_list);
@@ -1187,7 +1188,7 @@ impl Reader {
       Ok(message) => {
         let bytes = message
           .write_to_vec_with_ctx(Endianness::LittleEndian)
-          .unwrap();
+          .unwrap(); //TODO!!
         self
           .udp_sender
           .send_to_locator_list(&bytes, dst_locator_list);

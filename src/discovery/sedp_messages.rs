@@ -187,6 +187,9 @@ impl SubscriptionBuiltinTopicData {
     qos: &QosPolicies,
     _security_info: Option<EndpointSecurityInfo>, // used only with security feature
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    let _dummy = _security_info; // avoid clippy warning
+
     let mut sbtd = Self {
       key,
       participant_key,
@@ -623,6 +626,9 @@ impl PublicationBuiltinTopicData {
     type_name: String,
     _security_info: Option<EndpointSecurityInfo>,
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    let _dummy = _security_info; // suppress clippy warning
+
     Self {
       key: guid,
       participant_key: participant_guid,

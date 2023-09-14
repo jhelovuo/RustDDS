@@ -98,6 +98,9 @@ impl DPEventLoop {
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    let _dummy = _discovery_command_sender;
+
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(100);
@@ -178,6 +181,9 @@ impl DPEventLoop {
     // port number 0 means OS chooses an available port number.
     let udp_sender = UDPSender::new(0).expect("UDPSender construction fail"); // TODO
 
+    #[cfg(not(feature = "security"))]
+    let security_plugins_opt = security_plugins_opt.and(None); // make sure it is None an consume value
+
     Self {
       domain_info,
       poll,
@@ -189,11 +195,7 @@ impl DPEventLoop {
         participant_guid_prefix,
         acknack_sender,
         spdp_liveness_sender,
-        if cfg!(security) {
-          security_plugins_opt.clone()
-        } else {
-          None
-        },
+        security_plugins_opt.clone(),
       ),
       #[cfg(feature = "security")]
       security_plugins_opt,

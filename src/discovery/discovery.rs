@@ -511,7 +511,7 @@ impl Discovery {
 
     // DDS Security
     #[cfg(not(feature = "security"))]
-    let security_opt = security_plugins_opt.map(|_| None).flatten(); // = None, but avoid warning.
+    let security_opt = security_plugins_opt.and(None); // = None, but avoid warning.
 
     #[cfg(feature = "security")]
     let security_opt = if let Some(plugins_handle) = security_plugins_opt {
