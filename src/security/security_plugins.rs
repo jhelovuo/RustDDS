@@ -12,7 +12,7 @@ use crate::{
     submessage::{ReaderSubmessage, WriterSubmessage},
   },
   qos,
-  rtps::{Message, Submessage},
+  rtps::{Message, Submessage, SubmessageBody},
   security_error,
   structure::guid::GuidPrefix,
   QosPolicies, GUID,
@@ -737,6 +737,7 @@ impl SecurityPlugins {
 
 /// Interface for using the CryptoTransform of the Cryptographic plugin
 impl SecurityPlugins {
+  /// Calls [super::cryptographic::cryptographic_plugin::CryptoTransform::encode_serialized_payload]
   pub fn encode_serialized_payload(
     &self,
     serialized_payload: Vec<u8>,
@@ -757,68 +758,97 @@ impl SecurityPlugins {
     )
   }
 
+  /// Calls [super::cryptographic::cryptographic_plugin::CryptoTransform::encode_datawriter_submessage].
   pub fn encode_datawriter_submessage(
     &self,
     plain_submessage: Submessage,
     source_guid: &GUID,
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
-    // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform {
-      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+    // Enforce that the submessage is a writer submessage.
+    match plain_submessage.body {
+      SubmessageBody::Writer(_) => {
+        // TODO remove after testing, skips encoding
+        if self.test_disable_crypto_transform {
+          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+        }
+
+        if self.submessage_not_protected(source_guid) {
+          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+        }
+
+        println!("Submessage protected: {:?}", plain_submessage.header.kind);
+
+        // Convert the destination GUIDs to crypto handles
+        let mut receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle> =
+          SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
+            self.get_remote_endpoint_crypto_handle((source_guid, destination_guid))
+          }))?;
+        // Remove duplicates
+        receiving_datareader_crypto_list.sort();
+        receiving_datareader_crypto_list.dedup();
+
+        self.crypto.encode_datawriter_submessage(
+          plain_submessage,
+          self.get_local_endpoint_crypto_handle(source_guid)?,
+          receiving_datareader_crypto_list,
+        )
+      }
+      SubmessageBody::Interpreter(_) => Ok(EncodedSubmessage::Unencoded(plain_submessage)),
+      SubmessageBody::Reader(_) => Err(security_error!(
+        "encode_datawriter_submessage called for a reader submessage"
+      )),
+      SubmessageBody::Security(_) => Err(security_error!(
+        "encode_datawriter_submessage called for a security submessage"
+      )),
     }
-
-    if self.submessage_not_protected(source_guid) {
-      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
-    }
-
-    // Convert the destination GUIDs to crypto handles
-    let mut receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle> =
-      SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
-        self.get_remote_endpoint_crypto_handle((source_guid, destination_guid))
-      }))?;
-    // Remove duplicates
-    receiving_datareader_crypto_list.sort();
-    receiving_datareader_crypto_list.dedup();
-
-    self.crypto.encode_datawriter_submessage(
-      plain_submessage,
-      self.get_local_endpoint_crypto_handle(source_guid)?,
-      receiving_datareader_crypto_list,
-    )
   }
 
+  /// Calls [super::cryptographic::cryptographic_plugin::CryptoTransform::encode_datareader_submessage]. The body of the submessage shall be [SubmessageBody::Reader].
   pub fn encode_datareader_submessage(
     &self,
     plain_submessage: Submessage,
     source_guid: &GUID,
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
-    // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform {
-      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+    // Enforce that the submessage is a reader submessage.
+    match plain_submessage.body {
+      SubmessageBody::Reader(_) => {
+        // TODO remove after testing, skips encoding
+        if self.test_disable_crypto_transform {
+          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+        }
+
+        if self.submessage_not_protected(source_guid) {
+          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+        }
+
+        // Convert the destination GUIDs to crypto handles
+        let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
+          SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
+            self.get_remote_endpoint_crypto_handle((source_guid, destination_guid))
+          }))?;
+        // Remove duplicates
+        receiving_datawriter_crypto_list.sort();
+        receiving_datawriter_crypto_list.dedup();
+
+        self.crypto.encode_datareader_submessage(
+          plain_submessage,
+          self.get_local_endpoint_crypto_handle(source_guid)?,
+          receiving_datawriter_crypto_list,
+        )
+      }
+      SubmessageBody::Interpreter(_) => Ok(EncodedSubmessage::Unencoded(plain_submessage)),
+      SubmessageBody::Writer(_) => Err(security_error!(
+        "encode_datareader_submessage called for a writer submessage"
+      )),
+      SubmessageBody::Security(_) => Err(security_error!(
+        "encode_datareader_submessage called for a security submessage"
+      )),
     }
-
-    if self.submessage_not_protected(source_guid) {
-      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
-    }
-
-    // Convert the destination GUIDs to crypto handles
-    let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
-      SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
-        self.get_remote_endpoint_crypto_handle((source_guid, destination_guid))
-      }))?;
-    // Remove duplicates
-    receiving_datawriter_crypto_list.sort();
-    receiving_datawriter_crypto_list.dedup();
-
-    self.crypto.encode_datareader_submessage(
-      plain_submessage,
-      self.get_local_endpoint_crypto_handle(source_guid)?,
-      receiving_datawriter_crypto_list,
-    )
   }
 
+  /// Calls [super::cryptographic::cryptographic_plugin::CryptoTransform::encode_rtps_message]
   pub fn encode_message(
     &self,
     plain_message: Message,
