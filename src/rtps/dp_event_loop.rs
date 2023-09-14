@@ -550,23 +550,31 @@ impl DPEventLoop {
         {
           let mut reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
 
-          if *writer_eid == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
-            // Simple Participant Discovery Protocol (SPDP) writer is special,
-            // different from SEDP writers
-            qos = Discovery::create_spdp_participant_qos(); // different QoS
-                                                            // adding a multicast reader
-            reader_proxy.remote_reader_guid = GUID::new_with_prefix_and_id(
-              GuidPrefix::UNKNOWN,
-              EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-            );
+          match *writer_eid {
+            EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER => {
+              // Simple Participant Discovery Protocol (SPDP) writer is special,
+              // different from SEDP writers
+              qos = Discovery::create_spdp_participant_qos(); // different QoS
+                                                              // adding a multicast reader
+              reader_proxy.remote_reader_guid = GUID::new_with_prefix_and_id(
+                GuidPrefix::UNKNOWN,
+                EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
+              );
 
-            // reader_proxy.multicast_locator_list =
-            // get_local_multicast_locators(
-            //   spdp_well_known_multicast_port(self.domain_info.domain_id),
-            // );
-          } else if *writer_eid == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER {
-            // Also ParticipantStatelessMessage reader has special Qos
-            qos = Discovery::create_participant_stateless_message_qos();
+              // reader_proxy.multicast_locator_list =
+              // get_local_multicast_locators(
+              //   spdp_well_known_multicast_port(self.domain_info.domain_id),
+              // );
+            }
+            EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER => {
+              // Also ParticipantStatelessMessage reader has special Qos
+              qos = Discovery::create_participant_stateless_message_qos();
+            }
+            EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER => {
+              // TODO are there other qos requirements?
+              qos.durability = Some(policy::Durability::Volatile);
+            }
+            _ => {} // TODO are there other qos requirements?
           }
 
           writer.update_reader_proxy(&reader_proxy, &qos);
@@ -590,6 +598,7 @@ impl DPEventLoop {
           EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER => {
             Discovery::create_participant_stateless_message_qos()
           }
+          // TODO are there other qos requirements for volatile?
           _ => Discovery::publisher_qos(), // For all others
         };
         let wp = discovered_participant.as_writer_proxy(true, Some(*writer_eid));
