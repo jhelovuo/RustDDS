@@ -48,7 +48,7 @@ use crate::{
 };
 #[cfg(feature = "security")]
 use crate::{
-  discovery::secure_discovery::{NormalDiscoveryPermission, SecureDiscovery},
+  discovery::secure_discovery::SecureDiscovery,
   security::{security_plugins::SecurityPluginsHandle, types::*},
 };
 #[cfg(not(feature = "security"))]
@@ -148,6 +148,15 @@ mod no_key {
     pub writer: crate::no_key::DataWriter<D, crate::CDRSerializerAdapter<D>>,
     pub timer: Timer<()>,
   }
+}
+
+// Enum indicating if secure discovery allows normal discovery to process
+// something
+#[derive(PartialEq)]
+#[allow(dead_code)] // Deny variant is never constructed if security feature is not on
+pub(crate) enum NormalDiscoveryPermission {
+  Allow,
+  Deny,
 }
 
 pub(crate) struct Discovery {
@@ -1021,10 +1030,10 @@ impl Discovery {
       match s {
         Ok(Some(ds)) => {
           #[cfg(not(feature = "security"))]
-          let unsecure_discvery_permission = true;
+          let permission = NormalDiscoveryPermission::Allow;
 
           #[cfg(feature = "security")]
-          let unsecure_discvery_permission = if let Some(security) = self.security_opt.as_mut() {
+          let permission = if let Some(security) = self.security_opt.as_mut() {
             // Security is enabled. Do a secure read, potentially starting the
             // authentication protocol. The return value tells if normal Discovery is
             // allowed to process the message.
@@ -1033,13 +1042,13 @@ impl Discovery {
               &self.discovery_db,
               &self.discovery_updated_sender,
               &self.dcps_participant_stateless_message.writer,
-            ) == NormalDiscoveryPermission::Allow
+            )
           } else {
             // No security configured, always allowed
-            true
+            NormalDiscoveryPermission::Allow
           };
 
-          if unsecure_discvery_permission {
+          if permission == NormalDiscoveryPermission::Allow {
             match ds.value {
               Sample::Value(participant_data) => {
                 debug!(

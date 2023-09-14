@@ -45,14 +45,6 @@ use super::{
   Participant_GUID, SpdpDiscoveredParticipantData,
 };
 
-// Enum indicating if secure discovery allows normal discovery to process
-// something
-#[derive(PartialEq)]
-pub(crate) enum NormalDiscoveryPermission {
-  Allow,
-  Deny,
-}
-
 // Enum for authentication status of a remote participant
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub(crate) enum AuthenticationStatus {
