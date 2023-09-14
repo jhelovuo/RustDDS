@@ -15,7 +15,7 @@ use mio_06::Token;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  create_error_internal, create_error_out_of_resources,
+  create_error_out_of_resources,
   create_error_poisoned,
   dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
   discovery::{
@@ -35,6 +35,7 @@ use crate::{
 
 #[cfg(feature="security")]
 use crate::{
+  create_error_internal,
   create_error_not_allowed_by_security,
   security::{
     self,
@@ -96,7 +97,8 @@ impl DomainParticipantBuilder {
     self
   }
 
-  pub fn build(mut self) -> CreateResult<DomainParticipant> {
+  pub fn build(#[allow(unused_mut)]  mut self) -> CreateResult<DomainParticipant> {
+    #[allow(unused_mut)] // only security feature mutates this
     let mut participant_guid = GUID::new_participant_guid();
 
     // QosPolicies with possible security properties, otherwise default
@@ -287,6 +289,7 @@ impl DomainParticipant {
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// ```
   pub fn new(domain_id: u16) -> CreateResult<Self> {
+    #[allow(unused_mut)] // only security feature mutates this
     let mut dp_builder = DomainParticipantBuilder::new(domain_id);
     // Add security if so configured in security configs
     // This is meant to be included only in the development phase for convenience
@@ -443,6 +446,7 @@ impl DomainParticipant {
     self.dpi.lock().unwrap().dds_cache()
   }
 
+  #[cfg(feature="security")] // just to avoid warning
   pub(crate) fn qos(&self) -> QosPolicies {
     self.dpi.lock().unwrap().qos()
   }
@@ -480,8 +484,10 @@ impl PartialEq for DomainParticipant {
 pub struct DomainParticipantWeak {
   dpi: Weak<Mutex<DomainParticipantDisc>>,
   // This struct caches some items to avoid construction deadlocks
+  #[cfg(feature="security")] // just to avoid warning
   domain_id: u16,
   guid: GUID,
+  #[cfg(feature="security")] // just to avoid warning
   qos: QosPolicies,
 }
 
@@ -489,8 +495,10 @@ impl DomainParticipantWeak {
   pub fn new(dp: &DomainParticipant) -> Self {
     Self {
       dpi: Arc::downgrade(&dp.dpi),
+      #[cfg(feature="security")] // just to avoid warning
       domain_id: dp.domain_id(),
       guid: dp.guid(),
+      #[cfg(feature="security")] // just to avoid warning
       qos: dp.qos(),
     }
   }
@@ -515,10 +523,12 @@ impl DomainParticipantWeak {
       .and_then(|dpi| dpi.lock()?.create_subscriber(self, qos))
   }
 
+  #[cfg(feature="security")] // just to avoid warning
   pub fn domain_id(&self) -> u16 {
     self.domain_id
   }
 
+  #[cfg(feature="security")] // just to avoid warning
   pub fn qos(&self) -> QosPolicies {
     self.qos.clone()
   }
@@ -703,6 +713,7 @@ impl DomainParticipantDisc {
     self.dpi.lock().unwrap().dds_cache()
   }
 
+  #[cfg(feature="security")] // just to avoid warning
   pub(crate) fn qos(&self) -> QosPolicies {
     self.dpi.lock().unwrap().qos()
   }
@@ -767,6 +778,7 @@ pub(crate) struct DomainParticipantInner {
   participant_id: u16,
 
   my_guid: GUID,
+  #[cfg(feature="security")] // just to avoid warning
   my_qos_policies: QosPolicies,
 
   // Adding Readers
@@ -821,7 +833,7 @@ impl DomainParticipantInner {
   fn new(
     domain_id: u16,
     participant_guid: GUID,
-    qos_policies: QosPolicies,
+    _qos_policies: QosPolicies,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
@@ -984,7 +996,8 @@ impl DomainParticipantInner {
     Ok(Self {
       domain_id,
       participant_id,
-      my_qos_policies: qos_policies,
+      #[cfg(feature="security")]
+      my_qos_policies: _qos_policies,
       my_guid: participant_guid,
       sender_add_reader,
       sender_remove_reader,
@@ -1004,6 +1017,7 @@ impl DomainParticipantInner {
     self.dds_cache.clone()
   }
 
+  #[cfg(feature="security")] // just to avoid warning
   pub(crate) fn qos(&self) -> QosPolicies {
     self.my_qos_policies.clone()
   }

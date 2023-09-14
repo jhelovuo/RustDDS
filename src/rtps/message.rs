@@ -182,7 +182,7 @@ impl MessageBuilder {
     reader_entity_id: EntityId, // The entity id to be included in the submessage
     writer_guid: GUID,
     endianness: Endianness,
-    security_plugins: Option<&SecurityPluginsHandle>,
+    _security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
     let writer_entity_id = writer_guid.entity_id;
 
@@ -253,7 +253,7 @@ impl MessageBuilder {
           .write_to_vec()
           .map_err(|e| security_error!("{e:?}"))
           .and_then(|serialized_payload| {
-            security_plugins
+            _security_plugins
               .map(SecurityPluginsHandle::get_plugins)
               .map_or(
                 // If there are no security plugins, use plaintext
@@ -333,7 +333,7 @@ impl MessageBuilder {
     fragment_size: u16,
     sample_size: u32, // all fragments together
     endianness: Endianness,
-    security_plugins: Option<&SecurityPluginsHandle>,
+    _security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
     let writer_entity_id = writer_guid.entity_id;
 
@@ -382,7 +382,7 @@ impl MessageBuilder {
     let encoded_payload = serialized_payload;
 
     #[cfg(feature="security")]
-    let encoded_payload = match security_plugins
+    let encoded_payload = match _security_plugins
       .map(SecurityPluginsHandle::get_plugins)
       .map_or(
         // If there are no security plugins, use plaintext

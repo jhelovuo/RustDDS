@@ -33,7 +33,7 @@ use crate::{
   rtps::{
     constant::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION},
     rtps_reader_proxy::RtpsReaderProxy,
-    Message, MessageBuilder, Submessage,
+    Message, MessageBuilder,
   },
   structure::{
     cache_change::CacheChange,
@@ -48,7 +48,10 @@ use crate::{
 };
 
 #[cfg(feature="security")]
-use crate::security::{security_plugins::SecurityPluginsHandle, SecurityResult};
+use crate::{
+  rtps::Submessage,
+  security::{security_plugins::SecurityPluginsHandle, SecurityResult}
+};
 
 #[cfg(not(feature="security"))]
 use crate::no_security::SecurityPluginsHandle;

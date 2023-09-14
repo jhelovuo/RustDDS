@@ -132,6 +132,7 @@ mod with_key {
   }
 }
 
+#[cfg(feature="security")] // only used with security feature for now, this is to avoid warning
 mod no_key {
   use serde::{de::DeserializeOwned, Serialize};
   use mio_extras::timer::Timer;
@@ -247,6 +248,7 @@ impl Discovery {
   const SEND_WRITERS_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
   const SEND_TOPIC_INFO_PERIOD: StdDuration = StdDuration::from_secs(10);
   const CHECK_PARTICIPANT_MESSAGES: StdDuration = StdDuration::from_secs(1);
+  #[cfg(feature="security")]
   const AUTHENTICATION_MESSAGE_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
 
   pub(crate) const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
@@ -511,7 +513,7 @@ impl Discovery {
 
     // DDS Security
     #[cfg(not(feature="security"))]
-    let security_opt = None;
+    let security_opt = security_plugins_opt.map(|_|None).flatten(); // = None, but avoid warning.
 
     #[cfg(feature="security")]
     let security_opt = if let Some(plugins_handle) = security_plugins_opt {
@@ -1832,6 +1834,7 @@ mod tests {
         },
         SubmessageBody::Writer(_) => (),
         SubmessageBody::Reader(_) => (),
+        #[cfg(feature="security")]
         SubmessageBody::Security(_) => (),
       }
     }

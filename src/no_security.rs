@@ -7,10 +7,6 @@
 pub mod security_plugins {
   #[derive(Debug,Clone)]
   pub struct SecurityPluginsHandle {}
-
-  impl SecurityPluginsHandle {
-    pub fn new() -> Self  { SecurityPluginsHandle{} }
-  }
 }
 pub use security_plugins::SecurityPluginsHandle;
 

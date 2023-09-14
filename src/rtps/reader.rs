@@ -49,8 +49,9 @@ use crate::{
     time::Timestamp,
   },
 };
-use super::Submessage;
 
+#[cfg(feature="security")]
+use super::Submessage;
 #[cfg(feature="security")]
 use crate::security::{security_plugins::SecurityPluginsHandle, SecurityResult};
 
@@ -147,6 +148,7 @@ pub(crate) struct Reader {
   data_reader_waker: Arc<Mutex<Option<Waker>>>,
   poll_event_sender: mio_source::PollEventSender,
 
+  #[allow(dead_code)] // to avoid warning if no security feature
   security_plugins: Option<SecurityPluginsHandle>,
 }
 
@@ -1163,7 +1165,7 @@ impl Reader {
   }
 
   #[cfg(not(feature="security"))]
-  fn encode_and_send(&self, message: Message, destination_guid: GUID, dst_locator_list: &[Locator]) {
+  fn encode_and_send(&self, message: Message, _destination_guid: GUID, dst_locator_list: &[Locator]) {
     let bytes = message
       .write_to_vec_with_ctx(Endianness::LittleEndian)
       .unwrap(); //TODO!

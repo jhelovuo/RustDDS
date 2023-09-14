@@ -1,4 +1,6 @@
+#[allow(dead_code)] // We allow this, since extra constants are not too harmful.
 pub(crate) mod constant;
+
 pub(crate) mod dp_event_loop;
 pub(crate) mod fragment_assembler;
 pub(crate) mod message_receiver;

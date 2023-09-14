@@ -188,7 +188,7 @@ impl SubscriptionBuiltinTopicData {
     topic_name: String,
     type_name: String,
     qos: &QosPolicies,
-    security_info: Option<EndpointSecurityInfo>,
+    _security_info: Option<EndpointSecurityInfo>, // used only with security feature
   ) -> Self {
     let mut sbtd = Self {
       key,
@@ -214,7 +214,7 @@ impl SubscriptionBuiltinTopicData {
       
       // DDS Security
       #[cfg(feature="security")]
-      security_info,
+      security_info: _security_info,
     };
 
     sbtd.set_qos(qos);
@@ -624,7 +624,7 @@ impl PublicationBuiltinTopicData {
     participant_guid: Option<GUID>,
     topic_name: String,
     type_name: String,
-    security_info: Option<EndpointSecurityInfo>,
+    _security_info: Option<EndpointSecurityInfo>,
   ) -> Self {
     Self {
       key: guid,
@@ -647,7 +647,7 @@ impl PublicationBuiltinTopicData {
       related_datareader_key: None, // TODO
       topic_aliases: None,          // TODO
 
-      #[cfg(feature="security")] security_info,
+      #[cfg(feature="security")] security_info: _security_info,
     }
   }
 

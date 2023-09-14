@@ -60,6 +60,7 @@ pub struct DPEventLoop {
   message_receiver: MessageReceiver, // This contains our Readers
 
   // If security is enabled, this contains the security plugins
+  #[cfg(feature="security")]
   security_plugins_opt: Option<SecurityPluginsHandle>,
 
   // Adding readers
@@ -78,6 +79,7 @@ pub struct DPEventLoop {
   udp_sender: Rc<UDPSender>,
 
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+  #[cfg(feature="security")]
   discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
@@ -96,7 +98,7 @@ impl DPEventLoop {
     remove_writer_receiver: TokenReceiverPair<GUID>,
     stop_poll_receiver: mio_channel::Receiver<EventLoopCommand>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
-    discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
+    _discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> Self {
@@ -191,8 +193,9 @@ impl DPEventLoop {
         participant_guid_prefix,
         acknack_sender,
         spdp_liveness_sender,
-        security_plugins_opt.clone(),
+        if cfg!(security) {security_plugins_opt.clone()} else {None},
       ),
+      #[cfg(feature="security")]
       security_plugins_opt,
       add_reader_receiver,
       remove_reader_receiver,
@@ -202,7 +205,8 @@ impl DPEventLoop {
       writers: HashMap::new(),
       ack_nack_receiver: acknack_receiver,
       discovery_update_notification_receiver,
-      discovery_command_sender,
+      #[cfg(feature="security")]
+      discovery_command_sender: _discovery_command_sender,
     }
   }
 
@@ -743,9 +747,11 @@ impl DPEventLoop {
       .expect("Reader timer channel registration failed!");
 
     // Clone these before handing ingredients to Reader builder
+    #[cfg(feature="security")]
     let reader_guid = reader_ing.guid;
     #[cfg(feature="security")]
     let reader_property_qos = reader_ing.qos_policy.property();
+    #[cfg(feature="security")]
     let topic_name = reader_ing.topic_name.clone();
 
     let mut new_reader = Reader::new(reader_ing, self.udp_sender.clone(), timer);
@@ -834,9 +840,11 @@ impl DPEventLoop {
       .expect("Writer heartbeat timer channel registration failed!!");
 
     // Clone these before handing ingredients to Writer builder
+    #[cfg(feature="security")]
     let writer_guid = writer_ing.guid;
     #[cfg(feature="security")]
     let writer_property_qos = writer_ing.qos_policies.property();
+    #[cfg(feature="security")]
     let topic_name = writer_ing.topic_name.clone();
 
     let new_writer = Writer::new(writer_ing, self.udp_sender.clone(), timer);

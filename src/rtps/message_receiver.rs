@@ -2,6 +2,7 @@ use std::collections::{btree_map::Entry, BTreeMap};
 
 use enumflags2::BitFlags;
 use mio_extras::{channel as mio_channel, channel::TrySendError};
+#[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
 
@@ -333,8 +334,12 @@ impl MessageReceiver {
                     self.handle_writer_submessage(target_entity_id, submessage.clone());
                   }
                 }
+
+                #[cfg(not(feature="security"))]
+                Some(_) => {}
+
+                #[cfg(feature="security")]
                 Some(plugins_handle) => {
-                  #[cfg(feature="security")]
                   for target_entity_id in available_target_entity_ids {
                     let destination_guid = GUID {
                       prefix: self.dest_guid_prefix,
@@ -352,12 +357,16 @@ impl MessageReceiver {
             } else {
               match security_plugins_clone {
                 None => self.handle_writer_submessage(receiver_entity_id, submessage),
+
+                #[cfg(not(feature="security"))]
+                Some(_) => {}
+
+                #[cfg(feature="security")]
                 Some(plugins_handle) => {
                   let destination_guid = GUID {
                     prefix: self.dest_guid_prefix,
                     entity_id: receiver_entity_id,
                   };
-                  #[cfg(feature="security")] // This match branch can only be taken with security feature
                   if plugins_handle
                     .get_plugins()
                     .submessage_not_protected(&destination_guid)
@@ -569,8 +578,8 @@ impl MessageReceiver {
   // see security version of the same function below
   #[cfg(not(feature="security"))]
   fn decode_and_handle_data(
-    security_plugins: Option<&SecurityPluginsHandle>,
-    source_guid: &GUID,
+    _security_plugins: Option<&SecurityPluginsHandle>,
+    _source_guid: &GUID,
     data: Data,
     data_flags: BitFlags<DATA_Flags, u8>,
     reader: &mut Reader,
@@ -645,15 +654,14 @@ impl MessageReceiver {
   #[cfg(not(feature="security"))]
   // see security version below
   fn decode_and_handle_datafrag(
-    security_plugins: Option<&SecurityPluginsHandle>,
-    source_guid: &GUID,
+    _security_plugins: Option<&SecurityPluginsHandle>,
+    _source_guid: &GUID,
     datafrag: DataFrag,
     datafrag_flags: BitFlags<DATAFRAG_Flags, u8>,
     reader: &mut Reader,
     mr_state: &MessageReceiverState,
   ) {
-    let DataFrag { inline_qos, encoded_payload, .. } = datafrag.clone();
-    let serialized_payload = encoded_payload; // rename to be consistent with security version
+    let serialized_payload = datafrag.encoded_payload.clone();
     if serialized_payload.len()
       > (datafrag.fragments_in_submessage as usize) * (datafrag.fragment_size as usize)
     {

@@ -10,7 +10,7 @@ use bytes::Bytes;
 use cdr_encoding_size::CdrEncodingSize;
 
 use crate::{
-  dds::{participant::DomainParticipant, qos, qos::QosPolicies},
+  dds::{participant::DomainParticipant, qos::QosPolicies},
   messages::{
     protocol_version::ProtocolVersion,
     submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
@@ -33,9 +33,12 @@ use super::{
 };
 
 #[cfg(feature="security")]
-use crate::security::{
+use crate::{
+  dds::qos,
+  security::{
     access_control::PermissionsToken, authentication::IdentityToken, ParticipantSecurityInfo,
-  };
+  }
+};
 #[cfg(feature="security")]
 use super::secure_discovery::SecureDiscovery;
 
@@ -143,7 +146,7 @@ impl SpdpDiscoveredParticipantData {
   pub(crate) fn from_local_participant(
     participant: &DomainParticipant,
     self_locators: &HashMap<Token, Vec<Locator>>,
-    secure_discovery_opt: &Option<SecureDiscovery>, // If present, security is enabled
+    _secure_discovery_opt: &Option<SecureDiscovery>, // If present, security is enabled
     lease_duration: Duration,
   ) -> Self {
     let metatraffic_multicast_locators = self_locators
@@ -165,7 +168,8 @@ impl SpdpDiscoveredParticipantData {
       .get(&USER_TRAFFIC_LISTENER_TOKEN)
       .cloned()
       .unwrap_or_default();
-
+      
+    #[allow(unused_mut)] // only security feature mutates this
     let mut builtin_endpoints = BuiltinEndpointSet::PARTICIPANT_ANNOUNCER
       | BuiltinEndpointSet::PARTICIPANT_DETECTOR
       | BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER
@@ -184,7 +188,7 @@ impl SpdpDiscoveredParticipantData {
     #[cfg(feature="security")] let mut security_info = None;
 
     #[cfg(feature="security")]
-    if let Some(secure_discovery) = secure_discovery_opt {
+    if let Some(secure_discovery) = _secure_discovery_opt {
       // Security enabled, add needed data
       // Builtin security endpoints
       builtin_endpoints = builtin_endpoints

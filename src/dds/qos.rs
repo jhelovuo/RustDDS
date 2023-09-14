@@ -636,11 +636,16 @@ pub const LENGTH_UNLIMITED: i32 = -1;
 pub mod policy {
   use std::cmp::Ordering;
 
-  use speedy::{Context, IsEof, Readable, Reader, Writable, Writer};
+  use speedy::{Readable,  Writable, };
   #[allow(unused_imports)]
   use log::{debug, error, info, trace, warn};
 
-  use crate::{serialization::speedy_pl_cdr_helpers::*, structure::duration::Duration};
+  use crate::{structure::duration::Duration};
+
+  #[cfg(feature="security")]
+  use crate::{serialization::speedy_pl_cdr_helpers::*,};
+  #[cfg(feature="security")]
+  use speedy::{Context, IsEof, Reader, Writer,};
 
   /*
   pub struct UserData {
