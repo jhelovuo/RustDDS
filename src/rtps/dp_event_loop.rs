@@ -26,24 +26,19 @@ use crate::{
     rtps_writer_proxy::RtpsWriterProxy,
     writer::{Writer, WriterIngredients},
   },
-  
   structure::{
     dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
   },
 };
-
 #[cfg(feature = "security")]
 use crate::{
   discovery::secure_discovery::AuthenticationStatus,
   security::security_plugins::SecurityPluginsHandle,
 };
-
 #[cfg(not(feature = "security"))]
-use crate::{
-  no_security::security_plugins::SecurityPluginsHandle,
-};
+use crate::no_security::security_plugins::SecurityPluginsHandle;
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,
@@ -106,7 +101,7 @@ impl DPEventLoop {
     _discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
-  ) -> Self {        
+  ) -> Self {
     #[cfg(not(feature = "security"))]
     let _dummy = _discovery_command_sender;
 
@@ -189,7 +184,7 @@ impl DPEventLoop {
 
     // port number 0 means OS chooses an available port number.
     let udp_sender = UDPSender::new(0).expect("UDPSender construction fail"); // TODO
-    
+
     #[cfg(not(feature = "security"))]
     let security_plugins_opt = security_plugins_opt.and(None); // make sure it is None an consume value
 
@@ -586,8 +581,7 @@ impl DPEventLoop {
               GuidPrefix::UNKNOWN,
               EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
             );
-
-          } 
+          }
 
           #[cfg(feature = "security")]
           if *writer_eid == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER {
@@ -613,9 +607,10 @@ impl DPEventLoop {
           EntityId::SPDP_BUILTIN_PARTICIPANT_READER => Discovery::create_spdp_participant_qos(),
 
           #[cfg(feature = "security")]
-          EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER => 
-            Discovery::create_participant_stateless_message_qos(),
-            
+          EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER => {
+            Discovery::create_participant_stateless_message_qos()
+          }
+
           _ => Discovery::publisher_qos(), // For all others
         };
         let wp = discovered_participant.as_writer_proxy(true, Some(*writer_eid));

@@ -51,16 +51,10 @@ use super::{
   no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
   with_key::simpledatareader::ReaderCommand,
 };
-
 #[cfg(feature = "security")]
-use crate::{
-  security::security_plugins::SecurityPluginsHandle,
-};
-
+use crate::security::security_plugins::SecurityPluginsHandle;
 #[cfg(not(feature = "security"))]
-use crate::{
-  no_security::security_plugins::SecurityPluginsHandle,
-};
+use crate::no_security::security_plugins::SecurityPluginsHandle;
 
 // -------------------------------------------------------------------
 
@@ -259,7 +253,7 @@ impl Publisher {
       .create_datawriter(self, Some(entity_id), topic, qos, writer_like_stateless)
   }
 
-  #[cfg(feature="security")]  // to avoid "never used" warning
+  #[cfg(feature = "security")] // to avoid "never used" warning
   pub(crate) fn create_datawriter_with_entity_id_no_key<D, SA>(
     &self,
     entity_id: EntityId,
@@ -800,7 +794,7 @@ impl Subscriber {
       .create_datareader(self, topic, Some(entity_id), qos, reader_like_stateless)
   }
 
-  #[cfg(feature="security")]  // to avoid "never used" warning
+  #[cfg(feature = "security")] // to avoid "never used" warning
   pub(crate) fn create_datareader_with_entity_id_no_key<D: 'static, SA>(
     &self,
     topic: &Topic,
