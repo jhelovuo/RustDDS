@@ -260,7 +260,7 @@ impl DiscoveryDB {
     self.external_topic_readers.remove(&guid);
   }
 
-  #[allow(dead_code)] // Currently used only if security is on
+  #[cfg(feature = "security")]
   pub fn get_topic_reader(&self, guid: &GUID) -> Option<&DiscoveredReaderData> {
     self.external_topic_readers.get(guid)
   }
