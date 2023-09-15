@@ -15,12 +15,16 @@ pub fn test_config() -> SecurityConfig {
     // For the authentication plugin
     security::types::Property {
       name: "dds.sec.auth.identity_ca".to_string(),
-      value: "file:example_security_configuration_files/identity_ca_certificate.pem".to_string(),
+      value: "file:/home/olli/git/RustDDS/example_security_configuration_files/\
+              identity_ca_certificate.pem"
+        .to_string(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.auth.private_key".to_string(),
-      value: "file:example_security_configuration_files/participant1_private_key.pem".to_string(),
+      value: "file:/home/olli/git/RustDDS/example_security_configuration_files/\
+              participant1_private_key.pem"
+        .to_string(),
       propagate: false,
     },
     security::types::Property {
@@ -30,7 +34,9 @@ pub fn test_config() -> SecurityConfig {
     },
     security::types::Property {
       name: "dds.sec.auth.identity_certificate".to_string(),
-      value: "file:example_security_configuration_files/participant1_certificate.pem".to_string(),
+      value: "file:/home/olli/git/RustDDS/example_security_configuration_files/\
+              participant1_certificate.pem"
+        .to_string(),
       propagate: false,
     },
     security::types::Property {
@@ -43,17 +49,23 @@ pub fn test_config() -> SecurityConfig {
     // For the access control plugin
     security::types::Property {
       name: "dds.sec.access.permissions_ca".to_string(),
-      value: "file:example_security_configuration_files/permissions_ca_certificate.pem".to_string(),
+      value: "file:/home/olli/git/RustDDS/example_security_configuration_files/\
+              permissions_ca_certificate.pem"
+        .to_string(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.access.governance".to_string(),
-      value: "file:example_security_configuration_files/permissive_governance.p7s".to_string(),
+      value: "file:/home/olli/git/RustDDS/example_security_configuration_files/\
+              permissive_governance.p7s"
+        .to_string(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.access.permissions".to_string(),
-      value: "file:example_security_configuration_files/permissive_permissions.p7s".to_string(),
+      value: "file:/home/olli/git/RustDDS/example_security_configuration_files/\
+              permissive_permissions.p7s"
+        .to_string(),
       propagate: false,
     },
   ];
