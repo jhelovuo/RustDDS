@@ -12,13 +12,12 @@ use mio_extras::channel as mio_channel;
 use crate::{
   dds::{qos::policy, typedesc::TypeDesc},
   discovery::{
-    discovery::DiscoveryCommand,
+    discovery::{Discovery, DiscoveryCommand},
     discovery_db::{discovery_db_read, DiscoveryDB},
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
   messages::submessages::submessages::AckSubmessage,
   network::{udp_listener::UDPListener, udp_sender::UDPSender},
-  qos::HasQoSPolicy,
   rtps::{
     constant::*,
     message_receiver::MessageReceiver,
@@ -27,15 +26,24 @@ use crate::{
     rtps_writer_proxy::RtpsWriterProxy,
     writer::{Writer, WriterIngredients},
   },
-  security::security_plugins::SecurityPluginsHandle,
+  
   structure::{
     dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
   },
 };
+
 #[cfg(feature = "security")]
-use crate::discovery::secure_discovery::AuthenticationStatus;
+use crate::{
+  discovery::secure_discovery::AuthenticationStatus,
+  security::security_plugins::SecurityPluginsHandle,
+};
+
+#[cfg(not(feature = "security"))]
+use crate::{
+  no_security::security_plugins::SecurityPluginsHandle,
+};
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,
@@ -98,7 +106,7 @@ impl DPEventLoop {
     _discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
-  ) -> Self {
+  ) -> Self {        
     #[cfg(not(feature = "security"))]
     let _dummy = _discovery_command_sender;
 
@@ -181,7 +189,7 @@ impl DPEventLoop {
 
     // port number 0 means OS chooses an available port number.
     let udp_sender = UDPSender::new(0).expect("UDPSender construction fail"); // TODO
-
+    
     #[cfg(not(feature = "security"))]
     let security_plugins_opt = security_plugins_opt.and(None); // make sure it is None an consume value
 
@@ -551,27 +559,43 @@ impl DPEventLoop {
     for (writer_eid, reader_eid, endpoint) in &readers_init_list {
       if let Some(writer) = self.writers.get_mut(writer_eid) {
         debug!("update_discovery_writer - {:?}", writer.topic_name());
+        let mut qos = Discovery::subscriber_qos();
+        // special case by RTPS 2.3 spec Section
+        // "8.4.13.3 BuiltinParticipantMessageWriter and
+        // BuiltinParticipantMessageReader QoS"
+        if *reader_eid == EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
+          && discovered_participant
+            .builtin_endpoint_qos
+            .map_or(false, |beq| beq.is_best_effort())
+        {
+          qos.reliability = Some(policy::Reliability::BestEffort);
+        };
+
         if discovered_participant
           .available_builtin_endpoints
           .contains(*endpoint)
         {
-          let reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
+          let mut reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
 
-          // Get the QoS for the built-in topic from the local writer
-          let mut qos = writer.qos();
-          // special case by RTPS 2.3 spec Section
-          // "8.4.13.3 BuiltinParticipantMessageWriter and
-          // BuiltinParticipantMessageReader QoS"
-          if *reader_eid == EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
-            && discovered_participant
-              .builtin_endpoint_qos
-              .map_or(false, |beq| beq.is_best_effort())
-          {
-            qos.reliability = Some(policy::Reliability::BestEffort);
-          };
+          if *writer_eid == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
+            // Simple Participant Discovery Protocol (SPDP) writer is special,
+            // different from SEDP writers
+            qos = Discovery::create_spdp_participant_qos(); // different QoS
+                                                            // adding a multicast reader
+            reader_proxy.remote_reader_guid = GUID::new_with_prefix_and_id(
+              GuidPrefix::UNKNOWN,
+              EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
+            );
+
+          } 
+
+          #[cfg(feature = "security")]
+          if *writer_eid == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER {
+            // Also ParticipantStatelessMessage reader has special Qos
+            qos = Discovery::create_participant_stateless_message_qos();
+          }
 
           writer.update_reader_proxy(&reader_proxy, &qos);
-
           debug!(
             "update_discovery writer - endpoint {:?} - {:?}",
             endpoint, discovered_participant.participant_guid
@@ -585,17 +609,22 @@ impl DPEventLoop {
     for (writer_eid, reader_eid, endpoint) in &writers_init_list {
       if let Some(reader) = self.message_receiver.available_readers.get_mut(reader_eid) {
         debug!("try update_discovery_reader - {:?}", reader.topic_name());
+        let qos = match *reader_eid {
+          EntityId::SPDP_BUILTIN_PARTICIPANT_READER => Discovery::create_spdp_participant_qos(),
+
+          #[cfg(feature = "security")]
+          EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER => 
+            Discovery::create_participant_stateless_message_qos(),
+            
+          _ => Discovery::publisher_qos(), // For all others
+        };
+        let wp = discovered_participant.as_writer_proxy(true, Some(*writer_eid));
+
         if discovered_participant
           .available_builtin_endpoints
           .contains(*endpoint)
         {
-          let wp = discovered_participant.as_writer_proxy(true, Some(*writer_eid));
-
-          // Get the QoS for the built-in topic from the local reader
-          let qos = reader.qos();
-
           reader.update_writer_proxy(wp, &qos);
-
           debug!(
             "update_discovery_reader - endpoint {:?} - {:?}",
             *endpoint, discovered_participant.participant_guid
