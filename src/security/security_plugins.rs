@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-  discovery::DiscoveredReaderData,
+  discovery::{DiscoveredReaderData, DiscoveredWriterData},
   messages::submessages::{
     elements::parameter_list::ParameterList,
     secure_postfix::SecurePostfix,
@@ -401,7 +401,7 @@ impl SecurityPlugins {
     domain_id: u16,
     participant_guidp: GuidPrefix,
     qos: &QosPolicies,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let handle = self.get_permissions_handle(&participant_guidp)?;
     self.access.check_create_participant(handle, domain_id, qos)
   }
@@ -410,7 +410,7 @@ impl SecurityPlugins {
     &self,
     domain_id: u16,
     participant_guidp: GuidPrefix,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let handle = self.get_permissions_handle(&participant_guidp)?;
     self
       .access
@@ -424,7 +424,7 @@ impl SecurityPlugins {
     participant_guidp: GuidPrefix,
     domain_id: u16,
     reader_data: &DiscoveredReaderData,
-  ) -> SecurityResult<bool> {
+  ) -> SecurityResult<(bool, bool)> {
     let handle = self.get_permissions_handle(&participant_guidp)?;
     // Convert normal DiscoveredReaderData to SubscriptionBuiltinTopicDataSecure,
     // which is what Access control plugin expects
@@ -432,6 +432,23 @@ impl SecurityPlugins {
     self
       .access
       .check_remote_datareader(handle, domain_id, &secure_sub_data)
+  }
+
+  // This function is called when DataWriters from non-secure discovery
+  // need to be checked
+  pub fn check_remote_datawriter_from_nonsecure(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    writer_data: &DiscoveredWriterData,
+  ) -> SecurityResult<bool> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    // Convert normal DiscoveredWriterData to PublicationBuiltinTopicDataSecure,
+    // which is what Access control plugin expects
+    let secure_pub_data = PublicationBuiltinTopicDataSecure::from(writer_data.clone());
+    self
+      .access
+      .check_remote_datawriter(handle, domain_id, &secure_pub_data)
   }
 
   pub fn get_permissions_token(

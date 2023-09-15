@@ -126,7 +126,7 @@ pub(super) fn validate_mac(
   );
 
   // This will return `Err(..)` if verification fails
-  let plaintext = opening_key.open_in_place(Aad::empty(), &mut in_out)?;
+  let _plaintext = opening_key.open_in_place(Aad::empty(), &mut in_out)?;
   // If we get here, the mac ("tag") was valid.
   Ok(())
 }

@@ -4,7 +4,7 @@ use speedy::Readable;
 
 use crate::{
   messages::submessages::elements::{
-    crypto_content::CryptoContent,
+    //crypto_content::CryptoContent,
     crypto_footer::CryptoFooter,
     crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
@@ -192,10 +192,10 @@ impl BuiltinInitializationVector {
     // Succeeds as the slice length is 4
     SessionId::new(<[u8; 4]>::try_from(&self.0[..4]).unwrap())
   }
-  pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
-    // Succeeds as the slice length is 12-4=8
-    <[u8; 8]>::try_from(&self.0[4..]).unwrap()
-  }
+  // pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
+  //   // Succeeds as the slice length is 12-4=8
+  //   <[u8; 8]>::try_from(&self.0[4..]).unwrap()
+  // }
 
   pub fn try_from_slice(s: impl AsRef<[u8]>) -> Result<Self, std::array::TryFromSliceError> {
     Ok(Self(<[u8; INITIALIZATION_VECTOR_LENGTH]>::try_from(
@@ -231,15 +231,17 @@ impl BuiltinCryptoHeaderExtra {
   pub(super) fn initialization_vector(&self) -> BuiltinInitializationVector {
     self.0
   }
-  pub(super) fn session_id(&self) -> SessionId {
-    self.0.session_id()
-  }
-  pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
-    self.0.initialization_vector_suffix()
-  }
-  pub fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) -> Self {
-    Self::from((session_id, initialization_vector_suffix))
-  }
+
+  // pub(super) fn session_id(&self) -> SessionId {
+  //   self.0.session_id()
+  // }
+  // pub(super) fn initialization_vector_suffix(&self) -> [u8; 8] {
+  //   self.0.initialization_vector_suffix()
+  // }
+
+  // pub fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) -> Self {
+  //   Self::from((session_id, initialization_vector_suffix))
+  // }
 
   pub fn serialized_len() -> usize {
     INITIALIZATION_VECTOR_LENGTH
@@ -336,7 +338,7 @@ impl From<BuiltinCryptoHeader> for CryptoHeader {
 
 /// CryptoContent type from section 9.5.2.4 of the Security specification (v.
 /// 1.1)
-pub(super) type BuiltinCryptoContent = CryptoContent;
+//pub(super) type BuiltinCryptoContent = CryptoContent;
 
 pub(super) const MAC_LENGTH: usize = 16;
 pub(super) type BuiltinMAC = [u8; MAC_LENGTH];

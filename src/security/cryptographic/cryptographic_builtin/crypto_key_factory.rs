@@ -142,7 +142,7 @@ impl CryptographicBuiltin {
   fn hash_shared_secret(
     hmac_key_plain: [&[u8]; 3],
     shared_secret: &SharedSecret,
-    key_length: KeyLength,
+    _key_length: KeyLength,
   ) -> BuiltinKey {
     let hmac_key = hmac::Key::new(
       hmac::HMAC_SHA256,
@@ -181,7 +181,7 @@ impl CryptographicBuiltin {
 
   //TODO replace with proper functionality
   fn generate_key_material(
-    crypto_handle: CryptoHandle,
+    _crypto_handle: CryptoHandle,
     transformation_kind: BuiltinCryptoTransformationKind,
   ) -> KeyMaterial_AES_GCM_GMAC {
     let key_length = KeyLength::from(transformation_kind);
@@ -198,18 +198,18 @@ impl CryptographicBuiltin {
     }
   }
 
-  fn generate_mock_key(crypto_handle: CryptoHandle) -> KeyMaterial_AES_GCM_GMAC {
-    Self::generate_key_material(
-      crypto_handle,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
-    )
-  }
+  // fn generate_mock_key(crypto_handle: CryptoHandle) -> KeyMaterial_AES_GCM_GMAC {
+  //   Self::generate_key_material(
+  //     crypto_handle,
+  //     BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+  //   )
+  // }
 
   fn generate_receiver_specific_key(
     &mut self,
     key_materials: KeyMaterial_AES_GCM_GMAC_seq,
     origin_authentication: bool,
-    crypto_handle: CryptoHandle,
+    _crypto_handle: CryptoHandle,
   ) -> KeyMaterial_AES_GCM_GMAC_seq {
     if origin_authentication {
       let master_receiver_specific_key =
@@ -310,7 +310,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     local_participant_crypto_handle: ParticipantCryptoHandle,
     _remote_participant_identity: IdentityHandle,
     _remote_participant_permissions: PermissionsHandle,
-    shared_secret: SharedSecretHandle,
+    _shared_secret: SharedSecretHandle,
   ) -> SecurityResult<ParticipantCryptoHandle> {
     //TODO: this is only a mock implementation
 
@@ -441,7 +441,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     local_datawriter_crypto_handle: DatawriterCryptoHandle,
     remote_participant_crypto_handle: ParticipantCryptoHandle,
     shared_secret: SharedSecretHandle,
-    relay_only: bool,
+    _relay_only: bool,
   ) -> SecurityResult<DatareaderCryptoHandle> {
     //TODO: this is only a mock implementation
     let common_encode_key_materials = self

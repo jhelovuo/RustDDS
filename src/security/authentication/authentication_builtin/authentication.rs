@@ -51,7 +51,7 @@ const QOS_PASSWORD_PROPERTY_NAME: &str = "dds.sec.auth.password";
 impl Authentication for AuthenticationBuiltin {
   fn validate_local_identity(
     &mut self,
-    domain_id: u16,
+    _domain_id: u16,  //TODO: How this should be used?
     participant_qos: &QosPolicies,
     candidate_participant_guid: GUID,
   ) -> SecurityResult<(ValidationOutcome, IdentityHandle, GUID)> {
@@ -224,7 +224,7 @@ impl Authentication for AuthenticationBuiltin {
   // Currently only mocked
   fn get_identity_status_token(
     &self,
-    handle: IdentityHandle,
+    _handle: IdentityHandle,
   ) -> SecurityResult<IdentityStatusToken> {
     // TODO: actual implementation
 
@@ -262,7 +262,7 @@ impl Authentication for AuthenticationBuiltin {
   // anything, but it starts the authentication protocol.
   fn validate_remote_identity(
     &mut self,
-    remote_auth_request_token: Option<AuthRequestMessageToken>,
+    _remote_auth_request_token: Option<AuthRequestMessageToken>, // Unused, see below.
     local_identity_handle: IdentityHandle,
     remote_identity_token: IdentityToken,
     remote_participant_guidp: GuidPrefix,
@@ -323,8 +323,8 @@ impl Authentication for AuthenticationBuiltin {
     let remote_identity_handle = self.get_new_identity_handle();
 
     let remote_info = RemoteParticipantInfo {
-      guid_prefix: remote_participant_guidp,
-      identity_token: remote_identity_token,
+      //guid_prefix: remote_participant_guidp,
+      //identity_token: remote_identity_token,
       identity_certificate_opt: None,   // Not yet available
       signed_permissions_xml_opt: None, // Not yet available
       handshake: HandshakeInfo {
@@ -617,7 +617,6 @@ impl Authentication for AuthenticationBuiltin {
     // dummy.
     let mut state = BuiltinHandshakeState::PendingRequestSend; // dummy to leave behind
     std::mem::swap(&mut remote_info.handshake.state, &mut state);
-    let remote_info = self.get_remote_participant_info(&remote_identity_handle)?;
 
     let local_info = self.get_local_participant_info()?;
 
@@ -782,9 +781,32 @@ impl Authentication for AuthenticationBuiltin {
             return Err(security_error!(
               "Hash C1 mismatch on authentication final receive"
             ));
-          } else { /* ok */
-          }
+          } 
         }
+
+        // This is a sanity check 2
+        if let Some(received_hash_c2) = final_token.hash_c2 {
+          if hash_c2 != received_hash_c2 {
+            return Err(security_error!(
+              "Hash C2 mismatch on authentication final receive"
+            ));
+          } 
+        }
+
+        // sanity check
+        if dh1 != final_token.dh1 {
+          return Err(security_error!(
+            "Diffie-Hellman parameter DH1 mismatch on authentication final receive"
+          ));          
+        }
+
+        // sanity check
+        if dh2.compute_public_key()?.as_ref() != final_token.dh2.as_ref() {
+          return Err(security_error!(
+            "Diffie-Hellman parameter DH2 mismatch on authentication final receive"
+          ));          
+        }
+
 
         // "The operation shall check that the challenge1 and challenge2 match the ones
         // that were sent on the HandshakeReplyMessageToken."
@@ -830,7 +852,6 @@ impl Authentication for AuthenticationBuiltin {
 
         // Compute the shared secret
         // TODO: Algorithm is hardwired. Should follow "c.kagree_algo" from above.
-        let dh2_public = dh2.compute_public_key()?;
         let dh1 = agreement::UnparsedPublicKey::new(&agreement::ECDH_P256, dh1.as_ref());
         let shared_secret = agreement::agree_ephemeral(
           dh2,

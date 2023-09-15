@@ -1,4 +1,3 @@
-#![allow(non_camel_case_types)]
 
 use speedy::{Endianness, Readable};
 use enumflags2::{bitflags, BitFlags};

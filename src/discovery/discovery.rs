@@ -690,12 +690,18 @@ impl Discovery {
 
     loop {
       let mut events = Events::with_capacity(32); // Should this be outside of the loop?
-      match self.poll.poll(&mut events, None) {
+      match self
+        .poll
+        .poll(&mut events, Some(std::time::Duration::from_millis(5000)))
+      {
         Ok(_) => (),
         Err(e) => {
           error!("Failed in waiting of poll in discovery. {e:?}");
           return;
         }
+      }
+      if events.is_empty() {
+        debug!("Discovery event loop idling.");
       }
 
       for event in events.into_iter() {
@@ -1187,22 +1193,36 @@ impl Discovery {
       };
 
     for d in dwds {
-      match d {
-        Sample::Value(dwd) => {
-          trace!("handle_publication_reader discovered {:?}", &dwd);
-          let discovered_writer_data =
-            discovery_db_write(&self.discovery_db).update_publication(&dwd);
-          self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
-            discovered_writer_data,
-          });
-          debug!("Discovered Writer {:?}", &dwd);
-        }
-        Sample::Dispose(writer_key) => {
-          discovery_db_write(&self.discovery_db).remove_topic_writer(writer_key);
-          self.send_discovery_notification(DiscoveryNotificationType::WriterLost {
-            writer_guid: writer_key,
-          });
-          debug!("Disposed Writer {:?}", writer_key);
+      #[cfg(not(feature = "security"))]
+      let permission = NormalDiscoveryPermission::Allow;
+
+      #[cfg(feature = "security")]
+      let permission = if let Some(security) = self.security_opt.as_mut() {
+        // Security is enabled. Do a secure read
+        security.check_nonsecure_publication_read(&d, &self.discovery_db)
+      } else {
+        // No security configured, always allowed
+        NormalDiscoveryPermission::Allow
+      };
+
+      if permission == NormalDiscoveryPermission::Allow {
+        match d {
+          Sample::Value(dwd) => {
+            trace!("handle_publication_reader discovered {:?}", &dwd);
+            let discovered_writer_data =
+              discovery_db_write(&self.discovery_db).update_publication(&dwd);
+            self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
+              discovered_writer_data,
+            });
+            debug!("Discovered Writer {:?}", &dwd);
+          }
+          Sample::Dispose(writer_key) => {
+            discovery_db_write(&self.discovery_db).remove_topic_writer(writer_key);
+            self.send_discovery_notification(DiscoveryNotificationType::WriterLost {
+              writer_guid: writer_key,
+            });
+            debug!("Disposed Writer {:?}", writer_key);
+          }
         }
       }
     } // loop

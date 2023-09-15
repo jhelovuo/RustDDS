@@ -38,7 +38,6 @@ use crate::{
     reader::ReaderIngredients,
     writer::{WriterCommand, WriterIngredients},
   },
-  security::security_plugins::SecurityPluginsHandle,
   serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter},
   structure::{
     entity::RTPSEntity,
@@ -52,6 +51,10 @@ use super::{
   no_key::wrappers::{DAWrapper, NoKeyWrapper, SAWrapper},
   with_key::simpledatareader::ReaderCommand,
 };
+#[cfg(feature = "security")]
+use crate::security::security_plugins::SecurityPluginsHandle;
+#[cfg(not(feature = "security"))]
+use crate::no_security::security_plugins::SecurityPluginsHandle;
 
 // -------------------------------------------------------------------
 

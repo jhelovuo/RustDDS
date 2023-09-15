@@ -265,6 +265,11 @@ impl DiscoveryDB {
     self.external_topic_readers.get(guid)
   }
 
+  #[cfg(feature = "security")]
+  pub fn get_topic_writer(&self, guid: &GUID) -> Option<&DiscoveredWriterData> {
+    self.external_topic_writers.get(guid)
+  }
+
   fn remove_topic_writer_with_prefix(&mut self, guid_prefix: GuidPrefix) {
     // TODO: Implement this using .drain_filter() in BTreeMap once it lands in
     // stable.

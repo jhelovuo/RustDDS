@@ -6,13 +6,13 @@ use ring::agreement;
 use crate::{
   security::{access_control::PermissionsToken, certificate, SecurityError, SecurityResult},
   security_error,
-  structure::guid::GuidPrefix,
+  //structure::guid::GuidPrefix,
   GUID,
 };
 use self::types::BuiltinAuthenticatedPeerCredentialToken;
 use super::{
   authentication_builtin::types::BuiltinIdentityToken, AuthenticatedPeerCredentialToken, Challenge,
-  HandshakeHandle, HandshakeMessageToken, IdentityHandle, IdentityToken, Sha256, SharedSecret,
+  HandshakeHandle, HandshakeMessageToken, IdentityHandle, /*IdentityToken,*/ Sha256, SharedSecret,
   ValidationOutcome,
 };
 
@@ -94,8 +94,8 @@ struct LocalParticipantInfo {
 
 // All things about remote participant that we're interested in
 struct RemoteParticipantInfo {
-  identity_token: IdentityToken,
-  guid_prefix: GuidPrefix,
+  //identity_token: IdentityToken,
+  //guid_prefix: GuidPrefix,
   identity_certificate_opt: Option<certificate::Certificate>, /* Not available at first.
                                                                * Obtained from handshake
                                                                * request/reply message */
@@ -197,7 +197,7 @@ impl AuthenticationBuiltin {
     &mut self,
     initiator_identity_handle: IdentityHandle, // Local
     replier_identity_handle: IdentityHandle,   // Remote
-    serialized_local_participant_data: Vec<u8>,
+    _serialized_local_participant_data: Vec<u8>,
   ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
     // Make sure initiator_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
@@ -249,10 +249,10 @@ impl AuthenticationBuiltin {
   #[allow(clippy::needless_pass_by_value)]
   fn begin_handshake_reply_mocked(
     &mut self,
-    handshake_message_in: HandshakeMessageToken,
+    _handshake_message_in: HandshakeMessageToken,
     initiator_identity_handle: IdentityHandle, // Remote
     replier_identity_handle: IdentityHandle,   // Local
-    serialized_local_participant_data: Vec<u8>,
+    _serialized_local_participant_data: Vec<u8>,
   ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
     // Make sure replier_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
@@ -321,7 +321,7 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
   #[allow(clippy::needless_pass_by_value)]
   fn process_handshake_mocked(
     &mut self,
-    handshake_message_in: HandshakeMessageToken,
+    _handshake_message_in: HandshakeMessageToken,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<(ValidationOutcome, Option<HandshakeMessageToken>)> {
     // Check what is the handshake state
@@ -333,9 +333,8 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 
     match state {
       BuiltinHandshakeState::PendingReplyMessage {
-        dh1,
         challenge1,
-        hash_c1,
+        ..
       } => {
         // We are the initiator, and expect a reply.
         // Result is that we produce a MassageToken (i.e. send the final message)
@@ -360,11 +359,7 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
       BuiltinHandshakeState::PendingFinalMessage {
         challenge1,
         challenge2,
-        dh1,
-        dh2,
-        hash_c1,
-        hash_c2,
-        remote_id_certificate,
+        ..
       } => {
         // We are the responder, and expect the final message.
         // Result is that we do not produce a MassageToken, since this was the final
@@ -390,7 +385,7 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 
   fn get_authenticated_peer_credential_token_mocked(
     &self,
-    handshake_handle: HandshakeHandle,
+    _handshake_handle: HandshakeHandle,
   ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
     // Return a token with our own info. This can be used to test against an
     // identical RustDDS instance.
@@ -404,9 +399,4 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
     Ok(AuthenticatedPeerCredentialToken::from(builtin_token))
   }
 
-  fn set_listener(&self) -> SecurityResult<()> {
-    Err(security_error!(
-      "set_listener not supported. Use status events in DataReader/DataWriter instead."
-    ))
-  }
 }

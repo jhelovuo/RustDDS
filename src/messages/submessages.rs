@@ -26,6 +26,8 @@ pub mod secure_rtps_postfix;
 pub mod secure_rtps_prefix;
 
 pub mod submessage;
+
+#[allow(non_camel_case_types)]
 pub mod submessage_flag;
 pub mod submessage_header;
 pub mod submessage_kind;
