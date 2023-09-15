@@ -1405,6 +1405,8 @@ impl Writer {
           bad_policy_id,
           self.topic_name()
         );
+        info!("Reader QoS={:?} Writer QoS={:?}", requested_qos, self.qos_policies );
+
         self.requested_incompatible_qos_count += 1;
         self.send_status(DataWriterStatus::OfferedIncompatibleQos {
           count: CountWithChange::new(self.requested_incompatible_qos_count, 1),
