@@ -991,8 +991,8 @@ impl DomainParticipantInner {
       })?;
 
     info!(
-      "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
-      domain_id, participant_id, participant_guid
+      "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?} security={}",
+      domain_id, participant_id, participant_guid, cfg!(security)
     );
 
     Ok(Self {
