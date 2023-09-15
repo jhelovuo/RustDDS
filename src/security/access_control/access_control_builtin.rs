@@ -1,4 +1,4 @@
-use std::{collections::HashMap, /*ops::Not*/ };
+use std::collections::HashMap;
 
 use bytes::Bytes;
 use chrono::Utc;
@@ -12,7 +12,7 @@ use crate::{
   security_error,
 };
 use self::{
-  domain_governance_document::{DomainRule, /*TopicRule*/ },
+  domain_governance_document::DomainRule,
   domain_participant_permissions_document::{Action, DomainParticipantPermissions, Grant},
   types::Entity,
 };
@@ -155,24 +155,6 @@ impl AccessControlBuiltin {
     entity_kind: &Entity,
   ) -> SecurityResult<bool> {
     let grant = self.get_grant(&permissions_handle)?;
-    //let domain_rule = self.get_domain_rule(&permissions_handle)?;
-
-    /*
-    let requested_access_is_unprotected = domain_rule
-      .find_topic_rule(topic_name)
-      .map(
-        |TopicRule {
-           enable_read_access_control,
-           enable_write_access_control,
-           ..
-         }| match entity_kind {
-          Entity::Datawriter => *enable_write_access_control,
-          Entity::Datareader => *enable_read_access_control,
-          Entity::Topic => *enable_read_access_control && *enable_write_access_control,
-        },
-      )
-      .is_some_and(bool::not);
-    */
 
     let participant_has_write_access = grant
       .check_action(

@@ -51,7 +51,7 @@ const QOS_PASSWORD_PROPERTY_NAME: &str = "dds.sec.auth.password";
 impl Authentication for AuthenticationBuiltin {
   fn validate_local_identity(
     &mut self,
-    _domain_id: u16,  //TODO: How this should be used?
+    _domain_id: u16, //TODO: How this should be used?
     participant_qos: &QosPolicies,
     candidate_participant_guid: GUID,
   ) -> SecurityResult<(ValidationOutcome, IdentityHandle, GUID)> {
@@ -781,7 +781,7 @@ impl Authentication for AuthenticationBuiltin {
             return Err(security_error!(
               "Hash C1 mismatch on authentication final receive"
             ));
-          } 
+          }
         }
 
         // This is a sanity check 2
@@ -790,23 +790,22 @@ impl Authentication for AuthenticationBuiltin {
             return Err(security_error!(
               "Hash C2 mismatch on authentication final receive"
             ));
-          } 
+          }
         }
 
         // sanity check
         if dh1 != final_token.dh1 {
           return Err(security_error!(
             "Diffie-Hellman parameter DH1 mismatch on authentication final receive"
-          ));          
+          ));
         }
 
         // sanity check
         if dh2.compute_public_key()?.as_ref() != final_token.dh2.as_ref() {
           return Err(security_error!(
             "Diffie-Hellman parameter DH2 mismatch on authentication final receive"
-          ));          
+          ));
         }
-
 
         // "The operation shall check that the challenge1 and challenge2 match the ones
         // that were sent on the HandshakeReplyMessageToken."

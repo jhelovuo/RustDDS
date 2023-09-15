@@ -12,8 +12,8 @@ use crate::{
 use self::types::BuiltinAuthenticatedPeerCredentialToken;
 use super::{
   authentication_builtin::types::BuiltinIdentityToken, AuthenticatedPeerCredentialToken, Challenge,
-  HandshakeHandle, HandshakeMessageToken, IdentityHandle, /*IdentityToken,*/ Sha256, SharedSecret,
-  ValidationOutcome,
+  HandshakeHandle, HandshakeMessageToken, IdentityHandle, /* IdentityToken, */ Sha256,
+  SharedSecret, ValidationOutcome,
 };
 
 mod authentication;
@@ -332,10 +332,7 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
     std::mem::swap(&mut remote_info.handshake.state, &mut state);
 
     match state {
-      BuiltinHandshakeState::PendingReplyMessage {
-        challenge1,
-        ..
-      } => {
+      BuiltinHandshakeState::PendingReplyMessage { challenge1, .. } => {
         // We are the initiator, and expect a reply.
         // Result is that we produce a MassageToken (i.e. send the final message)
         // and the handshake results (shared secret)
@@ -398,5 +395,4 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 
     Ok(AuthenticatedPeerCredentialToken::from(builtin_token))
   }
-
 }

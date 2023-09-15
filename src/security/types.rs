@@ -514,8 +514,8 @@ pub(super) struct PluginClassId {
   minor_version: String, // Can be changed to number if needed
 }
 
-// TODO: This struct should be used in auhtentication/authentication_builtin/types.rs
-// instead of fixed strings.
+// TODO: This struct should be used in
+// auhtentication/authentication_builtin/types.rs instead of fixed strings.
 
 impl PluginClassId {
   pub fn matches_up_to_major_version(
@@ -585,7 +585,6 @@ impl TryFrom<String> for PluginClassId {
 
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
 //pub type Token = DataHolder; // never actually used in code.
-
 
 // DDS Security spec v1.1 Section 7.2.7 ParticipantSecurityInfo
 // This is communicated over Discovery

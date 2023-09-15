@@ -239,8 +239,8 @@ impl BuiltinCryptoHeaderExtra {
   //   self.0.initialization_vector_suffix()
   // }
 
-  // pub fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) -> Self {
-  //   Self::from((session_id, initialization_vector_suffix))
+  // pub fn new(session_id: SessionId, initialization_vector_suffix: [u8; 8]) ->
+  // Self {   Self::from((session_id, initialization_vector_suffix))
   // }
 
   pub fn serialized_len() -> usize {

@@ -1,6 +1,6 @@
 use std::fmt::Debug;
-use log::warn;
 
+use log::warn;
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use glob::Pattern;
 
@@ -271,7 +271,9 @@ impl Rule {
     let relay = relay?;
     let (_, rest) = rest.split_at(relay.len());
 
-    if ! rest.is_empty() { warn!("Extra elements in GrantElement. Ignoring."); }
+    if !rest.is_empty() {
+      warn!("Extra elements in GrantElement. Ignoring.");
+    }
 
     Ok(Rule {
       verdict,

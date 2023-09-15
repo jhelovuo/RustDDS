@@ -1,4 +1,3 @@
-
 use speedy::{Endianness, Readable};
 use enumflags2::{bitflags, BitFlags};
 
