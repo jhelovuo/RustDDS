@@ -107,7 +107,7 @@ impl CryptographicBuiltin {
   fn decode_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_endpoint_crypto_handle: DatareaderCryptoHandle,
+    _receiving_endpoint_crypto_handle: DatareaderCryptoHandle,
     sending_endpoint_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<SubmessageBody> {
     // Destructure header and footer

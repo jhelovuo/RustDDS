@@ -51,7 +51,7 @@ const QOS_PASSWORD_PROPERTY_NAME: &str = "dds.sec.auth.password";
 impl Authentication for AuthenticationBuiltin {
   fn validate_local_identity(
     &mut self,
-    domain_id: u16,
+    _domain_id: u16,  //TODO: How this should be used?
     participant_qos: &QosPolicies,
     candidate_participant_guid: GUID,
   ) -> SecurityResult<(ValidationOutcome, IdentityHandle, GUID)> {
@@ -224,7 +224,7 @@ impl Authentication for AuthenticationBuiltin {
   // Currently only mocked
   fn get_identity_status_token(
     &self,
-    handle: IdentityHandle,
+    _handle: IdentityHandle,
   ) -> SecurityResult<IdentityStatusToken> {
     // TODO: actual implementation
 
@@ -262,7 +262,7 @@ impl Authentication for AuthenticationBuiltin {
   // anything, but it starts the authentication protocol.
   fn validate_remote_identity(
     &mut self,
-    remote_auth_request_token: Option<AuthRequestMessageToken>,
+    _remote_auth_request_token: Option<AuthRequestMessageToken>, // Unused, see below.
     local_identity_handle: IdentityHandle,
     remote_identity_token: IdentityToken,
     remote_participant_guidp: GuidPrefix,
@@ -617,7 +617,6 @@ impl Authentication for AuthenticationBuiltin {
     // dummy.
     let mut state = BuiltinHandshakeState::PendingRequestSend; // dummy to leave behind
     std::mem::swap(&mut remote_info.handshake.state, &mut state);
-    let remote_info = self.get_remote_participant_info(&remote_identity_handle)?;
 
     let local_info = self.get_local_participant_info()?;
 
@@ -830,7 +829,6 @@ impl Authentication for AuthenticationBuiltin {
 
         // Compute the shared secret
         // TODO: Algorithm is hardwired. Should follow "c.kagree_algo" from above.
-        let dh2_public = dh2.compute_public_key()?;
         let dh1 = agreement::UnparsedPublicKey::new(&agreement::ECDH_P256, dh1.as_ref());
         let shared_secret = agreement::agree_ephemeral(
           dh2,
