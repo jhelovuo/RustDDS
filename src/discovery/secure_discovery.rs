@@ -416,8 +416,9 @@ impl SecureDiscovery {
                   self.domain_id,
                   reader_data,
                 ) {
-                Ok(check_passed) => {
+                Ok((check_passed, _relay_only)) => {
                   if check_passed {
+                    // TODO: use the relay_only value
                     security_log!(
                       "Access control check passed for authenticated participant {:?} to read \
                        topic {topic_name}.",
@@ -435,7 +436,8 @@ impl SecureDiscovery {
                 }
                 Err(e) => {
                   security_error!(
-                    "Failed to check remote datareader: {}. Topic: {topic_name}",
+                    "Something went wrong in checking permissions of a remote datareader: {}. \
+                     Topic: {topic_name}",
                     e
                   );
                   NormalDiscoveryPermission::Deny
@@ -1368,16 +1370,29 @@ impl SecureDiscovery {
         .get_plugins()
         .check_remote_participant(self.domain_id, remote_guid_prefix)
       {
-        Ok(()) => {
-          info!(
-            "Allowing remote participant to join the domain. Remote guid prefix {:?}",
-            remote_guid_prefix
-          );
+        Ok(check_passed) => {
+          if check_passed {
+            // All good
+            security_log!(
+              "Allowing remote participant {:?} to join the domain.",
+              remote_guid_prefix
+            );
+          } else {
+            // Not allowed
+            security_log!(
+              "Remote participant {:?} is not allowed to join the domain. Rejecting the remote.",
+              remote_guid_prefix
+            );
+            discovery_db_write(discovery_db)
+              .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+            return;
+          }
         }
         Err(e) => {
-          security_log!(
-            "Remote participant is not allowed to join the domain: {}. Rejecting the remote. Guid \
-             prefix: {:?}",
+          // Something went wrong in checking permissions
+          security_error!(
+            "Something went wrong in checking remote participant permissions: {}. Rejecting the \
+             remote {:?}.",
             e,
             remote_guid_prefix
           );

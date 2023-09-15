@@ -141,15 +141,24 @@ impl DomainParticipantBuilder {
         );
       }
 
-      if let Err(e) = security_plugins.check_create_participant(
+      match security_plugins.check_create_participant(
         self.domain_id,
         participant_guid.prefix,
         &participant_qos,
       ) {
-        return create_error_not_allowed_by_security!(
-          "Not allowed to create participant: {}",
-          e.msg
-        );
+        Ok(check_passed) => {
+          if !check_passed {
+            return create_error_not_allowed_by_security!(
+              "Access control does not allow to create the local participant",
+            );
+          }
+        }
+        Err(e) => {
+          return create_error_internal!(
+            "Something went wrong in checking local participant permissions: {}",
+            e
+          );
+        }
       }
 
       // Register participant with the crypto plugin

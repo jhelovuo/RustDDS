@@ -6,7 +6,6 @@ use crate::{
     PublicationBuiltinTopicData, SubscriptionBuiltinTopicData,
   },
   security::{access_control::*, *},
-  security_error,
 };
 use super::{
   domain_governance_document::TopicRule, domain_participant_permissions_document::Action,
@@ -19,7 +18,7 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     publication_data: &PublicationBuiltinTopicDataSecure,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let partitions = &[]; // Partitions currently unsupported. TODO: get from publication_data
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from publication_data
 
@@ -53,7 +52,7 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     subscription_data: &SubscriptionBuiltinTopicDataSecure,
-  ) -> SecurityResult<bool> {
+  ) -> SecurityResult<(bool, bool)> {
     let partitions = &[]; // Partitions currently unsupported. TODO: get from publication_data
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from publication_data
 
@@ -97,14 +96,21 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     // or the MajorVersion of the local permissions_token differ from those in
     // the remote_permissions_token, the operation shall return FALSE."
 
-    (requested_access_is_unprotected || participant_has_read_access)
-      .then_some(false)
-      // Check for relay only access
-      .or_else(|| {
-        bool::from(grant.check_action(Action::Relay, domain_id, topic_name, partitions, data_tags))
-          .then_some(true)
-      })
-      .ok_or_else(|| security_error!("The participant has no read nor relay access to the topic."))
+    let allow_to_fully_read = requested_access_is_unprotected || participant_has_read_access;
+
+    let relay_only = if allow_to_fully_read {
+      // Participant allowed to fully read the topic, relay_only has no meaning
+      false
+    } else {
+      // Participant is not allowed to fully read the topic. But is it allowed to
+      // relay it?
+      bool::from(grant.check_action(Action::Relay, domain_id, topic_name, partitions, data_tags))
+    };
+
+    // check_passed = true means that participant is allowed to either fully read
+    // the topic or relay it.
+    let check_passed = allow_to_fully_read || relay_only;
+    Ok((check_passed, relay_only))
   }
 
   fn check_remote_topic(
@@ -112,7 +118,7 @@ impl RemoteEntityAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_data: &TopicBuiltinTopicData,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let partitions = &[]; // Partitions currently unsupported. TODO: get from publication_data
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from publication_data
 

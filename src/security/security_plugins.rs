@@ -401,7 +401,7 @@ impl SecurityPlugins {
     domain_id: u16,
     participant_guidp: GuidPrefix,
     qos: &QosPolicies,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let handle = self.get_permissions_handle(&participant_guidp)?;
     self.access.check_create_participant(handle, domain_id, qos)
   }
@@ -410,7 +410,7 @@ impl SecurityPlugins {
     &self,
     domain_id: u16,
     participant_guidp: GuidPrefix,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let handle = self.get_permissions_handle(&participant_guidp)?;
     self
       .access
@@ -424,7 +424,7 @@ impl SecurityPlugins {
     participant_guidp: GuidPrefix,
     domain_id: u16,
     reader_data: &DiscoveredReaderData,
-  ) -> SecurityResult<bool> {
+  ) -> SecurityResult<(bool, bool)> {
     let handle = self.get_permissions_handle(&participant_guidp)?;
     // Convert normal DiscoveredReaderData to SubscriptionBuiltinTopicDataSecure,
     // which is what Access control plugin expects
