@@ -323,8 +323,8 @@ impl Authentication for AuthenticationBuiltin {
     let remote_identity_handle = self.get_new_identity_handle();
 
     let remote_info = RemoteParticipantInfo {
-      guid_prefix: remote_participant_guidp,
-      identity_token: remote_identity_token,
+      //guid_prefix: remote_participant_guidp,
+      //identity_token: remote_identity_token,
       identity_certificate_opt: None,   // Not yet available
       signed_permissions_xml_opt: None, // Not yet available
       handshake: HandshakeInfo {
@@ -781,9 +781,32 @@ impl Authentication for AuthenticationBuiltin {
             return Err(security_error!(
               "Hash C1 mismatch on authentication final receive"
             ));
-          } else { /* ok */
-          }
+          } 
         }
+
+        // This is a sanity check 2
+        if let Some(received_hash_c2) = final_token.hash_c2 {
+          if hash_c2 != received_hash_c2 {
+            return Err(security_error!(
+              "Hash C2 mismatch on authentication final receive"
+            ));
+          } 
+        }
+
+        // sanity check
+        if dh1 != final_token.dh1 {
+          return Err(security_error!(
+            "Diffie-Hellman parameter DH1 mismatch on authentication final receive"
+          ));          
+        }
+
+        // sanity check
+        if dh2.compute_public_key()?.as_ref() != final_token.dh2.as_ref() {
+          return Err(security_error!(
+            "Diffie-Hellman parameter DH2 mismatch on authentication final receive"
+          ));          
+        }
+
 
         // "The operation shall check that the challenge1 and challenge2 match the ones
         // that were sent on the HandshakeReplyMessageToken."

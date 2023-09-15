@@ -1,8 +1,3 @@
-// TODO: Remove this when getting rid of mock implementations.
-#![allow(dead_code)]
-
-// TODO: Remove this when getting rid of mock implementations.
-#[allow(unused_variables)]
 pub mod access_control;
 pub mod authentication;
 mod certificate;

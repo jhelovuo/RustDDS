@@ -198,12 +198,12 @@ impl CryptographicBuiltin {
     }
   }
 
-  fn generate_mock_key(crypto_handle: CryptoHandle) -> KeyMaterial_AES_GCM_GMAC {
-    Self::generate_key_material(
-      crypto_handle,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
-    )
-  }
+  // fn generate_mock_key(crypto_handle: CryptoHandle) -> KeyMaterial_AES_GCM_GMAC {
+  //   Self::generate_key_material(
+  //     crypto_handle,
+  //     BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
+  //   )
+  // }
 
   fn generate_receiver_specific_key(
     &mut self,

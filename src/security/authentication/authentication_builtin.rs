@@ -6,13 +6,13 @@ use ring::agreement;
 use crate::{
   security::{access_control::PermissionsToken, certificate, SecurityError, SecurityResult},
   security_error,
-  structure::guid::GuidPrefix,
+  //structure::guid::GuidPrefix,
   GUID,
 };
 use self::types::BuiltinAuthenticatedPeerCredentialToken;
 use super::{
   authentication_builtin::types::BuiltinIdentityToken, AuthenticatedPeerCredentialToken, Challenge,
-  HandshakeHandle, HandshakeMessageToken, IdentityHandle, IdentityToken, Sha256, SharedSecret,
+  HandshakeHandle, HandshakeMessageToken, IdentityHandle, /*IdentityToken,*/ Sha256, SharedSecret,
   ValidationOutcome,
 };
 
@@ -94,8 +94,8 @@ struct LocalParticipantInfo {
 
 // All things about remote participant that we're interested in
 struct RemoteParticipantInfo {
-  identity_token: IdentityToken,
-  guid_prefix: GuidPrefix,
+  //identity_token: IdentityToken,
+  //guid_prefix: GuidPrefix,
   identity_certificate_opt: Option<certificate::Certificate>, /* Not available at first.
                                                                * Obtained from handshake
                                                                * request/reply message */
@@ -399,9 +399,4 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
     Ok(AuthenticatedPeerCredentialToken::from(builtin_token))
   }
 
-  fn set_listener(&self) -> SecurityResult<()> {
-    Err(security_error!(
-      "set_listener not supported. Use status events in DataReader/DataWriter instead."
-    ))
-  }
 }

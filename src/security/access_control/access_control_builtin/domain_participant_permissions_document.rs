@@ -1,4 +1,5 @@
 use std::fmt::Debug;
+use log::warn;
 
 use chrono::{DateTime, FixedOffset, TimeZone, Utc};
 use glob::Pattern;
@@ -270,7 +271,7 @@ impl Rule {
     let relay = relay?;
     let (_, rest) = rest.split_at(relay.len());
 
-    // at this point "rest" should be empty
+    if ! rest.is_empty() { warn!("Extra elements in GrantElement. Ignoring."); }
 
     Ok(Rule {
       verdict,
@@ -417,18 +418,6 @@ pub enum DomainIds {
 }
 
 impl DomainIds {
-  pub fn from_id(i: u16) -> DomainIds {
-    DomainIds::Value(i)
-  }
-  pub fn from_range(min: u16, max: u16) -> DomainIds {
-    DomainIds::Range(min, max)
-  }
-  pub fn from_min(min: u16) -> DomainIds {
-    DomainIds::Min(min)
-  }
-  pub fn from_max(max: u16) -> DomainIds {
-    DomainIds::Max(max)
-  }
   pub fn matches(&self, i: u16) -> bool {
     match self {
       DomainIds::Value(v) => *v == i,

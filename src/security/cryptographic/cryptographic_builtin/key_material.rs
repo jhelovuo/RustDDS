@@ -107,14 +107,6 @@ impl KeyMaterial_AES_GCM_GMAC_seq {
     }
   }
 
-  // TODO: Remove this function and use ".get()" above
-  pub fn payload_key_material(&self) -> &KeyMaterial_AES_GCM_GMAC {
-    match self {
-      Self::One(key_material) => key_material,
-      Self::Two(_, payload_key_material) => payload_key_material,
-    }
-  }
-
   pub fn modify_key_material<F>(self, f: F) -> KeyMaterial_AES_GCM_GMAC_seq
   where
     F: FnOnce(KeyMaterial_AES_GCM_GMAC) -> KeyMaterial_AES_GCM_GMAC,

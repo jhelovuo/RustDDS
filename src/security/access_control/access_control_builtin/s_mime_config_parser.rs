@@ -41,7 +41,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct SignedDocument {
-  input_bytes: Bytes,
+  //input_bytes: Bytes,
   content: Bytes,
   signature_der: Bytes,
 }
@@ -73,7 +73,7 @@ impl SignedDocument {
         );
 
         Ok(SignedDocument {
-          input_bytes: Bytes::copy_from_slice(input),
+          //input_bytes: Bytes::copy_from_slice(input),
           content,
           signature_der,
         })
