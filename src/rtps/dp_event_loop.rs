@@ -601,8 +601,6 @@ impl DPEventLoop {
             endpoint, discovered_participant.participant_guid
           );
         }
-
-        writer.notify_new_data_to_all_readers();
       }
     }
     // update local readers.

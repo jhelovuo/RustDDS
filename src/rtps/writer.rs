@@ -376,16 +376,6 @@ impl Writer {
       .collect()
   }
 
-  // TODO:
-  // please explain why this is needed and why does it make sense.
-  // Used by dp_event_loop.
-  pub fn notify_new_data_to_all_readers(&mut self) {
-    // removed, because it causes ghost sequence numbers.
-    // for reader_proxy in self.readers.iter_mut() {
-    //   reader_proxy.notify_new_cache_change(self.last_change_sequence_number);
-    // }
-  }
-
   // --------------------------------------------------------------
   // --------------------------------------------------------------
   // --------------------------------------------------------------
@@ -1398,10 +1388,8 @@ impl Writer {
             total: CountWithChange::new(self.matched_readers_count_total, change),
             current: CountWithChange::new(self.readers.len() as i32, change),
           });
-          // send out heartbeat, so that new reader can catch up
-          if let Some(Reliability::Reliable { .. }) = self.qos_policies.reliability {
-            self.notify_new_data_to_all_readers();
-          }
+          // If we're reliable, should we send out a heartbeat so that new reader can
+          // catch up?
           info!(
             "Matched new remote reader on topic={:?} reader={:?}",
             self.topic_name(),
