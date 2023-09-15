@@ -1597,7 +1597,7 @@ impl Discovery {
       .build()
   }
 
-  #[allow(dead_code)] // Used only when security feature is enabled
+  #[cfg(feature = "security")]
   pub fn create_participant_stateless_message_qos() -> QosPolicies {
     // See section 7.4.3 "New DCPSParticipantStatelessMessage builtin Topic" of the
     // Security spec
