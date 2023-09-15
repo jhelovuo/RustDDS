@@ -681,13 +681,17 @@ impl Discovery {
 
     loop {
       let mut events = Events::with_capacity(32); // Should this be outside of the loop?
-      match self.poll.poll(&mut events, None) {
+      match self.poll.poll(&mut events, Some(std::time::Duration::from_millis(5000))) {
         Ok(_) => (),
         Err(e) => {
           error!("Failed in waiting of poll in discovery. {e:?}");
           return;
         }
       }
+      if events.is_empty() {
+        debug!("Discovery event loop idling.");
+      }
+
 
       for event in events.into_iter() {
         match event.token() {
