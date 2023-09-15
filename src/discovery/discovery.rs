@@ -1193,22 +1193,36 @@ impl Discovery {
       };
 
     for d in dwds {
-      match d {
-        Sample::Value(dwd) => {
-          trace!("handle_publication_reader discovered {:?}", &dwd);
-          let discovered_writer_data =
-            discovery_db_write(&self.discovery_db).update_publication(&dwd);
-          self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
-            discovered_writer_data,
-          });
-          debug!("Discovered Writer {:?}", &dwd);
-        }
-        Sample::Dispose(writer_key) => {
-          discovery_db_write(&self.discovery_db).remove_topic_writer(writer_key);
-          self.send_discovery_notification(DiscoveryNotificationType::WriterLost {
-            writer_guid: writer_key,
-          });
-          debug!("Disposed Writer {:?}", writer_key);
+      #[cfg(not(feature = "security"))]
+      let permission = NormalDiscoveryPermission::Allow;
+
+      #[cfg(feature = "security")]
+      let permission = if let Some(security) = self.security_opt.as_mut() {
+        // Security is enabled. Do a secure read
+        security.check_nonsecure_publication_read(&d, &self.discovery_db)
+      } else {
+        // No security configured, always allowed
+        NormalDiscoveryPermission::Allow
+      };
+
+      if permission == NormalDiscoveryPermission::Allow {
+        match d {
+          Sample::Value(dwd) => {
+            trace!("handle_publication_reader discovered {:?}", &dwd);
+            let discovered_writer_data =
+              discovery_db_write(&self.discovery_db).update_publication(&dwd);
+            self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
+              discovered_writer_data,
+            });
+            debug!("Discovered Writer {:?}", &dwd);
+          }
+          Sample::Dispose(writer_key) => {
+            discovery_db_write(&self.discovery_db).remove_topic_writer(writer_key);
+            self.send_discovery_notification(DiscoveryNotificationType::WriterLost {
+              writer_guid: writer_key,
+            });
+            debug!("Disposed Writer {:?}", writer_key);
+          }
         }
       }
     } // loop

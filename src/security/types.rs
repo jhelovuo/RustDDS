@@ -839,6 +839,16 @@ impl Keyed for PublicationBuiltinTopicDataSecure {
     self.discovered_writer_data.key()
   }
 }
+
+impl From<discovery::sedp_messages::DiscoveredWriterData> for PublicationBuiltinTopicDataSecure {
+  fn from(dwd: discovery::sedp_messages::DiscoveredWriterData) -> Self {
+    Self {
+      discovered_writer_data: dwd,
+      data_tags: qos::policy::DataTag::default(),
+    }
+  }
+}
+
 impl PlCdrDeserialize for PublicationBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],

@@ -43,7 +43,7 @@ use crate::{
 use super::{
   discovery::NormalDiscoveryPermission,
   discovery_db::{discovery_db_read, discovery_db_write, DiscoveryDB},
-  DiscoveredReaderData, Participant_GUID, SpdpDiscoveredParticipantData,
+  DiscoveredReaderData, DiscoveredWriterData, Participant_GUID, SpdpDiscoveredParticipantData,
 };
 
 // Enum for authentication status of a remote participant
@@ -483,6 +483,171 @@ impl SecureDiscovery {
             // Reject dispose message if authentication status is something else
             security_log!(
               "Participant {:?} with authentication status {:?} attempts to disposes its reader \
+               in topic {topic_name}. Rejecting.",
+              other_status,
+              participant_guidp
+            );
+            NormalDiscoveryPermission::Deny
+          }
+        }
+      }
+    }
+  }
+
+  pub fn check_nonsecure_publication_read(
+    &mut self,
+    sample: &Sample<DiscoveredWriterData, GUID>,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) -> NormalDiscoveryPermission {
+    // First see if discovery for the topic should be protected
+    let (topic_name, participant_guidp) = match sample {
+      Sample::Value(writer_data) => (
+        writer_data.publication_topic_data.topic_name().clone(),
+        writer_data.writer_proxy.remote_writer_guid.prefix,
+      ),
+      Sample::Dispose(writer_guid) => {
+        if let Some(writer) = discovery_db_read(discovery_db).get_topic_writer(writer_guid) {
+          // We do know a writer with this guid
+          (
+            writer.publication_topic_data.topic_name().clone(),
+            writer_guid.prefix,
+          )
+        } else {
+          // We do not now such a writer. Deny processing just in case.
+          return NormalDiscoveryPermission::Deny;
+        }
+      }
+    };
+
+    let topic_sec_attributes = match self
+      .security_plugins
+      .get_plugins()
+      .get_topic_sec_attributes(participant_guidp, &topic_name)
+    {
+      Ok(attr) => attr,
+      Err(e) => {
+        security_error!(
+          "Failed to get topic security attributes: {}. Topic: {topic_name}",
+          e
+        );
+        return NormalDiscoveryPermission::Deny;
+      }
+    };
+
+    if topic_sec_attributes.is_discovery_protected {
+      // Message should come from DCPSPublicationsSecure topic. Ignore this one.
+      security_log!(
+        "Received a non-secure DCPSPublication message for topic {topic_name} whose discovery is \
+         protected. Ignoring message. Participant: {:?}",
+        participant_guidp
+      );
+      return NormalDiscoveryPermission::Deny;
+    }
+    // Topic discovery is not protected. Get the authentication status
+    let auth_status = discovery_db_read(discovery_db).get_authentication_status(participant_guidp);
+
+    match sample {
+      Sample::Value(writer_data) => {
+        // Participant wants to publish to the topic
+        match auth_status {
+          Some(AuthenticationStatus::Unauthenticated) => {
+            // Section 8.8.7.1 "AccessControl behavior with discovered endpoints from
+            // “Unauthenticated” DomainParticipant" from the spec
+            if topic_sec_attributes.is_write_protected {
+              security_log!(
+                "Unauthenticated participant {:?} attempted to publish to protected topic \
+                 {topic_name}. Rejecting.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Deny
+            } else {
+              security_log!(
+                "Unauthenticated participant {:?} wants to publish to unprotected topic \
+                 {topic_name}. Allowing.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Allow
+            }
+          }
+          Some(AuthenticationStatus::Authenticated) => {
+            // Section 8.8.7.2 "AccessControl behavior with discovered endpoints from
+            // “Authenticated” DomainParticipant" from the spec
+            if topic_sec_attributes.is_write_protected {
+              // We need to check from access control
+              match self
+                .security_plugins
+                .get_plugins()
+                .check_remote_datawriter_from_nonsecure(
+                  participant_guidp,
+                  self.domain_id,
+                  writer_data,
+                ) {
+                Ok(check_passed) => {
+                  if check_passed {
+                    security_log!(
+                      "Access control check passed for authenticated participant {:?} to publish \
+                       to topic {topic_name}.",
+                      participant_guidp
+                    );
+                    NormalDiscoveryPermission::Allow
+                  } else {
+                    security_log!(
+                      "Access control check did not pass for authenticated participant {:?} to \
+                       publish to topic {topic_name}. Rejecting.",
+                      participant_guidp
+                    );
+                    NormalDiscoveryPermission::Deny
+                  }
+                }
+                Err(e) => {
+                  security_error!(
+                    "Something went wrong in checking permissions of a remote DataWriter: {}. \
+                     Topic: {topic_name}",
+                    e
+                  );
+                  NormalDiscoveryPermission::Deny
+                }
+              }
+            } else {
+              // Write is not protected. Allow.
+              security_log!(
+                "Authenticated participant {:?} wants to publish to unprotected topic \
+                 {topic_name}. Allowing.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Allow
+            }
+          }
+          other => {
+            // Authentication status other than Authenticated/Unauthenticated
+            security_log!(
+              "Received a DCPSPublication message from a participant with authentication status: \
+               {:?}. Ignoring message. Participant: {:?}",
+              other,
+              participant_guidp
+            );
+            NormalDiscoveryPermission::Deny
+          }
+        }
+      }
+      Sample::Dispose(_writer_guid) => {
+        // Participant wants to dispose its writer
+        match auth_status {
+          Some(AuthenticationStatus::Unauthenticated)
+          | Some(AuthenticationStatus::Authenticated) => {
+            // Allow dispose for Unauthenticated/Authenticated participants
+            security_log!(
+              "Participant {:?} with authentication status {:?} disposes its writer in topic \
+               {topic_name}.",
+              participant_guidp,
+              auth_status,
+            );
+            NormalDiscoveryPermission::Allow
+          }
+          other_status => {
+            // Reject dispose message if authentication status is something else
+            security_log!(
+              "Participant {:?} with authentication status {:?} attempts to disposes its writer \
                in topic {topic_name}. Rejecting.",
               other_status,
               participant_guidp

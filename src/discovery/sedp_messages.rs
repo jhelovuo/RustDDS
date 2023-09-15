@@ -700,6 +700,10 @@ impl PublicationBuiltinTopicData {
     }
   }
 
+  pub fn topic_name(&self) -> &String {
+    &self.topic_name
+  }
+
   pub fn to_topic_data(&self) -> TopicBuiltinTopicData {
     TopicBuiltinTopicData::new(
       None, // This would be topic GUID or BuiltinInTopicKey_t. What is it and who defines it?
