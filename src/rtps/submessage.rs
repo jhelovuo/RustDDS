@@ -300,17 +300,24 @@ pub enum SubmessageBody {
 
   Interpreter(InterpreterSubmessage),
 }
-
-impl<C: Context> Writable<C> for Submessage {
+impl<C: Context> Writable<C> for SubmessageBody {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    writer.write_value(&self.header)?;
-    match &self.body {
+    match &self {
       SubmessageBody::Writer(m) => writer.write_value(&m),
       SubmessageBody::Reader(m) => writer.write_value(&m),
       SubmessageBody::Interpreter(m) => writer.write_value(&m),
       #[cfg(feature = "security")]
       SubmessageBody::Security(m) => writer.write_value(&m),
     }
+  }
+}
+
+impl<C: Context> Writable<C> for Submessage {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    let Submessage { header, body, .. } = self;
+    writer.write_value(header)?;
+    let body_endianness = endianness_flag(header.flags);
+    writer.write_bytes(&body.write_to_vec_with_ctx(body_endianness)?)
   }
 }
 
