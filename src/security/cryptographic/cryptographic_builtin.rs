@@ -56,6 +56,9 @@ pub struct CryptographicBuiltin {
   // For reverse lookups
   endpoint_to_participant: HashMap<EndpointCryptoHandle, ParticipantCryptoHandle>,
 
+  // For generating random key IDs without collisions
+  used_local_key_ids: HashSet<CryptoTransformKeyId>,
+
   // sessions
   //
   // TODO: The session ids should be stored in a data structure.
@@ -93,6 +96,7 @@ impl CryptographicBuiltin {
       endpoint_encrypt_options: HashMap::new(),
       participant_to_endpoint_info: HashMap::new(),
       endpoint_to_participant: HashMap::new(),
+      used_local_key_ids: HashSet::from([CryptoTransformKeyId::ZERO]),
       matched_remote_endpoint: HashMap::new(),
       matched_local_endpoint: HashMap::new(),
       crypto_handle_counter: 0,

@@ -56,7 +56,7 @@ pub struct CryptoTransformIdentifier {
 pub type CryptoTransformKind = [u8; 4];
 /// transformation_key_id: section 8.5.1.5.2 of the Security specification (v.
 /// 1.1)
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Readable, Writable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Readable, Writable, Serialize, Deserialize, Hash)]
 pub struct CryptoTransformKeyId([u8; 4]);
 
 impl CryptoTransformKeyId {
@@ -64,6 +64,11 @@ impl CryptoTransformKeyId {
 
   pub fn is_zero(&self) -> bool {
     *self == Self::ZERO
+  }
+
+  pub fn random() -> Self {
+    let random_array: [u8; 4] = rand::random();
+    Self(random_array)
   }
 }
 
