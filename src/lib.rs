@@ -177,8 +177,6 @@ mod security;
 
 #[cfg(not(feature = "security"))]
 mod no_security;
-#[cfg(not(feature = "security"))]
-use no_security as security;
 
 pub(crate) mod structure;
 
@@ -189,6 +187,8 @@ mod mio_source;
 
 // Public modules
 pub mod dds; // this is public, but not advertised
+
+#[deprecated(since = "0.8.5", note = "Use crate ros2-client instead.")]
 pub mod ros2;
 /// Helpers for (De)serialization and definitions of (De)serializer adapters
 pub mod serialization;
