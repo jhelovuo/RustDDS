@@ -4,6 +4,8 @@ use std::{
   sync::{Arc, Mutex, MutexGuard},
 };
 
+use log::debug;
+
 use crate::{
   discovery::{DiscoveredReaderData, DiscoveredWriterData},
   messages::submessages::{
@@ -146,6 +148,52 @@ impl SecurityPlugins {
       .copied()
   }
 
+  fn insert_to_identity_handle_cache(
+    &mut self,
+    participant_guidp: GuidPrefix,
+    handle: IdentityHandle,
+  ) {
+    let old_opt = self.identity_handle_cache.insert(participant_guidp, handle);
+    if let Some(old) = old_opt {
+      debug!(
+        "Replaced IdentityHandle for guid prefix {:?}. Old: {}, new: {}",
+        participant_guidp, old, handle
+      );
+    }
+  }
+
+  fn insert_to_permissions_handle_cache(
+    &mut self,
+    participant_guidp: GuidPrefix,
+    handle: PermissionsHandle,
+  ) {
+    let old_opt = self
+      .permissions_handle_cache
+      .insert(participant_guidp, handle);
+    if let Some(old) = old_opt {
+      debug!(
+        "Replaced PermissionsHandle for guid prefix {:?}. Old: {}, new: {}",
+        participant_guidp, old, handle
+      );
+    }
+  }
+
+  fn insert_to_participant_crypto_handle_cache(
+    &mut self,
+    participant_guidp: GuidPrefix,
+    handle: ParticipantCryptoHandle,
+  ) {
+    let old_opt = self
+      .participant_crypto_handle_cache
+      .insert(participant_guidp, handle);
+    if let Some(old) = old_opt {
+      debug!(
+        "Replaced ParticipantCryptoHandle for guid prefix {:?}. Old: {}, new: {}",
+        participant_guidp, old, handle
+      );
+    }
+  }
+
   // Checks whether the given guid matches the given handle
   pub fn confirm_local_endpoint_guid(
     &self,
@@ -183,12 +231,18 @@ impl SecurityPlugins {
   fn store_remote_endpoint_crypto_handle(
     &mut self,
     (local_endpoint_guid, remote_endpoint_guid): (GUID, GUID),
-    remote_crypto_handle: EndpointCryptoHandle,
+    handle: EndpointCryptoHandle,
   ) {
     let local_and_remote_guid_pair = (local_endpoint_guid, remote_endpoint_guid);
-    self
+    let old_opt = self
       .remote_endpoint_crypto_handle_cache
-      .insert(local_and_remote_guid_pair, remote_crypto_handle);
+      .insert(local_and_remote_guid_pair, handle);
+    if let Some(old) = old_opt {
+      debug!(
+        "Replaced EndpointCryptoHandle for guid pair {:?}. Old: {}, new: {}",
+        local_and_remote_guid_pair, old, handle
+      );
+    }
   }
 }
 
@@ -207,9 +261,7 @@ impl SecurityPlugins {
 
     if let ValidationOutcome::Ok = outcome {
       // Everything OK, store handle and return GUID
-      self
-        .identity_handle_cache
-        .insert(sec_guid.prefix, identity_handle);
+      self.insert_to_identity_handle_cache(sec_guid.prefix, identity_handle);
       Ok(sec_guid)
     } else {
       // If the builtin authentication does not fail, it should produce only OK
@@ -264,9 +316,7 @@ impl SecurityPlugins {
     )?;
 
     // Add remote identity handle to cache
-    self
-      .identity_handle_cache
-      .insert(remote_participant_guidp, remote_id_handle);
+    self.insert_to_identity_handle_cache(remote_participant_guidp, remote_id_handle);
 
     Ok((outcome, auth_req_token_opt))
   }
@@ -366,9 +416,7 @@ impl SecurityPlugins {
       domain_id,
       participant_qos,
     )?;
-    self
-      .permissions_handle_cache
-      .insert(participant_guidp, permissions_handle);
+    self.insert_to_permissions_handle_cache(participant_guidp, permissions_handle);
     Ok(())
   }
 
@@ -390,9 +438,7 @@ impl SecurityPlugins {
       remote_credential_token,
     )?;
 
-    self
-      .permissions_handle_cache
-      .insert(remote_participant_guidp, permissions_handle);
+    self.insert_to_permissions_handle_cache(remote_participant_guidp, permissions_handle);
     Ok(())
   }
 
@@ -535,9 +581,7 @@ impl SecurityPlugins {
       participant_security_attributes,
     )?;
 
-    self
-      .participant_crypto_handle_cache
-      .insert(participant_guidp, crypto_handle);
+    self.insert_to_participant_crypto_handle_cache(participant_guidp, crypto_handle);
     Ok(())
   }
 
@@ -616,9 +660,7 @@ impl SecurityPlugins {
       shared_secret,
     )?;
 
-    self
-      .participant_crypto_handle_cache
-      .insert(remote_participant_guidp, remote_crypto_handle);
+    self.insert_to_participant_crypto_handle_cache(remote_participant_guidp, remote_crypto_handle);
     Ok(())
   }
 
