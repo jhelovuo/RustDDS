@@ -4,7 +4,9 @@ use bytes::Bytes;
 use ring::agreement;
 
 use crate::{
-  security::{access_control::PermissionsToken, certificate, SecurityError, SecurityResult},
+  security::{
+    access_control::PermissionsToken, certificate, security_error, SecurityError, SecurityResult,
+  },
   security_error,
   //structure::guid::GuidPrefix,
   GUID,
@@ -197,6 +199,12 @@ impl AuthenticationBuiltin {
       .handshake_to_identity_handle_map
       .get(hs_handle)
       .ok_or_else(|| security_error!("Identity handle not found with handshake handle"))
+  }
+
+  fn generate_random_32_bytes(&self) -> SecurityResult<[u8; 32]> {
+    ring::rand::generate::<[u8; 32]>(&self.secure_random_generator)
+      .map(|random| random.expose())
+      .map_err(|e| security_error(&format!("Failed to generate random bytes: {}", e)))
   }
 
   #[allow(clippy::needless_pass_by_value)]

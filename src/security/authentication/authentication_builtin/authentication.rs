@@ -401,7 +401,8 @@ impl Authentication for AuthenticationBuiltin {
     )?;
 
     // This is an initiator-generated 256-bit nonce
-    let challenge1 = Challenge::from(rand::random::<[u8; 32]>());
+    let random_bytes = self.generate_random_32_bytes()?;
+    let challenge1 = Challenge::from(random_bytes);
 
     let handshake_request_builtin = BuiltinHandshakeMessageToken {
       class_id: Bytes::copy_from_slice(HANDSHAKE_REQUEST_CLASS_ID),
@@ -521,7 +522,8 @@ impl Authentication for AuthenticationBuiltin {
     }
 
     // This is an initiator-generated 256-bit nonce
-    let challenge2 = Challenge::from(rand::random::<[u8; 32]>());
+    let random_bytes = self.generate_random_32_bytes()?;
+    let challenge2 = Challenge::from(random_bytes);
 
     // Generate new, random Diffie-Hellman key pair "dh2"
     let dh2 = agreement::EphemeralPrivateKey::generate(
