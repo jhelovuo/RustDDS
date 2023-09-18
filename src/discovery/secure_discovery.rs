@@ -101,6 +101,7 @@ pub(crate) struct SecureDiscovery {
 impl SecureDiscovery {
   pub fn new(
     domain_participant: &DomainParticipantWeak,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
     security_plugins: SecurityPluginsHandle,
   ) -> Result<Self, &'static str> {
     // Run the Discovery-related initialization steps of DDS Security spec v1.1
@@ -162,6 +163,23 @@ impl SecureDiscovery {
         return Err("Could not get ParticipantSecurityAttributes");
       }
     };
+
+    // Register ourself as remote to the crypto plugin (this is not from the
+    // spec)
+    if let Err(_e) = plugins
+      .get_shared_secret(participant_guid_prefix)
+      .and_then(|shared_secret| {
+        plugins.register_matched_remote_participant(participant_guid_prefix, shared_secret)
+      })
+    {
+      return Err("Failed to register local participant as a remote with the crypto plugin.");
+    } else {
+      info!("Registered local participant as a remote with the crypto plugin");
+    }
+
+    // Set ourself as authenticated
+    discovery_db_write(discovery_db)
+      .update_authentication_status(participant_guid_prefix, AuthenticationStatus::Authenticated);
 
     drop(plugins); // Drop mutex guard on plugins so that plugins can be moved to self
 
@@ -880,7 +898,7 @@ impl SecureDiscovery {
 
     send_discovery_notification(
       discovery_updated_sender,
-      DiscoveryNotificationType::ParticipantUpdated {
+      DiscoveryNotificationType::ParticipantAuthenticationStatusChanged {
         guid_prefix: participant_guid_prefix,
       },
     );

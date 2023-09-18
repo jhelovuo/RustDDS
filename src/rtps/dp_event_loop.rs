@@ -336,6 +336,11 @@ impl DPEventLoop {
                         .get_mut(&writer_guid.entity_id)
                         .map(|w| w.handle_heartbeat_tick(manual_assertion));
                     }
+
+                    #[cfg(feature = "security")]
+                    ParticipantAuthenticationStatusChanged { guid_prefix } => {
+                      ev_wrapper.on_remote_participant_authentication_status_changed(guid_prefix);
+                    }
                   }
                 }
               }
@@ -608,25 +613,6 @@ impl DPEventLoop {
       }
     } // for
 
-    // If appropriate, send a signal to Discovery to start key exchange with the
-    // participant
-    #[cfg(feature = "security")]
-    if let Some(AuthenticationStatus::Authenticated) =
-      db.get_authentication_status(participant_guid_prefix)
-    {
-      if let Err(e) = self.discovery_command_sender.send(
-        DiscoveryCommand::StartKeyExchangeWithRemoteParticipant {
-          participant_guid_prefix,
-        },
-      ) {
-        error!(
-          "Could not signal Discovery to start the key exchange with remote. Reason: {}. Remote: \
-           {:?}",
-          e, participant_guid_prefix
-        );
-      }
-    }
-
     debug!(
       "update_participant - finished for {:?}",
       participant_guid_prefix
@@ -896,6 +882,37 @@ impl DPEventLoop {
         let _ = plugins_handle
           .get_plugins()
           .unregister_local_writer(writer_guid);
+      }
+    }
+  }
+
+  #[cfg(feature = "security")]
+  fn on_remote_participant_authentication_status_changed(&mut self, remote_guidp: GuidPrefix) {
+    let auth_status = discovery_db_read(&self.discovery_db).get_authentication_status(remote_guidp);
+
+    match auth_status {
+      Some(AuthenticationStatus::Authenticated) => {
+        // The participant has been authenticated
+        // First connect the built-in endpoints
+        self.update_participant(remote_guidp);
+        // Then start the key exchange
+        if let Err(e) = self.discovery_command_sender.send(
+          DiscoveryCommand::StartKeyExchangeWithRemoteParticipant {
+            participant_guid_prefix: remote_guidp,
+          },
+        ) {
+          error!(
+            "Could not signal Discovery to start the key exchange with remote. Reason: {}. \
+             Remote: {:?}",
+            e, remote_guidp
+          );
+        }
+      }
+      other => {
+        info!(
+          "Status {:?}, in on_remote_participant_authentication_status_changed. What to do?",
+          other
+        );
       }
     }
   }

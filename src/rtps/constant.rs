@@ -288,6 +288,10 @@ pub(crate) enum DiscoveryNotificationType {
     writer_guid: GUID,
     manual_assertion: bool,
   },
+  #[cfg(feature = "security")]
+  ParticipantAuthenticationStatusChanged {
+    guid_prefix: GuidPrefix,
+  },
 }
 
 pub mod builtin_topic_names {

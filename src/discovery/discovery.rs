@@ -526,7 +526,7 @@ impl Discovery {
     let security_opt = if let Some(plugins_handle) = security_plugins_opt {
       // Plugins is Some so security is enabled. Initialize SecureDiscovery
       let security = try_construct!(
-        SecureDiscovery::new(&domain_participant, plugins_handle),
+        SecureDiscovery::new(&domain_participant, &discovery_db, plugins_handle),
         "Could not initialize Secure Discovery. {:?}"
       );
       Some(security)

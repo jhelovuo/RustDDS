@@ -404,7 +404,7 @@ impl SecurityPlugins {
     &self,
     remote_participant_guidp: GuidPrefix,
   ) -> SecurityResult<SharedSecretHandle> {
-    let handle = self.get_handshake_handle(&remote_participant_guidp)?;
+    let handle = self.get_identity_handle(&remote_participant_guidp)?;
     self.auth.get_shared_secret(handle)
   }
 }
