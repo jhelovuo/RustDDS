@@ -46,8 +46,8 @@ use crate::no_security::SecurityPluginsHandle;
 pub struct DomainParticipantBuilder {
   domain_id: u16,
 
-  #[allow(dead_code)] /* only_networks is a placeholder for a feture to limit
-  which interfaces the DomainParticiapnt will talk to. */
+  #[allow(dead_code)] /* only_networks is a placeholder for a feature to limit
+  which interfaces the DomainParticipant will talk to. */
   only_networks: Option<Vec<String>>, // if specified, run RTPS only over these interfaces
 
   #[cfg(feature = "security")]
@@ -95,9 +95,6 @@ impl DomainParticipantBuilder {
   }
 
   pub fn build(#[allow(unused_mut)] mut self) -> CreateResult<DomainParticipant> {
-    #[allow(unused_mut)] // only security feature mutates this
-    let mut participant_guid = GUID::new_participant_guid();
-
     // QosPolicies with possible security properties, otherwise default
     let participant_qos = QosPolicies {
       #[cfg(feature = "security")]
@@ -105,9 +102,12 @@ impl DomainParticipantBuilder {
       ..Default::default()
     };
 
+    let candidate_participant_guid = GUID::new_participant_guid();
+    #[cfg(not(feature = "security"))]
+    let participant_guid = candidate_participant_guid;
     // If security plugins are present, security is enabled
     #[cfg(feature = "security")]
-    if let Some(ref mut security_plugins) = self.security_plugins.as_mut() {
+    let participant_guid = if let Some(ref mut security_plugins) = self.security_plugins.as_mut() {
       trace!("DomainParticipant security construction start");
       // Do the security checks according to DDS Security spec v1.1
       // Section "8.8.1 Authentication and AccessControl behavior with local
@@ -117,7 +117,7 @@ impl DomainParticipantBuilder {
       let sec_guid = match security_plugins.validate_local_identity(
         self.domain_id,
         &participant_qos,
-        participant_guid, // this is now candidate
+        candidate_participant_guid,
       ) {
         Ok(guid) => guid,
         Err(e) => {
@@ -128,11 +128,9 @@ impl DomainParticipantBuilder {
         }
       };
 
-      participant_guid = sec_guid; // just overwrite to update
-
       if let Err(e) = security_plugins.validate_local_permissions(
         self.domain_id,
-        participant_guid.prefix,
+        sec_guid.prefix,
         &participant_qos,
       ) {
         return create_error_not_allowed_by_security!(
@@ -143,7 +141,7 @@ impl DomainParticipantBuilder {
 
       match security_plugins.check_create_participant(
         self.domain_id,
-        participant_guid.prefix,
+        sec_guid.prefix,
         &participant_qos,
       ) {
         Ok(check_passed) => {
@@ -163,10 +161,10 @@ impl DomainParticipantBuilder {
 
       // Register participant with the crypto plugin
       if let Err(e) = security_plugins
-        .get_participant_sec_attributes(participant_guid.prefix)
+        .get_participant_sec_attributes(sec_guid.prefix)
         .and_then(|sec_attr| {
           security_plugins.register_local_participant(
-            participant_guid.prefix,
+            sec_guid.prefix,
             participant_qos.property.clone(),
             sec_attr,
           )
@@ -177,6 +175,9 @@ impl DomainParticipantBuilder {
           e.msg
         );
       };
+      sec_guid
+    } else {
+      candidate_participant_guid
     };
 
     trace!("DomainParticipant construct start");
