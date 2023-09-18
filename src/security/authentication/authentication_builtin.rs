@@ -121,6 +121,12 @@ pub struct AuthenticationBuiltin {
   next_identity_handle: IdentityHandle,
   next_handshake_handle: HandshakeHandle,
 
+  // Our own cryptographic pseudo-random number generator
+  // From ring documentation (https://docs.rs/ring/latest/ring/rand/index.html):
+  // "An application should create a single SystemRandom and then use it for all randomness
+  // generation"
+  secure_random_generator: ring::rand::SystemRandom,
+
   mock_handshakes: bool, // Mock handshakes for testing? Temporary field, for development only
 }
 
@@ -132,6 +138,7 @@ impl AuthenticationBuiltin {
       handshake_to_identity_handle_map: HashMap::new(),
       next_identity_handle: 0,
       next_handshake_handle: 0,
+      secure_random_generator: ring::rand::SystemRandom::new(),
       mock_handshakes: false,
     }
   }

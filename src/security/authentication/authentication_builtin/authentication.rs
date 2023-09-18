@@ -367,8 +367,7 @@ impl Authentication for AuthenticationBuiltin {
     let my_id_certificate_text = Bytes::from(local_info.identity_certificate.to_pem());
     let my_permissions_doc_text = local_info.signed_permissions_document_xml.clone();
 
-    // This borrows `self` mutably!
-    let remote_info = self.get_remote_participant_info_mutable(&replier_identity_handle)?;
+    let remote_info = self.get_remote_participant_info(&replier_identity_handle)?;
 
     // Make sure we are expecting to send the authentication request message
     if let BuiltinHandshakeState::PendingRequestSend = remote_info.handshake.state {
@@ -398,7 +397,7 @@ impl Authentication for AuthenticationBuiltin {
     // Generate new, random Diffie-Hellman key pair "dh1"
     let dh1 = agreement::EphemeralPrivateKey::generate(
       &agreement::ECDH_P256,
-      &ring::rand::SystemRandom::new(),
+      &self.secure_random_generator,
     )?;
 
     // This is an initiator-generated 256-bit nonce
@@ -422,6 +421,9 @@ impl Authentication for AuthenticationBuiltin {
     };
 
     let handshake_request = HandshakeMessageToken::from(handshake_request_builtin);
+
+    // Get a new mutable reference to remote_info
+    let remote_info = self.get_remote_participant_info_mutable(&replier_identity_handle)?;
 
     // Change handshake state to pending reply message & save the request token
     remote_info.handshake.state = BuiltinHandshakeState::PendingReplyMessage {
@@ -524,7 +526,7 @@ impl Authentication for AuthenticationBuiltin {
     // Generate new, random Diffie-Hellman key pair "dh2"
     let dh2 = agreement::EphemeralPrivateKey::generate(
       &agreement::ECDH_P256,
-      &ring::rand::SystemRandom::new(),
+      &self.secure_random_generator,
     )?;
     let dh2_public_key = Bytes::copy_from_slice(dh2.compute_public_key()?.as_ref());
 
