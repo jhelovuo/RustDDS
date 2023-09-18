@@ -1297,7 +1297,7 @@ impl Writer {
     // unicast and multicast locators for each reader only on every reader update,
     // and not find it dynamically on every message.
 
-    let readers = readers.collect::<Vec<_>>(); // clone itterator
+    let readers = readers.collect::<Vec<_>>(); // clone iterator
 
     #[cfg(feature = "security")]
     let encoded = self.security_encode(message, &readers);

@@ -338,17 +338,14 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 "#;
     let cert = Certificate::from_pem(cert_pem).unwrap();
 
-    let dpp_signed = SignedDocument::from_bytes(&mut document.as_bytes()).unwrap();
+    let dpp_signed = SignedDocument::from_bytes(document.as_bytes()).unwrap();
 
     let verified_dpp_xml = dpp_signed.verify_signature(&cert).unwrap();
 
-    let dpp =
-      DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(verified_dpp_xml.as_ref()))
-        .unwrap();
+    DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(verified_dpp_xml.as_ref()))
+      .unwrap();
 
     // getting here with no panic is success
-
-    //println!("{:?}", dpp);
   }
 
   #[test]
@@ -433,17 +430,14 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
 
     let cert = Certificate::from_pem(cert_pem).unwrap();
 
-    let dgd_signed = SignedDocument::from_bytes(&mut document.as_bytes()).unwrap();
+    let dgd_signed = SignedDocument::from_bytes(document.as_bytes()).unwrap();
 
     let verified_dgd_xml = dgd_signed.verify_signature(&cert).unwrap();
 
-    let dgd =
-      DomainGovernanceDocument::from_xml(&String::from_utf8_lossy(verified_dgd_xml.as_ref()))
-        .unwrap();
+    DomainGovernanceDocument::from_xml(&String::from_utf8_lossy(verified_dgd_xml.as_ref()))
+      .unwrap();
 
     // getting here with no panic is success
-
-    //println!("{:?}", dgd);
   }
 
   #[test]
@@ -530,10 +524,10 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
     let cert = Certificate::from_pem(cert_pem).unwrap();
 
     // Now evil hacker has modified DGD content
-    let dgd_signed = SignedDocument::from_bytes(&mut document.as_bytes()).unwrap();
+    let dgd_signed = SignedDocument::from_bytes(document.as_bytes()).unwrap();
 
     // We expect this to fail
-    let verified_dgd_xml = dgd_signed.verify_signature(&cert).unwrap();
+    dgd_signed.verify_signature(&cert).unwrap();
 
     // It is an error if we get past .unwrap() above.
     unreachable!();

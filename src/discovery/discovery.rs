@@ -1766,38 +1766,35 @@ mod tests {
     let mut data;
     for submsg in &mut tdata.submessages {
       match &mut submsg.body {
-        SubmessageBody::Writer(v) => match v {
-          WriterSubmessage::Data(d, _) => {
-            let mut drd: DiscoveredReaderData = PlCdrDeserializerAdapter::from_bytes(
-              &d.no_crypto_decoded()
-                .serialized_payload
-                .as_ref()
-                .unwrap()
-                .value,
-              RepresentationIdentifier::PL_CDR_LE,
-            )
-            .unwrap();
-            drd.reader_proxy.unicast_locator_list.clear();
-            drd
-              .reader_proxy
-              .unicast_locator_list
-              .push(Locator::from(SocketAddr::new(
-                "127.0.0.1".parse().unwrap(),
-                11001,
-              )));
-            drd.reader_proxy.multicast_locator_list.clear();
-
-            data = drd
-              .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
-              .unwrap();
-            d.no_crypto_decoded()
+        SubmessageBody::Writer(WriterSubmessage::Data(d, _)) => {
+          let mut drd: DiscoveredReaderData = PlCdrDeserializerAdapter::from_bytes(
+            &d.no_crypto_decoded()
               .serialized_payload
-              .as_mut()
+              .as_ref()
               .unwrap()
-              .value = data.clone();
-          }
-          _ => continue,
-        },
+              .value,
+            RepresentationIdentifier::PL_CDR_LE,
+          )
+          .unwrap();
+          drd.reader_proxy.unicast_locator_list.clear();
+          drd
+            .reader_proxy
+            .unicast_locator_list
+            .push(Locator::from(SocketAddr::new(
+              "127.0.0.1".parse().unwrap(),
+              11001,
+            )));
+          drd.reader_proxy.multicast_locator_list.clear();
+
+          data = drd
+            .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+            .unwrap();
+          d.no_crypto_decoded()
+            .serialized_payload
+            .as_mut()
+            .unwrap()
+            .value = data.clone();
+        }
         SubmessageBody::Interpreter(_) => (),
         _ => continue,
       }
@@ -1923,7 +1920,7 @@ mod tests {
     );
 
     let rtps_message = create_cdr_pl_rtps_data_message(
-      topic_data,
+      &topic_data,
       EntityId::SEDP_BUILTIN_TOPIC_READER,
       EntityId::SEDP_BUILTIN_TOPIC_WRITER,
     );

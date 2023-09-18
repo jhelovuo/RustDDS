@@ -733,8 +733,8 @@ mod tests {
 </dds>
 "#;
     // Test serde-xml parse only
-    let dpd_xml: xml::DomainParticipantPermissionsDocument =
-      from_str(domain_participant_permissions_xml).unwrap();
+    from_str::<xml::DomainParticipantPermissionsDocument>(domain_participant_permissions_xml)
+      .unwrap();
 
     // Test full parse
     let dpd = DomainParticipantPermissions::from_xml(domain_participant_permissions_xml).unwrap();
@@ -766,8 +766,8 @@ mod tests {
 "#;
 
     // Test serde-xml parse only
-    let dpd: xml::DomainParticipantPermissionsDocument =
-      from_str(domain_participant_permissions_xml).unwrap();
+    from_str::<xml::DomainParticipantPermissionsDocument>(domain_participant_permissions_xml)
+      .unwrap();
 
     // Test full parse
     let dpd = DomainParticipantPermissions::from_xml(domain_participant_permissions_xml).unwrap();
