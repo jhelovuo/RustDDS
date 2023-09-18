@@ -1419,11 +1419,7 @@ impl SecureDiscovery {
         if let Err(e) = self
           .security_plugins
           .get_plugins()
-          .set_remote_participant_crypto_tokens(
-            self.local_participant_guid.prefix,
-            remote_participant_guidp,
-            crypto_tokens,
-          )
+          .set_remote_participant_crypto_tokens(remote_participant_guidp, crypto_tokens)
         {
           security_error!(
             "Failed to set remote participant crypto tokens: {}. Remote: {:?}",
@@ -1601,11 +1597,7 @@ impl SecureDiscovery {
         self
           .security_plugins
           .get_plugins()
-          .register_matched_remote_participant(
-            self.local_participant_guid.prefix,
-            remote_guid_prefix,
-            shared_secret,
-          )
+          .register_matched_remote_participant(remote_guid_prefix, shared_secret)
       })
     } {
       security_error!(
@@ -1686,10 +1678,7 @@ impl SecureDiscovery {
       .security_plugins
       .get_plugins()
       // Get participant crypto tokens
-      .create_local_participant_crypto_tokens(
-        self.local_participant_guid.prefix,
-        remote_guid_prefix,
-      ); // Release lock
+      .create_local_participant_crypto_tokens(remote_guid_prefix); // Release lock
     let res = local_participant_crypto_tokens
       .map(|crypto_tokens| {
         self.new_volatile_message(

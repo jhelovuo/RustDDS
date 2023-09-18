@@ -262,11 +262,7 @@ impl MessageReceiver {
           ..
         }) = rtps_message.submessages.first()
         {
-          match security_plugins.decode_rtps_message(
-            rtps_message,
-            &self.source_guid_prefix,
-            &self.dest_guid_prefix,
-          ) {
+          match security_plugins.decode_rtps_message(rtps_message, &self.source_guid_prefix) {
             Ok(message) => message,
             Err(e) => return error!("{e:?}"),
           }
@@ -802,11 +798,7 @@ impl MessageReceiver {
     // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
     // the submessage contains and then proceed to decode and process accordingly.
 
-    match security_plugins.preprocess_secure_submessage(
-      sec_prefix,
-      &self.source_guid_prefix,
-      &self.dest_guid_prefix,
-    ) {
+    match security_plugins.preprocess_secure_submessage(sec_prefix, &self.source_guid_prefix) {
       Err(e) => {
         error!("{e:?}");
       }
