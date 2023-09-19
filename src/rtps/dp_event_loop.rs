@@ -718,14 +718,6 @@ impl DPEventLoop {
       )
       .expect("Reader timer channel registration failed!");
 
-    // Clone these before handing ingredients to Reader builder
-    #[cfg(feature = "security")]
-    let reader_guid = reader_ing.guid;
-    #[cfg(feature = "security")]
-    let reader_property_qos = reader_ing.qos_policy.property();
-    #[cfg(feature = "security")]
-    let topic_name = reader_ing.topic_name.clone();
-
     let mut new_reader = Reader::new(reader_ing, self.udp_sender.clone(), timer);
 
     // Non-timed action polling
@@ -738,33 +730,6 @@ impl DPEventLoop {
         PollOpt::edge(),
       )
       .expect("Reader command channel registration failed!!!");
-
-    #[cfg(feature = "security")]
-    if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-      // Security is enabled. Register Reader to crypto plugin
-      if let Err(e) = {
-        let reader_security_attributes = plugins_handle
-          .get_plugins()
-          .get_reader_sec_attributes(reader_guid, topic_name); // Release lock
-        reader_security_attributes.and_then(|attributes| {
-          plugins_handle.get_plugins().register_local_reader(
-            reader_guid,
-            reader_property_qos,
-            attributes,
-          )
-        })
-      } {
-        error!(
-          "Failed to register reader to crypto plugin: {} . GUID: {:?}",
-          e, reader_guid
-        );
-      } else {
-        info!(
-          "Registered local reader to crypto plugin. GUID: {:?}",
-          reader_guid
-        );
-      }
-    }
 
     new_reader.set_requested_deadline_check_timer();
     trace!("Add reader: {:?}", new_reader);
@@ -811,14 +776,6 @@ impl DPEventLoop {
       )
       .expect("Writer heartbeat timer channel registration failed!!");
 
-    // Clone these before handing ingredients to Writer builder
-    #[cfg(feature = "security")]
-    let writer_guid = writer_ing.guid;
-    #[cfg(feature = "security")]
-    let writer_property_qos = writer_ing.qos_policies.property();
-    #[cfg(feature = "security")]
-    let topic_name = writer_ing.topic_name.clone();
-
     let new_writer = Writer::new(writer_ing, self.udp_sender.clone(), timer);
 
     self
@@ -830,34 +787,6 @@ impl DPEventLoop {
         PollOpt::edge(),
       )
       .expect("Writer command channel registration failed!!");
-
-    #[cfg(feature = "security")]
-    if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-      // Security is enabled. Register Writer to crypto plugin
-
-      if let Err(e) = {
-        let writer_security_attributes = plugins_handle
-          .get_plugins()
-          .get_writer_sec_attributes(writer_guid, topic_name); // Release lock
-        writer_security_attributes.and_then(|attributes| {
-          plugins_handle.get_plugins().register_local_writer(
-            writer_guid,
-            writer_property_qos,
-            attributes,
-          )
-        })
-      } {
-        error!(
-          "Failed to register writer to crypto plugin: {} . GUID: {:?}",
-          e, writer_guid
-        );
-      } else {
-        info!(
-          "Registered local writer to crypto plugin. GUID: {:?}",
-          writer_guid
-        );
-      }
-    }
 
     self.writers.insert(new_writer.guid().entity_id, new_writer);
   }

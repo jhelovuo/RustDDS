@@ -519,20 +519,6 @@ impl Discovery {
     );
 
     // DDS Security
-    #[cfg(not(feature = "security"))]
-    let security_opt = security_plugins_opt.and(None); // = None, but avoid warning.
-
-    #[cfg(feature = "security")]
-    let security_opt = if let Some(plugins_handle) = security_plugins_opt {
-      // Plugins is Some so security is enabled. Initialize SecureDiscovery
-      let security = try_construct!(
-        SecureDiscovery::new(&domain_participant, &discovery_db, plugins_handle),
-        "Could not initialize Secure Discovery. {:?}"
-      );
-      Some(security)
-    } else {
-      None // no security configured
-    };
 
     // Participant
     #[cfg(feature = "security")]
@@ -637,6 +623,21 @@ impl Discovery {
       Self::CHECK_PARTICIPANT_MESSAGES,
       P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN,
     );
+
+    #[cfg(not(feature = "security"))]
+    let security_opt = security_plugins_opt.and(None); // = None, but avoid warning.
+
+    #[cfg(feature = "security")]
+    let security_opt = if let Some(plugins_handle) = security_plugins_opt {
+      // Plugins is Some so security is enabled. Initialize SecureDiscovery
+      let security = try_construct!(
+        SecureDiscovery::new(&domain_participant, &discovery_db, plugins_handle),
+        "Could not initialize Secure Discovery. {:?}"
+      );
+      Some(security)
+    } else {
+      None // no security configured
+    };
 
     Ok(Self {
       poll,
