@@ -101,8 +101,9 @@ pub(crate) struct SecureDiscovery {
 impl SecureDiscovery {
   pub fn new(
     domain_participant: &DomainParticipantWeak,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
     security_plugins: SecurityPluginsHandle,
-  ) -> Result<Self, &'static str> {
+  ) -> SecurityResult<Self> {
     // Run the Discovery-related initialization steps of DDS Security spec v1.1
     // Section "8.8.1 Authentication and AccessControl behavior with local
     // DomainParticipant"
@@ -116,54 +117,53 @@ impl SecureDiscovery {
       .property()
       .expect("No property QoS defined even though security is enabled");
 
-    let identity_token = match plugins.get_identity_token(participant_guid_prefix) {
-      Ok(token) => token,
-      Err(_e) => {
-        return Err("Could not get IdentityToken");
-      }
-    };
+    let identity_token = plugins
+      .get_identity_token(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get IdentityToken: {}", e))?;
 
-    let _identity_status_token = match plugins.get_identity_status_token(participant_guid_prefix) {
-      Ok(token) => token,
-      Err(_e) => {
-        return Err("Could not get IdentityStatusToken");
-      }
-    };
+    let _identity_status_token = plugins
+      .get_identity_status_token(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get IdentityStatusToken: {}", e))?;
 
-    let permissions_token = match plugins.get_permissions_token(participant_guid_prefix) {
-      Ok(token) => token,
-      Err(_e) => {
-        return Err("Could not get PermissionsToken");
-      }
-    };
+    let permissions_token = plugins
+      .get_permissions_token(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get PermissionsToken: {}", e))?;
 
-    let credential_token = match plugins.get_permissions_credential_token(participant_guid_prefix) {
-      Ok(token) => token,
-      Err(_e) => {
-        return Err("Could not get PermissionsCredentialToken");
-      }
-    };
+    let credential_token = plugins
+      .get_permissions_credential_token(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get PermissionsCredentialToken: {}", e))?;
 
-    if plugins
+    plugins
       .set_permissions_credential_and_token(
         participant_guid_prefix,
         credential_token,
         permissions_token.clone(),
       )
-      .is_err()
-    {
-      return Err("Could not set permission tokens.");
-    }
+      .map_err(|e| security_error!("Failed to set permission tokens: {}", e))?;
 
-    let security_attributes = match plugins.get_participant_sec_attributes(participant_guid_prefix)
-    {
-      Ok(val) => val,
-      Err(_e) => {
-        return Err("Could not get ParticipantSecurityAttributes");
-      }
-    };
+    let security_attributes = plugins
+      .get_participant_sec_attributes(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get ParticipantSecurityAttributes: {}", e))?;
 
-    drop(plugins); // Drop mutex guard on plugins so that plugins can be moved to self
+    drop(plugins); // Drop plugins so that register_remote_to_crypto can use them
+
+    // Register local participant as remote to the crypto
+    register_remote_to_crypto(
+      participant_guid_prefix,
+      participant_guid_prefix,
+      &security_plugins,
+    )
+    .map_err(|e| {
+      security_error!(
+        "Failed to register local participant as remote to crypto plugin: {}",
+        e
+      )
+    })?;
+    info!("Registered local participant as remote to crypto plugin");
+
+    // Set ourself as authenticated
+    discovery_db_write(discovery_db)
+      .update_authentication_status(participant_guid_prefix, AuthenticationStatus::Authenticated);
 
     Ok(Self {
       security_plugins,
@@ -880,7 +880,7 @@ impl SecureDiscovery {
 
     send_discovery_notification(
       discovery_updated_sender,
-      DiscoveryNotificationType::ParticipantUpdated {
+      DiscoveryNotificationType::ParticipantAuthenticationStatusChanged {
         guid_prefix: participant_guid_prefix,
       },
     );
@@ -1419,11 +1419,7 @@ impl SecureDiscovery {
         if let Err(e) = self
           .security_plugins
           .get_plugins()
-          .set_remote_participant_crypto_tokens(
-            self.local_participant_guid.prefix,
-            remote_participant_guidp,
-            crypto_tokens,
-          )
+          .set_remote_participant_crypto_tokens(remote_participant_guidp, crypto_tokens)
         {
           security_error!(
             "Failed to set remote participant crypto tokens: {}. Remote: {:?}",
@@ -1569,6 +1565,21 @@ impl SecureDiscovery {
     }
     // Permission checks OK
 
+    if let Err(e) = register_remote_to_crypto(
+      self.local_participant_guid.prefix,
+      remote_guid_prefix,
+      &self.security_plugins,
+    ) {
+      security_error!(
+        "Failed to register remote participant {:?} to crypto plugin: {}. Rejecting remote",
+        remote_guid_prefix,
+        e,
+      );
+      discovery_db_write(discovery_db)
+        .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+      return;
+    };
+
     // Update participant status as Authenticated & notify dp
     self.update_participant_authentication_status_and_notify_dp(
       remote_guid_prefix,
@@ -1590,37 +1601,6 @@ impl SecureDiscovery {
     key_exchange_writer: &no_key::DataWriter<ParticipantVolatileMessageSecure>,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
   ) {
-    // Register remote participant to crypto plugin with the shared secret which
-    // resulted from the successful handshake
-    if let Err(e) = {
-      let shared_secret = self
-        .security_plugins
-        .get_plugins()
-        .get_shared_secret(remote_guid_prefix); // Release lock
-      shared_secret.and_then(|shared_secret| {
-        self
-          .security_plugins
-          .get_plugins()
-          .register_matched_remote_participant(
-            self.local_participant_guid.prefix,
-            remote_guid_prefix,
-            shared_secret,
-          )
-      })
-    } {
-      security_error!(
-        "Failed to register remote participant with the crypto plugin: {}. Remote: {:?}",
-        e,
-        remote_guid_prefix
-      );
-      return;
-    } else {
-      info!(
-        "Registered remote participant with the crypto plugin. Remote = {:?}",
-        remote_guid_prefix
-      );
-    }
-
     // Read remote's available endpoints from DB
     let remotes_builtin_endpoints =
       match discovery_db_read(discovery_db).find_participant_proxy(remote_guid_prefix) {
@@ -1634,62 +1614,13 @@ impl SecureDiscovery {
         }
       };
 
-    // Register remote reader & writer of topic
-    // ParticipantVolatileMessageSecure, which is used for exchanging crypto
-    // tokens.
-    // These need to be registered before sending crypto tokens
-    let local_volatile_reader_guid = self
-      .local_participant_guid
-      .from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER);
-    let local_volatile_writer_guid = self
-      .local_participant_guid
-      .from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER);
-
-    let remote_volatile_reader_guid = GUID::new(
-      remote_guid_prefix,
-      EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
-    );
-    let remote_volatile_writer_guid = GUID::new(
-      remote_guid_prefix,
-      EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
-    );
-
-    if let Err(e) = {
-      let register_result = self
-        .security_plugins
-        .get_plugins()
-        .register_matched_remote_reader(
-          remote_volatile_reader_guid,
-          local_volatile_writer_guid,
-          false,
-        ); // Release lock
-      register_result.and_then(|()| {
-        self
-          .security_plugins
-          .get_plugins()
-          .register_matched_remote_writer(remote_volatile_writer_guid, local_volatile_reader_guid)
-      })
-    } {
-      security_error!(
-        "Failed to register remote volatile reader/writer to crypto plugin {}. Remote: {:?}",
-        e,
-        remote_guid_prefix
-      );
-      // If this registration failed, it is pointless to try to send any crypto
-      // tokens. So just exit.
-      return;
-    }
-
     // Send local participant crypto tokens to remote
     // TODO: do this only if needed?
     let local_participant_crypto_tokens = self
       .security_plugins
       .get_plugins()
       // Get participant crypto tokens
-      .create_local_participant_crypto_tokens(
-        self.local_participant_guid.prefix,
-        remote_guid_prefix,
-      ); // Release lock
+      .create_local_participant_crypto_tokens(remote_guid_prefix); // Release lock
     let res = local_participant_crypto_tokens
       .map(|crypto_tokens| {
         self.new_volatile_message(
@@ -1726,33 +1657,15 @@ impl SecureDiscovery {
       info!("Sent participant crypto tokens to {:?}", remote_guid_prefix);
     }
 
-    // Register the rest of the remote's secure built-in readers
+    // Send local writers' crypto tokens to the remote readers
     for (writer_eid, reader_eid, reader_endpoint) in SECURE_BUILTIN_READERS_INIT_LIST {
       if remotes_builtin_endpoints.contains(*reader_endpoint)
+      // Key exchange is not done for the volatile topic (its keys are derived from the shared secret)
         && *reader_eid != EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER
       {
         let remote_reader_guid = GUID::new(remote_guid_prefix, *reader_eid);
         let local_writer_guid = self.local_participant_guid.from_prefix(*writer_eid);
 
-        // First register remote reader
-        if let Err(e) = self
-          .security_plugins
-          .get_plugins()
-          .register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
-        {
-          security_error!(
-            "Failed to register remote built-in reader {:?} to crypto plugin: {}",
-            remote_reader_guid,
-            e,
-          );
-          continue;
-        }
-        info!(
-          "Registered remote reader with the crypto plugin. GUID: {:?}",
-          remote_reader_guid
-        );
-
-        // Then send local writer crypto tokens to the remote reader
         let local_writer_crypto_tokens = self
           .security_plugins
           .get_plugins()
@@ -1798,34 +1711,15 @@ impl SecureDiscovery {
       }
     }
 
-    // Register the rest of the remote's secure built-in writers
+    // Send local readers' crypto tokens to the remote writers
     for (writer_eid, reader_eid, writer_endpoint) in SECURE_BUILTIN_WRITERS_INIT_LIST {
       if remotes_builtin_endpoints.contains(*writer_endpoint)
+        // Key exchange is not done for the volatile topic (its keys are derived from the shared secret)
         && *writer_eid != EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER
       {
         let remote_writer_guid = GUID::new(remote_guid_prefix, *writer_eid);
         let local_reader_guid = self.local_participant_guid.from_prefix(*reader_eid);
 
-        // First register remote writer
-        if let Err(e) = self
-          .security_plugins
-          .get_plugins()
-          .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
-        {
-          security_error!(
-            "Failed to register remote built-in writer {:?} to crypto plugin: {}",
-            remote_writer_guid,
-            e,
-          );
-          continue;
-        } else {
-          info!(
-            "Registered remote writer with the crypto plugin. GUID: {:?}",
-            remote_writer_guid
-          );
-        }
-
-        // Then send local reader crypto tokens to the remote writer
         let local_reader_crypto_tokens = self
           .security_plugins
           .get_plugins()
@@ -2044,6 +1938,78 @@ fn get_handshake_token_from_stateless_message(
   message_data
     .get(0)
     .map(|data_holder| HandshakeMessageToken::from(data_holder.clone()))
+}
+
+fn register_remote_to_crypto(
+  local_guidp: GuidPrefix,
+  remote_guidp: GuidPrefix,
+  security_plugins_handle: &SecurityPluginsHandle,
+) -> SecurityResult<()> {
+  // Register remote participant to crypto plugin with the shared secret which
+  // resulted from the successful handshake
+  let shared_secret = security_plugins_handle
+    .get_plugins()
+    .get_shared_secret(remote_guidp); // Release lock
+  shared_secret
+    .and_then(|shared_secret| {
+      security_plugins_handle
+        .get_plugins()
+        .register_matched_remote_participant(remote_guidp, shared_secret)
+    })
+    .map_err(|e| {
+      security_error!(
+        "Failed to register remote participant with the crypto plugin: {}. Remote: {:?}",
+        e,
+        remote_guidp
+      )
+    })?;
+  debug!(
+    "Registered remote participant {:?} with the crypto plugin.",
+    remote_guidp
+  );
+
+  // Register remote's secure built-in readers
+  for (writer_eid, reader_eid, _reader_endpoint) in SECURE_BUILTIN_READERS_INIT_LIST {
+    let remote_reader_guid = GUID::new(remote_guidp, *reader_eid);
+    let local_writer_guid = GUID::new(local_guidp, *writer_eid);
+
+    security_plugins_handle
+      .get_plugins()
+      .register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
+      .map_err(|e| {
+        security_error!(
+          "Failed to register remote built-in reader {:?} to crypto plugin: {}",
+          remote_reader_guid,
+          e,
+        )
+      })?;
+    debug!(
+      "Registered remote reader with the crypto plugin. GUID: {:?}",
+      remote_reader_guid
+    );
+  }
+
+  // Register remote's secure built-in readers
+  for (writer_eid, reader_eid, _writer_endpoint) in SECURE_BUILTIN_WRITERS_INIT_LIST {
+    let remote_writer_guid = GUID::new(remote_guidp, *writer_eid);
+    let local_reader_guid = GUID::new(local_guidp, *reader_eid);
+
+    security_plugins_handle
+      .get_plugins()
+      .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
+      .map_err(|e| {
+        security_error!(
+          "Failed to register remote built-in writer {:?} to crypto plugin: {}",
+          remote_writer_guid,
+          e,
+        )
+      })?;
+    debug!(
+      "Registered remote writer with the crypto plugin. GUID: {:?}",
+      remote_writer_guid
+    );
+  }
+  Ok(())
 }
 
 // A helper to construct ParticipantGenericMessages. Takes care of

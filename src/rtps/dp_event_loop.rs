@@ -336,6 +336,11 @@ impl DPEventLoop {
                         .get_mut(&writer_guid.entity_id)
                         .map(|w| w.handle_heartbeat_tick(manual_assertion));
                     }
+
+                    #[cfg(feature = "security")]
+                    ParticipantAuthenticationStatusChanged { guid_prefix } => {
+                      ev_wrapper.on_remote_participant_authentication_status_changed(guid_prefix);
+                    }
                   }
                 }
               }
@@ -608,25 +613,6 @@ impl DPEventLoop {
       }
     } // for
 
-    // If appropriate, send a signal to Discovery to start key exchange with the
-    // participant
-    #[cfg(feature = "security")]
-    if let Some(AuthenticationStatus::Authenticated) =
-      db.get_authentication_status(participant_guid_prefix)
-    {
-      if let Err(e) = self.discovery_command_sender.send(
-        DiscoveryCommand::StartKeyExchangeWithRemoteParticipant {
-          participant_guid_prefix,
-        },
-      ) {
-        error!(
-          "Could not signal Discovery to start the key exchange with remote. Reason: {}. Remote: \
-           {:?}",
-          e, participant_guid_prefix
-        );
-      }
-    }
-
     debug!(
       "update_participant - finished for {:?}",
       participant_guid_prefix
@@ -732,14 +718,6 @@ impl DPEventLoop {
       )
       .expect("Reader timer channel registration failed!");
 
-    // Clone these before handing ingredients to Reader builder
-    #[cfg(feature = "security")]
-    let reader_guid = reader_ing.guid;
-    #[cfg(feature = "security")]
-    let reader_property_qos = reader_ing.qos_policy.property();
-    #[cfg(feature = "security")]
-    let topic_name = reader_ing.topic_name.clone();
-
     let mut new_reader = Reader::new(reader_ing, self.udp_sender.clone(), timer);
 
     // Non-timed action polling
@@ -752,33 +730,6 @@ impl DPEventLoop {
         PollOpt::edge(),
       )
       .expect("Reader command channel registration failed!!!");
-
-    #[cfg(feature = "security")]
-    if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-      // Security is enabled. Register Reader to crypto plugin
-      if let Err(e) = {
-        let reader_security_attributes = plugins_handle
-          .get_plugins()
-          .get_reader_sec_attributes(reader_guid, topic_name); // Release lock
-        reader_security_attributes.and_then(|attributes| {
-          plugins_handle.get_plugins().register_local_reader(
-            reader_guid,
-            reader_property_qos,
-            attributes,
-          )
-        })
-      } {
-        error!(
-          "Failed to register reader to crypto plugin: {} . GUID: {:?}",
-          e, reader_guid
-        );
-      } else {
-        info!(
-          "Registered local reader to crypto plugin. GUID: {:?}",
-          reader_guid
-        );
-      }
-    }
 
     new_reader.set_requested_deadline_check_timer();
     trace!("Add reader: {:?}", new_reader);
@@ -825,14 +776,6 @@ impl DPEventLoop {
       )
       .expect("Writer heartbeat timer channel registration failed!!");
 
-    // Clone these before handing ingredients to Writer builder
-    #[cfg(feature = "security")]
-    let writer_guid = writer_ing.guid;
-    #[cfg(feature = "security")]
-    let writer_property_qos = writer_ing.qos_policies.property();
-    #[cfg(feature = "security")]
-    let topic_name = writer_ing.topic_name.clone();
-
     let new_writer = Writer::new(writer_ing, self.udp_sender.clone(), timer);
 
     self
@@ -844,34 +787,6 @@ impl DPEventLoop {
         PollOpt::edge(),
       )
       .expect("Writer command channel registration failed!!");
-
-    #[cfg(feature = "security")]
-    if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
-      // Security is enabled. Register Writer to crypto plugin
-
-      if let Err(e) = {
-        let writer_security_attributes = plugins_handle
-          .get_plugins()
-          .get_writer_sec_attributes(writer_guid, topic_name); // Release lock
-        writer_security_attributes.and_then(|attributes| {
-          plugins_handle.get_plugins().register_local_writer(
-            writer_guid,
-            writer_property_qos,
-            attributes,
-          )
-        })
-      } {
-        error!(
-          "Failed to register writer to crypto plugin: {} . GUID: {:?}",
-          e, writer_guid
-        );
-      } else {
-        info!(
-          "Registered local writer to crypto plugin. GUID: {:?}",
-          writer_guid
-        );
-      }
-    }
 
     self.writers.insert(new_writer.guid().entity_id, new_writer);
   }
@@ -896,6 +811,37 @@ impl DPEventLoop {
         let _ = plugins_handle
           .get_plugins()
           .unregister_local_writer(writer_guid);
+      }
+    }
+  }
+
+  #[cfg(feature = "security")]
+  fn on_remote_participant_authentication_status_changed(&mut self, remote_guidp: GuidPrefix) {
+    let auth_status = discovery_db_read(&self.discovery_db).get_authentication_status(remote_guidp);
+
+    match auth_status {
+      Some(AuthenticationStatus::Authenticated) => {
+        // The participant has been authenticated
+        // First connect the built-in endpoints
+        self.update_participant(remote_guidp);
+        // Then start the key exchange
+        if let Err(e) = self.discovery_command_sender.send(
+          DiscoveryCommand::StartKeyExchangeWithRemoteParticipant {
+            participant_guid_prefix: remote_guidp,
+          },
+        ) {
+          error!(
+            "Could not signal Discovery to start the key exchange with remote. Reason: {}. \
+             Remote: {:?}",
+            e, remote_guidp
+          );
+        }
+      }
+      other => {
+        info!(
+          "Status {:?}, in on_remote_participant_authentication_status_changed. What to do?",
+          other
+        );
       }
     }
   }

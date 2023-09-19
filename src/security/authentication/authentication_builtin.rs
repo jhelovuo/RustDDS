@@ -4,7 +4,9 @@ use bytes::Bytes;
 use ring::agreement;
 
 use crate::{
-  security::{access_control::PermissionsToken, certificate, SecurityError, SecurityResult},
+  security::{
+    access_control::PermissionsToken, certificate, security_error, SecurityError, SecurityResult,
+  },
   security_error,
   //structure::guid::GuidPrefix,
   GUID,
@@ -121,6 +123,12 @@ pub struct AuthenticationBuiltin {
   next_identity_handle: IdentityHandle,
   next_handshake_handle: HandshakeHandle,
 
+  // Our own cryptographic pseudo-random number generator
+  // From ring documentation (https://docs.rs/ring/latest/ring/rand/index.html):
+  // "An application should create a single SystemRandom and then use it for all randomness
+  // generation"
+  secure_random_generator: ring::rand::SystemRandom,
+
   mock_handshakes: bool, // Mock handshakes for testing? Temporary field, for development only
 }
 
@@ -132,6 +140,7 @@ impl AuthenticationBuiltin {
       handshake_to_identity_handle_map: HashMap::new(),
       next_identity_handle: 0,
       next_handshake_handle: 0,
+      secure_random_generator: ring::rand::SystemRandom::new(),
       mock_handshakes: false,
     }
   }
@@ -190,6 +199,12 @@ impl AuthenticationBuiltin {
       .handshake_to_identity_handle_map
       .get(hs_handle)
       .ok_or_else(|| security_error!("Identity handle not found with handshake handle"))
+  }
+
+  fn generate_random_32_bytes(&self) -> SecurityResult<[u8; 32]> {
+    ring::rand::generate::<[u8; 32]>(&self.secure_random_generator)
+      .map(|random| random.expose())
+      .map_err(|e| security_error(&format!("Failed to generate random bytes: {}", e)))
   }
 
   #[allow(clippy::needless_pass_by_value)]

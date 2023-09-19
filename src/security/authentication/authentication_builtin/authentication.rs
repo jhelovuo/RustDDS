@@ -198,6 +198,28 @@ impl Authentication for AuthenticationBuiltin {
 
     self.local_participant_info = Some(local_participant_info);
 
+    // Generate self-shared secret and insert own data into remote_participant_infos
+    // This is done for self-authentication.
+    // Note: this is not part of the Security specification.
+    let random_bytes1 = self.generate_random_32_bytes()?;
+    let random_bytes2 = self.generate_random_32_bytes()?;
+    let random_bytes3 = self.generate_random_32_bytes()?;
+
+    let self_remote_info = RemoteParticipantInfo {
+      identity_certificate_opt: None,
+      signed_permissions_xml_opt: None,
+      handshake: HandshakeInfo {
+        state: BuiltinHandshakeState::CompletedWithFinalMessageReceived {
+          challenge1: Challenge::from(random_bytes1),
+          challenge2: Challenge::from(random_bytes2),
+          shared_secret: SharedSecret::from(random_bytes3),
+        },
+      },
+    };
+    self
+      .remote_participant_infos
+      .insert(local_identity_handle, self_remote_info);
+
     // Read the temporary config which determines should handshakes be mocked
     self.mock_handshakes = match participant_qos.get_property("dds.sec.auth.mock_handshakes") {
       Ok(val) => val == *"yes",
@@ -367,8 +389,7 @@ impl Authentication for AuthenticationBuiltin {
     let my_id_certificate_text = Bytes::from(local_info.identity_certificate.to_pem());
     let my_permissions_doc_text = local_info.signed_permissions_document_xml.clone();
 
-    // This borrows `self` mutably!
-    let remote_info = self.get_remote_participant_info_mutable(&replier_identity_handle)?;
+    let remote_info = self.get_remote_participant_info(&replier_identity_handle)?;
 
     // Make sure we are expecting to send the authentication request message
     if let BuiltinHandshakeState::PendingRequestSend = remote_info.handshake.state {
@@ -398,11 +419,12 @@ impl Authentication for AuthenticationBuiltin {
     // Generate new, random Diffie-Hellman key pair "dh1"
     let dh1 = agreement::EphemeralPrivateKey::generate(
       &agreement::ECDH_P256,
-      &ring::rand::SystemRandom::new(),
+      &self.secure_random_generator,
     )?;
 
     // This is an initiator-generated 256-bit nonce
-    let challenge1 = Challenge::from(rand::random::<[u8; 32]>());
+    let random_bytes = self.generate_random_32_bytes()?;
+    let challenge1 = Challenge::from(random_bytes);
 
     let handshake_request_builtin = BuiltinHandshakeMessageToken {
       class_id: Bytes::copy_from_slice(HANDSHAKE_REQUEST_CLASS_ID),
@@ -422,6 +444,9 @@ impl Authentication for AuthenticationBuiltin {
     };
 
     let handshake_request = HandshakeMessageToken::from(handshake_request_builtin);
+
+    // Get a new mutable reference to remote_info
+    let remote_info = self.get_remote_participant_info_mutable(&replier_identity_handle)?;
 
     // Change handshake state to pending reply message & save the request token
     remote_info.handshake.state = BuiltinHandshakeState::PendingReplyMessage {
@@ -519,12 +544,13 @@ impl Authentication for AuthenticationBuiltin {
     }
 
     // This is an initiator-generated 256-bit nonce
-    let challenge2 = Challenge::from(rand::random::<[u8; 32]>());
+    let random_bytes = self.generate_random_32_bytes()?;
+    let challenge2 = Challenge::from(random_bytes);
 
     // Generate new, random Diffie-Hellman key pair "dh2"
     let dh2 = agreement::EphemeralPrivateKey::generate(
       &agreement::ECDH_P256,
-      &ring::rand::SystemRandom::new(),
+      &self.secure_random_generator,
     )?;
     let dh2_public_key = Bytes::copy_from_slice(dh2.compute_public_key()?.as_ref());
 
@@ -880,10 +906,9 @@ impl Authentication for AuthenticationBuiltin {
   // CompletedWithFinalMessageSent or CompletedWithFinalMessageReceived
   fn get_shared_secret(
     &self,
-    handshake_handle: HandshakeHandle,
+    remote_identity_handle: IdentityHandle,
   ) -> SecurityResult<SharedSecretHandle> {
-    let identity_handle = self.handshake_handle_to_identity_handle(&handshake_handle)?;
-    let remote_info = self.get_remote_participant_info(identity_handle)?;
+    let remote_info = self.get_remote_participant_info(&remote_identity_handle)?;
 
     match &remote_info.handshake.state {
       BuiltinHandshakeState::CompletedWithFinalMessageSent {

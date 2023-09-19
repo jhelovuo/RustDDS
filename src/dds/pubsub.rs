@@ -52,7 +52,7 @@ use super::{
   with_key::simpledatareader::ReaderCommand,
 };
 #[cfg(feature = "security")]
-use crate::security::security_plugins::SecurityPluginsHandle;
+use crate::{create_error_internal, security::security_plugins::SecurityPluginsHandle};
 #[cfg(not(feature = "security"))]
 use crate::no_security::security_plugins::SecurityPluginsHandle;
 
@@ -487,6 +487,29 @@ impl InnerPublisher {
     };
 
     let guid = GUID::new_with_prefix_and_id(dp.guid().prefix, entity_id);
+
+    #[cfg(feature = "security")]
+    if let Some(handle) = self.security_plugins_handle.as_ref() {
+      // Security is enabled. Register Writer to crypto plugin
+      if let Err(e) = {
+        let writer_security_attributes = handle
+          .get_plugins()
+          .get_writer_sec_attributes(guid, topic.name()); // Release lock
+        writer_security_attributes.and_then(|attributes| {
+          handle
+            .get_plugins()
+            .register_local_writer(guid, writer_qos.property(), attributes)
+        })
+      } {
+        return create_error_internal!(
+          "Failed to register writer to crypto plugin: {} . GUID: {:?}",
+          e,
+          guid
+        );
+      } else {
+        info!("Registered local writer to crypto plugin. GUID: {:?}", guid);
+      }
+    }
 
     let new_writer = WriterIngredients {
       guid,
@@ -956,6 +979,32 @@ impl InnerSubscriber {
       Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
+
+    #[cfg(feature = "security")]
+    if let Some(handle) = self.security_plugins_handle.as_ref() {
+      // Security is enabled. Register Reader to crypto plugin
+      if let Err(e) = {
+        let reader_security_attributes = handle
+          .get_plugins()
+          .get_reader_sec_attributes(reader_guid, topic.name()); // Release lock
+        reader_security_attributes.and_then(|attributes| {
+          handle
+            .get_plugins()
+            .register_local_reader(reader_guid, qos.property(), attributes)
+        })
+      } {
+        return create_error_internal!(
+          "Failed to register reader to crypto plugin: {} . GUID: {:?}",
+          e,
+          reader_guid
+        );
+      } else {
+        info!(
+          "Registered local reader to crypto plugin. GUID: {:?}",
+          reader_guid
+        );
+      }
+    }
 
     let data_reader_waker = Arc::new(Mutex::new(None));
 
