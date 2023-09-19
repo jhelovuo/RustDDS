@@ -594,10 +594,12 @@ impl CryptoTransform for CryptographicBuiltin {
     let sending_participant_endpoints = self
       .participant_to_endpoint_info
       .get(&sending_participant_crypto_handle)
-      .ok_or(security_error!(
-        "Could not find registered entities for the sending_participant_crypto_handle {}",
-        sending_participant_crypto_handle
-      ))?;
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find registered entities for the sending_participant_crypto_handle {}",
+          sending_participant_crypto_handle
+        )
+      })?;
 
     let mut datawriter_submessage_handle_pairs =
       Vec::<(DatawriterCryptoHandle, DatareaderCryptoHandle)>::new();
@@ -627,10 +629,12 @@ impl CryptoTransform for CryptographicBuiltin {
           let matched_local_endpoint_crypto_handle = *self
             .matched_local_endpoint
             .get(&remote_endpoint_crypto_handle)
-            .ok_or(security_error!(
-              "The local endpoint matched to the remote endpoint crypto handle {} is missing.",
-              remote_endpoint_crypto_handle
-            ))?;
+            .ok_or_else(|| {
+              security_error!(
+                "The local endpoint matched to the remote endpoint crypto handle {} is missing.",
+                remote_endpoint_crypto_handle
+              )
+            })?;
           match kind {
             EndpointKind::DataWriter => datawriter_submessage_handle_pairs.push((
               remote_endpoint_crypto_handle,
