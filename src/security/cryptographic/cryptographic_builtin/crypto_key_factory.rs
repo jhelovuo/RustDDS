@@ -73,14 +73,18 @@ impl CryptographicBuiltin {
   fn is_volatile(properties: &[Property]) -> bool {
     properties
       .iter()
-      .find(|property| property.name.eq("dds.sec.builtin_endpoint_name"))
+      .find(|property| {
+        property
+          .name
+          .eq(VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME)
+      })
       .map_or(false, |property| {
         property
           .value
-          .eq("BuiltinParticipantVolatileMessageSecureWriter")
+          .eq(VOLATILE_WRITER_RECOGNITION_PROPERTY_VALUE)
           || property
             .value
-            .eq("BuiltinParticipantVolatileMessageSecureReader")
+            .eq(VOLATILE_READER_RECOGNITION_PROPERTY_VALUE)
       })
   }
 

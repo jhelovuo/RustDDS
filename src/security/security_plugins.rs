@@ -17,7 +17,7 @@ use crate::{
   qos,
   rtps::{Message, Submessage, SubmessageBody},
   security_error,
-  structure::guid::GuidPrefix,
+  structure::guid::{EntityId, GuidPrefix},
   QosPolicies, GUID,
 };
 use super::{
@@ -601,7 +601,13 @@ impl SecurityPlugins {
   ) -> SecurityResult<()> {
     let local_participant_crypto_handle = self.get_local_participant_crypto_handle()?;
 
-    let properties = reader_properties.map(|prop| prop.value).unwrap_or_default();
+    let mut properties = reader_properties.map(|prop| prop.value).unwrap_or_default();
+
+    if reader_guid.entity_id == EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER {
+      // Add a property which the crypto plugin expects for the Volatile Reader
+      // (see 8.8.8.1 of the Security spec)
+      properties.push(volatile_reader_recognition_property());
+    }
 
     if !reader_security_attributes.is_submessage_protected {
       self.submessage_not_protected.insert(reader_guid);
@@ -630,7 +636,13 @@ impl SecurityPlugins {
   ) -> SecurityResult<()> {
     let local_participant_crypto_handle = self.get_local_participant_crypto_handle()?;
 
-    let properties = writer_properties.map(|prop| prop.value).unwrap_or_default();
+    let mut properties = writer_properties.map(|prop| prop.value).unwrap_or_default();
+
+    if writer_guid.entity_id == EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER {
+      // Add a property which the crypto plugin expects for the Volatile Writer
+      // (see 8.8.8.1 of the Security spec)
+      properties.push(volatile_writer_recognition_property());
+    }
 
     if !writer_security_attributes.is_submessage_protected {
       self.submessage_not_protected.insert(writer_guid);

@@ -986,6 +986,32 @@ impl From<ParticipantGenericMessage> for ParticipantStatelessMessage {
   }
 }
 
+pub const VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME: &str = "dds.sec.builtin_endpoint_name";
+pub const VOLATILE_WRITER_RECOGNITION_PROPERTY_VALUE: &str =
+  "BuiltinParticipantVolatileMessageSecureWriter";
+pub const VOLATILE_READER_RECOGNITION_PROPERTY_VALUE: &str =
+  "BuiltinParticipantVolatileMessageSecureReader";
+
+// Property from which crypto plugin detects a volatile writer
+// See 8.8.8.1 of the Security spec
+pub fn volatile_writer_recognition_property() -> Property {
+  Property {
+    name: VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME.to_string(),
+    value: VOLATILE_WRITER_RECOGNITION_PROPERTY_VALUE.to_string(),
+    propagate: false,
+  }
+}
+
+// Property from which crypto plugin detects a volatile reader
+// See 8.8.8.1 of the Security spec
+pub fn volatile_reader_recognition_property() -> Property {
+  Property {
+    name: VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME.to_string(),
+    value: VOLATILE_READER_RECOGNITION_PROPERTY_VALUE.to_string(),
+    propagate: false,
+  }
+}
+
 // ParticipantVolatileMessageSecure from section 7.4.4.3 of the Security
 // specification
 //
