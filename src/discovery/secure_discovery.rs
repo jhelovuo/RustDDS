@@ -147,7 +147,8 @@ impl SecureDiscovery {
 
     drop(plugins); // Drop plugins so that register_remote_to_crypto can use them
 
-    // Register local participant as remote to the crypto
+    // Register local participant as remote to the crypto.
+    // This is needed so that we can receive our own secured messages.
     register_remote_to_crypto(
       participant_guid_prefix,
       participant_guid_prefix,
@@ -161,9 +162,66 @@ impl SecureDiscovery {
     })?;
     info!("Registered local participant as remote to crypto plugin");
 
+    // After registering, set local crypto tokens as remote tokens.
+    // This is also needed so that we can receive our own secured messages.
+    let mut plugins = security_plugins.get_plugins();
+
+    // Participant tokens
+    plugins
+      .create_local_participant_crypto_tokens(participant_guid_prefix)
+      .and_then(|tokens| {
+        plugins.set_remote_participant_crypto_tokens(participant_guid_prefix, tokens)
+      })
+      .map_err(|e| {
+        security_error!(
+          "Failed to set local participant crypto tokens as remote tokens: {}",
+          e
+        )
+      })?;
+
+    // Endpoint tokens
+    for (writer_eid, reader_eid, _reader_endpoint) in SECURE_BUILTIN_READERS_INIT_LIST {
+      // Tokens are set for all but the volatile endpoint
+      if *writer_eid != EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER {
+        let local_writer_guid = GUID::new(participant_guid_prefix, *writer_eid);
+        let local_reader_guid = GUID::new(participant_guid_prefix, *reader_eid);
+
+        // Writer tokens
+        plugins
+          .create_local_writer_crypto_tokens(local_writer_guid, local_reader_guid)
+          .and_then(|tokens| {
+            plugins.set_remote_writer_crypto_tokens(local_writer_guid, local_reader_guid, tokens)
+          })
+          .map_err(|e| {
+            security_error!(
+              "Failed to set local writer {:?} crypto tokens as remote tokens: {}.",
+              writer_eid,
+              e
+            )
+          })?;
+
+        // Reader tokens
+        plugins
+          .create_local_reader_crypto_tokens(local_reader_guid, local_writer_guid)
+          .and_then(|tokens| {
+            plugins.set_remote_reader_crypto_tokens(local_reader_guid, local_writer_guid, tokens)
+          })
+          .map_err(|e| {
+            security_error!(
+              "Failed to set local reader {:?} crypto tokens as remote tokens: {}.",
+              reader_eid,
+              e
+            )
+          })?;
+      }
+    }
+    info!("Completed setting local crypto tokens as remote tokens");
+
     // Set ourself as authenticated
     discovery_db_write(discovery_db)
       .update_authentication_status(participant_guid_prefix, AuthenticationStatus::Authenticated);
+
+    drop(plugins); // Drop plugins so that they can be moved to self
 
     Ok(Self {
       security_plugins,
@@ -1989,7 +2047,7 @@ fn register_remote_to_crypto(
     );
   }
 
-  // Register remote's secure built-in readers
+  // Register remote's secure built-in writers
   for (writer_eid, reader_eid, _writer_endpoint) in SECURE_BUILTIN_WRITERS_INIT_LIST {
     let remote_writer_guid = GUID::new(remote_guidp, *writer_eid);
     let local_reader_guid = GUID::new(local_guidp, *reader_eid);
