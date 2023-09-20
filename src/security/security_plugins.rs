@@ -9,10 +9,8 @@ use log::{debug, error};
 use crate::{
   discovery::{DiscoveredReaderData, DiscoveredWriterData},
   messages::submessages::{
-    elements::parameter_list::ParameterList,
-    secure_postfix::SecurePostfix,
+    elements::parameter_list::ParameterList, secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
-    submessage::{ReaderSubmessage, WriterSubmessage},
   },
   qos,
   rtps::{Message, Submessage, SubmessageBody},
@@ -25,8 +23,8 @@ use super::{
   authentication::*,
   cryptographic::{
     DatareaderCryptoHandle, DatareaderCryptoToken, DatawriterCryptoHandle, DatawriterCryptoToken,
-    EncodedSubmessage, EndpointCryptoHandle, ParticipantCryptoHandle, ParticipantCryptoToken,
-    SecureSubmessageCategory,
+    DecodedSubmessage, EncodedSubmessage, EndpointCryptoHandle, ParticipantCryptoHandle,
+    ParticipantCryptoToken,
   },
   types::*,
   AccessControl, Cryptographic,
@@ -202,17 +200,17 @@ impl SecurityPlugins {
     }
   }
 
-  // Checks whether the given guid matches the given handle
+  // Checks whether the given guid matches one of the given handles
   pub fn confirm_local_endpoint_guid(
     &self,
-    local_endpoint_crypto_handle: EndpointCryptoHandle,
+    local_endpoint_crypto_handles: &[EndpointCryptoHandle],
     guid: &GUID,
   ) -> bool {
     self
       .local_endpoint_crypto_handle_cache
       .get(guid)
       .map_or(false, |found_handle| {
-        local_endpoint_crypto_handle.eq(found_handle)
+        local_endpoint_crypto_handles.contains(found_handle)
       })
   }
 
@@ -1010,41 +1008,16 @@ impl SecurityPlugins {
 
   // Currently only those submessages whose destination is the local participant
   // can be preprocessed. TODO: add support for other destinations as well?
-  pub fn preprocess_secure_submessage(
+
+  pub fn decode_submessage(
     &self,
-    secure_prefix: &SecurePrefix,
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     source_guid_prefix: &GuidPrefix,
-  ) -> SecurityResult<SecureSubmessageCategory> {
-    self.crypto.preprocess_secure_submessage(
-      secure_prefix,
+  ) -> SecurityResult<DecodedSubmessage> {
+    self.crypto.decode_submessage(
+      encoded_rtps_submessage,
       self.get_local_participant_crypto_handle()?,
       self.get_remote_participant_crypto_handle(source_guid_prefix)?,
-    )
-  }
-
-  pub fn decode_datawriter_submessage(
-    &self,
-    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datareader_crypto: DatareaderCryptoHandle,
-    sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<WriterSubmessage> {
-    self.crypto.decode_datawriter_submessage(
-      encoded_rtps_submessage,
-      receiving_datareader_crypto,
-      sending_datawriter_crypto,
-    )
-  }
-
-  pub fn decode_datareader_submessage(
-    &self,
-    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datawriter_crypto: DatawriterCryptoHandle,
-    sending_datareader_crypto: DatareaderCryptoHandle,
-  ) -> SecurityResult<ReaderSubmessage> {
-    self.crypto.decode_datareader_submessage(
-      encoded_rtps_submessage,
-      receiving_datawriter_crypto,
-      sending_datareader_crypto,
     )
   }
 

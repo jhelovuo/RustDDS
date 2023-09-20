@@ -86,7 +86,7 @@ pub(super) enum KeyMaterial_AES_GCM_GMAC_seq {
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub(super) enum KeyMaterialScope {
-  PayloadAndMetadata,
+  MessageOrSubmessage,
   PayloadOnly,
 }
 
@@ -94,7 +94,7 @@ impl KeyMaterial_AES_GCM_GMAC_seq {
   pub fn select(&self, scope: KeyMaterialScope) -> &KeyMaterial_AES_GCM_GMAC {
     match (self, scope) {
       (Self::One(key_material), _) => key_material, // This is all we have
-      (Self::Two(key_material, _), KeyMaterialScope::PayloadAndMetadata) => key_material,
+      (Self::Two(key_material, _), KeyMaterialScope::MessageOrSubmessage) => key_material,
       (Self::Two(_, payload_key_material), KeyMaterialScope::PayloadOnly) => payload_key_material,
     }
   }

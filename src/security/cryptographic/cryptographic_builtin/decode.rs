@@ -17,20 +17,22 @@ use super::{
 };
 
 pub(super) fn find_receiver_specific_mac(
-  receiver_specific_key: Option<ReceiverSpecificKeyMaterial>,
+  receiver_specific_key: &ReceiverSpecificKeyMaterial,
   receiver_specific_macs: &[ReceiverSpecificMAC],
-) -> SecurityResult<Option<(BuiltinKey, BuiltinMAC)>> {
-  // If the key is None, we are not expecting a receiver-specific MAC
-  receiver_specific_key
-    .map(|ReceiverSpecificKeyMaterial{ key_id, key }|
-    // Find the receiver-specific map by ID
-    receiver_specific_macs
-      .iter()
-      .find( |ReceiverSpecificMAC { receiver_mac_key_id, .. }| *receiver_mac_key_id == key_id )
-      .map(|ReceiverSpecificMAC { receiver_mac, .. }| ( key.clone() , *receiver_mac ) )
-      // We are expecting to find a MAC, so reject if we do not
-      .ok_or_else(|| security_error!( "No MAC found for receiver_specific_key_id {key_id}")))
-    .transpose()
+) -> SecurityResult<(BuiltinKey, BuiltinMAC)> {
+  let ReceiverSpecificKeyMaterial { key_id, key } = receiver_specific_key;
+  // Find the receiver-specific map by ID
+  receiver_specific_macs
+    .iter()
+    .find(
+      |ReceiverSpecificMAC {
+         receiver_mac_key_id,
+         ..
+       }| receiver_mac_key_id.eq(key_id),
+    )
+    .map(|ReceiverSpecificMAC { receiver_mac, .. }| (key.clone(), *receiver_mac))
+    // We are expecting to find a MAC, so reject if we do not
+    .ok_or_else(|| security_error!("No MAC found for receiver_specific_key_id {key_id}"))
 }
 
 pub(super) fn decode_submessage_gmac(
@@ -38,7 +40,7 @@ pub(super) fn decode_submessage_gmac(
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: &Submessage,
   common_mac: BuiltinMAC,
-  receiver_specific_key_and_mac: Option<(BuiltinKey, BuiltinMAC)>,
+  receiver_specific_keys_and_macs: &[(BuiltinKey, BuiltinMAC)],
 ) -> SecurityResult<()> {
   let data = encoded_submessage
     .original_bytes
@@ -48,13 +50,13 @@ pub(super) fn decode_submessage_gmac(
   // Validate the common MAC
   validate_mac(key, initialization_vector, data, common_mac)?;
 
-  // Validate the receiver-specific MAC if one exists
-  if let Some((receiver_specific_key, receiver_specific_mac)) = receiver_specific_key_and_mac {
+  // Validate the receiver-specific MACs
+  for (receiver_specific_key, receiver_specific_mac) in receiver_specific_keys_and_macs {
     validate_mac(
-      &receiver_specific_key,
+      receiver_specific_key,
       initialization_vector,
       data,
-      receiver_specific_mac,
+      *receiver_specific_mac,
     )?;
   }
 
@@ -67,7 +69,7 @@ pub(super) fn decode_submessage_gcm(
   initialization_vector: BuiltinInitializationVector,
   encoded_submessage: &Submessage,
   common_mac: BuiltinMAC,
-  receiver_specific_key_and_mac: Option<(BuiltinKey, BuiltinMAC)>,
+  receiver_specific_keys_and_macs: &[(BuiltinKey, BuiltinMAC)],
 ) -> SecurityResult<SubmessageBody> {
   // Destructure to get the data
   match &encoded_submessage.body {
@@ -77,13 +79,13 @@ pub(super) fn decode_submessage_gcm(
       },
       _,
     )) => {
-      // Validate the receiver-specific MAC if one exists
-      if let Some((receiver_specific_key, receiver_specific_mac)) = receiver_specific_key_and_mac {
+      // Validate the receiver-specific MACs
+      for (receiver_specific_key, receiver_specific_mac) in receiver_specific_keys_and_macs {
         validate_mac(
-          &receiver_specific_key,
+          receiver_specific_key,
           initialization_vector,
           data,
-          receiver_specific_mac,
+          *receiver_specific_mac,
         )?;
       }
 

@@ -3,7 +3,11 @@ use std::{convert::From, fmt};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
-use crate::{rtps::Submessage, security::types::DataHolder};
+use crate::{
+  messages::submessages::submessage::{ReaderSubmessage, WriterSubmessage},
+  rtps::Submessage,
+  security::types::DataHolder,
+};
 
 // Crypto related message class IDs for GenericMessageClassId:
 // See section 7.4.4.5 of the security spec
@@ -84,21 +88,6 @@ impl fmt::Display for CryptoTransformKeyId {
   }
 }
 
-/// SecureSubmessageCategory_t: section 8.5.1.6 of the Security specification
-/// (v. 1.1)
-///
-/// Used as a return type by
-/// [super::cryptographic_plugin::CryptoTransform::preprocess_secure_submessage],
-/// and therefore includes the crypto handles that would be returned in the
-/// latter two cases.
-
-#[allow(clippy::enum_variant_names)] // We are using variant names from the spec
-pub enum SecureSubmessageCategory {
-  InfoSubmessage,
-  DatawriterSubmessage(Vec<(DatawriterCryptoHandle, DatareaderCryptoHandle)>),
-  DatareaderSubmessage(Vec<(DatareaderCryptoHandle, DatawriterCryptoHandle)>),
-}
-
 /// [super::cryptographic_plugin::CryptoTransform::encode_datawriter_submessage]
 /// and [super::cryptographic_plugin::CryptoTransform::encode_datareader_submessage]
 /// may return the unencoded input or an encoded message between a
@@ -117,4 +106,16 @@ impl From<EncodedSubmessage> for Vec<Submessage> {
       EncodedSubmessage::Encoded(prefix, submessage, postfix) => vec![prefix, submessage, postfix],
     }
   }
+}
+
+/// Result of submessage decoding. Contains the decoded submessage body and a
+/// list of endpoint crypto handles, the decode keys of which match the one used
+/// for decoding, i.e. which are approved to receive the submessage by access
+/// control.
+pub enum DecodedSubmessage {
+  // TODO: Should we support interpreter submessages here? The specification is unclear on this.
+  // See 8.5.1.6
+  //Interpreter(InterpreterSubmessage),
+  Writer(WriterSubmessage, Vec<EndpointCryptoHandle>),
+  Reader(ReaderSubmessage, Vec<EndpointCryptoHandle>),
 }

@@ -197,11 +197,12 @@ impl CryptographicBuiltin {
     }
   }
 
-  fn get_decode_key_materials(
+  fn get_decode_key_material(
     &self,
     remote_entity_crypto_handle: CryptoHandle,
-    _key_id: CryptoTransformKeyId,
-  ) -> SecurityResult<&KeyMaterial_AES_GCM_GMAC_seq> {
+    key_id: CryptoTransformKeyId,
+    key_material_scope: KeyMaterialScope,
+  ) -> Option<&KeyMaterial_AES_GCM_GMAC> {
     // TODO:
     // Received packet is specifying key_id used to encrypt, but
     // we just ignore that and assume the key_id is uniquely determined by
@@ -212,12 +213,8 @@ impl CryptographicBuiltin {
     self
       .decode_key_materials
       .get(&remote_entity_crypto_handle)
-      .ok_or_else(|| {
-        security_error!(
-          "Could not find decode key materials for the CryptoHandle {}",
-          remote_entity_crypto_handle
-        )
-      })
+      .map(|key_materials| key_materials.select(key_material_scope))
+      .filter(|KeyMaterial_AES_GCM_GMAC { sender_key_id, .. }| sender_key_id.eq(&key_id))
   }
 
   fn insert_endpoint_info(
@@ -428,6 +425,29 @@ impl CryptographicBuiltin {
     key_material_scope: KeyMaterialScope,
     initialization_vector: BuiltinInitializationVector, // as received in header
   ) -> SecurityResult<DecodeSessionMaterials> {
+    self
+      .get_session_decode_crypto_materials(
+        remote_sender_handle,
+        header_key_id,
+        key_material_scope,
+        initialization_vector,
+      )
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find decode key materials for the CryptoHandle {}",
+          remote_sender_handle
+        )
+      })
+  }
+
+  // Get materials needed for decoding if they exist
+  fn get_session_decode_crypto_materials(
+    &self,
+    remote_sender_handle: CryptoHandle,
+    header_key_id: CryptoTransformKeyId, // what key id was specified on incoming header
+    key_material_scope: KeyMaterialScope,
+    initialization_vector: BuiltinInitializationVector, // as received in header
+  ) -> Option<DecodeSessionMaterials> {
     let KeyMaterial_AES_GCM_GMAC {
       transformation_kind,
       master_salt,
@@ -435,9 +455,7 @@ impl CryptographicBuiltin {
       master_sender_key,
       receiver_specific_key_id,
       master_receiver_specific_key,
-    } = self
-      .get_decode_key_materials(remote_sender_handle, header_key_id)?
-      .select(key_material_scope);
+    } = self.get_decode_key_material(remote_sender_handle, header_key_id, key_material_scope)?;
 
     let transformation_kind = *transformation_kind;
     let session_key = Self::compute_session_key(
@@ -462,7 +480,7 @@ impl CryptographicBuiltin {
       })
     };
 
-    Ok(DecodeSessionMaterials {
+    Some(DecodeSessionMaterials {
       key_id: *sender_key_id,
       transformation_kind,
       session_key,

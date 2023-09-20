@@ -24,9 +24,7 @@ use crate::{
   },
 };
 #[cfg(feature = "security")]
-use crate::security::{
-  cryptographic::types::SecureSubmessageCategory, security_plugins::SecurityPluginsHandle,
-};
+use crate::security::security_plugins::SecurityPluginsHandle;
 #[cfg(feature = "security")]
 use crate::messages::submessages::{secure_postfix::SecurePostfix, secure_prefix::SecurePrefix};
 #[cfg(not(feature = "security"))]
@@ -469,7 +467,7 @@ impl MessageReceiver {
         // Now expecting postfix, and only that.
         match submessage.body {
           SubmessageBody::Security(SecuritySubmessage::SecurePostfix(sec_postfix, _)) => {
-            self.handle_secure_submessage(&sec_prefix, sec_submessage, &sec_postfix);
+            self.handle_secure_submessage(&sec_prefix, &sec_submessage, &sec_postfix);
           }
           other => {
             warn!(
@@ -783,133 +781,105 @@ impl MessageReceiver {
   fn handle_secure_submessage(
     &mut self,
     sec_prefix: &SecurePrefix,
-    encoded_submessage: Submessage,
+    encoded_submessage: &Submessage,
     sec_postfix: &SecurePostfix,
   ) {
     let security_plugins = self.security_plugins.clone();
-    let security_plugins = match security_plugins {
+    match security_plugins {
       None => {
         warn!("Cannot handle secure submessage: No security plugins configured.");
-        return;
       }
-      Some(ref security_plugins_handle) => security_plugins_handle.get_plugins(),
-    };
+      Some(ref security_plugins_handle) => {
+        // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
+        // the submessage contains and then proceed to decode and process accordingly.
 
-    // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
-    // the submessage contains and then proceed to decode and process accordingly.
-
-    match security_plugins.preprocess_secure_submessage(sec_prefix, &self.source_guid_prefix) {
-      Err(e) => {
-        error!("{e:?}");
-      }
-      Ok(SecureSubmessageCategory::InfoSubmessage) => {
-        // DDS Security spec v1.1 Section "8.5.1.9.6 Operation:
-        // preprocess_secure_submsg": decoding does not apply to info
-        // submessages. (But what if someone fakes them? Or must we secure whole
-        // RTPS message then?)
-        drop(security_plugins);
-        self.handle_submessage(encoded_submessage);
-      }
-      Ok(SecureSubmessageCategory::DatawriterSubmessage(sender_receiver_pairs)) => {
-        for (sending_datawriter_crypto_handle, receiving_datareader_crypto_handle) in
-          sender_receiver_pairs
-        {
-          match security_plugins.decode_datawriter_submessage(
-            (
-              sec_prefix.clone(),
-              encoded_submessage.clone(),
-              sec_postfix.clone(),
-            ),
-            receiving_datareader_crypto_handle,
-            sending_datawriter_crypto_handle,
-          ) {
-            Ok(submessage) => {
-              let receiver_entity_id = submessage.receiver_entity_id();
-
-              // If the receiver entity ID is unknown, we try to find the correct id based on
-              // whether it matches the crypto handle
-              if receiver_entity_id == EntityId::UNKNOWN {
-                let sending_writer_entity_id = submessage.sender_entity_id();
-
-                if let Some(target_reader)=self.available_readers.values().find(|target_reader| {
-                  (
-                  // Reader must contain the writer
-                  target_reader.contains_writer(sending_writer_entity_id)
-                      // But there are two exceptions:
-                      // 1. SPDP reader must read from unknown SPDP writers
-                      //  TODO: This logic here is uglyish. Can we just inject a
-                      //  presupposed writer (proxy) to the built-in reader as it is created?
-                      || (sending_writer_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
-                        && target_reader.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_READER)
-                      // 2. ParticipantStatelessReader does not contain any writers, since it is stateless
-                      || (sending_writer_entity_id == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER
-                        && target_reader.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER)
-                      )
-                      &&
-                      security_plugins
-                      .confirm_local_endpoint_guid(receiving_datareader_crypto_handle,
-                        &GUID { prefix: self.dest_guid_prefix,entity_id: target_reader.entity_id() })
-                }){
-                  self.handle_writer_submessage(target_reader.entity_id(), submessage);
-                }else{
-                  error!("No reader matching the CryptoHandle found");
-                }
-              } else {
-                let receiver_guid = GUID {
-                  prefix: self.dest_guid_prefix,
-                  entity_id: receiver_entity_id,
-                };
-                if security_plugins
-                  .confirm_local_endpoint_guid(receiving_datareader_crypto_handle, &receiver_guid)
-                {
-                  self.handle_writer_submessage(receiver_entity_id, submessage);
-                } else {
-                  error!("Destination GUID did not match the handle used for decoding.");
-                }
-              }
-            }
-            Err(sec_err) => {
-              //TODO: Write to security log?
-              warn!("Secured DatawriterSubmessage decode failed: {sec_err:?}");
-            }
+        match security_plugins_handle.get_plugins().decode_submessage(
+          (
+            sec_prefix.clone(),
+            encoded_submessage.clone(),
+            sec_postfix.clone(),
+          ),
+          &self.source_guid_prefix,
+        ) {
+          Err(e) => {
+            error!("Submessage decoding failed: {e:?}");
           }
-        }
-      }
-      Ok(SecureSubmessageCategory::DatareaderSubmessage(sender_receiver_pairs)) => {
-        for (sending_datareader_crypto_handle, receiving_datawriter_crypto_handle) in
-          sender_receiver_pairs
-        {
-          match security_plugins.decode_datareader_submessage(
-            (
-              sec_prefix.clone(),
-              encoded_submessage.clone(),
-              sec_postfix.clone(),
-            ),
-            receiving_datawriter_crypto_handle,
-            sending_datareader_crypto_handle,
-          ) {
-            Ok(submessage) => {
-              let receiver_entity_id = submessage.receiver_entity_id();
+          Ok(crate::security::cryptographic::DecodedSubmessage::Writer(
+            decoded_writer_submessage,
+            approved_receiving_datareader_crypto_handles,
+          )) => {
+            let receiver_entity_id = decoded_writer_submessage.receiver_entity_id();
+
+            // If the receiver entity ID is unknown, we try to find the correct id based on
+            // whether it matches the crypto handle
+            if receiver_entity_id == EntityId::UNKNOWN {
+              let sending_writer_entity_id = decoded_writer_submessage.sender_entity_id();
+
+              if let Some(target_reader)=self.available_readers.values().find(|target_reader| {
+                (
+                // Reader must contain the writer
+                target_reader.contains_writer(sending_writer_entity_id)
+                    // But there are two exceptions:
+                    // 1. SPDP reader must read from unknown SPDP writers
+                    //  TODO: This logic here is uglyish. Can we just inject a
+                    //  presupposed writer (proxy) to the built-in reader as it is created?
+                    || (sending_writer_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
+                      && target_reader.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_READER)
+                    // 2. ParticipantStatelessReader does not contain any writers, since it is stateless
+                    || (sending_writer_entity_id == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER
+                      && target_reader.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER)
+                    )
+                    &&
+                    security_plugins_handle.get_plugins()
+                    .confirm_local_endpoint_guid(&approved_receiving_datareader_crypto_handles,
+                      &GUID { prefix: self.dest_guid_prefix,entity_id: target_reader.entity_id() })
+              }){
+                self.handle_writer_submessage(target_reader.entity_id(), decoded_writer_submessage);
+              }else{
+                error!("No reader matching the CryptoHandle found");
+              }
+            } else {
               let receiver_guid = GUID {
                 prefix: self.dest_guid_prefix,
                 entity_id: receiver_entity_id,
               };
-              if security_plugins
-                .confirm_local_endpoint_guid(receiving_datawriter_crypto_handle, &receiver_guid)
+              if security_plugins_handle
+                .get_plugins()
+                .confirm_local_endpoint_guid(
+                  &approved_receiving_datareader_crypto_handles,
+                  &receiver_guid,
+                )
               {
-                self.handle_reader_submessage(submessage);
+                self.handle_writer_submessage(receiver_entity_id, decoded_writer_submessage);
               } else {
                 error!("Destination GUID did not match the handle used for decoding.");
               }
             }
-            Err(sec_err) => {
-              //TODO: Write to security log?
-              warn!("Secured DatareaderSubmessage decode failed: {sec_err:?}");
+          }
+          Ok(crate::security::cryptographic::DecodedSubmessage::Reader(
+            decoded_reader_submessage,
+            approved_receiving_datawriter_crypto_handles,
+          )) => {
+            let receiver_entity_id = decoded_reader_submessage.receiver_entity_id();
+            let receiver_guid = GUID {
+              prefix: self.dest_guid_prefix,
+              entity_id: receiver_entity_id,
+            };
+            if security_plugins_handle
+              .get_plugins()
+              .confirm_local_endpoint_guid(
+                &approved_receiving_datawriter_crypto_handles,
+                &receiver_guid,
+              )
+            {
+              self.handle_reader_submessage(decoded_reader_submessage);
+            } else {
+              error!("Destination GUID did not match the handle used for decoding.");
             }
           }
         }
       }
-    }
+    };
   }
 
   fn handle_interpreter_submessage(&mut self, interp_subm: InterpreterSubmessage)
