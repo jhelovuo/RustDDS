@@ -9,10 +9,11 @@ use std::sync::PoisonError;
 
 use crate::{
   no_key::wrappers::NoKeyWrapper,
-  security::SecurityError,
   serialization::{cdr_deserializer, cdr_serializer},
   TopicKind,
 };
+#[cfg(feature = "security")]
+use crate::security::SecurityError;
 
 /// Error type for DDS "read" type operations.
 #[derive(Debug, thiserror::Error)]
@@ -210,6 +211,7 @@ pub enum CreateError {
   #[error("Resource allocation failed: {reason}")]
   OutOfResources { reason: String },
 
+  #[cfg(feature = "security")]
   #[error("Not allowed by security: {reason}")]
   NotAllowedBySecurity { reason: String },
 }
@@ -265,6 +267,7 @@ macro_rules! create_error_out_of_resources {
 }
 
 #[doc(hidden)]
+#[cfg(feature = "security")]
 #[macro_export]
 macro_rules! create_error_not_allowed_by_security {
   ($($arg:tt)*) => (
@@ -282,6 +285,7 @@ impl<T> From<PoisonError<T>> for CreateError {
   }
 }
 
+#[cfg(feature = "security")]
 impl From<SecurityError> for CreateError {
   fn from(security_error: SecurityError) -> Self {
     CreateError::NotAllowedBySecurity {

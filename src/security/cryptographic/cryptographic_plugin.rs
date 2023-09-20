@@ -180,11 +180,8 @@ pub trait CryptoTransform: Send {
   /// encode_datawriter_submessage: section 8.5.1.9.2 of the Security
   /// specification (v. 1.1)
   ///
-  /// In an [EncodeResult], return the submessages that would be written in
+  /// Return the submessages that would be written in
   /// `encoded_rtps_submessage`.
-  /// In case of [EncodeResult::One], the same result will be use for all
-  /// receivers, while [EncodeResult::Many] shall contain a result for each
-  /// receiving datareader in `receiving_datareader_crypto_list`.
   /// `receiving_datareader_crypto_list_index` is dropped.
   ///
   /// # Panics
@@ -200,11 +197,8 @@ pub trait CryptoTransform: Send {
   /// encode_datareader_submessage: section 8.5.1.9.3 of the Security
   /// specification (v. 1.1)
   ///
-  /// In an [EncodeResult], return the submessages that would be written in
+  /// Return the submessages that would be written in
   /// `encoded_rtps_submessage`.
-  /// In case of [EncodeResult::One], the same result will be use for all
-  /// receivers, while [EncodeResult::Many] shall contain a result for each
-  /// receiving datawriter in `receiving_datawriter_crypto_list`.
   ///
   /// # Panics
   /// The function may panic if `plain_rtps_submessage.body` is not
@@ -219,15 +213,12 @@ pub trait CryptoTransform: Send {
   /// encode_rtps_message: section 8.5.1.9.4 of the Security specification (v.
   /// 1.1)
   ///
-  /// In an [EncodeResult], return the message that would be written in
+  /// Return the message that would be written in
   /// `encoded_rtps_message`.
-  /// In case of [EncodeResult::One], the same result will be use for all
-  /// receivers, while [EncodeResult::Many] shall contain a result for each
-  /// receiving participant in `receiving_participant_crypto_list`.
   /// in the case that no transformation is performed and the plain message
-  /// should be sent, the plain message shall be returned in
-  /// [EncodeResult::One] (instead of returning false, see the spec).
-  /// `receiving_participant_crypto_list_index` is dropped.
+  /// should be sent, the plain message shall be returned (instead of returning
+  /// false, see the spec). `receiving_participant_crypto_list_index` is
+  /// dropped.
   fn encode_rtps_message(
     &self,
     plain_rtps_message: Message,

@@ -76,6 +76,7 @@ pub const STANDARD_BUILTIN_WRITERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[
 ];
 
 // Helper list for initializing the authentication topic built-in reader
+#[cfg(feature = "security")]
 pub const AUTHENTICATION_BUILTIN_READERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[(
   EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
   EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
@@ -83,6 +84,7 @@ pub const AUTHENTICATION_BUILTIN_READERS_INIT_LIST: &[(EntityId, EntityId, u32)]
 )];
 
 // Helper list for initializing the authentication topic built-in writer
+#[cfg(feature = "security")]
 pub const AUTHENTICATION_BUILTIN_WRITERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[(
   EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
   EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
@@ -90,6 +92,7 @@ pub const AUTHENTICATION_BUILTIN_WRITERS_INIT_LIST: &[(EntityId, EntityId, u32)]
 )];
 
 // Helper list for initializing remote secure built-in readers
+#[cfg(feature = "security")]
 pub const SECURE_BUILTIN_READERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[
   (
     EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER, // SPDP
@@ -119,6 +122,7 @@ pub const SECURE_BUILTIN_READERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[
 ];
 
 // Helper list for initializing remote secure built-in writers
+#[cfg(feature = "security")]
 pub const SECURE_BUILTIN_WRITERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[
   (
     EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER, // SPDP
@@ -152,7 +156,7 @@ pub const SECURE_BUILTIN_WRITERS_INIT_LIST: &[(EntityId, EntityId, u32)] = &[
 // This list is used for detecting if a built-in reader needs to be secure.
 // TODO: STANDARD_BUILTIN_READERS_INIT_LIST already contains these
 // EntityIds. Could we use that list directly and get rid of this one?
-#[allow(dead_code)] // TODO: remove list if no use
+#[cfg(feature = "security")]
 pub const SECURE_BUILTIN_READER_ENTITY_IDS: &[EntityId] = &[
   EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_READER,
   EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_READER,
@@ -165,7 +169,7 @@ pub const SECURE_BUILTIN_READER_ENTITY_IDS: &[EntityId] = &[
 // This list is used for detecting if a built-in writer needs to be secure.
 // TODO: STANDARD_BUILTIN_WRITERS_INIT_LIST already contains these
 // EntityIds. Could we use that list directly and get rid of this one?
-#[allow(dead_code)] // TODO: remove list if no use
+#[cfg(feature = "security")]
 pub const SECURE_BUILTIN_WRITER_ENTITY_IDS: &[EntityId] = &[
   EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER,
   EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_WRITER,
@@ -283,6 +287,10 @@ pub(crate) enum DiscoveryNotificationType {
   AssertTopicLiveliness {
     writer_guid: GUID,
     manual_assertion: bool,
+  },
+  #[cfg(feature = "security")]
+  ParticipantAuthenticationStatusChanged {
+    guid_prefix: GuidPrefix,
   },
 }
 

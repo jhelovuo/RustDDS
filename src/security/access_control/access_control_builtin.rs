@@ -153,12 +153,7 @@ impl AccessControlBuiltin {
     partitions: &[&str],
     data_tags: &[(&str, &str)],
     entity_kind: &Entity,
-  ) -> SecurityResult<()> {
-    // TODO: remove after testing
-    if true {
-      return Ok(());
-    }
-
+  ) -> SecurityResult<bool> {
     let grant = self.get_grant(&permissions_handle)?;
     let domain_rule = self.get_domain_rule(&permissions_handle)?;
 
@@ -203,17 +198,7 @@ impl AccessControlBuiltin {
       Entity::Topic => participant_has_write_access || participant_has_read_access,
     };
 
-    (requested_access_is_unprotected || participant_has_requested_access)
-      .then_some(())
-      .ok_or_else(|| {
-        security_error!(
-          "The participant has no {} access to the topic.",
-          match entity_kind {
-            Entity::Datawriter => "write",
-            Entity::Datareader => "read",
-            Entity::Topic => "write nor read",
-          }
-        )
-      })
+    let check_passed = requested_access_is_unprotected || participant_has_requested_access;
+    Ok(check_passed)
   }
 }

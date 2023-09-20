@@ -44,7 +44,7 @@ impl CryptographicBuiltin {
       .map_err(|err| security_error!("Error converting Submessage to byte vector: {}", err))?;
 
     // Get the key material for encoding
-    let EncryptSessionMaterials {
+    let EncodeSessionMaterials {
       key_id,
       transformation_kind,
       session_key,
@@ -107,7 +107,7 @@ impl CryptographicBuiltin {
   fn decode_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_endpoint_crypto_handle: DatareaderCryptoHandle,
+    _receiving_endpoint_crypto_handle: DatareaderCryptoHandle,
     sending_endpoint_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<SubmessageBody> {
     // Destructure header and footer
@@ -201,7 +201,7 @@ impl CryptoTransform for CryptographicBuiltin {
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
     // Get the key material for encrypting serialized payloads
-    let EncryptSessionMaterials {
+    let EncodeSessionMaterials {
       key_id,
       transformation_kind,
       session_key,
@@ -317,7 +317,7 @@ impl CryptoTransform for CryptographicBuiltin {
     .concat();
 
     // Get the key material for encoding
-    let EncryptSessionMaterials {
+    let EncodeSessionMaterials {
       key_id,
       transformation_kind,
       session_key,
@@ -594,10 +594,12 @@ impl CryptoTransform for CryptographicBuiltin {
     let sending_participant_endpoints = self
       .participant_to_endpoint_info
       .get(&sending_participant_crypto_handle)
-      .ok_or(security_error!(
-        "Could not find registered entities for the sending_participant_crypto_handle {}",
-        sending_participant_crypto_handle
-      ))?;
+      .ok_or_else(|| {
+        security_error!(
+          "Could not find registered entities for the sending_participant_crypto_handle {}",
+          sending_participant_crypto_handle
+        )
+      })?;
 
     let mut datawriter_submessage_handle_pairs =
       Vec::<(DatawriterCryptoHandle, DatareaderCryptoHandle)>::new();
@@ -627,10 +629,12 @@ impl CryptoTransform for CryptographicBuiltin {
           let matched_local_endpoint_crypto_handle = *self
             .matched_local_endpoint
             .get(&remote_endpoint_crypto_handle)
-            .ok_or(security_error!(
-              "The local endpoint matched to the remote endpoint crypto handle {} is missing.",
-              remote_endpoint_crypto_handle
-            ))?;
+            .ok_or_else(|| {
+              security_error!(
+                "The local endpoint matched to the remote endpoint crypto handle {} is missing.",
+                remote_endpoint_crypto_handle
+              )
+            })?;
           match kind {
             EndpointKind::DataWriter => datawriter_submessage_handle_pairs.push((
               remote_endpoint_crypto_handle,

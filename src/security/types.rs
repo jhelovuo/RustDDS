@@ -366,16 +366,6 @@ impl DataHolderBuilder {
     }
   }
 
-  pub fn add_property(mut self, name: &str, value: String, propagate: bool) -> Self {
-    let property = Property {
-      name: name.to_string(),
-      value,
-      propagate,
-    };
-    self.properties.push(property);
-    self
-  }
-
   pub fn add_property_opt(mut self, name: &str, value: Option<String>, propagate: bool) -> Self {
     if let Some(value) = value {
       let property = Property {
@@ -520,8 +510,13 @@ impl<C: Context> Writable<C> for DataHolder {
 pub(super) struct PluginClassId {
   plugin_class_name: String,
   major_version: String, // Can be changed to number if needed
+  #[allow(dead_code)]
   minor_version: String, // Can be changed to number if needed
 }
+
+// TODO: This struct should be used in
+// auhtentication/authentication_builtin/types.rs instead of fixed strings.
+
 impl PluginClassId {
   pub fn matches_up_to_major_version(
     &self,
@@ -589,7 +584,7 @@ impl TryFrom<String> for PluginClassId {
 }
 
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
-pub type Token = DataHolder;
+//pub type Token = DataHolder; // never actually used in code.
 
 // DDS Security spec v1.1 Section 7.2.7 ParticipantSecurityInfo
 // This is communicated over Discovery
@@ -702,10 +697,12 @@ pub enum EndpointSecurityAttributesMaskFlags {
 pub struct EndpointSecurityAttributesMask(pub BitFlags<EndpointSecurityAttributesMaskFlags>);
 
 impl EndpointSecurityAttributesMask {
-  pub fn is_valid(&self) -> bool {
-    let Self(value) = self;
-    value.contains(EndpointSecurityAttributesMaskFlags::IsValid)
-  }
+  // currently unused
+
+  // pub fn is_valid(&self) -> bool {
+  //   let Self(value) = self;
+  //   value.contains(EndpointSecurityAttributesMaskFlags::IsValid)
+  // }
 }
 
 impl<'a, C: Context> Readable<'a, C> for EndpointSecurityAttributesMask {
@@ -839,6 +836,16 @@ impl Keyed for PublicationBuiltinTopicDataSecure {
     self.discovered_writer_data.key()
   }
 }
+
+impl From<discovery::sedp_messages::DiscoveredWriterData> for PublicationBuiltinTopicDataSecure {
+  fn from(dwd: discovery::sedp_messages::DiscoveredWriterData) -> Self {
+    Self {
+      discovered_writer_data: dwd,
+      data_tags: qos::policy::DataTag::default(),
+    }
+  }
+}
+
 impl PlCdrDeserialize for PublicationBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
@@ -898,6 +905,15 @@ impl Keyed for SubscriptionBuiltinTopicDataSecure {
     self.discovered_reader_data.key()
   }
 }
+impl From<discovery::sedp_messages::DiscoveredReaderData> for SubscriptionBuiltinTopicDataSecure {
+  fn from(drd: discovery::sedp_messages::DiscoveredReaderData) -> Self {
+    Self {
+      discovered_reader_data: drd,
+      data_tags: qos::policy::DataTag::default(),
+    }
+  }
+}
+
 impl PlCdrDeserialize for SubscriptionBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
@@ -961,6 +977,38 @@ impl Keyed for ParticipantStatelessMessage {
 
   fn key(&self) -> Self::K {
     self.generic.key()
+  }
+}
+
+impl From<ParticipantGenericMessage> for ParticipantStatelessMessage {
+  fn from(msg: ParticipantGenericMessage) -> Self {
+    Self { generic: msg }
+  }
+}
+
+pub const VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME: &str = "dds.sec.builtin_endpoint_name";
+pub const VOLATILE_WRITER_RECOGNITION_PROPERTY_VALUE: &str =
+  "BuiltinParticipantVolatileMessageSecureWriter";
+pub const VOLATILE_READER_RECOGNITION_PROPERTY_VALUE: &str =
+  "BuiltinParticipantVolatileMessageSecureReader";
+
+// Property from which crypto plugin detects a volatile writer
+// See 8.8.8.1 of the Security spec
+pub fn volatile_writer_recognition_property() -> Property {
+  Property {
+    name: VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME.to_string(),
+    value: VOLATILE_WRITER_RECOGNITION_PROPERTY_VALUE.to_string(),
+    propagate: false,
+  }
+}
+
+// Property from which crypto plugin detects a volatile reader
+// See 8.8.8.1 of the Security spec
+pub fn volatile_reader_recognition_property() -> Property {
+  Property {
+    name: VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME.to_string(),
+    value: VOLATILE_READER_RECOGNITION_PROPERTY_VALUE.to_string(),
+    propagate: false,
   }
 }
 

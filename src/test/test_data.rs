@@ -142,55 +142,53 @@ pub(crate) fn spdp_participant_msg_mod(port: u16) -> Message {
   for submsg in &mut tdata.submessages {
     let mut submsglen = submsg.header.content_length;
     match &mut submsg.body {
-      SubmessageBody::Writer(v) => match v {
-        WriterSubmessage::Data(d, _) => {
-          let mut participant_data: SpdpDiscoveredParticipantData =
-            PlCdrDeserializerAdapter::<SpdpDiscoveredParticipantData>::from_bytes(
-              &d.no_crypto_decoded()
-                .serialized_payload
-                .as_ref()
-                .unwrap()
-                .value,
-              RepresentationIdentifier::PL_CDR_LE,
-            )
-            .unwrap();
-          participant_data.metatraffic_unicast_locators[0] =
-            Locator::from(SocketAddr::new("127.0.0.1".parse().unwrap(), port));
-          participant_data.metatraffic_multicast_locators.clear();
-          participant_data.default_unicast_locators.clear();
-          participant_data.default_multicast_locators.clear();
+      SubmessageBody::Writer(WriterSubmessage::Data(d, _)) => {
+        let mut participant_data: SpdpDiscoveredParticipantData =
+          PlCdrDeserializerAdapter::<SpdpDiscoveredParticipantData>::from_bytes(
+            &d.no_crypto_decoded()
+              .serialized_payload
+              .as_ref()
+              .unwrap()
+              .value,
+            RepresentationIdentifier::PL_CDR_LE,
+          )
+          .unwrap();
+        participant_data.metatraffic_unicast_locators[0] =
+          Locator::from(SocketAddr::new("127.0.0.1".parse().unwrap(), port));
+        participant_data.metatraffic_multicast_locators.clear();
+        participant_data.default_unicast_locators.clear();
+        participant_data.default_multicast_locators.clear();
 
-          let datalen = d
+        let datalen = d
+          .no_crypto_decoded()
+          .serialized_payload
+          .as_ref()
+          .unwrap()
+          .value
+          .len() as u16;
+        data = participant_data
+          .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+          .unwrap();
+        // data = Bytes::from(
+        //   to_bytes::<SpdpDiscoveredParticipantData,
+        // byteorder::LittleEndian>(&participant_data)     .unwrap(),
+        // );
+        d.no_crypto_decoded()
+          .serialized_payload
+          .as_mut()
+          .unwrap()
+          .value = data.clone();
+        submsglen = submsglen
+          + d
             .no_crypto_decoded()
             .serialized_payload
             .as_ref()
             .unwrap()
             .value
-            .len() as u16;
-          data = participant_data
-            .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
-            .unwrap();
-          // data = Bytes::from(
-          //   to_bytes::<SpdpDiscoveredParticipantData,
-          // byteorder::LittleEndian>(&participant_data)     .unwrap(),
-          // );
-          d.no_crypto_decoded()
-            .serialized_payload
-            .as_mut()
-            .unwrap()
-            .value = data.clone();
-          submsglen = submsglen
-            + d
-              .no_crypto_decoded()
-              .serialized_payload
-              .as_ref()
-              .unwrap()
-              .value
-              .len() as u16
-            - datalen;
-        }
-        _ => continue,
-      },
+            .len() as u16
+          - datalen;
+      }
+
       SubmessageBody::Interpreter(_) => (),
       _ => continue,
     }
@@ -208,23 +206,19 @@ pub(crate) fn spdp_participant_data() -> Option<SpdpDiscoveredParticipantData> {
 
   for submsg in &submsgs {
     match &submsg.body {
-      SubmessageBody::Writer(v) => match v {
-        WriterSubmessage::Data(d, _) => {
-          let participant_data: SpdpDiscoveredParticipantData =
-            PlCdrDeserializerAdapter::from_bytes(
-              &d.no_crypto_decoded()
-                .serialized_payload
-                .as_ref()
-                .unwrap()
-                .value,
-              RepresentationIdentifier::PL_CDR_LE,
-            )
-            .unwrap();
+      SubmessageBody::Writer(WriterSubmessage::Data(d, _)) => {
+        let participant_data: SpdpDiscoveredParticipantData = PlCdrDeserializerAdapter::from_bytes(
+          &d.no_crypto_decoded()
+            .serialized_payload
+            .as_ref()
+            .unwrap()
+            .value,
+          RepresentationIdentifier::PL_CDR_LE,
+        )
+        .unwrap();
 
-          return Some(participant_data);
-        }
-        _ => continue,
-      },
+        return Some(participant_data);
+      }
       SubmessageBody::Interpreter(_) => (),
       _ => continue,
     }
@@ -337,6 +331,7 @@ pub(crate) fn publication_builtin_topic_data() -> Option<PublicationBuiltinTopic
     related_datareader_key: None,
     service_instance_name: None,
     topic_aliases: None,
+    #[cfg(feature = "security")]
     security_info: None,
   };
 
@@ -392,7 +387,7 @@ pub(crate) fn content_filter_data() -> Option<ContentFilterProperty> {
 
 #[allow(dead_code)]
 pub(crate) fn create_rtps_data_message<D: PlCdrSerialize>(
-  data: D,
+  data: &D,
   reader_id: EntityId,
   writer_id: EntityId,
 ) -> Message {
@@ -444,7 +439,7 @@ pub(crate) fn create_rtps_data_message<D: PlCdrSerialize>(
 }
 
 pub(crate) fn create_cdr_pl_rtps_data_message<D: PlCdrSerialize>(
-  data: D,
+  data: &D,
   reader_id: EntityId,
   writer_id: EntityId,
 ) -> Message {

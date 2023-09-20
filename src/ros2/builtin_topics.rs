@@ -33,6 +33,7 @@ impl ROSDiscoveryTopic {
     lifespan: Some(Lifespan {
       duration: Duration::DURATION_INFINITE,
     }),
+    #[cfg(feature = "security")]
     property: None,
   };
 
@@ -70,6 +71,7 @@ impl ParameterEventsTopic {
     history: Some(History::KeepLast { depth: 1 }),
     resource_limits: None,
     lifespan: None,
+    #[cfg(feature = "security")]
     property: None,
   };
 
@@ -113,6 +115,7 @@ impl RosOutTopic {
     lifespan: Some(Lifespan {
       duration: Duration::from_secs(10),
     }),
+    #[cfg(feature = "security")]
     property: None,
   };
 

@@ -33,9 +33,8 @@ use crate::{
   rtps::{
     constant::{NACK_RESPONSE_DELAY, NACK_SUPPRESSION_DURATION},
     rtps_reader_proxy::RtpsReaderProxy,
-    Message, MessageBuilder, Submessage,
+    Message, MessageBuilder,
   },
-  security::{security_plugins::SecurityPluginsHandle, SecurityResult},
   structure::{
     cache_change::CacheChange,
     dds_cache::TopicCache,
@@ -47,6 +46,13 @@ use crate::{
     time::Timestamp,
   },
 };
+#[cfg(feature = "security")]
+use crate::{
+  rtps::Submessage,
+  security::{security_plugins::SecurityPluginsHandle, SecurityResult},
+};
+#[cfg(not(feature = "security"))]
+use crate::no_security::SecurityPluginsHandle;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum DeliveryMode {
@@ -368,16 +374,6 @@ impl Writer {
         }
       })
       .collect()
-  }
-
-  // TODO:
-  // please explain why this is needed and why does it make sense.
-  // Used by dp_event_loop.
-  pub fn notify_new_data_to_all_readers(&mut self) {
-    // removed, because it causes ghost sequence numbers.
-    // for reader_proxy in self.readers.iter_mut() {
-    //   reader_proxy.notify_new_cache_change(self.last_change_sequence_number);
-    // }
   }
 
   // --------------------------------------------------------------
@@ -1238,16 +1234,18 @@ impl Writer {
     self.heartbeat_message_counter += 1;
   }
 
+  #[cfg(feature = "security")]
   fn security_encode(
     &self,
     message: Message,
-    readers: &mut dyn Iterator<Item = &RtpsReaderProxy>,
+    readers: &[&RtpsReaderProxy],
   ) -> SecurityResult<Message> {
     // If we have security plugins, use them, otherwise pass through
     if let Some(security_plugins_handle) = &self.security_plugins {
       // Get the source and destination GUIDs
       let source_guid = self.guid();
       let destination_guid_list: Vec<GUID> = readers
+        .iter()
         .map(|reader_proxy| reader_proxy.remote_reader_guid)
         .collect();
       // Destructure
@@ -1299,7 +1297,14 @@ impl Writer {
     // unicast and multicast locators for each reader only on every reader update,
     // and not find it dynamically on every message.
 
-    match self.security_encode(message, readers) {
+    let readers = readers.collect::<Vec<_>>(); // clone iterator
+
+    #[cfg(feature = "security")]
+    let encoded = self.security_encode(message, &readers);
+    #[cfg(not(feature = "security"))]
+    let encoded: Result<Message, ()> = Ok(message);
+
+    match encoded {
       Ok(message) => {
         let buffer = message.write_to_vec_with_ctx(self.endianness).unwrap();
         let mut already_sent_to = BTreeSet::new();
@@ -1383,10 +1388,8 @@ impl Writer {
             total: CountWithChange::new(self.matched_readers_count_total, change),
             current: CountWithChange::new(self.readers.len() as i32, change),
           });
-          // send out heartbeat, so that new reader can catch up
-          if let Some(Reliability::Reliable { .. }) = self.qos_policies.reliability {
-            self.notify_new_data_to_all_readers();
-          }
+          // If we're reliable, should we send out a heartbeat so that new reader can
+          // catch up?
           info!(
             "Matched new remote reader on topic={:?} reader={:?}",
             self.topic_name(),
@@ -1402,6 +1405,11 @@ impl Writer {
           bad_policy_id,
           self.topic_name()
         );
+        info!(
+          "Reader QoS={:?} Writer QoS={:?}",
+          requested_qos, self.qos_policies
+        );
+
         self.requested_incompatible_qos_count += 1;
         self.send_status(DataWriterStatus::OfferedIncompatibleQos {
           count: CountWithChange::new(self.requested_incompatible_qos_count, 1),

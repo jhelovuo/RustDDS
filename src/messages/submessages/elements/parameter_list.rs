@@ -38,6 +38,7 @@ impl ParameterList {
     self.parameters.push(p);
   }
 
+  #[cfg(feature = "security")]
   pub fn concat(&mut self, other_parameter_list: ParameterList) {
     self.parameters = [self.parameters.clone(), other_parameter_list.parameters].concat();
   }

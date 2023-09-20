@@ -115,3 +115,13 @@ impl<C: Context> Writable<C> for SerializedPayload {
     Ok(())
   }
 }
+
+// TODO: Should this be fallibe try_from instead?
+// The speedy write_to_buffer() call could in theory fail, but it is hard to see
+// how.
+impl From<SerializedPayload> for Bytes {
+  fn from(sp: SerializedPayload) -> Bytes {
+    let buf = sp.write_to_vec().unwrap(); //TODO: deal with (unlikely) error
+    buf.into()
+  }
+}

@@ -4,10 +4,10 @@ use std::{
   sync::{Arc, Mutex, MutexGuard},
 };
 
-#[allow(unused_imports)]
-use log::{debug, error, info, trace, warn};
+use log::{debug, error};
 
 use crate::{
+  discovery::{DiscoveredReaderData, DiscoveredWriterData},
   messages::submessages::{
     elements::parameter_list::ParameterList,
     secure_postfix::SecurePostfix,
@@ -15,9 +15,9 @@ use crate::{
     submessage::{ReaderSubmessage, WriterSubmessage},
   },
   qos,
-  rtps::{Message, Submessage},
+  rtps::{Message, Submessage, SubmessageBody},
   security_error,
-  structure::guid::GuidPrefix,
+  structure::guid::{EntityId, GuidPrefix},
   QosPolicies, GUID,
 };
 use super::{
@@ -41,7 +41,8 @@ pub(crate) struct SecurityPlugins {
   permissions_handle_cache: HashMap<GuidPrefix, PermissionsHandle>,
   handshake_handle_cache: HashMap<GuidPrefix, HandshakeHandle>,
 
-  participant_crypto_handle_cache: HashMap<GuidPrefix, ParticipantCryptoHandle>,
+  local_participant_crypto_handle: Option<ParticipantCryptoHandle>,
+  remote_participant_crypto_handle_cache: HashMap<GuidPrefix, ParticipantCryptoHandle>,
   local_endpoint_crypto_handle_cache: HashMap<GUID, EndpointCryptoHandle>,
   remote_endpoint_crypto_handle_cache: HashMap<(GUID, GUID), EndpointCryptoHandle>,
 
@@ -68,7 +69,8 @@ impl SecurityPlugins {
       identity_handle_cache: HashMap::new(),
       permissions_handle_cache: HashMap::new(),
       handshake_handle_cache: HashMap::new(),
-      participant_crypto_handle_cache: HashMap::new(),
+      local_participant_crypto_handle: None,
+      remote_participant_crypto_handle_cache: HashMap::new(),
       local_endpoint_crypto_handle_cache: HashMap::new(),
       remote_endpoint_crypto_handle_cache: HashMap::new(),
 
@@ -119,12 +121,18 @@ impl SecurityPlugins {
       .copied()
   }
 
-  fn get_participant_crypto_handle(
+  fn get_local_participant_crypto_handle(&self) -> SecurityResult<ParticipantCryptoHandle> {
+    self
+      .local_participant_crypto_handle
+      .ok_or_else(|| security_error("Local participant crypto handle has not been set"))
+  }
+
+  fn get_remote_participant_crypto_handle(
     &self,
     guid_prefix: &GuidPrefix,
   ) -> SecurityResult<ParticipantCryptoHandle> {
     self
-      .participant_crypto_handle_cache
+      .remote_participant_crypto_handle_cache
       .get(guid_prefix)
       .ok_or_else(|| {
         security_error!(
@@ -146,6 +154,52 @@ impl SecurityPlugins {
         )
       })
       .copied()
+  }
+
+  fn insert_to_identity_handle_cache(
+    &mut self,
+    participant_guidp: GuidPrefix,
+    handle: IdentityHandle,
+  ) {
+    let old_opt = self.identity_handle_cache.insert(participant_guidp, handle);
+    if let Some(old) = old_opt {
+      debug!(
+        "Replaced IdentityHandle for guid prefix {:?}. Old: {}, new: {}",
+        participant_guidp, old, handle
+      );
+    }
+  }
+
+  fn insert_to_permissions_handle_cache(
+    &mut self,
+    participant_guidp: GuidPrefix,
+    handle: PermissionsHandle,
+  ) {
+    let old_opt = self
+      .permissions_handle_cache
+      .insert(participant_guidp, handle);
+    if let Some(old) = old_opt {
+      debug!(
+        "Replaced PermissionsHandle for guid prefix {:?}. Old: {}, new: {}",
+        participant_guidp, old, handle
+      );
+    }
+  }
+
+  fn insert_to_remote_participant_crypto_handle_cache(
+    &mut self,
+    participant_guidp: GuidPrefix,
+    handle: ParticipantCryptoHandle,
+  ) {
+    let old_opt = self
+      .remote_participant_crypto_handle_cache
+      .insert(participant_guidp, handle);
+    if let Some(old) = old_opt {
+      debug!(
+        "Replaced ParticipantCryptoHandle for guid prefix {:?}. Old: {}, new: {}",
+        participant_guidp, old, handle
+      );
+    }
   }
 
   // Checks whether the given guid matches the given handle
@@ -185,12 +239,18 @@ impl SecurityPlugins {
   fn store_remote_endpoint_crypto_handle(
     &mut self,
     (local_endpoint_guid, remote_endpoint_guid): (GUID, GUID),
-    remote_crypto_handle: EndpointCryptoHandle,
+    handle: EndpointCryptoHandle,
   ) {
     let local_and_remote_guid_pair = (local_endpoint_guid, remote_endpoint_guid);
-    self
+    let old_opt = self
       .remote_endpoint_crypto_handle_cache
-      .insert(local_and_remote_guid_pair, remote_crypto_handle);
+      .insert(local_and_remote_guid_pair, handle);
+    if let Some(old) = old_opt {
+      debug!(
+        "Replaced EndpointCryptoHandle for guid pair {:?}. Old: {}, new: {}",
+        local_and_remote_guid_pair, old, handle
+      );
+    }
   }
 }
 
@@ -209,9 +269,7 @@ impl SecurityPlugins {
 
     if let ValidationOutcome::Ok = outcome {
       // Everything OK, store handle and return GUID
-      self
-        .identity_handle_cache
-        .insert(sec_guid.prefix, identity_handle);
+      self.insert_to_identity_handle_cache(sec_guid.prefix, identity_handle);
       Ok(sec_guid)
     } else {
       // If the builtin authentication does not fail, it should produce only OK
@@ -266,9 +324,7 @@ impl SecurityPlugins {
     )?;
 
     // Add remote identity handle to cache
-    self
-      .identity_handle_cache
-      .insert(remote_participant_guidp, remote_id_handle);
+    self.insert_to_identity_handle_cache(remote_participant_guidp, remote_id_handle);
 
     Ok((outcome, auth_req_token_opt))
   }
@@ -348,7 +404,7 @@ impl SecurityPlugins {
     &self,
     remote_participant_guidp: GuidPrefix,
   ) -> SecurityResult<SharedSecretHandle> {
-    let handle = self.get_handshake_handle(&remote_participant_guidp)?;
+    let handle = self.get_identity_handle(&remote_participant_guidp)?;
     self.auth.get_shared_secret(handle)
   }
 }
@@ -368,9 +424,7 @@ impl SecurityPlugins {
       domain_id,
       participant_qos,
     )?;
-    self
-      .permissions_handle_cache
-      .insert(participant_guidp, permissions_handle);
+    self.insert_to_permissions_handle_cache(participant_guidp, permissions_handle);
     Ok(())
   }
 
@@ -392,9 +446,7 @@ impl SecurityPlugins {
       remote_credential_token,
     )?;
 
-    self
-      .permissions_handle_cache
-      .insert(remote_participant_guidp, permissions_handle);
+    self.insert_to_permissions_handle_cache(remote_participant_guidp, permissions_handle);
     Ok(())
   }
 
@@ -403,7 +455,7 @@ impl SecurityPlugins {
     domain_id: u16,
     participant_guidp: GuidPrefix,
     qos: &QosPolicies,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let handle = self.get_permissions_handle(&participant_guidp)?;
     self.access.check_create_participant(handle, domain_id, qos)
   }
@@ -412,11 +464,45 @@ impl SecurityPlugins {
     &self,
     domain_id: u16,
     participant_guidp: GuidPrefix,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let handle = self.get_permissions_handle(&participant_guidp)?;
     self
       .access
       .check_remote_participant(handle, domain_id, None)
+  }
+
+  // This function is called when DataReaders from non-secure discovery
+  // need to be checked
+  pub fn check_remote_datareader_from_nonsecure(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    reader_data: &DiscoveredReaderData,
+  ) -> SecurityResult<(bool, bool)> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    // Convert normal DiscoveredReaderData to SubscriptionBuiltinTopicDataSecure,
+    // which is what Access control plugin expects
+    let secure_sub_data = SubscriptionBuiltinTopicDataSecure::from(reader_data.clone());
+    self
+      .access
+      .check_remote_datareader(handle, domain_id, &secure_sub_data)
+  }
+
+  // This function is called when DataWriters from non-secure discovery
+  // need to be checked
+  pub fn check_remote_datawriter_from_nonsecure(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    writer_data: &DiscoveredWriterData,
+  ) -> SecurityResult<bool> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    // Convert normal DiscoveredWriterData to PublicationBuiltinTopicDataSecure,
+    // which is what Access control plugin expects
+    let secure_pub_data = PublicationBuiltinTopicDataSecure::from(writer_data.clone());
+    self
+      .access
+      .check_remote_datawriter(handle, domain_id, &secure_pub_data)
   }
 
   pub fn get_permissions_token(
@@ -441,6 +527,17 @@ impl SecurityPlugins {
   ) -> SecurityResult<ParticipantSecurityAttributes> {
     let handle: PermissionsHandle = self.get_permissions_handle(&participant_guidp)?;
     self.access.get_participant_sec_attributes(handle)
+  }
+
+  pub fn get_topic_sec_attributes(
+    &self,
+    participant_guidp: GuidPrefix,
+    topic_name: &str,
+  ) -> SecurityResult<TopicSecurityAttributes> {
+    let permissions_handle = self.get_permissions_handle(&participant_guidp)?;
+    self
+      .access
+      .get_topic_sec_attributes(permissions_handle, topic_name)
   }
 
   pub fn get_reader_sec_attributes(
@@ -492,9 +589,7 @@ impl SecurityPlugins {
       participant_security_attributes,
     )?;
 
-    self
-      .participant_crypto_handle_cache
-      .insert(participant_guidp, crypto_handle);
+    self.local_participant_crypto_handle = Some(crypto_handle);
     Ok(())
   }
 
@@ -504,9 +599,15 @@ impl SecurityPlugins {
     reader_properties: Option<qos::policy::Property>,
     reader_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<()> {
-    let participant_crypto_handle = self.get_participant_crypto_handle(&reader_guid.prefix)?;
+    let local_participant_crypto_handle = self.get_local_participant_crypto_handle()?;
 
-    let properties = reader_properties.map(|prop| prop.value).unwrap_or_default();
+    let mut properties = reader_properties.map(|prop| prop.value).unwrap_or_default();
+
+    if reader_guid.entity_id == EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER {
+      // Add a property which the crypto plugin expects for the Volatile Reader
+      // (see 8.8.8.1 of the Security spec)
+      properties.push(volatile_reader_recognition_property());
+    }
 
     if !reader_security_attributes.is_submessage_protected {
       self.submessage_not_protected.insert(reader_guid);
@@ -516,7 +617,7 @@ impl SecurityPlugins {
     }
 
     let crypto_handle = self.crypto.register_local_datareader(
-      participant_crypto_handle,
+      local_participant_crypto_handle,
       &properties,
       reader_security_attributes,
     )?;
@@ -533,9 +634,15 @@ impl SecurityPlugins {
     writer_properties: Option<qos::policy::Property>,
     writer_security_attributes: EndpointSecurityAttributes,
   ) -> SecurityResult<()> {
-    let participant_crypto_handle = self.get_participant_crypto_handle(&writer_guid.prefix)?;
+    let local_participant_crypto_handle = self.get_local_participant_crypto_handle()?;
 
-    let properties = writer_properties.map(|prop| prop.value).unwrap_or_default();
+    let mut properties = writer_properties.map(|prop| prop.value).unwrap_or_default();
+
+    if writer_guid.entity_id == EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER {
+      // Add a property which the crypto plugin expects for the Volatile Writer
+      // (see 8.8.8.1 of the Security spec)
+      properties.push(volatile_writer_recognition_property());
+    }
 
     if !writer_security_attributes.is_submessage_protected {
       self.submessage_not_protected.insert(writer_guid);
@@ -545,7 +652,7 @@ impl SecurityPlugins {
     }
 
     let crypto_handle = self.crypto.register_local_datawriter(
-      participant_crypto_handle,
+      local_participant_crypto_handle,
       &properties,
       writer_security_attributes,
     )?;
@@ -558,11 +665,10 @@ impl SecurityPlugins {
 
   pub fn register_matched_remote_participant(
     &mut self,
-    local_participant_guidp: GuidPrefix,
     remote_participant_guidp: GuidPrefix,
     shared_secret: SharedSecretHandle,
   ) -> SecurityResult<()> {
-    let local_crypto = self.get_participant_crypto_handle(&local_participant_guidp)?;
+    let local_crypto = self.get_local_participant_crypto_handle()?;
     let remote_identity = self.get_identity_handle(&remote_participant_guidp)?;
     let remote_permissions = self.get_permissions_handle(&remote_participant_guidp)?;
 
@@ -573,9 +679,10 @@ impl SecurityPlugins {
       shared_secret,
     )?;
 
-    self
-      .participant_crypto_handle_cache
-      .insert(remote_participant_guidp, remote_crypto_handle);
+    self.insert_to_remote_participant_crypto_handle_cache(
+      remote_participant_guidp,
+      remote_crypto_handle,
+    );
     Ok(())
   }
 
@@ -590,7 +697,7 @@ impl SecurityPlugins {
 
     let local_writer_crypto = self.get_local_endpoint_crypto_handle(&local_writer_guid)?;
     let remote_participant_crypto =
-      self.get_participant_crypto_handle(&remote_reader_guid.prefix)?;
+      self.get_remote_participant_crypto_handle(&remote_reader_guid.prefix)?;
 
     let remote_reader_crypto = self.crypto.register_matched_remote_datareader(
       local_writer_crypto,
@@ -616,7 +723,7 @@ impl SecurityPlugins {
 
     let local_reader_crypto = self.get_local_endpoint_crypto_handle(&local_reader_guid)?;
     let remote_participant_crypto =
-      self.get_participant_crypto_handle(&remote_writer_guid.prefix)?;
+      self.get_remote_participant_crypto_handle(&remote_writer_guid.prefix)?;
 
     let remote_writer_crypto = self.crypto.register_matched_remote_datawriter(
       local_reader_crypto,
@@ -646,11 +753,11 @@ impl SecurityPlugins {
 impl SecurityPlugins {
   pub fn create_local_participant_crypto_tokens(
     &mut self,
-    local_participant_guidp: GuidPrefix,
     remote_participant_guidp: GuidPrefix,
   ) -> SecurityResult<Vec<ParticipantCryptoToken>> {
-    let local_crypto_handle = self.get_participant_crypto_handle(&local_participant_guidp)?;
-    let remote_crypto_handle = self.get_participant_crypto_handle(&remote_participant_guidp)?;
+    let local_crypto_handle = self.get_local_participant_crypto_handle()?;
+    let remote_crypto_handle =
+      self.get_remote_participant_crypto_handle(&remote_participant_guidp)?;
 
     self
       .crypto
@@ -689,12 +796,12 @@ impl SecurityPlugins {
 
   pub fn set_remote_participant_crypto_tokens(
     &mut self,
-    local_participant_guidp: GuidPrefix,
     remote_participant_guidp: GuidPrefix,
     remote_participant_tokens: Vec<ParticipantCryptoToken>,
   ) -> SecurityResult<()> {
-    let local_crypto_handle = self.get_participant_crypto_handle(&local_participant_guidp)?;
-    let remote_crypto_handle = self.get_participant_crypto_handle(&remote_participant_guidp)?;
+    let local_crypto_handle = self.get_local_participant_crypto_handle()?;
+    let remote_crypto_handle =
+      self.get_remote_participant_crypto_handle(&remote_participant_guidp)?;
 
     self.crypto.set_remote_participant_crypto_tokens(
       local_crypto_handle,
@@ -740,6 +847,7 @@ impl SecurityPlugins {
 
 /// Interface for using the CryptoTransform of the Cryptographic plugin
 impl SecurityPlugins {
+  /// Calls [super::cryptographic::cryptographic_plugin::CryptoTransform::encode_serialized_payload]
   pub fn encode_serialized_payload(
     &self,
     serialized_payload: Vec<u8>,
@@ -760,68 +868,98 @@ impl SecurityPlugins {
     )
   }
 
+  /// Calls [super::cryptographic::cryptographic_plugin::CryptoTransform::encode_datawriter_submessage].
   pub fn encode_datawriter_submessage(
     &self,
     plain_submessage: Submessage,
     source_guid: &GUID,
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
-    // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform {
-      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+    // Enforce that the submessage is a writer submessage.
+    match plain_submessage.body {
+      SubmessageBody::Writer(_) => {
+        // TODO remove after testing, skips encoding
+        if self.test_disable_crypto_transform {
+          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+        }
+
+        if self.submessage_not_protected(source_guid) {
+          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+        }
+
+        // Convert the destination GUIDs to crypto handles
+        let mut receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle> =
+          SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
+            self.get_remote_endpoint_crypto_handle((source_guid, destination_guid))
+          }))?;
+        // Remove duplicates
+        receiving_datareader_crypto_list.sort();
+        receiving_datareader_crypto_list.dedup();
+
+        self.crypto.encode_datawriter_submessage(
+          plain_submessage,
+          self.get_local_endpoint_crypto_handle(source_guid)?,
+          receiving_datareader_crypto_list,
+        )
+      }
+      SubmessageBody::Interpreter(_) => Ok(EncodedSubmessage::Unencoded(plain_submessage)),
+      SubmessageBody::Reader(_) => Err(security_error!(
+        "encode_datawriter_submessage called for a reader submessage"
+      )),
+      SubmessageBody::Security(_) => Err(security_error!(
+        "encode_datawriter_submessage called for a security submessage"
+      )),
     }
-
-    if self.submessage_not_protected(source_guid) {
-      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
-    }
-
-    // Convert the destination GUIDs to crypto handles
-    let mut receiving_datareader_crypto_list: Vec<DatareaderCryptoHandle> =
-      SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
-        self.get_remote_endpoint_crypto_handle((source_guid, destination_guid))
-      }))?;
-    // Remove duplicates
-    receiving_datareader_crypto_list.sort();
-    receiving_datareader_crypto_list.dedup();
-
-    self.crypto.encode_datawriter_submessage(
-      plain_submessage,
-      self.get_local_endpoint_crypto_handle(source_guid)?,
-      receiving_datareader_crypto_list,
-    )
   }
 
+  /// Calls [super::cryptographic::cryptographic_plugin::CryptoTransform::encode_datareader_submessage]. The body of the submessage shall be [SubmessageBody::Reader].
   pub fn encode_datareader_submessage(
     &self,
     plain_submessage: Submessage,
     source_guid: &GUID,
     destination_guid_list: &[GUID],
   ) -> SecurityResult<EncodedSubmessage> {
-    // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform {
-      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+    // Enforce that the submessage is a reader submessage.
+    match plain_submessage.body {
+      SubmessageBody::Reader(_) => {
+        // TODO remove after testing, skips encoding
+        if self.test_disable_crypto_transform {
+          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+        }
+
+        if self.submessage_not_protected(source_guid) {
+          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
+        }
+
+        // Convert the destination GUIDs to crypto handles
+        let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
+          SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
+            self.get_remote_endpoint_crypto_handle((source_guid, destination_guid))
+          }))?;
+        // Remove duplicates
+        receiving_datawriter_crypto_list.sort();
+        receiving_datawriter_crypto_list.dedup();
+
+        self.crypto.encode_datareader_submessage(
+          plain_submessage,
+          self.get_local_endpoint_crypto_handle(source_guid)?,
+          receiving_datawriter_crypto_list,
+        )
+      }
+      SubmessageBody::Interpreter(_) => Ok(EncodedSubmessage::Unencoded(plain_submessage)),
+      SubmessageBody::Writer(_) => Err(security_error!(
+        "encode_datareader_submessage called for a writer submessage"
+      )),
+      SubmessageBody::Security(_) => Err(security_error!(
+        "encode_datareader_submessage called for a security submessage"
+      )),
     }
-
-    if self.submessage_not_protected(source_guid) {
-      return Ok(EncodedSubmessage::Unencoded(plain_submessage));
-    }
-
-    // Convert the destination GUIDs to crypto handles
-    let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
-      SecurityResult::from_iter(destination_guid_list.iter().map(|destination_guid| {
-        self.get_remote_endpoint_crypto_handle((source_guid, destination_guid))
-      }))?;
-    // Remove duplicates
-    receiving_datawriter_crypto_list.sort();
-    receiving_datawriter_crypto_list.dedup();
-
-    self.crypto.encode_datareader_submessage(
-      plain_submessage,
-      self.get_local_endpoint_crypto_handle(source_guid)?,
-      receiving_datawriter_crypto_list,
-    )
   }
 
+  /// Calls [super::cryptographic::cryptographic_plugin::CryptoTransform::encode_rtps_message]
+  // Currently only those RTPS messages whose source is the local participant
+  // can be encoded.
+  // TODO: add support for other source participants as well?
   pub fn encode_message(
     &self,
     plain_message: Message,
@@ -840,7 +978,9 @@ impl SecurityPlugins {
     // Convert the destination GUID prefixes to crypto handles
     let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
       SecurityResult::from_iter(destination_guid_prefix_list.iter().map(
-        |destination_guid_prefix| self.get_participant_crypto_handle(destination_guid_prefix),
+        |destination_guid_prefix| {
+          self.get_remote_participant_crypto_handle(destination_guid_prefix)
+        },
       ))?;
     // Remove duplicates
     receiving_datawriter_crypto_list.sort();
@@ -848,34 +988,37 @@ impl SecurityPlugins {
 
     self.crypto.encode_rtps_message(
       plain_message,
-      self.get_participant_crypto_handle(source_guid_prefix)?,
+      self.get_local_participant_crypto_handle()?,
       receiving_datawriter_crypto_list,
     )
   }
 
+  // Currently only those RTPS messages whose destination is the local participant
+  // can be decoded.
+  // TODO: add support for other destinations as well?
   pub fn decode_rtps_message(
     &self,
     encoded_message: Message,
     source_guid_prefix: &GuidPrefix,
-    destination_guid_prefix: &GuidPrefix,
   ) -> SecurityResult<Message> {
     self.crypto.decode_rtps_message(
       encoded_message,
-      self.get_participant_crypto_handle(destination_guid_prefix)?,
-      self.get_participant_crypto_handle(source_guid_prefix)?,
+      self.get_local_participant_crypto_handle()?,
+      self.get_remote_participant_crypto_handle(source_guid_prefix)?,
     )
   }
 
+  // Currently only those submessages whose destination is the local participant
+  // can be preprocessed. TODO: add support for other destinations as well?
   pub fn preprocess_secure_submessage(
     &self,
     secure_prefix: &SecurePrefix,
     source_guid_prefix: &GuidPrefix,
-    destination_guid_prefix: &GuidPrefix,
   ) -> SecurityResult<SecureSubmessageCategory> {
     self.crypto.preprocess_secure_submessage(
       secure_prefix,
-      self.get_participant_crypto_handle(destination_guid_prefix)?,
-      self.get_participant_crypto_handle(source_guid_prefix)?,
+      self.get_local_participant_crypto_handle()?,
+      self.get_remote_participant_crypto_handle(source_guid_prefix)?,
     )
   }
 
@@ -964,11 +1107,15 @@ impl SecurityPluginsHandle {
       match self.try_lock() {
         Ok(guard) => {
           *self.who_has_it.lock().unwrap() = std::thread::current().name().map(|s| s.to_owned());
-          return guard
-        },
+          return guard;
+        }
         Err(std::sync::TryLockError::WouldBlock) => {
           if count > 10 {
-            error!("I need my lock!! {:?} Looks like {:?} has it.", count, self.who_has_it.lock().unwrap());
+            error!(
+              "I need my lock!! {:?} Looks like {:?} has it.",
+              count,
+              self.who_has_it.lock().unwrap()
+            );
           }
           count += 1;
           std::thread::sleep(std::time::Duration::from_millis(100));
@@ -979,7 +1126,7 @@ impl SecurityPluginsHandle {
         }
       }
     } // loop
-  } // fn 
+  } // fn
 }
 
 impl fmt::Debug for SecurityPluginsHandle {

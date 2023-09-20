@@ -24,6 +24,11 @@ pub trait Authentication: Send {
   /// The return values `local_identity_handle` and `adjusted_participant_guid`
   /// are also contained inside the Ok-variant, in addition to the validation
   /// outcome.
+  ///
+  /// Note: In addition to what is dictated by the Security specification, this
+  /// function should also generate & store a self-shared secret, which is used
+  /// for self-authentication. To get a sense of this, see what the
+  /// builtin-implementation does.
   fn validate_local_identity(
     &mut self,
     domain_id: u16,
@@ -87,9 +92,11 @@ pub trait Authentication: Send {
 
   /// get_shared_secret: section 8.3.2.11.7 of the Security
   /// specification
+  /// Note: The parameter is an IdentityHandle, not
+  /// a HandshakeHandle like in the specification.
   fn get_shared_secret(
     &self,
-    handshake_handle: HandshakeHandle,
+    handshake_handle: IdentityHandle,
   ) -> SecurityResult<SharedSecretHandle>;
 
   /// get_authenticated_peer_credential_token: section 8.3.2.11.8 of the

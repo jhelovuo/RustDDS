@@ -13,23 +13,30 @@ use crate::{
     info_source::InfoSource,
     info_timestamp::InfoTimestamp,
     nack_frag::NackFrag,
-    secure_body::SecureBody,
-    secure_postfix::SecurePostfix,
-    secure_prefix::SecurePrefix,
-    secure_rtps_postfix::SecureRTPSPostfix,
-    secure_rtps_prefix::SecureRTPSPrefix,
-    submessage::{ReaderSubmessage, SecuritySubmessage, WriterSubmessage},
+    submessage::{ReaderSubmessage, WriterSubmessage},
     submessage_flag::{
       endianness_flag, ACKNACK_Flags, DATAFRAG_Flags, DATA_Flags, GAP_Flags, HEARTBEAT_Flags,
       INFODESTINATION_Flags, INFOREPLY_Flags, INFOSOURCE_Flags, INFOTIMESTAMP_Flags,
-      NACKFRAG_Flags, SECUREBODY_Flags, SECUREPOSTFIX_Flags, SECUREPREFIX_Flags,
-      SECURERTPSPOSTFIX_Flags, SECURERTPSPREFIX_Flags,
+      NACKFRAG_Flags,
     },
     submessage_header::SubmessageHeader,
     submessage_kind::SubmessageKind,
     submessages::{Data, DataFrag, Gap, InfoReply, InterpreterSubmessage},
   },
   Timestamp,
+};
+#[cfg(feature = "security")]
+use crate::messages::submessages::{
+  secure_body::SecureBody,
+  secure_postfix::SecurePostfix,
+  secure_prefix::SecurePrefix,
+  secure_rtps_postfix::SecureRTPSPostfix,
+  secure_rtps_prefix::SecureRTPSPrefix,
+  submessage::SecuritySubmessage,
+  submessage_flag::{
+    SECUREBODY_Flags, SECUREPOSTFIX_Flags, SECUREPREFIX_Flags, SECURERTPSPOSTFIX_Flags,
+    SECURERTPSPREFIX_Flags,
+  },
 };
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -106,7 +113,10 @@ impl Submessage {
         original_bytes,
       }))
     };
+
+    #[cfg(feature = "security")]
     let original_bytes = Some(original_submessage_bytes.clone());
+    #[cfg(feature = "security")]
     let mk_s_subm = move |s: SecuritySubmessage| {
       io::Result::<Option<Self>>::Ok(Some(Submessage {
         header: sub_header,
@@ -114,6 +124,7 @@ impl Submessage {
         original_bytes,
       }))
     };
+
     let original_bytes = Some(original_submessage_bytes.clone());
     let mk_i_subm = move |s: InterpreterSubmessage| {
       io::Result::<Option<Self>>::Ok(Some(Submessage {
@@ -214,6 +225,8 @@ impl Submessage {
       SubmessageKind::PAD => {
         Ok(None) // nothing to do here
       }
+
+      #[cfg(feature = "security")]
       SubmessageKind::SEC_BODY => {
         let f = BitFlags::<SECUREBODY_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecureBody(
@@ -221,6 +234,8 @@ impl Submessage {
           f,
         ))
       }
+
+      #[cfg(feature = "security")]
       SubmessageKind::SEC_PREFIX => {
         let f = BitFlags::<SECUREPREFIX_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecurePrefix(
@@ -228,6 +243,7 @@ impl Submessage {
           f,
         ))
       }
+      #[cfg(feature = "security")]
       SubmessageKind::SEC_POSTFIX => {
         let f = BitFlags::<SECUREPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecurePostfix(
@@ -235,6 +251,7 @@ impl Submessage {
           f,
         ))
       }
+      #[cfg(feature = "security")]
       SubmessageKind::SRTPS_PREFIX => {
         let f = BitFlags::<SECURERTPSPREFIX_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecureRTPSPrefix(
@@ -242,6 +259,7 @@ impl Submessage {
           f,
         ))
       }
+      #[cfg(feature = "security")]
       SubmessageKind::SRTPS_POSTFIX => {
         let f = BitFlags::<SECURERTPSPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
         mk_s_subm(SecuritySubmessage::SecureRTPSPostfix(
@@ -276,19 +294,30 @@ impl Submessage {
 pub enum SubmessageBody {
   Writer(WriterSubmessage),
   Reader(ReaderSubmessage),
+
+  #[cfg(feature = "security")]
   Security(SecuritySubmessage),
+
   Interpreter(InterpreterSubmessage),
+}
+impl<C: Context> Writable<C> for SubmessageBody {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    match &self {
+      SubmessageBody::Writer(m) => writer.write_value(&m),
+      SubmessageBody::Reader(m) => writer.write_value(&m),
+      SubmessageBody::Interpreter(m) => writer.write_value(&m),
+      #[cfg(feature = "security")]
+      SubmessageBody::Security(m) => writer.write_value(&m),
+    }
+  }
 }
 
 impl<C: Context> Writable<C> for Submessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    writer.write_value(&self.header)?;
-    match &self.body {
-      SubmessageBody::Writer(m) => writer.write_value(&m),
-      SubmessageBody::Reader(m) => writer.write_value(&m),
-      SubmessageBody::Interpreter(m) => writer.write_value(&m),
-      SubmessageBody::Security(m) => writer.write_value(&m),
-    }
+    let Submessage { header, body, .. } = self;
+    writer.write_value(header)?;
+    let body_endianness = endianness_flag(header.flags);
+    writer.write_bytes(&body.write_to_vec_with_ctx(body_endianness)?)
   }
 }
 

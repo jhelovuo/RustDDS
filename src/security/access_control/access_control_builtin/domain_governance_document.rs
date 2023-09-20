@@ -325,7 +325,7 @@ xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg
 </dds>
 "#;
 
-    let dgd: xml::DomainGovernanceDocument = from_str(domain_governance_document).unwrap();
+    from_str::<xml::DomainGovernanceDocument>(domain_governance_document).unwrap();
 
     println!(
       "{:?}",
@@ -371,7 +371,7 @@ xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg
 </dds>
 "#;
 
-    let dgd: xml::DomainGovernanceDocument = from_str(domain_governance_document).unwrap();
+    from_str::<xml::DomainGovernanceDocument>(domain_governance_document).unwrap();
 
     println!(
       "{:?}",

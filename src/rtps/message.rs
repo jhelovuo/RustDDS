@@ -22,8 +22,6 @@ use crate::{
     vendor_id::VendorId,
   },
   rtps::{writer::Writer as RtpsWriter, Submessage, SubmessageBody},
-  security::{security_plugins::SecurityPluginsHandle, SecurityError},
-  security_error,
   structure::{
     cache_change::CacheChange,
     entity::RTPSEntity,
@@ -34,6 +32,13 @@ use crate::{
   },
   RepresentationIdentifier,
 };
+#[cfg(feature = "security")]
+use crate::{
+  security::{security_plugins::SecurityPluginsHandle, SecurityError},
+  security_error,
+};
+#[cfg(not(feature = "security"))]
+use crate::no_security::SecurityPluginsHandle;
 
 #[derive(Debug, Clone)]
 pub struct Message {
@@ -175,7 +180,7 @@ impl MessageBuilder {
     reader_entity_id: EntityId, // The entity id to be included in the submessage
     writer_guid: GUID,
     endianness: Endianness,
-    security_plugins: Option<&SecurityPluginsHandle>,
+    _security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
     let writer_entity_id = writer_guid.entity_id;
 
@@ -233,6 +238,10 @@ impl MessageBuilder {
       }
     });
 
+    #[cfg(not(feature = "security"))]
+    let encoded_payload = serialized_payload;
+
+    #[cfg(feature = "security")]
     let encoded_payload = match serialized_payload
       // Encode payload if it exists
       .map(|serialized_payload| {
@@ -241,21 +250,22 @@ impl MessageBuilder {
           .write_to_vec()
           .map_err(|e| security_error!("{e:?}"))
           .and_then(|serialized_payload| {
-            security_plugins.map_or(
-              // If there are no security plugins, use plaintext
-              Ok(serialized_payload.clone()),
-              // If security plugins exist, call them to encode payload
-              |security_plugins_handle| {
-                security_plugins_handle
-                  .get_plugins()
-                  .encode_serialized_payload(serialized_payload, &writer_guid)
-                  // Add the extra qos
-                  .map(|(encoded_payload, extra_inline_qos)| {
-                    param_list.concat(extra_inline_qos);
-                    encoded_payload
-                  })
-              },
-            )
+            _security_plugins
+              .map(SecurityPluginsHandle::get_plugins)
+              .map_or(
+                // If there are no security plugins, use plaintext
+                Ok(serialized_payload.clone()),
+                // If security plugins exist, call them to encode payload
+                |security_plugins| {
+                  security_plugins
+                    .encode_serialized_payload(serialized_payload, &writer_guid)
+                    // Add the extra qos
+                    .map(|(encoded_payload, extra_inline_qos)| {
+                      param_list.concat(extra_inline_qos);
+                      encoded_payload
+                    })
+                },
+              )
           })
       })
       .transpose()
@@ -265,7 +275,7 @@ impl MessageBuilder {
         error!("{e:?}");
         return self;
       }
-    };
+    }; // end security
 
     let have_inline_qos = !param_list.is_empty(); // we need this later also
     let inline_qos = if have_inline_qos {
@@ -320,7 +330,7 @@ impl MessageBuilder {
     fragment_size: u16,
     sample_size: u32, // all fragments together
     endianness: Endianness,
-    security_plugins: Option<&SecurityPluginsHandle>,
+    _security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
     let writer_entity_id = writer_guid.entity_id;
 
@@ -365,27 +375,32 @@ impl MessageBuilder {
         .bytes_slice(from_byte, up_to_before_byte),
     );
 
-    let encoded_payload = match security_plugins.map_or(
-      // If there are no security plugins, use plaintext
-      Ok(serialized_payload.clone()),
-      // ..else, security plugins exist, call them to encode payload
-      |security_plugins_handle| {
-        security_plugins_handle
-          .get_plugins()
-          .encode_serialized_payload(serialized_payload, &writer_guid)
-          // Add the extra qos
-          .map(|(encoded_payload, extra_inline_qos)| {
-            param_list.concat(extra_inline_qos);
-            encoded_payload
-          })
-      },
-    ) {
+    #[cfg(not(feature = "security"))]
+    let encoded_payload = serialized_payload;
+
+    #[cfg(feature = "security")]
+    let encoded_payload = match _security_plugins
+      .map(SecurityPluginsHandle::get_plugins)
+      .map_or(
+        // If there are no security plugins, use plaintext
+        Ok(serialized_payload.clone()),
+        // ..else, security plugins exist, call them to encode payload
+        |security_plugins| {
+          security_plugins
+            .encode_serialized_payload(serialized_payload, &writer_guid)
+            // Add the extra qos
+            .map(|(encoded_payload, extra_inline_qos)| {
+              param_list.concat(extra_inline_qos);
+              encoded_payload
+            })
+        },
+      ) {
       Ok(encoded_payload) => encoded_payload,
       Err(e) => {
         error!("{e:?}");
         return self;
       }
-    };
+    }; // end security encoding
 
     let data_message = DataFrag {
       reader_id: reader_entity_id,
@@ -526,8 +541,8 @@ impl MessageBuilder {
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
-  #![allow(non_snake_case)]
   use log::info;
   use speedy::Writable;
 

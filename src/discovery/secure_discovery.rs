@@ -38,11 +38,12 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix},
   },
-  RepresentationIdentifier, SequenceNumber, GUID,
+  with_key, RepresentationIdentifier, SequenceNumber, GUID,
 };
 use super::{
+  discovery::NormalDiscoveryPermission,
   discovery_db::{discovery_db_read, discovery_db_write, DiscoveryDB},
-  Participant_GUID, SpdpDiscoveredParticipantData,
+  DiscoveredReaderData, DiscoveredWriterData, Participant_GUID, SpdpDiscoveredParticipantData,
 };
 
 // Enum for authentication status of a remote participant
@@ -87,7 +88,6 @@ pub(crate) struct SecureDiscovery {
   pub local_dp_property_qos: qos::policy::Property,
   pub local_dp_sec_attributes: ParticipantSecurityAttributes,
 
-  stateless_message_helper: ParticipantStatelessMessageHelper,
   generic_message_helper: ParticipantGenericMessageHelper,
   // SecureDiscovery maintains states of handshake with remote participants.
   // We use the same states as the built-in authentication plugin, since
@@ -101,8 +101,9 @@ pub(crate) struct SecureDiscovery {
 impl SecureDiscovery {
   pub fn new(
     domain_participant: &DomainParticipantWeak,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
     security_plugins: SecurityPluginsHandle,
-  ) -> Result<Self, &'static str> {
+  ) -> SecurityResult<Self> {
     // Run the Discovery-related initialization steps of DDS Security spec v1.1
     // Section "8.8.1 Authentication and AccessControl behavior with local
     // DomainParticipant"
@@ -116,54 +117,111 @@ impl SecureDiscovery {
       .property()
       .expect("No property QoS defined even though security is enabled");
 
-    let identity_token = match plugins.get_identity_token(participant_guid_prefix) {
-      Ok(token) => token,
-      Err(_e) => {
-        return Err("Could not get IdentityToken");
-      }
-    };
+    let identity_token = plugins
+      .get_identity_token(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get IdentityToken: {}", e))?;
 
-    let _identity_status_token = match plugins.get_identity_status_token(participant_guid_prefix) {
-      Ok(token) => token,
-      Err(_e) => {
-        return Err("Could not get IdentityStatusToken");
-      }
-    };
+    let _identity_status_token = plugins
+      .get_identity_status_token(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get IdentityStatusToken: {}", e))?;
 
-    let permissions_token = match plugins.get_permissions_token(participant_guid_prefix) {
-      Ok(token) => token,
-      Err(_e) => {
-        return Err("Could not get PermissionsToken");
-      }
-    };
+    let permissions_token = plugins
+      .get_permissions_token(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get PermissionsToken: {}", e))?;
 
-    let credential_token = match plugins.get_permissions_credential_token(participant_guid_prefix) {
-      Ok(token) => token,
-      Err(_e) => {
-        return Err("Could not get PermissionsCredentialToken");
-      }
-    };
+    let credential_token = plugins
+      .get_permissions_credential_token(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get PermissionsCredentialToken: {}", e))?;
 
-    if plugins
+    plugins
       .set_permissions_credential_and_token(
         participant_guid_prefix,
         credential_token,
         permissions_token.clone(),
       )
-      .is_err()
-    {
-      return Err("Could not set permission tokens.");
-    }
+      .map_err(|e| security_error!("Failed to set permission tokens: {}", e))?;
 
-    let security_attributes = match plugins.get_participant_sec_attributes(participant_guid_prefix)
-    {
-      Ok(val) => val,
-      Err(_e) => {
-        return Err("Could not get ParticipantSecurityAttributes");
+    let security_attributes = plugins
+      .get_participant_sec_attributes(participant_guid_prefix)
+      .map_err(|e| security_error!("Failed to get ParticipantSecurityAttributes: {}", e))?;
+
+    drop(plugins); // Drop plugins so that register_remote_to_crypto can use them
+
+    // Register local participant as remote to the crypto.
+    // This is needed so that we can receive our own secured messages.
+    register_remote_to_crypto(
+      participant_guid_prefix,
+      participant_guid_prefix,
+      &security_plugins,
+    )
+    .map_err(|e| {
+      security_error!(
+        "Failed to register local participant as remote to crypto plugin: {}",
+        e
+      )
+    })?;
+    info!("Registered local participant as remote to crypto plugin");
+
+    // After registering, set local crypto tokens as remote tokens.
+    // This is also needed so that we can receive our own secured messages.
+    let mut plugins = security_plugins.get_plugins();
+
+    // Participant tokens
+    plugins
+      .create_local_participant_crypto_tokens(participant_guid_prefix)
+      .and_then(|tokens| {
+        plugins.set_remote_participant_crypto_tokens(participant_guid_prefix, tokens)
+      })
+      .map_err(|e| {
+        security_error!(
+          "Failed to set local participant crypto tokens as remote tokens: {}",
+          e
+        )
+      })?;
+
+    // Endpoint tokens
+    for (writer_eid, reader_eid, _reader_endpoint) in SECURE_BUILTIN_READERS_INIT_LIST {
+      // Tokens are set for all but the volatile endpoint
+      if *writer_eid != EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER {
+        let local_writer_guid = GUID::new(participant_guid_prefix, *writer_eid);
+        let local_reader_guid = GUID::new(participant_guid_prefix, *reader_eid);
+
+        // Writer tokens
+        plugins
+          .create_local_writer_crypto_tokens(local_writer_guid, local_reader_guid)
+          .and_then(|tokens| {
+            plugins.set_remote_writer_crypto_tokens(local_writer_guid, local_reader_guid, tokens)
+          })
+          .map_err(|e| {
+            security_error!(
+              "Failed to set local writer {:?} crypto tokens as remote tokens: {}.",
+              writer_eid,
+              e
+            )
+          })?;
+
+        // Reader tokens
+        plugins
+          .create_local_reader_crypto_tokens(local_reader_guid, local_writer_guid)
+          .and_then(|tokens| {
+            plugins.set_remote_reader_crypto_tokens(local_reader_guid, local_writer_guid, tokens)
+          })
+          .map_err(|e| {
+            security_error!(
+              "Failed to set local reader {:?} crypto tokens as remote tokens: {}.",
+              reader_eid,
+              e
+            )
+          })?;
       }
-    };
+    }
+    info!("Completed setting local crypto tokens as remote tokens");
 
-    drop(plugins); // Drop mutex guard on plugins so that plugins can be moved to self
+    // Set ourself as authenticated
+    discovery_db_write(discovery_db)
+      .update_authentication_status(participant_guid_prefix, AuthenticationStatus::Authenticated);
+
+    drop(plugins); // Drop plugins so that they can be moved to self
 
     Ok(Self {
       security_plugins,
@@ -173,7 +231,6 @@ impl SecureDiscovery {
       local_dp_permissions_token: permissions_token,
       local_dp_property_qos: property_qos,
       local_dp_sec_attributes: security_attributes,
-      stateless_message_helper: ParticipantStatelessMessageHelper::new(),
       generic_message_helper: ParticipantGenericMessageHelper::new(),
       handshake_states: HashMap::new(),
       stored_authentication_messages: HashMap::new(),
@@ -182,14 +239,15 @@ impl SecureDiscovery {
 
   // Inspect a new sample from the standard DCPSParticipant Builtin Topic
   // Possibly start the authentication protocol
-  // Return boolean indicating if normal Discovery can process the sample as usual
+  // Return return value indicates if normal Discovery can process the sample as
+  // usual
   pub fn participant_read(
     &mut self,
     ds: &DataSample<SpdpDiscoveredParticipantData>,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
     discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
     auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
-  ) -> bool {
+  ) -> NormalDiscoveryPermission {
     match &ds.value {
       Sample::Value(participant_data) => self.participant_data_read(
         participant_data,
@@ -205,7 +263,7 @@ impl SecureDiscovery {
 
   // This function inspects a data message from normal DCPSParticipant topic
   // The authentication protocol is possibly started
-  // The returned boolean tells if normal Discovery is allowed to process
+  // The return value tells if normal Discovery is allowed to process
   // the message.
   #[allow(clippy::needless_bool)] // for return value clarity
   fn participant_data_read(
@@ -214,7 +272,7 @@ impl SecureDiscovery {
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
     discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
     auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
-  ) -> bool {
+  ) -> NormalDiscoveryPermission {
     let guid_prefix = participant_data.participant_guid.prefix;
 
     // Our action depends on the current authentication status of the remote
@@ -288,9 +346,9 @@ impl SecureDiscovery {
     if updated_auth_status == AuthenticationStatus::Unauthenticated
       || updated_auth_status == AuthenticationStatus::Authenticating
     {
-      true
+      NormalDiscoveryPermission::Allow
     } else {
-      false
+      NormalDiscoveryPermission::Deny
     }
   }
 
@@ -300,7 +358,7 @@ impl SecureDiscovery {
     &self,
     participant_guid: &Participant_GUID,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
-  ) -> bool {
+  ) -> NormalDiscoveryPermission {
     let guid_prefix = participant_guid.0.prefix;
 
     let db = discovery_db_read(discovery_db);
@@ -310,11 +368,11 @@ impl SecureDiscovery {
     match db.get_authentication_status(guid_prefix) {
       None => {
         // No prior info on this participant. Let the dispose message be processed
-        true
+        NormalDiscoveryPermission::Allow
       }
       Some(AuthenticationStatus::Unauthenticated) => {
         // Participant has been marked as Unauthenticated. Allow to process.
-        true
+        NormalDiscoveryPermission::Allow
       }
       Some(other_status) => {
         debug!(
@@ -323,7 +381,338 @@ impl SecureDiscovery {
           other_status, guid_prefix
         );
         // Do not allow with any other status
-        false
+        NormalDiscoveryPermission::Deny
+      }
+    }
+  }
+
+  pub fn check_nonsecure_subscription_read(
+    &mut self,
+    sample: &with_key::Sample<DiscoveredReaderData, GUID>,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) -> NormalDiscoveryPermission {
+    // First see if discovery for the topic should be protected
+    let (topic_name, participant_guidp) = match sample {
+      Sample::Value(reader_data) => (
+        reader_data.subscription_topic_data.topic_name().clone(),
+        reader_data.reader_proxy.remote_reader_guid.prefix,
+      ),
+      Sample::Dispose(reader_guid) => {
+        if let Some(reader) = discovery_db_read(discovery_db).get_topic_reader(reader_guid) {
+          // We do know a reader with this guid
+          (
+            reader.subscription_topic_data.topic_name().clone(),
+            reader_guid.prefix,
+          )
+        } else {
+          // We do not now such a reader. Deny processing just in case.
+          return NormalDiscoveryPermission::Deny;
+        }
+      }
+    };
+
+    let topic_sec_attributes = match self
+      .security_plugins
+      .get_plugins()
+      .get_topic_sec_attributes(participant_guidp, &topic_name)
+    {
+      Ok(attr) => attr,
+      Err(e) => {
+        security_error!(
+          "Failed to get topic security attributes: {}. Topic: {topic_name}",
+          e
+        );
+        return NormalDiscoveryPermission::Deny;
+      }
+    };
+
+    if topic_sec_attributes.is_discovery_protected {
+      // Message should come from DCPSSubscriptionsSecure topic. Ignore this one.
+      security_log!(
+        "Received a non-secure DCPSSubscription message for topic {topic_name} whose discovery is \
+         protected. Ignoring message. Participant: {:?}",
+        participant_guidp
+      );
+      return NormalDiscoveryPermission::Deny;
+    }
+    // Topic discovery is not protected. Get the authentication status
+    let auth_status = discovery_db_read(discovery_db).get_authentication_status(participant_guidp);
+
+    match sample {
+      Sample::Value(reader_data) => {
+        // Participant wants to subscribe to the topic
+        match auth_status {
+          Some(AuthenticationStatus::Unauthenticated) => {
+            // Section 8.8.7.1 "AccessControl behavior with discovered endpoints from
+            // “Unauthenticated” DomainParticipant" from the spec
+            if topic_sec_attributes.is_read_protected {
+              security_log!(
+                "Unauthenticated participant {:?} attempted to read protected topic {topic_name}. \
+                 Rejecting.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Deny
+            } else {
+              security_log!(
+                "Unauthenticated participant {:?} wants to read unprotected topic {topic_name}. \
+                 Allowing.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Allow
+            }
+          }
+          Some(AuthenticationStatus::Authenticated) => {
+            // Section 8.8.7.2 "AccessControl behavior with discovered endpoints from
+            // “Authenticated” DomainParticipant" from the spec
+            if topic_sec_attributes.is_read_protected {
+              // We need to check from access control
+              match self
+                .security_plugins
+                .get_plugins()
+                .check_remote_datareader_from_nonsecure(
+                  participant_guidp,
+                  self.domain_id,
+                  reader_data,
+                ) {
+                Ok((check_passed, _relay_only)) => {
+                  if check_passed {
+                    // TODO: use the relay_only value
+                    security_log!(
+                      "Access control check passed for authenticated participant {:?} to read \
+                       topic {topic_name}.",
+                      participant_guidp
+                    );
+                    NormalDiscoveryPermission::Allow
+                  } else {
+                    security_log!(
+                      "Access control check did not pass for authenticated participant {:?} to \
+                       read topic {topic_name}. Rejecting.",
+                      participant_guidp
+                    );
+                    NormalDiscoveryPermission::Deny
+                  }
+                }
+                Err(e) => {
+                  security_error!(
+                    "Something went wrong in checking permissions of a remote datareader: {}. \
+                     Topic: {topic_name}",
+                    e
+                  );
+                  NormalDiscoveryPermission::Deny
+                }
+              }
+            } else {
+              // Read is not protected. Allow.
+              security_log!(
+                "Authenticated participant {:?} wants to read unprotected topic {topic_name}. \
+                 Allowing.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Allow
+            }
+          }
+          other => {
+            // Authentication status other than Authenticated/Unauthenticated
+            security_log!(
+              "Received a DCPSSubscription message from a participant with authentication status: \
+               {:?}. Ignoring message. Participant: {:?}",
+              other,
+              participant_guidp
+            );
+            NormalDiscoveryPermission::Deny
+          }
+        }
+      }
+      Sample::Dispose(_reader_guid) => {
+        // Participant wants to dispose its reader
+        match auth_status {
+          Some(AuthenticationStatus::Unauthenticated)
+          | Some(AuthenticationStatus::Authenticated) => {
+            // Allow dispose for Unauthenticated/Authenticated participants
+            security_log!(
+              "Participant {:?} with authentication status {:?} disposes its reader in topic \
+               {topic_name}.",
+              participant_guidp,
+              auth_status,
+            );
+            NormalDiscoveryPermission::Allow
+          }
+          other_status => {
+            // Reject dispose message if authentication status is something else
+            security_log!(
+              "Participant {:?} with authentication status {:?} attempts to disposes its reader \
+               in topic {topic_name}. Rejecting.",
+              other_status,
+              participant_guidp
+            );
+            NormalDiscoveryPermission::Deny
+          }
+        }
+      }
+    }
+  }
+
+  pub fn check_nonsecure_publication_read(
+    &mut self,
+    sample: &Sample<DiscoveredWriterData, GUID>,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) -> NormalDiscoveryPermission {
+    // First see if discovery for the topic should be protected
+    let (topic_name, participant_guidp) = match sample {
+      Sample::Value(writer_data) => (
+        writer_data.publication_topic_data.topic_name().clone(),
+        writer_data.writer_proxy.remote_writer_guid.prefix,
+      ),
+      Sample::Dispose(writer_guid) => {
+        if let Some(writer) = discovery_db_read(discovery_db).get_topic_writer(writer_guid) {
+          // We do know a writer with this guid
+          (
+            writer.publication_topic_data.topic_name().clone(),
+            writer_guid.prefix,
+          )
+        } else {
+          // We do not now such a writer. Deny processing just in case.
+          return NormalDiscoveryPermission::Deny;
+        }
+      }
+    };
+
+    let topic_sec_attributes = match self
+      .security_plugins
+      .get_plugins()
+      .get_topic_sec_attributes(participant_guidp, &topic_name)
+    {
+      Ok(attr) => attr,
+      Err(e) => {
+        security_error!(
+          "Failed to get topic security attributes: {}. Topic: {topic_name}",
+          e
+        );
+        return NormalDiscoveryPermission::Deny;
+      }
+    };
+
+    if topic_sec_attributes.is_discovery_protected {
+      // Message should come from DCPSPublicationsSecure topic. Ignore this one.
+      security_log!(
+        "Received a non-secure DCPSPublication message for topic {topic_name} whose discovery is \
+         protected. Ignoring message. Participant: {:?}",
+        participant_guidp
+      );
+      return NormalDiscoveryPermission::Deny;
+    }
+    // Topic discovery is not protected. Get the authentication status
+    let auth_status = discovery_db_read(discovery_db).get_authentication_status(participant_guidp);
+
+    match sample {
+      Sample::Value(writer_data) => {
+        // Participant wants to publish to the topic
+        match auth_status {
+          Some(AuthenticationStatus::Unauthenticated) => {
+            // Section 8.8.7.1 "AccessControl behavior with discovered endpoints from
+            // “Unauthenticated” DomainParticipant" from the spec
+            if topic_sec_attributes.is_write_protected {
+              security_log!(
+                "Unauthenticated participant {:?} attempted to publish to protected topic \
+                 {topic_name}. Rejecting.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Deny
+            } else {
+              security_log!(
+                "Unauthenticated participant {:?} wants to publish to unprotected topic \
+                 {topic_name}. Allowing.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Allow
+            }
+          }
+          Some(AuthenticationStatus::Authenticated) => {
+            // Section 8.8.7.2 "AccessControl behavior with discovered endpoints from
+            // “Authenticated” DomainParticipant" from the spec
+            if topic_sec_attributes.is_write_protected {
+              // We need to check from access control
+              match self
+                .security_plugins
+                .get_plugins()
+                .check_remote_datawriter_from_nonsecure(
+                  participant_guidp,
+                  self.domain_id,
+                  writer_data,
+                ) {
+                Ok(check_passed) => {
+                  if check_passed {
+                    security_log!(
+                      "Access control check passed for authenticated participant {:?} to publish \
+                       to topic {topic_name}.",
+                      participant_guidp
+                    );
+                    NormalDiscoveryPermission::Allow
+                  } else {
+                    security_log!(
+                      "Access control check did not pass for authenticated participant {:?} to \
+                       publish to topic {topic_name}. Rejecting.",
+                      participant_guidp
+                    );
+                    NormalDiscoveryPermission::Deny
+                  }
+                }
+                Err(e) => {
+                  security_error!(
+                    "Something went wrong in checking permissions of a remote DataWriter: {}. \
+                     Topic: {topic_name}",
+                    e
+                  );
+                  NormalDiscoveryPermission::Deny
+                }
+              }
+            } else {
+              // Write is not protected. Allow.
+              security_log!(
+                "Authenticated participant {:?} wants to publish to unprotected topic \
+                 {topic_name}. Allowing.",
+                participant_guidp
+              );
+              NormalDiscoveryPermission::Allow
+            }
+          }
+          other => {
+            // Authentication status other than Authenticated/Unauthenticated
+            security_log!(
+              "Received a DCPSPublication message from a participant with authentication status: \
+               {:?}. Ignoring message. Participant: {:?}",
+              other,
+              participant_guidp
+            );
+            NormalDiscoveryPermission::Deny
+          }
+        }
+      }
+      Sample::Dispose(_writer_guid) => {
+        // Participant wants to dispose its writer
+        match auth_status {
+          Some(AuthenticationStatus::Unauthenticated)
+          | Some(AuthenticationStatus::Authenticated) => {
+            // Allow dispose for Unauthenticated/Authenticated participants
+            security_log!(
+              "Participant {:?} with authentication status {:?} disposes its writer in topic \
+               {topic_name}.",
+              participant_guidp,
+              auth_status,
+            );
+            NormalDiscoveryPermission::Allow
+          }
+          other_status => {
+            // Reject dispose message if authentication status is something else
+            security_log!(
+              "Participant {:?} with authentication status {:?} attempts to disposes its writer \
+               in topic {topic_name}. Rejecting.",
+              other_status,
+              participant_guidp
+            );
+            NormalDiscoveryPermission::Deny
+          }
+        }
       }
     }
   }
@@ -549,7 +938,7 @@ impl SecureDiscovery {
 
     send_discovery_notification(
       discovery_updated_sender,
-      DiscoveryNotificationType::ParticipantUpdated {
+      DiscoveryNotificationType::ParticipantAuthenticationStatusChanged {
         guid_prefix: participant_guid_prefix,
       },
     );
@@ -582,11 +971,10 @@ impl SecureDiscovery {
     }
 
     // Create the request message with the request token
-    let request_message = self.stateless_message_helper.new_message(
-      self.local_participant_guid,
-      None,
-      remote_guid_prefix,
+    let request_message = self.new_stateless_message(
       GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+      remote_guid_prefix,
+      None,
       request_token,
     );
     Ok(request_message)
@@ -797,20 +1185,20 @@ impl SecureDiscovery {
       };
 
     // Now call the security functionality
-    match self.security_plugins.get_plugins().begin_handshake_reply(
+    let result = self.security_plugins.get_plugins().begin_handshake_reply(
       local_guid_prefix,
       remote_guid_prefix,
       handshake_token,
       my_serialized_data,
-    ) {
+    );
+    match result {
       Ok((ValidationOutcome::PendingHandshakeMessage, reply_token)) => {
         // Request token was OK and we got a reply token to send back
         // Create a ParticipantStatelessMessage with the token
-        let reply_message = self.stateless_message_helper.new_message(
-          self.local_participant_guid,
-          Some(received_message),
-          remote_guid_prefix,
+        let reply_message = self.new_stateless_message(
           GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+          remote_guid_prefix,
+          Some(received_message),
           reply_token,
         );
 
@@ -906,11 +1294,10 @@ impl SecureDiscovery {
       Ok((ValidationOutcome::OkFinalMessage, Some(final_message_token))) => {
         // Everything went OK. Still need to send the final message to remote.
         // Create a ParticipantStatelessMessage with the token
-        let final_message = self.stateless_message_helper.new_message(
-          self.local_participant_guid,
-          Some(received_message),
-          remote_guid_prefix,
+        let final_message = self.new_stateless_message(
           GMCLASSID_SECURITY_AUTH_HANDSHAKE,
+          remote_guid_prefix,
+          Some(received_message),
           final_message_token,
         );
 
@@ -1090,11 +1477,7 @@ impl SecureDiscovery {
         if let Err(e) = self
           .security_plugins
           .get_plugins()
-          .set_remote_participant_crypto_tokens(
-            self.local_participant_guid.prefix,
-            remote_participant_guidp,
-            crypto_tokens,
-          )
+          .set_remote_participant_crypto_tokens(remote_participant_guidp, crypto_tokens)
         {
           security_error!(
             "Failed to set remote participant crypto tokens: {}. Remote: {:?}",
@@ -1206,16 +1589,29 @@ impl SecureDiscovery {
         .get_plugins()
         .check_remote_participant(self.domain_id, remote_guid_prefix)
       {
-        Ok(()) => {
-          info!(
-            "Allowing remote participant to join the domain. Remote guid prefix {:?}",
-            remote_guid_prefix
-          );
+        Ok(check_passed) => {
+          if check_passed {
+            // All good
+            security_log!(
+              "Allowing remote participant {:?} to join the domain.",
+              remote_guid_prefix
+            );
+          } else {
+            // Not allowed
+            security_log!(
+              "Remote participant {:?} is not allowed to join the domain. Rejecting the remote.",
+              remote_guid_prefix
+            );
+            discovery_db_write(discovery_db)
+              .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+            return;
+          }
         }
         Err(e) => {
-          security_log!(
-            "Remote participant is not allowed to join the domain: {}. Rejecting the remote. Guid \
-             prefix: {:?}",
+          // Something went wrong in checking permissions
+          security_error!(
+            "Something went wrong in checking remote participant permissions: {}. Rejecting the \
+             remote {:?}.",
             e,
             remote_guid_prefix
           );
@@ -1226,6 +1622,21 @@ impl SecureDiscovery {
       }
     }
     // Permission checks OK
+
+    if let Err(e) = register_remote_to_crypto(
+      self.local_participant_guid.prefix,
+      remote_guid_prefix,
+      &self.security_plugins,
+    ) {
+      security_error!(
+        "Failed to register remote participant {:?} to crypto plugin: {}. Rejecting remote",
+        remote_guid_prefix,
+        e,
+      );
+      discovery_db_write(discovery_db)
+        .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+      return;
+    };
 
     // Update participant status as Authenticated & notify dp
     self.update_participant_authentication_status_and_notify_dp(
@@ -1248,37 +1659,6 @@ impl SecureDiscovery {
     key_exchange_writer: &no_key::DataWriter<ParticipantVolatileMessageSecure>,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
   ) {
-    // Register remote participant to crypto plugin with the shared secret which
-    // resulted from the successful handshake
-    if let Err(e) = {
-      let shared_secret = self
-        .security_plugins
-        .get_plugins()
-        .get_shared_secret(remote_guid_prefix); // Release lock
-      shared_secret.and_then(|shared_secret| {
-        self
-          .security_plugins
-          .get_plugins()
-          .register_matched_remote_participant(
-            self.local_participant_guid.prefix,
-            remote_guid_prefix,
-            shared_secret,
-          )
-      })
-    } {
-      security_error!(
-        "Failed to register remote participant with the crypto plugin: {}. Remote: {:?}",
-        e,
-        remote_guid_prefix
-      );
-      return;
-    } else {
-      info!(
-        "Registered remote participant with the crypto plugin. Remote = {:?}",
-        remote_guid_prefix
-      );
-    }
-
     // Read remote's available endpoints from DB
     let remotes_builtin_endpoints =
       match discovery_db_read(discovery_db).find_participant_proxy(remote_guid_prefix) {
@@ -1292,84 +1672,24 @@ impl SecureDiscovery {
         }
       };
 
-    // Register remote reader & writer of topic
-    // ParticipantVolatileMessageSecure, which is used for exchanging crypto
-    // tokens.
-    // These need to be registered before sending crypto tokens
-    let local_volatile_reader_guid = self
-      .local_participant_guid
-      .from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER);
-    let local_volatile_writer_guid = self
-      .local_participant_guid
-      .from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER);
-
-    let remote_volatile_reader_guid = GUID::new(
-      remote_guid_prefix,
-      EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
-    );
-    let remote_volatile_writer_guid = GUID::new(
-      remote_guid_prefix,
-      EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
-    );
-
-    if let Err(e) = {
-      let register_result = self
-        .security_plugins
-        .get_plugins()
-        .register_matched_remote_reader(
-          remote_volatile_reader_guid,
-          local_volatile_writer_guid,
-          false,
-        ); // Release lock
-      register_result.and_then(|()| {
-        self
-          .security_plugins
-          .get_plugins()
-          .register_matched_remote_writer(remote_volatile_writer_guid, local_volatile_reader_guid)
-      })
-    } {
-      security_error!(
-        "Failed to register remote volatile reader/writer to crypto plugin {}. Remote: {:?}",
-        e,
-        remote_guid_prefix
-      );
-      // If this registration failed, it is pointless to try to send any crypto
-      // tokens. So just exit.
-      return;
-    }
-
     // Send local participant crypto tokens to remote
     // TODO: do this only if needed?
     let local_participant_crypto_tokens = self
       .security_plugins
       .get_plugins()
       // Get participant crypto tokens
-      .create_local_participant_crypto_tokens(
-        self.local_participant_guid.prefix,
-        remote_guid_prefix,
-      ); // Release lock
+      .create_local_participant_crypto_tokens(remote_guid_prefix); // Release lock
     let res = local_participant_crypto_tokens
-      // Map to vector of data holders
-      .map(|crypto_token_vec| {
-        crypto_token_vec
-          .iter()
-          .map(|crypto_token| crypto_token.data_holder.clone())
-          .collect::<Vec<_>>()
-      })
-      // Create a GenericParticipantMessage
-      .map(|data_holders| {
-        self.generic_message_helper.new_message(
-          GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS, // Message id
+      .map(|crypto_tokens| {
+        self.new_volatile_message(
+          GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS,
           key_exchange_writer.guid(),
-          GUID::GUID_UNKNOWN, // No source endpoint guid
-          None,               // No related message
+          GUID::GUID_UNKNOWN, // No source endpoint, just the participant
           remote_guid_prefix,
-          GUID::GUID_UNKNOWN, // No destination endpoint guid
-          data_holders,
+          GUID::GUID_UNKNOWN, // No destination endpoint, just the participant
+          crypto_tokens.as_ref(),
         )
       })
-      // Create the volatile message
-      .map(ParticipantVolatileMessageSecure::from)
       // Send with writer
       .and_then(|vol_msg| {
         let opts = WriteOptionsBuilder::new()
@@ -1395,59 +1715,30 @@ impl SecureDiscovery {
       info!("Sent participant crypto tokens to {:?}", remote_guid_prefix);
     }
 
-    // Register the rest of the remote's secure built-in readers
+    // Send local writers' crypto tokens to the remote readers
     for (writer_eid, reader_eid, reader_endpoint) in SECURE_BUILTIN_READERS_INIT_LIST {
       if remotes_builtin_endpoints.contains(*reader_endpoint)
+      // Key exchange is not done for the volatile topic (its keys are derived from the shared secret)
         && *reader_eid != EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER
       {
         let remote_reader_guid = GUID::new(remote_guid_prefix, *reader_eid);
         let local_writer_guid = self.local_participant_guid.from_prefix(*writer_eid);
 
-        // First register remote reader
-        if let Err(e) = self
-          .security_plugins
-          .get_plugins()
-          .register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
-        {
-          security_error!(
-            "Failed to register remote built-in reader {:?} to crypto plugin: {}",
-            remote_reader_guid,
-            e,
-          );
-          continue;
-        }
-        info!(
-          "Registered remote reader with the crypto plugin. GUID: {:?}",
-          remote_reader_guid
-        );
-
-        // Then send local writer crypto tokens to the remote reader
         let local_writer_crypto_tokens = self
           .security_plugins
           .get_plugins()
           .create_local_writer_crypto_tokens(local_writer_guid, remote_reader_guid); // Release lock
         let res = local_writer_crypto_tokens
-          // Map crypto tokens to vector of data holders
-          .map(|crypto_token_vec| {
-            crypto_token_vec
-              .iter()
-              .map(|crypto_token| crypto_token.data_holder.clone())
-              .collect::<Vec<_>>()
-          })
-          // Create a GenericParticipantMessage
-          .map(|data_holders| {
-            self.generic_message_helper.new_message(
-              GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS, // Message id
+          .map(|crypto_tokens| {
+            self.new_volatile_message(
+              GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS,
               key_exchange_writer.guid(),
-              local_writer_guid, // Source endpoint guid is our writer
-              None,              // No related message
+              local_writer_guid,
               remote_guid_prefix,
-              remote_reader_guid, // Destination endpoint guid is the remote reader
-              data_holders,
+              remote_reader_guid,
+              crypto_tokens.as_ref(),
             )
           })
-          // Create the volatile message
-          .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
           .and_then(|vol_msg| {
             let opts = WriteOptionsBuilder::new()
@@ -1478,60 +1769,30 @@ impl SecureDiscovery {
       }
     }
 
-    // Register the rest of the remote's secure built-in writers
+    // Send local readers' crypto tokens to the remote writers
     for (writer_eid, reader_eid, writer_endpoint) in SECURE_BUILTIN_WRITERS_INIT_LIST {
       if remotes_builtin_endpoints.contains(*writer_endpoint)
+        // Key exchange is not done for the volatile topic (its keys are derived from the shared secret)
         && *writer_eid != EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER
       {
         let remote_writer_guid = GUID::new(remote_guid_prefix, *writer_eid);
         let local_reader_guid = self.local_participant_guid.from_prefix(*reader_eid);
 
-        // First register remote writer
-        if let Err(e) = self
-          .security_plugins
-          .get_plugins()
-          .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
-        {
-          security_error!(
-            "Failed to register remote built-in writer {:?} to crypto plugin: {}",
-            remote_writer_guid,
-            e,
-          );
-          continue;
-        } else {
-          info!(
-            "Registered remote writer with the crypto plugin. GUID: {:?}",
-            remote_writer_guid
-          );
-        }
-
-        // Then send local reader crypto tokens to the remote writer
         let local_reader_crypto_tokens = self
           .security_plugins
           .get_plugins()
           .create_local_reader_crypto_tokens(local_reader_guid, remote_writer_guid); // Release lock
         let res = local_reader_crypto_tokens
-          // Map crypto tokens to vector of data holders
-          .map(|crypto_token_vec| {
-            crypto_token_vec
-              .iter()
-              .map(|crypto_token| crypto_token.data_holder.clone())
-              .collect::<Vec<_>>()
-          })
-          // Create a GenericParticipantMessage
-          .map(|data_holders| {
-            self.generic_message_helper.new_message(
-              GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS, // Message id
+          .map(|crypto_tokens| {
+            self.new_volatile_message(
+              GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS,
               key_exchange_writer.guid(),
-              local_reader_guid, // Source endpoint guid is our reader
-              None,              // No related message
+              local_reader_guid,
               remote_guid_prefix,
-              remote_writer_guid, // Destination endpoint guid is the remote writer
-              data_holders,
+              remote_writer_guid,
+              crypto_tokens.as_ref(),
             )
           })
-          // Create the volatile message
-          .map(ParticipantVolatileMessageSecure::from)
           // Send with writer
           .and_then(|vol_msg| {
             let opts = WriteOptionsBuilder::new()
@@ -1659,6 +1920,53 @@ impl SecureDiscovery {
 
     Ok(my_ser_data.to_vec())
   }
+
+  // Create a message for the DCPSParticipantStatelessMessage builtin Topic
+  fn new_stateless_message(
+    &mut self,
+    message_class_id: &str,
+    destination_guid_prefix: GuidPrefix,
+    related_message_opt: Option<&ParticipantStatelessMessage>,
+    handshake_token: HandshakeMessageToken,
+  ) -> ParticipantStatelessMessage {
+    let generic_message = self.generic_message_helper.new_message(
+      message_class_id,
+      self.local_participant_guid, // Writer guid for message identity
+      GUID::GUID_UNKNOWN,          // Do not specify source endpoint guid
+      related_message_opt.map(|msg| &msg.generic),
+      destination_guid_prefix,
+      GUID::GUID_UNKNOWN, // Do not specify destination endpoint guid
+      vec![handshake_token.data_holder],
+    );
+
+    ParticipantStatelessMessage::from(generic_message)
+  }
+
+  // Create a message for the DCPSParticipantVolatileMessageSecure builtin Topic
+  fn new_volatile_message(
+    &mut self,
+    message_class_id: &str,
+    volatile_writer_guid: GUID,
+    source_endpoint_guid: GUID,
+    destination_guid_prefix: GuidPrefix,
+    destination_endpoint_guid: GUID,
+    crypto_tokens: &[CryptoToken],
+  ) -> ParticipantVolatileMessageSecure {
+    let generic_message = self.generic_message_helper.new_message(
+      message_class_id,
+      volatile_writer_guid,
+      source_endpoint_guid,
+      None, // No related message
+      destination_guid_prefix,
+      destination_endpoint_guid,
+      crypto_tokens
+        .iter()
+        .map(|token| token.data_holder.clone())
+        .collect(),
+    );
+
+    ParticipantVolatileMessageSecure::from(generic_message)
+  }
 }
 
 fn send_discovery_notification(
@@ -1690,71 +1998,80 @@ fn get_handshake_token_from_stateless_message(
     .map(|data_holder| HandshakeMessageToken::from(data_holder.clone()))
 }
 
-// A helper to construct/readParticipantStatelessMessages. Takes care of the
-// sequence numbering of the messages
-struct ParticipantStatelessMessageHelper {
-  next_seqnum: SequenceNumber,
-}
+fn register_remote_to_crypto(
+  local_guidp: GuidPrefix,
+  remote_guidp: GuidPrefix,
+  security_plugins_handle: &SecurityPluginsHandle,
+) -> SecurityResult<()> {
+  // Register remote participant to crypto plugin with the shared secret which
+  // resulted from the successful handshake
+  let shared_secret = security_plugins_handle
+    .get_plugins()
+    .get_shared_secret(remote_guidp); // Release lock
+  shared_secret
+    .and_then(|shared_secret| {
+      security_plugins_handle
+        .get_plugins()
+        .register_matched_remote_participant(remote_guidp, shared_secret)
+    })
+    .map_err(|e| {
+      security_error!(
+        "Failed to register remote participant with the crypto plugin: {}. Remote: {:?}",
+        e,
+        remote_guidp
+      )
+    })?;
+  debug!(
+    "Registered remote participant {:?} with the crypto plugin.",
+    remote_guidp
+  );
 
-impl ParticipantStatelessMessageHelper {
-  pub fn new() -> Self {
-    Self {
-      next_seqnum: SequenceNumber::new(1), /* Sequence numbering starts at 1 (see section 7.4.3.3
-                                            * 'Contents of the ParticipantStatelessMessage' of
-                                            * Security spec) */
-    }
+  // Register remote's secure built-in readers
+  for (writer_eid, reader_eid, _reader_endpoint) in SECURE_BUILTIN_READERS_INIT_LIST {
+    let remote_reader_guid = GUID::new(remote_guidp, *reader_eid);
+    let local_writer_guid = GUID::new(local_guidp, *writer_eid);
+
+    security_plugins_handle
+      .get_plugins()
+      .register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
+      .map_err(|e| {
+        security_error!(
+          "Failed to register remote built-in reader {:?} to crypto plugin: {}",
+          remote_reader_guid,
+          e,
+        )
+      })?;
+    debug!(
+      "Registered remote reader with the crypto plugin. GUID: {:?}",
+      remote_reader_guid
+    );
   }
 
-  pub fn new_message(
-    &mut self,
-    local_participant_guid: GUID,
-    related_message_opt: Option<&ParticipantStatelessMessage>,
-    destination_guid_prefix: GuidPrefix,
-    message_class_id: &str,
-    handshake_token: HandshakeMessageToken,
-  ) -> ParticipantStatelessMessage {
-    // See Section 7.4.3.3 Contents of the ParticipantStatelessMessage of the
-    // Security specification
+  // Register remote's secure built-in writers
+  for (writer_eid, reader_eid, _writer_endpoint) in SECURE_BUILTIN_WRITERS_INIT_LIST {
+    let remote_writer_guid = GUID::new(remote_guidp, *writer_eid);
+    let local_reader_guid = GUID::new(local_guidp, *reader_eid);
 
-    let message_identity = rpc::SampleIdentity {
-      writer_guid: local_participant_guid
-        .from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER),
-      sequence_number: self.next_seqnum,
-    };
-
-    let related_message_identity = if let Some(msg) = related_message_opt {
-      msg.generic.message_identity
-    } else {
-      rpc::SampleIdentity {
-        writer_guid: GUID::GUID_UNKNOWN,
-        sequence_number: SequenceNumber::zero(),
-      }
-    };
-
-    // Make sure destination GUID has correct EntityId
-    let destination_participant_guid = GUID::new(destination_guid_prefix, EntityId::PARTICIPANT);
-
-    // Increment next sequence number
-    self.next_seqnum = self.next_seqnum + SequenceNumber::new(1);
-
-    let generic = ParticipantGenericMessage {
-      message_identity,
-      related_message_identity,
-      destination_participant_guid,
-      destination_endpoint_guid: GUID::GUID_UNKNOWN,
-      source_endpoint_guid: GUID::GUID_UNKNOWN,
-      message_class_id: message_class_id.to_string(),
-      message_data: vec![handshake_token.data_holder],
-    };
-
-    ParticipantStatelessMessage { generic }
+    security_plugins_handle
+      .get_plugins()
+      .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
+      .map_err(|e| {
+        security_error!(
+          "Failed to register remote built-in writer {:?} to crypto plugin: {}",
+          remote_writer_guid,
+          e,
+        )
+      })?;
+    debug!(
+      "Registered remote writer with the crypto plugin. GUID: {:?}",
+      remote_writer_guid
+    );
   }
+  Ok(())
 }
 
-// A helper to construct/readParticipantStatelessMessages. Takes care of the
-// sequence numbering of the messages
-// TODO: use this also with ParticipantStatelessMessages, i.e. get rid of
-// ParticipantStatelessMessageHelper
+// A helper to construct ParticipantGenericMessages. Takes care of
+// sequence numbering the messages
 struct ParticipantGenericMessageHelper {
   next_seqnum: SequenceNumber,
 }

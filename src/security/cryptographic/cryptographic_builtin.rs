@@ -56,6 +56,9 @@ pub struct CryptographicBuiltin {
   // For reverse lookups
   endpoint_to_participant: HashMap<EndpointCryptoHandle, ParticipantCryptoHandle>,
 
+  // For generating random key IDs without collisions
+  used_local_key_ids: HashSet<CryptoTransformKeyId>,
+
   // sessions
   //
   // TODO: The session ids should be stored in a data structure.
@@ -93,6 +96,7 @@ impl CryptographicBuiltin {
       endpoint_encrypt_options: HashMap::new(),
       participant_to_endpoint_info: HashMap::new(),
       endpoint_to_participant: HashMap::new(),
+      used_local_key_ids: HashSet::from([CryptoTransformKeyId::ZERO]),
       matched_remote_endpoint: HashMap::new(),
       matched_local_endpoint: HashMap::new(),
       crypto_handle_counter: 0,
@@ -295,6 +299,10 @@ impl CryptographicBuiltin {
     master_salt: &BuiltinKey,
     iv: BuiltinInitializationVector,
   ) -> BuiltinKey {
+    if let BuiltinKey::None = master_key {
+      return BuiltinKey::None;
+    }
+
     // This is the algorithm given in
     // DDS Security spec v1.1
     // Section "9.5.3.3.3 Computation of SessionKey and SessionReceiverSpecificKey"
@@ -327,7 +335,7 @@ impl CryptographicBuiltin {
     sending_local_entity_crypto_handle: CryptoHandle,
     key_material_scope: KeyMaterialScope,
     receiving_remote_entity_crypto_handles: &[CryptoHandle],
-  ) -> SecurityResult<EncryptSessionMaterials> {
+  ) -> SecurityResult<EncodeSessionMaterials> {
     let common_encode_key_materials =
       self.get_common_encode_key_materials(&sending_local_entity_crypto_handle)?;
 
@@ -373,7 +381,7 @@ impl CryptographicBuiltin {
       // Iterate over receiver handles
       receiving_remote_entity_crypto_handles
         .iter()
-        .map(|receiver_crypto_handle| {
+        .filter_map(|receiver_crypto_handle| {
           self
             .get_receiver_specific_encode_key_materials(receiver_crypto_handle)
             .map(|m| m.select(key_material_scope))
@@ -382,22 +390,28 @@ impl CryptographicBuiltin {
               receiver_key_material.receiver_key_material_for(common_encode_key_material)
             })
             // Map to session keys
-            .map(|rec_spec_key_material| {
-              let session_key = Self::compute_session_key(
-                ReceiverSpecific::Yes,
-                &rec_spec_key_material.key,
-                master_salt,
-                initialization_vector,
-              );
-              ReceiverSpecificKeyMaterial {
-                key_id: rec_spec_key_material.key_id,
-                key: session_key,
+            .map(|ReceiverSpecificKeyMaterial { key_id, key }| {
+              // Filter out when there are no receiver-specific keys
+              if key_id.is_zero() {
+                None
+              } else {
+                let session_key = Self::compute_session_key(
+                  ReceiverSpecific::Yes,
+                  &key,
+                  master_salt,
+                  initialization_vector,
+                );
+                Some(ReceiverSpecificKeyMaterial {
+                  key_id,
+                  key: session_key,
+                })
               }
             })
+            .transpose()
         }),
     )?;
 
-    Ok(EncryptSessionMaterials {
+    Ok(EncodeSessionMaterials {
       key_id: *sender_key_id,
       transformation_kind,
       session_key,
@@ -406,14 +420,14 @@ impl CryptographicBuiltin {
     })
   }
 
-  // Get materials needed for encrypting
+  // Get materials needed for decoding
   fn session_decode_crypto_materials(
     &self,
     remote_sender_handle: CryptoHandle,
     header_key_id: CryptoTransformKeyId, // what key id was specified on incoming header
     key_material_scope: KeyMaterialScope,
     initialization_vector: BuiltinInitializationVector, // as received in header
-  ) -> SecurityResult<DecryptSessionMaterials> {
+  ) -> SecurityResult<DecodeSessionMaterials> {
     let KeyMaterial_AES_GCM_GMAC {
       transformation_kind,
       master_salt,
@@ -448,7 +462,7 @@ impl CryptographicBuiltin {
       })
     };
 
-    Ok(DecryptSessionMaterials {
+    Ok(DecodeSessionMaterials {
       key_id: *sender_key_id,
       transformation_kind,
       session_key,
@@ -457,7 +471,7 @@ impl CryptographicBuiltin {
   }
 }
 
-struct EncryptSessionMaterials {
+struct EncodeSessionMaterials {
   key_id: CryptoTransformKeyId, // key identifier over the wire
   transformation_kind: BuiltinCryptoTransformationKind, // encrypt/sign/none
   session_key: BuiltinKey,      // session-specific AES-GCM key
@@ -467,7 +481,7 @@ struct EncryptSessionMaterials {
   receiver_specific_keys: Vec<ReceiverSpecificKeyMaterial>,
 }
 
-struct DecryptSessionMaterials {
+struct DecodeSessionMaterials {
   key_id: CryptoTransformKeyId, // key identifier over the wire
   transformation_kind: BuiltinCryptoTransformationKind, // encrypt/sign/none
   session_key: BuiltinKey,      // session-specific AES-GCM key

@@ -135,7 +135,7 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     domain_id: u16,
     topic_name: String,
     _qos: &QosPolicies,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let partitions = &[]; // Partitions currently unsupported. TODO: get from PartitionQosPolicy
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from DataTagQosPolicy
     self.check_entity(
@@ -154,7 +154,7 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     domain_id: u16,
     topic_name: String,
     _qos: &QosPolicies,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let partitions = &[]; // Partitions currently unsupported. TODO: get from PartitionQosPolicy
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from DataTagQosPolicy
     self.check_entity(
@@ -173,7 +173,7 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
     domain_id: u16,
     topic_name: String,
     _qos: &QosPolicies,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let partitions = &[]; // Partitions currently unsupported. TODO: get from PartitionQosPolicy
     let data_tags = &[]; // Data tagging currently unsupported. TODO: get from DataTagQosPolicy
     self.check_entity(
@@ -219,10 +219,10 @@ impl LocalEntityAccessControl for AccessControlBuiltin {
   fn get_topic_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
-    topic_name: String,
+    topic_name: &str,
   ) -> SecurityResult<TopicSecurityAttributes> {
     self
-      .get_endpoint_security_attributes(permissions_handle, &topic_name)
+      .get_endpoint_security_attributes(permissions_handle, topic_name)
       .map(
         |EndpointSecurityAttributes {
            topic_security_attributes,
