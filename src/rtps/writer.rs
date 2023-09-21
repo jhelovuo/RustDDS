@@ -584,12 +584,11 @@ impl Writer {
 
             // send message, either to all readers or jsut one
             match write_options.to_single_reader() {
-              None =>
-                self.send_message_to_readers(
-                  DeliveryMode::Multicast,
-                  data_hb_message,
-                  &mut self.readers.values(),
-                ),
+              None => self.send_message_to_readers(
+                DeliveryMode::Multicast,
+                data_hb_message,
+                &mut self.readers.values(),
+              ),
               Some(reader_guid) => {
                 debug!("Single reader send: {data_hb_message:?}");
                 if let Some(reader_proxy) = self.readers.get(&reader_guid) {
@@ -597,15 +596,12 @@ impl Writer {
                     DeliveryMode::Unicast,
                     data_hb_message,
                     &mut std::iter::once(reader_proxy),
-                  )
+                  );
                 } else {
-                  warn!("Cannot send to Reader {reader_guid:?}, I have no ReaderProxy!")
+                  warn!("Cannot send to Reader {reader_guid:?}, I have no ReaderProxy!");
                 }
               }
-
             }
-
-
           } else {
             // Large payload, must fragment.
 
