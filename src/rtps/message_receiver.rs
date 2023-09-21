@@ -793,14 +793,15 @@ impl MessageReceiver {
         // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
         // the submessage contains and then proceed to decode and process accordingly.
 
-        match security_plugins_handle.get_plugins().decode_submessage(
+        let decode_result = security_plugins_handle.get_plugins().decode_submessage(
           (
             sec_prefix.clone(),
             encoded_submessage.clone(),
             sec_postfix.clone(),
           ),
           &self.source_guid_prefix,
-        ) {
+        );
+        match decode_result {
           Err(e) => {
             error!("Submessage decoding failed: {e:?}");
           }
