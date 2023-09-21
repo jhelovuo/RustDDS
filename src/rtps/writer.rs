@@ -804,17 +804,35 @@ impl Writer {
         .ts_msg(self.endianness, Some(Timestamp::now()))
         .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
         .add_header_and_build(self.my_guid.prefix);
+
       debug!(
         "Writer {:?} topic={:} HEARTBEAT {:?}",
         self.guid().entity_id,
         self.topic_name(),
         hb_message
       );
-      self.send_message_to_readers(
-        DeliveryMode::Multicast,
-        hb_message,
-        &mut self.readers.values(),
-      );
+
+      // In the volatle key exchange topic we cannot send to multiple readers by any means,
+      // so we handle that separately.
+      if self.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER {
+        for rp in self.readers.values() {
+          if self.last_change_sequence_number < rp.all_acked_before {
+            // Everything we have has been acknowledged already. Do nothing.
+          } else {
+            self.send_message_to_readers(
+              DeliveryMode::Unicast,
+              hb_message.clone(),
+              &mut std::iter::once(rp),
+            );
+          }
+        }
+      } else {  // Normal case
+        self.send_message_to_readers(
+          DeliveryMode::Multicast,
+          hb_message,
+          &mut self.readers.values(),
+        );
+      }
     }
   }
 
