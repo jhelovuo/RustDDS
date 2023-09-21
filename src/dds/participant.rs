@@ -808,7 +808,7 @@ pub(crate) struct DomainParticipantInner {
 
   // RTPS locators describing how to reach this DP
   self_locators: HashMap<Token, Vec<Locator>>,
-  #[allow(dead_code)] // TODO: use or remove
+
   security_plugins_handle: Option<SecurityPluginsHandle>,
 }
 
@@ -1091,6 +1091,35 @@ impl DomainParticipantInner {
     qos: &QosPolicies,
     topic_kind: TopicKind,
   ) -> CreateResult<Topic> {
+    #[cfg(feature = "security")]
+    if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security is enabled.
+      // Check are we allowed to create the topic from Access control
+      let check_res = sec_handle.get_plugins().check_create_topic(
+        self.my_guid.prefix,
+        self.domain_id,
+        name.clone(),
+        qos,
+      );
+      match check_res {
+        Ok(check_passed) => {
+          if !check_passed {
+            return create_error_not_allowed_by_security!(
+              "Not allowed to create the topic {}",
+              name
+            );
+          }
+        }
+        Err(e) => {
+          // Something went wrong in the check
+          return create_error_internal!(
+            "Failed to check Topic rights from Access control: {}",
+            e.msg
+          );
+        }
+      };
+    }
+
     let topic = Topic::new(
       domain_participant_weak,
       name,

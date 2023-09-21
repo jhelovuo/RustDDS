@@ -52,7 +52,10 @@ use super::{
   with_key::simpledatareader::ReaderCommand,
 };
 #[cfg(feature = "security")]
-use crate::{create_error_internal, security::security_plugins::SecurityPluginsHandle};
+use crate::{
+  create_error_internal, create_error_not_allowed_by_security,
+  security::security_plugins::SecurityPluginsHandle,
+};
 #[cfg(not(feature = "security"))]
 use crate::no_security::security_plugins::SecurityPluginsHandle;
 
@@ -489,14 +492,40 @@ impl InnerPublisher {
     let guid = GUID::new_with_prefix_and_id(dp.guid().prefix, entity_id);
 
     #[cfg(feature = "security")]
-    if let Some(handle) = self.security_plugins_handle.as_ref() {
-      // Security is enabled. Register Writer to crypto plugin
+    if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security is enabled.
+      // Check are we allowed to create the DataWriter from Access control
+      let check_res = sec_handle.get_plugins().check_create_datawriter(
+        guid.prefix,
+        dp.domain_id(),
+        topic.name(),
+        &writer_qos,
+      );
+      match check_res {
+        Ok(check_passed) => {
+          if !check_passed {
+            return create_error_not_allowed_by_security!(
+              "Not allowed to create a DataWriter to topic {}",
+              topic.name()
+            );
+          }
+        }
+        Err(e) => {
+          // Something went wrong in the check
+          return create_error_internal!(
+            "Failed to check DataWriter rights from Access control: {}",
+            e.msg
+          );
+        }
+      };
+
+      // Register Writer to crypto plugin
       if let Err(e) = {
-        let writer_security_attributes = handle
+        let writer_security_attributes = sec_handle
           .get_plugins()
           .get_writer_sec_attributes(guid, topic.name()); // Release lock
         writer_security_attributes.and_then(|attributes| {
-          handle
+          sec_handle
             .get_plugins()
             .register_local_writer(guid, writer_qos.property(), attributes)
         })
@@ -981,14 +1010,40 @@ impl InnerSubscriber {
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
 
     #[cfg(feature = "security")]
-    if let Some(handle) = self.security_plugins_handle.as_ref() {
-      // Security is enabled. Register Reader to crypto plugin
+    if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security is enabled.
+      // Check are we allowed to create the DataReader from Access control
+      let check_res = sec_handle.get_plugins().check_create_datareader(
+        reader_guid.prefix,
+        dp.domain_id(),
+        topic.name(),
+        &qos,
+      );
+      match check_res {
+        Ok(check_passed) => {
+          if !check_passed {
+            return create_error_not_allowed_by_security!(
+              "Not allowed to create a DataReader to topic {}",
+              topic.name()
+            );
+          }
+        }
+        Err(e) => {
+          // Something went wrong in the check
+          return create_error_internal!(
+            "Failed to check DataReader rights from Access control: {}",
+            e.msg
+          );
+        }
+      };
+
+      // Register Reader to crypto plugin
       if let Err(e) = {
-        let reader_security_attributes = handle
+        let reader_security_attributes = sec_handle
           .get_plugins()
           .get_reader_sec_attributes(reader_guid, topic.name()); // Release lock
         reader_security_attributes.and_then(|attributes| {
-          handle
+          sec_handle
             .get_plugins()
             .register_local_reader(reader_guid, qos.property(), attributes)
         })

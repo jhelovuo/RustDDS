@@ -458,6 +458,45 @@ impl SecurityPlugins {
     self.access.check_create_participant(handle, domain_id, qos)
   }
 
+  pub fn check_create_topic(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    topic_name: String,
+    qos: &QosPolicies,
+  ) -> SecurityResult<bool> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    self
+      .access
+      .check_create_topic(handle, domain_id, topic_name, qos)
+  }
+
+  pub fn check_create_datawriter(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    topic_name: String,
+    qos: &QosPolicies,
+  ) -> SecurityResult<bool> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    self
+      .access
+      .check_create_datawriter(handle, domain_id, topic_name, qos)
+  }
+
+  pub fn check_create_datareader(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    topic_name: String,
+    qos: &QosPolicies,
+  ) -> SecurityResult<bool> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    self
+      .access
+      .check_create_datareader(handle, domain_id, topic_name, qos)
+  }
+
   pub fn check_remote_participant(
     &self,
     domain_id: u16,
