@@ -343,9 +343,10 @@ impl SecureDiscovery {
     discovery_db_write(discovery_db).update_authentication_status(guid_prefix, updated_auth_status);
 
     // Decide if normal Discovery can process the participant message
-    if updated_auth_status == AuthenticationStatus::Unauthenticated
-      || updated_auth_status == AuthenticationStatus::Authenticating
-    {
+    // If authentication has begun with the remote, we should have already notified
+    // DP event loop of it. So allow normal discovery to process the message only
+    // if the remote is Unauthenticated
+    if updated_auth_status == AuthenticationStatus::Unauthenticated {
       NormalDiscoveryPermission::Allow
     } else {
       NormalDiscoveryPermission::Deny
@@ -824,10 +825,13 @@ impl SecureDiscovery {
     // Gather some needed items
     let my_guid = self.local_participant_guid;
     let remote_guid = participant_data.participant_guid;
-    let remote_identity_token = participant_data
-      .identity_token
-      .clone()
-      .expect("IdentityToken disappeared"); // Identity token is here since compatibility test passed
+    let remote_identity_token = match participant_data.identity_token.as_ref() {
+      Some(token) => token.clone(),
+      None => {
+        security_error!("SpdpDiscoveredParticipantData is missing the Identity token");
+        return AuthenticationStatus::Rejected;
+      }
+    };
 
     // First validate the remote identity
     let outcome: ValidationOutcome = match self
@@ -1576,19 +1580,23 @@ impl SecureDiscovery {
           e,
           remote_guid_prefix
         );
-        discovery_db_write(discovery_db)
-          .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+        self.update_participant_authentication_status_and_notify_dp(
+          remote_guid_prefix,
+          AuthenticationStatus::Rejected,
+          discovery_db,
+          discovery_updated_sender,
+        );
         return;
       }
     }
 
     // If needed, check is remote allowed to join the domain
     if self.local_dp_sec_attributes.is_access_protected {
-      match self
+      let check_result = self
         .security_plugins
         .get_plugins()
-        .check_remote_participant(self.domain_id, remote_guid_prefix)
-      {
+        .check_remote_participant(self.domain_id, remote_guid_prefix);
+      match check_result {
         Ok(check_passed) => {
           if check_passed {
             // All good
@@ -1602,8 +1610,12 @@ impl SecureDiscovery {
               "Remote participant {:?} is not allowed to join the domain. Rejecting the remote.",
               remote_guid_prefix
             );
-            discovery_db_write(discovery_db)
-              .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+            self.update_participant_authentication_status_and_notify_dp(
+              remote_guid_prefix,
+              AuthenticationStatus::Rejected,
+              discovery_db,
+              discovery_updated_sender,
+            );
             return;
           }
         }
@@ -1615,8 +1627,12 @@ impl SecureDiscovery {
             e,
             remote_guid_prefix
           );
-          discovery_db_write(discovery_db)
-            .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+          self.update_participant_authentication_status_and_notify_dp(
+            remote_guid_prefix,
+            AuthenticationStatus::Rejected,
+            discovery_db,
+            discovery_updated_sender,
+          );
           return;
         }
       }
@@ -1633,8 +1649,12 @@ impl SecureDiscovery {
         remote_guid_prefix,
         e,
       );
-      discovery_db_write(discovery_db)
-        .update_authentication_status(remote_guid_prefix, AuthenticationStatus::Rejected);
+      self.update_participant_authentication_status_and_notify_dp(
+        remote_guid_prefix,
+        AuthenticationStatus::Rejected,
+        discovery_db,
+        discovery_updated_sender,
+      );
       return;
     };
 

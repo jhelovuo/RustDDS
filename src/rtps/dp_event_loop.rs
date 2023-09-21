@@ -837,6 +837,17 @@ impl DPEventLoop {
           );
         }
       }
+      Some(AuthenticationStatus::Authenticating) => {
+        // The following call should connect the endpoints used for authentication
+        self.update_participant(remote_guidp);
+      }
+      Some(AuthenticationStatus::Rejected) => {
+        // TODO: disconnect endpoints from the participant?
+        info!(
+          "Status Rejected in on_remote_participant_authentication_status_changed with {:?}. TODO!",
+          remote_guidp
+        );
+      }
       other => {
         info!(
           "Status {:?}, in on_remote_participant_authentication_status_changed. What to do?",

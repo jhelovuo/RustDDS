@@ -812,8 +812,8 @@ impl Writer {
         hb_message
       );
 
-      // In the volatle key exchange topic we cannot send to multiple readers by any means,
-      // so we handle that separately.
+      // In the volatle key exchange topic we cannot send to multiple readers by any
+      // means, so we handle that separately.
       if self.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER {
         for rp in self.readers.values() {
           if self.last_change_sequence_number < rp.all_acked_before {
@@ -826,7 +826,8 @@ impl Writer {
             );
           }
         }
-      } else {  // Normal case
+      } else {
+        // Normal case
         self.send_message_to_readers(
           DeliveryMode::Multicast,
           hb_message,
