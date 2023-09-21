@@ -507,9 +507,7 @@ impl Writer {
           // Check if this is for single Reader only.
           // If so, insert GAP for others.
           // And additionally send any pending gap for the single reader.
-          let mut to_single_reader = false;
           if let Some(single_reader) = write_options.to_single_reader() {
-            to_single_reader = true;
             let writer_entity_id = self.entity_id();
             for (reader_guid, reader_proxy) in self.readers.iter_mut() {
               if *reader_guid == single_reader {
@@ -583,16 +581,31 @@ impl Writer {
             }
 
             let data_hb_message = message_builder.add_header_and_build(self.my_guid.prefix);
-            // debug
-            if to_single_reader {
-              debug!("Single reader send: {data_hb_message:?}");
+
+            // send message, either to all readers or jsut one
+            match write_options.to_single_reader() {
+              None =>
+                self.send_message_to_readers(
+                  DeliveryMode::Multicast,
+                  data_hb_message,
+                  &mut self.readers.values(),
+                ),
+              Some(reader_guid) => {
+                debug!("Single reader send: {data_hb_message:?}");
+                if let Some(reader_proxy) = self.readers.get(&reader_guid) {
+                  self.send_message_to_readers(
+                    DeliveryMode::Unicast,
+                    data_hb_message,
+                    &mut std::iter::once(reader_proxy),
+                  )
+                } else {
+                  warn!("Cannot send to Reader {reader_guid:?}, I have no ReaderProxy!")
+                }
+              }
+
             }
-            // end debug
-            self.send_message_to_readers(
-              DeliveryMode::Multicast,
-              data_hb_message,
-              &mut self.readers.values(),
-            );
+
+
           } else {
             // Large payload, must fragment.
 
