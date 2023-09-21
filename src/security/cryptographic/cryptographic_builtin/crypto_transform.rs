@@ -17,7 +17,7 @@ use crate::{
     secure_rtps_prefix::SecureRTPSPrefix,
     submessage::SecuritySubmessage,
     submessage_flag::FromEndianness,
-    submessages::{InterpreterSubmessage, ReaderSubmessage, WriterSubmessage},
+    submessages::InterpreterSubmessage,
   },
   rtps::{Message, Submessage, SubmessageBody},
   security::cryptographic::cryptographic_builtin::*,
@@ -52,7 +52,7 @@ impl CryptographicBuiltin {
       receiver_specific_keys,
     } = self.session_encoding_materials(
       sending_endpoint_crypto_handle,
-      KeyMaterialScope::PayloadAndMetadata,
+      KeyMaterialScope::MessageOrSubmessage,
       receiving_endpoint_crypto_handle_list,
     )?;
 
@@ -102,95 +102,6 @@ impl CryptographicBuiltin {
       encoded_submessage,
       postfix.create_submessage(speedy::Endianness::BigEndian)?, // 9.5.2.5 use BigEndian
     ))
-  }
-
-  fn decode_submessage(
-    &self,
-    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    _receiving_endpoint_crypto_handle: DatareaderCryptoHandle,
-    sending_endpoint_crypto_handle: DatawriterCryptoHandle,
-  ) -> SecurityResult<SubmessageBody> {
-    // Destructure header and footer
-    let (SecurePrefix { crypto_header }, encoded_submessage, SecurePostfix { crypto_footer }) =
-      encoded_rtps_submessage;
-
-    let BuiltinCryptoHeader {
-      transform_identifier:
-        BuiltinCryptoTransformIdentifier {
-          transformation_kind: header_transformation_kind,
-          transformation_key_id,
-        },
-      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
-    } = BuiltinCryptoHeader::try_from(crypto_header)?;
-
-    let BuiltinCryptoFooter {
-      common_mac,
-      receiver_specific_macs,
-    } = BuiltinCryptoFooter::try_from(crypto_footer)?;
-
-    // Get decode key material
-    let decode_key_material = self.session_decode_crypto_materials(
-      sending_endpoint_crypto_handle,
-      transformation_key_id,
-      KeyMaterialScope::PayloadAndMetadata,
-      initialization_vector,
-    )?;
-
-    // Check that the key id matches the header. This should be redundant if the
-    // method is called after preprocess_secure_submessage
-    if transformation_key_id != decode_key_material.key_id {
-      Err(security_error!(
-        "The key IDs do not match. The key material has sender_key_id {}, while the header has \
-         transformation_key_id {}",
-        decode_key_material.key_id,
-        transformation_key_id
-      ))?;
-    } else if header_transformation_kind != decode_key_material.transformation_kind {
-      Err(security_error!(
-        "The transformation_kind do not match. The key material has {:?}, while the header has \
-         {:?}",
-        decode_key_material.transformation_kind,
-        header_transformation_kind
-      ))?;
-    }
-
-    // Get the receiver-specific MAC if one is expected
-    let receiver_specific_key_and_mac = find_receiver_specific_mac(
-      decode_key_material.receiver_specific_key,
-      &receiver_specific_macs,
-    )?;
-
-    let decode_key = decode_key_material.session_key;
-
-    match decode_key_material.transformation_kind {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        // Does this even make sense?
-        warn!("Decode submessage success, but crypto transformation kind is none.");
-        Ok(encoded_submessage.body)
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
-      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        decode_submessage_gmac(
-          &decode_key,
-          initialization_vector,
-          &encoded_submessage,
-          common_mac,
-          receiver_specific_key_and_mac,
-        )?; // return verify error here, or continue
-
-        Ok(encoded_submessage.body) // it was plaintext anyway.
-      }
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
-      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        decode_submessage_gcm(
-          &decode_key,
-          initialization_vector,
-          &encoded_submessage,
-          common_mac,
-          receiver_specific_key_and_mac,
-        )
-      }
-    }
   }
 }
 
@@ -325,7 +236,7 @@ impl CryptoTransform for CryptographicBuiltin {
       receiver_specific_keys,
     } = self.session_encoding_materials(
       sending_participant_crypto_handle,
-      KeyMaterialScope::PayloadAndMetadata,
+      KeyMaterialScope::MessageOrSubmessage,
       &receiving_participant_crypto_handle_list,
     )?;
 
@@ -435,7 +346,7 @@ impl CryptoTransform for CryptographicBuiltin {
       let decode_key_material = self.session_decode_crypto_materials(
         sending_participant_crypto_handle,
         transformation_key_id,
-        KeyMaterialScope::PayloadAndMetadata,
+        KeyMaterialScope::MessageOrSubmessage,
         initialization_vector,
       )?;
 
@@ -457,10 +368,12 @@ impl CryptoTransform for CryptographicBuiltin {
       }
 
       // Get the receiver-specific MAC if one is expected
-      let receiver_specific_key_and_mac = find_receiver_specific_mac(
-        decode_key_material.receiver_specific_key,
+      let receiver_specific_key_and_mac =decode_key_material.receiver_specific_key
+      // If the key is None, we are not expecting a receiver-specific MAC
+      .map(|receiver_specific_key|find_receiver_specific_mac(
+        &receiver_specific_key,
         &receiver_specific_macs,
-      )?;
+      )).transpose()?;
 
       let decode_key = decode_key_material.session_key;
 
@@ -566,154 +479,211 @@ impl CryptoTransform for CryptographicBuiltin {
     }
   }
 
-  fn preprocess_secure_submessage(
+  fn decode_submessage(
     &self,
-    secure_prefix: &SecurePrefix,
-    _receiving_participant_crypto_handle: ParticipantCryptoHandle,
-    sending_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<SecureSubmessageCategory> {
-    // 9.5.3.3.5
-    let SecurePrefix {
-      crypto_header:
-        CryptoHeader {
-          transformation_id:
-            CryptoTransformIdentifier {
-              transformation_kind,
-              transformation_key_id,
-            },
-          ..
-        },
-      ..
-    } = *secure_prefix;
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
+    _receiving_local_participant_crypto_handle: ParticipantCryptoHandle,
+    sending_remote_participant_crypto_handle: ParticipantCryptoHandle,
+  ) -> SecurityResult<DecodedSubmessage> {
+    // Destructure header and footer
+    let (SecurePrefix { crypto_header }, encoded_submessage, SecurePostfix { crypto_footer }) =
+      encoded_rtps_submessage;
 
-    // Check the validity of transformation_kind
-    let submessage_transformation_kind =
-      BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
+    let BuiltinCryptoHeader {
+      transform_identifier:
+        BuiltinCryptoTransformIdentifier {
+          transformation_kind: header_transformation_kind,
+          transformation_key_id: header_key_id,
+        },
+      builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
+    } = BuiltinCryptoHeader::try_from(crypto_header)?;
+
+    let BuiltinCryptoFooter {
+      common_mac,
+      receiver_specific_macs,
+    } = BuiltinCryptoFooter::try_from(crypto_footer)?;
 
     // Search for matching key materials over endpoints registered to the sender
     let sending_participant_endpoints = self
       .participant_to_endpoint_info
-      .get(&sending_participant_crypto_handle)
+      .get(&sending_remote_participant_crypto_handle)
       .ok_or_else(|| {
         security_error!(
-          "Could not find registered entities for the sending_participant_crypto_handle {}",
-          sending_participant_crypto_handle
+          "Could not find registered entities for the sending_remote_participant_crypto_handle {}",
+          sending_remote_participant_crypto_handle
         )
       })?;
 
-    let mut datawriter_submessage_handle_pairs =
-      Vec::<(DatawriterCryptoHandle, DatareaderCryptoHandle)>::new();
-    let mut datareader_submessage_handle_pairs =
-      Vec::<(DatareaderCryptoHandle, DatawriterCryptoHandle)>::new();
+    let (matching_decode_materials, sending_endpoint_infos): (Vec<_>, Vec<EndpointInfo>) =
+      sending_participant_endpoints
+        .iter()
+        .filter_map(|sending_endpoint_info| {
+          self
+            .get_session_decode_crypto_materials(
+              sending_endpoint_info.crypto_handle,
+              header_key_id,
+              KeyMaterialScope::MessageOrSubmessage,
+              initialization_vector,
+            )
+            .map(|decode_materials| (decode_materials, sending_endpoint_info))
+        })
+        .unzip();
 
-    for EndpointInfo {
-      crypto_handle,
-      kind,
-    } in sending_participant_endpoints
-    {
-      // Iterate over the key materials associated with the endpoint
-      if let Some(KeyMaterial_AES_GCM_GMAC {
-        transformation_kind,
-        sender_key_id,
-        ..
-      }) = self
-        .decode_key_materials
-        .get(crypto_handle)
-        .map(KeyMaterial_AES_GCM_GMAC_seq::key_material)
-      {
-        // Compare key materials to the crypto transform identifier
-        if submessage_transformation_kind.eq(transformation_kind)
-          && transformation_key_id.eq(sender_key_id)
-        {
-          let remote_endpoint_crypto_handle = *crypto_handle;
-          let matched_local_endpoint_crypto_handle = *self
-            .matched_local_endpoint
-            .get(&remote_endpoint_crypto_handle)
-            .ok_or_else(|| {
-              security_error!(
-                "The local endpoint matched to the remote endpoint crypto handle {} is missing.",
-                remote_endpoint_crypto_handle
-              )
-            })?;
-          match kind {
-            EndpointKind::DataWriter => datawriter_submessage_handle_pairs.push((
-              remote_endpoint_crypto_handle,
-              matched_local_endpoint_crypto_handle,
-            )),
-            EndpointKind::DataReader => datareader_submessage_handle_pairs.push((
-              remote_endpoint_crypto_handle,
-              matched_local_endpoint_crypto_handle,
-            )),
+    let decode_key = matching_decode_materials
+      .iter()
+      // Check that for all matched ids transformation kind matches the header
+      .map(
+        |DecodeSessionMaterials {
+           transformation_kind,
+           session_key,
+           ..
+         }| {
+          if transformation_kind.eq(&header_transformation_kind) {
+            Ok(session_key)
+          } else {
+            Err(security_error!(
+              "Transformation kind of the submessage header does not match the key: expected \
+               {:?}, received {:?}.",
+              transformation_kind,
+              header_transformation_kind
+            ))
           }
-        }
-      }
-    }
+        },
+      )
+      // Make sure there is exactly one
+      .reduce(|accumulator, session_key_result| {
+        accumulator.and_then(|acc_session_key| {
+          session_key_result.and_then(|current_session_key| {
+            if acc_session_key.eq(current_session_key) {
+              Ok(acc_session_key)
+            } else {
+              Err(security_error!(
+                "Multiple different matching decode keys found for the key id {:?} for the remote \
+                 participant {}",
+                header_key_id,
+                sending_remote_participant_crypto_handle
+              ))
+            }
+          })
+        })
+      })
+      .ok_or_else(|| {
+        security_error!(
+          "No matching decode keys found for the key id {:?} for the remote participant {}",
+          header_key_id,
+          sending_remote_participant_crypto_handle
+        )
+      })??;
 
-    match (
-      datawriter_submessage_handle_pairs.is_empty(),
-      datareader_submessage_handle_pairs.is_empty(),
-    ) {
-      (true, true) => Err(security_error!(
-        "Could not find matching key materials for any registered endpoint for the \
-         sending_participant_crypto_handle {}.",
-        sending_participant_crypto_handle
-      )),
-      (false, false) => {
-        //
-        Err(security_error!(
-          "Matching key materials found for both registered datawriters and datareaders for the \
-           sending_participant_crypto_handle {}.",
-          sending_participant_crypto_handle
+    let receiver_specific_keys_and_macs = SecurityResult::<Vec<_>>::from_iter(
+      matching_decode_materials
+        .iter()
+        .filter_map(
+          |DecodeSessionMaterials {
+             receiver_specific_key,
+             ..
+           }| receiver_specific_key.as_ref(),
+        )
+        .map(|receiver_specific_key| {
+          find_receiver_specific_mac(receiver_specific_key, &receiver_specific_macs)
+        }),
+    )?;
+
+    let decoded_submessage = match header_transformation_kind {
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
+        // Does this even make sense?
+        warn!("Decode submessage success, but crypto transformation kind is none.");
+
+        encoded_submessage.body
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
+        decode_submessage_gmac(
+          decode_key,
+          initialization_vector,
+          &encoded_submessage,
+          common_mac,
+          &receiver_specific_keys_and_macs,
+        )?; // return verify error here, or continue
+        encoded_submessage.body // it was plaintext anyway.
+      }
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
+      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
+        decode_submessage_gcm(
+          decode_key,
+          initialization_vector,
+          &encoded_submessage,
+          common_mac,
+          &receiver_specific_keys_and_macs,
+        )?
+      }
+    };
+
+    match decoded_submessage {
+      SubmessageBody::Writer(writer_submessage) => {
+        let matching_readers = SecurityResult::from_iter(
+          sending_endpoint_infos.iter().filter_map(
+            |EndpointInfo {
+               crypto_handle: remote_endpoint_crypto_handle,
+               kind,
+             }| match kind {
+              EndpointKind::DataWriter => Some(
+                self
+                  .matched_local_endpoint
+                  .get(remote_endpoint_crypto_handle)
+                  .copied()
+                  .ok_or_else(|| {
+                    security_error!(
+                      "The local reader matched to the remote writer crypto handle {} is missing.",
+                      remote_endpoint_crypto_handle
+                    )
+                  }),
+              ),
+              _ => None,
+            },
+          ),
+        )?;
+        Ok(DecodedSubmessage::Writer(
+          writer_submessage,
+          matching_readers,
         ))
       }
-      (false, true) => Ok(SecureSubmessageCategory::DatawriterSubmessage(
-        datawriter_submessage_handle_pairs,
-      )),
-      (true, false) => Ok(SecureSubmessageCategory::DatareaderSubmessage(
-        datareader_submessage_handle_pairs,
-      )),
-    }
-  }
-
-  fn decode_datawriter_submessage(
-    &self,
-    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datareader_crypto_handle: DatawriterCryptoHandle,
-    sending_datawriter_crypto_handle: DatareaderCryptoHandle,
-  ) -> SecurityResult<WriterSubmessage> {
-    match self.decode_submessage(
-      encoded_rtps_submessage,
-      receiving_datareader_crypto_handle,
-      sending_datawriter_crypto_handle,
-    )? {
-      SubmessageBody::Writer(submessage) => Ok(submessage),
-      other => {
-        warn!("Expected WriterSubmessage, but decoded as {other:?}");
-        Err(security_error(
-          "decode_datawriter_submessage: Decode result was not WriterSubmessage",
+      SubmessageBody::Reader(reader_submessage) => {
+        let matching_writers = SecurityResult::from_iter(
+          sending_endpoint_infos.iter().filter_map(
+            |EndpointInfo {
+               crypto_handle: remote_endpoint_crypto_handle,
+               kind,
+             }| match kind {
+              EndpointKind::DataReader => Some(
+                self
+                  .matched_local_endpoint
+                  .get(remote_endpoint_crypto_handle)
+                  .copied()
+                  .ok_or_else(|| {
+                    security_error!(
+                      "The local writer matched to the remote reader crypto handle {} is missing.",
+                      remote_endpoint_crypto_handle
+                    )
+                  }),
+              ),
+              _ => None,
+            },
+          ),
+        )?;
+        Ok(DecodedSubmessage::Reader(
+          reader_submessage,
+          matching_writers,
         ))
       }
-    }
-  }
 
-  fn decode_datareader_submessage(
-    &self,
-    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datawriter_crypto_handle: DatawriterCryptoHandle,
-    sending_datareader_crypto_handle: DatareaderCryptoHandle,
-  ) -> SecurityResult<ReaderSubmessage> {
-    match self.decode_submessage(
-      encoded_rtps_submessage,
-      receiving_datawriter_crypto_handle,
-      sending_datareader_crypto_handle,
-    )? {
-      SubmessageBody::Reader(submessage) => Ok(submessage),
-      other => {
-        warn!("Expected ReaderSubmessage, but decoded as {other:?}");
-        Err(security_error(
-          "decode_datareader_submessage: Decode result was not ReaderSubmessage",
-        ))
-      }
+      SubmessageBody::Interpreter(_) => Err(security_error!(
+        "Interpreter submessage after successful submessage decryption. This is not in the \
+         specification."
+      )),
+      SubmessageBody::Security(_) => Err(security_error!(
+        "Security submessage after successful submessage decryption."
+      )),
     }
   }
 

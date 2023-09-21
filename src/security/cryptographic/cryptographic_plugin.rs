@@ -1,9 +1,7 @@
 use crate::{
   messages::submessages::{
-    elements::parameter_list::ParameterList,
-    secure_postfix::SecurePostfix,
+    elements::parameter_list::ParameterList, secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
-    submessages::{ReaderSubmessage, WriterSubmessage},
   },
   rtps::{Message, Submessage},
   security::{
@@ -237,52 +235,22 @@ pub trait CryptoTransform: Send {
     sending_participant_crypto_handle: ParticipantCryptoHandle,
   ) -> SecurityResult<Message>;
 
-  /// preprocess_secure_submsg: section 8.5.1.9.6 of the Security specification
+  // Combines the functionality of preprocess_secure_submsg and the subsequent
+  // call of decode_datawriter_submessage or decode_datareader_submessage from
+  // sections 8.5.1.9.6–8 of the Security specification
   /// (v. 1.1)
   ///
-  /// Return the secure submessage category that would be written in
-  /// `secure_submessage_category`. The [DatawriterCryptoHandle] and
-  /// [DatareaderCryptoHandle] that would be written in `datawriter_crypto` and
-  /// `datareader_crypto` shall be returned in
-  /// [SecureSubmessageCategory::DatawriterSubmessage] or
-  /// [SecureSubmessageCategory::DatareaderSubmessage] in the order
-  /// (sender,receiver). In the case `INFO_SUBMESSAGE`,
-  /// [SecureSubmessageCategory::InfoSubmessage] is returned instead of `false`.
-  ///
-  /// A vector of handle pairs is included in the SecureSubmessageCategory
-  /// instead of one pair, since there can be multiple receiving local
-  /// endpoints matched to the sending remote endpoint, which in this case
-  /// would also have a different CryptoHandle for each match
-  fn preprocess_secure_submessage(
-    &self,
-    secure_prefix: &SecurePrefix,
-    receiving_participant_crypto_handle: ParticipantCryptoHandle,
-    sending_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<SecureSubmessageCategory>;
-
-  /// decode_datawriter_submessage: section 8.5.1.9.7 of the Security
-  /// specification (v. 1.1)
-  ///
-  /// Return the writer submessage that would be written in
-  /// `plain_rtps_submessage`.
-  fn decode_datawriter_submessage(
+  /// Return the body of the submessage that would be written in
+  /// `plain_rtps_submessage` of the appropriate decode method, and a list of
+  /// endpoint crypto handles, the decode keys of which match the one used for
+  /// decoding, i.e. which are approved to receive the submessage by access
+  /// control.
+  fn decode_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datareader_crypto_handle: DatareaderCryptoHandle,
-    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
-  ) -> SecurityResult<WriterSubmessage>;
-
-  /// decode_datareader_submessage: section 8.5.1.9.8 of the Security
-  /// specification (v. 1.1)
-  ///
-  /// Return the reader submessage that would be written in
-  /// `plain_rtps_submessage`.
-  fn decode_datareader_submessage(
-    &self,
-    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datawriter_crypto_handle: DatawriterCryptoHandle,
-    sending_datareader_crypto_handle: DatareaderCryptoHandle,
-  ) -> SecurityResult<ReaderSubmessage>;
+    receiving_local_participant_crypto_handle: ParticipantCryptoHandle,
+    sending_remote_participant_crypto_handle: ParticipantCryptoHandle,
+  ) -> SecurityResult<DecodedSubmessage>;
 
   /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
   /// (v. 1.1)

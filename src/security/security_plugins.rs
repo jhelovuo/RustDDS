@@ -4,15 +4,13 @@ use std::{
   sync::{Arc, Mutex, MutexGuard},
 };
 
-use log::debug;
+use log::{debug, error};
 
 use crate::{
   discovery::{DiscoveredReaderData, DiscoveredWriterData},
   messages::submessages::{
-    elements::parameter_list::ParameterList,
-    secure_postfix::SecurePostfix,
+    elements::parameter_list::ParameterList, secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
-    submessage::{ReaderSubmessage, WriterSubmessage},
   },
   qos,
   rtps::{Message, Submessage, SubmessageBody},
@@ -25,8 +23,8 @@ use super::{
   authentication::*,
   cryptographic::{
     DatareaderCryptoHandle, DatareaderCryptoToken, DatawriterCryptoHandle, DatawriterCryptoToken,
-    EncodedSubmessage, EndpointCryptoHandle, ParticipantCryptoHandle, ParticipantCryptoToken,
-    SecureSubmessageCategory,
+    DecodedSubmessage, EncodedSubmessage, EndpointCryptoHandle, ParticipantCryptoHandle,
+    ParticipantCryptoToken,
   },
   types::*,
   AccessControl, Cryptographic,
@@ -202,17 +200,17 @@ impl SecurityPlugins {
     }
   }
 
-  // Checks whether the given guid matches the given handle
+  // Checks whether the given guid matches one of the given handles
   pub fn confirm_local_endpoint_guid(
     &self,
-    local_endpoint_crypto_handle: EndpointCryptoHandle,
+    local_endpoint_crypto_handles: &[EndpointCryptoHandle],
     guid: &GUID,
   ) -> bool {
     self
       .local_endpoint_crypto_handle_cache
       .get(guid)
       .map_or(false, |found_handle| {
-        local_endpoint_crypto_handle.eq(found_handle)
+        local_endpoint_crypto_handles.contains(found_handle)
       })
   }
 
@@ -1010,41 +1008,16 @@ impl SecurityPlugins {
 
   // Currently only those submessages whose destination is the local participant
   // can be preprocessed. TODO: add support for other destinations as well?
-  pub fn preprocess_secure_submessage(
+
+  pub fn decode_submessage(
     &self,
-    secure_prefix: &SecurePrefix,
+    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     source_guid_prefix: &GuidPrefix,
-  ) -> SecurityResult<SecureSubmessageCategory> {
-    self.crypto.preprocess_secure_submessage(
-      secure_prefix,
+  ) -> SecurityResult<DecodedSubmessage> {
+    self.crypto.decode_submessage(
+      encoded_rtps_submessage,
       self.get_local_participant_crypto_handle()?,
       self.get_remote_participant_crypto_handle(source_guid_prefix)?,
-    )
-  }
-
-  pub fn decode_datawriter_submessage(
-    &self,
-    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datareader_crypto: DatareaderCryptoHandle,
-    sending_datawriter_crypto: DatawriterCryptoHandle,
-  ) -> SecurityResult<WriterSubmessage> {
-    self.crypto.decode_datawriter_submessage(
-      encoded_rtps_submessage,
-      receiving_datareader_crypto,
-      sending_datawriter_crypto,
-    )
-  }
-
-  pub fn decode_datareader_submessage(
-    &self,
-    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datawriter_crypto: DatawriterCryptoHandle,
-    sending_datareader_crypto: DatareaderCryptoHandle,
-  ) -> SecurityResult<ReaderSubmessage> {
-    self.crypto.decode_datareader_submessage(
-      encoded_rtps_submessage,
-      receiving_datawriter_crypto,
-      sending_datareader_crypto,
     )
   }
 
@@ -1090,21 +1063,43 @@ impl SecurityPlugins {
 #[derive(Clone)]
 pub(crate) struct SecurityPluginsHandle {
   inner: Arc<Mutex<SecurityPlugins>>,
+  who_has_it: Arc<Mutex<Option<String>>>,
 }
 
 impl SecurityPluginsHandle {
   pub(crate) fn new(s: SecurityPlugins) -> Self {
     Self {
       inner: Arc::new(Mutex::new(s)),
+      who_has_it: Arc::new(Mutex::new(None)),
     }
   }
 
   pub(crate) fn get_plugins(&self) -> MutexGuard<SecurityPlugins> {
-    self.lock().unwrap_or_else(|e| {
-      security_error!("Security plugins are poisoned! {}", e);
-      panic!("Security plugins are poisoned!");
-    })
-  }
+    let mut count = 0;
+    loop {
+      match self.try_lock() {
+        Ok(guard) => {
+          *self.who_has_it.lock().unwrap() = std::thread::current().name().map(|s| s.to_owned());
+          return guard;
+        }
+        Err(std::sync::TryLockError::WouldBlock) => {
+          if count > 10 {
+            error!(
+              "I need my lock!! {:?} Looks like {:?} has it.",
+              count,
+              self.who_has_it.lock().unwrap()
+            );
+          }
+          count += 1;
+          std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        Err(poisoned) => {
+          security_error!("Security plugins are poisoned! {poisoned:?}");
+          panic!("Security plugins are poisoned!");
+        }
+      }
+    } // loop
+  } // fn
 }
 
 impl fmt::Debug for SecurityPluginsHandle {
