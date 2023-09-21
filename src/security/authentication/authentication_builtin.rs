@@ -11,11 +11,9 @@ use crate::{
   //structure::guid::GuidPrefix,
   GUID,
 };
-use self::types::BuiltinAuthenticatedPeerCredentialToken;
 use super::{
-  authentication_builtin::types::BuiltinIdentityToken, AuthenticatedPeerCredentialToken, Challenge,
-  HandshakeHandle, HandshakeMessageToken, IdentityHandle, /* IdentityToken, */ Sha256,
-  SharedSecret, ValidationOutcome,
+  authentication_builtin::types::BuiltinIdentityToken, Challenge, HandshakeHandle, IdentityHandle,
+  /* IdentityToken, */ Sha256, SharedSecret,
 };
 
 mod authentication;
@@ -128,8 +126,6 @@ pub struct AuthenticationBuiltin {
   // "An application should create a single SystemRandom and then use it for all randomness
   // generation"
   secure_random_generator: ring::rand::SystemRandom,
-
-  mock_handshakes: bool, // Mock handshakes for testing? Temporary field, for development only
 }
 
 impl AuthenticationBuiltin {
@@ -141,7 +137,6 @@ impl AuthenticationBuiltin {
       next_identity_handle: 0,
       next_handshake_handle: 0,
       secure_random_generator: ring::rand::SystemRandom::new(),
-      mock_handshakes: false,
     }
   }
 
@@ -205,209 +200,5 @@ impl AuthenticationBuiltin {
     ring::rand::generate::<[u8; 32]>(&self.secure_random_generator)
       .map(|random| random.expose())
       .map_err(|e| security_error(&format!("Failed to generate random bytes: {}", e)))
-  }
-
-  #[allow(clippy::needless_pass_by_value)]
-  fn begin_handshake_request_mocked(
-    &mut self,
-    initiator_identity_handle: IdentityHandle, // Local
-    replier_identity_handle: IdentityHandle,   // Remote
-    _serialized_local_participant_data: Vec<u8>,
-  ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
-    // Make sure initiator_identity_handle is actually ours
-    let local_info = self.get_local_participant_info()?;
-    if initiator_identity_handle != local_info.identity_handle {
-      return Err(security_error!(
-        "The parameter initiator_identity_handle is not the correct local handle"
-      ));
-    }
-
-    // Make sure we are expecting to send the authentication request message
-    let remote_info = self.get_remote_participant_info_mutable(&replier_identity_handle)?;
-    if let BuiltinHandshakeState::PendingRequestSend = remote_info.handshake.state {
-      // Yes, this is what we expect. No action here.
-    } else {
-      return Err(security_error!(
-        "We are not expecting to send a handshake request. Handshake state: {:?}",
-        remote_info.handshake.state
-      ));
-    }
-
-    // Construct the handshake request message token
-    let handshake_request = HandshakeMessageToken::dummy();
-
-    let dh1 = agreement::EphemeralPrivateKey::generate(
-      &agreement::ECDH_P256,
-      &ring::rand::SystemRandom::new(),
-    )?;
-
-    // Change handshake state to pending reply message & save the request token
-    remote_info.handshake.state = BuiltinHandshakeState::PendingReplyMessage {
-      dh1,
-      challenge1: Challenge::dummy(),
-      hash_c1: Sha256::dummy(),
-    };
-
-    // Create a new handshake handle & map it to remotes identity handle
-    let new_handshake_handle = self.get_new_handshake_handle();
-    self
-      .handshake_to_identity_handle_map
-      .insert(new_handshake_handle, replier_identity_handle);
-
-    Ok((
-      ValidationOutcome::PendingHandshakeMessage,
-      new_handshake_handle,
-      handshake_request,
-    ))
-  }
-
-  #[allow(clippy::needless_pass_by_value)]
-  fn begin_handshake_reply_mocked(
-    &mut self,
-    _handshake_message_in: HandshakeMessageToken,
-    initiator_identity_handle: IdentityHandle, // Remote
-    replier_identity_handle: IdentityHandle,   // Local
-    _serialized_local_participant_data: Vec<u8>,
-  ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
-    // Make sure replier_identity_handle is actually ours
-    let local_info = self.get_local_participant_info()?;
-    if replier_identity_handle != local_info.identity_handle {
-      return Err(security_error!(
-        "The parameter replier_identity_handle is not the correct local handle"
-      ));
-    }
-
-    // Make sure we are expecting a authentication request from remote
-    let remote_info = self.get_remote_participant_info_mutable(&initiator_identity_handle)?;
-    if let BuiltinHandshakeState::PendingRequestMessage = remote_info.handshake.state {
-      // Nothing to see here. Carry on.
-    } else {
-      return Err(security_error!(
-        "We are not expecting to receive a handshake request. Handshake state: {:?}",
-        remote_info.handshake.state
-      ));
-    }
-
-    // Generate a reply token
-    let reply_token = HandshakeMessageToken::dummy();
-
-    let dh2 = agreement::EphemeralPrivateKey::generate(
-      &agreement::ECDH_P256,
-      &ring::rand::SystemRandom::new(),
-    )?;
-
-    let cert_pem = r#"-----BEGIN CERTIFICATE-----
-MIIBOzCB4qADAgECAhR361786/qVPfJWWDw4Wg5cmJUwBTAKBggqhkjOPQQDAjAS
-MRAwDgYDVQQDDAdzcm9zMkNBMB4XDTIzMDcyMzA4MjgzNloXDTMzMDcyMTA4Mjgz
-NlowEjEQMA4GA1UEAwwHc3JvczJDQTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IA
-BMpvJQ/91ZqnmRRteTL2qaEFz2d7SGAQQk9PIhhZCV1tlLwYf/hI4xWLJaEv8FxJ
-TjxXRGJ1U+/IqqqIvJVpWaSjFjAUMBIGA1UdEwEB/wQIMAYBAf8CAQEwCgYIKoZI
-zj0EAwIDSAAwRQIgEiyVGRc664+/TE/HImA4WNwsSi/alHqPYB58BWINj34CIQDD
-iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
------END CERTIFICATE-----
-"#;
-
-    let certificate = certificate::Certificate::from_pem(cert_pem).unwrap();
-
-    // Change handshake state to pending final message
-    remote_info.handshake.state = BuiltinHandshakeState::PendingFinalMessage {
-      dh1: Bytes::default(),
-      challenge1: Challenge::dummy(),
-      dh2,
-      challenge2: Challenge::dummy(),
-      hash_c1: Sha256::dummy(),
-      hash_c2: Sha256::dummy(),
-      remote_id_certificate: certificate,
-    };
-
-    // Create a new handshake handle & map it to remotes identity handle
-    let new_handshake_handle = self.get_new_handshake_handle();
-    self
-      .handshake_to_identity_handle_map
-      .insert(new_handshake_handle, initiator_identity_handle);
-
-    Ok((
-      ValidationOutcome::PendingHandshakeMessage,
-      new_handshake_handle,
-      reply_token,
-    ))
-  }
-
-  #[allow(clippy::needless_pass_by_value)]
-  fn process_handshake_mocked(
-    &mut self,
-    _handshake_message_in: HandshakeMessageToken,
-    handshake_handle: HandshakeHandle,
-  ) -> SecurityResult<(ValidationOutcome, Option<HandshakeMessageToken>)> {
-    // Check what is the handshake state
-    let remote_identity_handle = *self.handshake_handle_to_identity_handle(&handshake_handle)?;
-    let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
-
-    let mut state = BuiltinHandshakeState::PendingRequestSend; // dummy to leave behind
-    std::mem::swap(&mut remote_info.handshake.state, &mut state);
-
-    match state {
-      BuiltinHandshakeState::PendingReplyMessage { challenge1, .. } => {
-        // We are the initiator, and expect a reply.
-        // Result is that we produce a MassageToken (i.e. send the final message)
-        // and the handshake results (shared secret)
-        let final_message_token = HandshakeMessageToken::dummy();
-
-        let shared_secret = SharedSecret::dummy();
-
-        // This is an initiator-generated 256-bit nonce
-        let challenge2 = Challenge::from(rand::random::<[u8; 32]>());
-
-        // Change handshake state to Completed & save the final message token
-        let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
-        remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageSent {
-          challenge1,
-          challenge2,
-          shared_secret,
-        };
-        Ok((ValidationOutcome::OkFinalMessage, Some(final_message_token)))
-      }
-
-      BuiltinHandshakeState::PendingFinalMessage {
-        challenge1,
-        challenge2,
-        ..
-      } => {
-        // We are the responder, and expect the final message.
-        // Result is that we do not produce a MassageToken, since this was the final
-        // message, but we compute the handshake results (shared secret)
-
-        // Change handshake state to Completed
-        let shared_secret = SharedSecret::dummy();
-        let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
-        remote_info.handshake.state = BuiltinHandshakeState::CompletedWithFinalMessageReceived {
-          challenge1,
-          challenge2,
-          shared_secret,
-        };
-
-        Ok((ValidationOutcome::Ok, None))
-      }
-      other_state => Err(security_error!(
-        "Unexpected handshake state: {:?}",
-        other_state
-      )),
-    }
-  }
-
-  fn get_authenticated_peer_credential_token_mocked(
-    &self,
-    _handshake_handle: HandshakeHandle,
-  ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
-    // Return a token with our own info. This can be used to test against an
-    // identical RustDDS instance.
-    let local_info = self.get_local_participant_info()?;
-
-    let builtin_token = BuiltinAuthenticatedPeerCredentialToken {
-      c_id: Bytes::from(local_info.identity_certificate.to_pem()),
-      c_perm: local_info.signed_permissions_document_xml.clone(),
-    };
-
-    Ok(AuthenticatedPeerCredentialToken::from(builtin_token))
   }
 }

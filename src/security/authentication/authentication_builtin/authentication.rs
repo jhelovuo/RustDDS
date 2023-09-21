@@ -220,12 +220,6 @@ impl Authentication for AuthenticationBuiltin {
       .remote_participant_infos
       .insert(local_identity_handle, self_remote_info);
 
-    // Read the temporary config which determines should handshakes be mocked
-    self.mock_handshakes = match participant_qos.get_property("dds.sec.auth.mock_handshakes") {
-      Ok(val) => val == *"yes",
-      Err(_e) => false,
-    };
-
     Ok((ValidationOutcome::Ok, local_identity_handle, adjusted_guid))
   }
 
@@ -371,14 +365,6 @@ impl Authentication for AuthenticationBuiltin {
     replier_identity_handle: IdentityHandle,   // Remote
     serialized_local_participant_data: Vec<u8>,
   ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
-    if self.mock_handshakes {
-      return self.begin_handshake_request_mocked(
-        initiator_identity_handle,
-        replier_identity_handle,
-        serialized_local_participant_data,
-      );
-    }
-
     // Make sure initiator_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
     if initiator_identity_handle != local_info.identity_handle {
@@ -476,15 +462,6 @@ impl Authentication for AuthenticationBuiltin {
     replier_identity_handle: IdentityHandle,   // Local
     serialized_local_participant_data: Vec<u8>,
   ) -> SecurityResult<(ValidationOutcome, HandshakeHandle, HandshakeMessageToken)> {
-    if self.mock_handshakes {
-      return self.begin_handshake_reply_mocked(
-        handshake_message_in,
-        initiator_identity_handle,
-        replier_identity_handle,
-        serialized_local_participant_data,
-      );
-    }
-
     // Make sure replier_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
     if replier_identity_handle != local_info.identity_handle {
@@ -629,10 +606,6 @@ impl Authentication for AuthenticationBuiltin {
     handshake_message_in: HandshakeMessageToken,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<(ValidationOutcome, Option<HandshakeMessageToken>)> {
-    if self.mock_handshakes {
-      return self.process_handshake_mocked(handshake_message_in, handshake_handle);
-    }
-
     // Check what is the handshake state
     let remote_identity_handle = *self.handshake_handle_to_identity_handle(&handshake_handle)?;
     let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;
@@ -939,10 +912,6 @@ impl Authentication for AuthenticationBuiltin {
     &self,
     handshake_handle: HandshakeHandle,
   ) -> SecurityResult<AuthenticatedPeerCredentialToken> {
-    if self.mock_handshakes {
-      return self.get_authenticated_peer_credential_token_mocked(handshake_handle);
-    }
-
     let identity_handle = self.handshake_handle_to_identity_handle(&handshake_handle)?;
     let remote_info = self.get_remote_participant_info(identity_handle)?;
 
