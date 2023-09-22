@@ -18,6 +18,11 @@ pub fn test_config() -> SecurityConfig {
   ]
   .concat();
 
+  let mut test_participant_name = String::new();
+  File::open("test_participant_name")
+    .and_then(|mut file| file.read_to_string(&mut test_participant_name))
+    .unwrap();
+
   let properties = vec![
     // For the authentication plugin
     security::types::Property {
@@ -33,7 +38,7 @@ pub fn test_config() -> SecurityConfig {
       name: "dds.sec.auth.private_key".to_string(),
       value: [
         path_start.clone(),
-        "participant1_private_key.pem".to_string(),
+        [test_participant_name.clone(),"_private_key.pem".to_string()].concat(),
       ]
       .concat(),
       propagate: false,
@@ -47,7 +52,7 @@ pub fn test_config() -> SecurityConfig {
       name: "dds.sec.auth.identity_certificate".to_string(),
       value: [
         path_start.clone(),
-        "participant1_certificate.pem".to_string(),
+        [test_participant_name,"_certificate.pem".to_string()].concat(),
       ]
       .concat(),
       propagate: false,
@@ -64,12 +69,12 @@ pub fn test_config() -> SecurityConfig {
     },
     security::types::Property {
       name: "dds.sec.access.governance".to_string(),
-      value: [path_start.clone(), "permissive_governance.p7s".to_string()].concat(),
+      value: [path_start.clone(), "test_governance.p7s".to_string()].concat(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.access.permissions".to_string(),
-      value: [path_start, "permissive_permissions.p7s".to_string()].concat(),
+      value: [path_start, "test_permissions.p7s".to_string()].concat(),
       propagate: false,
     },
   ];
@@ -102,7 +107,7 @@ pub(crate) fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
   }
 }
 
-use std::fmt::Debug;
+use std::{fmt::Debug, fs::File, io::Read};
 
 #[derive(Debug)]
 pub enum ConfigError {
