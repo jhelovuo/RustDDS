@@ -715,6 +715,11 @@ impl PublicationBuiltinTopicData {
       &self.qos(),
     )
   }
+
+  #[cfg(feature = "security")]
+  pub fn security_info(&self) -> &Option<EndpointSecurityInfo> {
+    &self.security_info
+  }
 }
 
 // =======================================================================

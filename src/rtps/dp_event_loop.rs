@@ -36,7 +36,8 @@ use crate::{
 #[cfg(feature = "security")]
 use crate::{
   discovery::secure_discovery::AuthenticationStatus,
-  security::security_plugins::SecurityPluginsHandle,
+  security::{security_plugins::SecurityPluginsHandle, EndpointSecurityInfo, SecurityError},
+  security_error,
 };
 #[cfg(not(feature = "security"))]
 use crate::no_security::security_plugins::SecurityPluginsHandle;
@@ -637,23 +638,71 @@ impl DPEventLoop {
     }
   }
 
-  fn remote_reader_discovered(&mut self, drd: &DiscoveredReaderData) {
+  fn remote_reader_discovered(&mut self, remote_reader: &DiscoveredReaderData) {
     for writer in self.writers.values_mut() {
-      if drd.subscription_topic_data.topic_name() == writer.topic_name() {
-        // // see if the participant has published a QoS for the topic
-        // // If yes, we take that as a basis QoS
-        // let topic_qos = self.discovery_db.read().unwrap()
-        //   .get_topic_for_participant(&drd.subscription_topic_data.topic_name(),
-        //     drd.reader_proxy.remote_reader_guid.prefix )
-        //   .map( |dtd| dtd.topic_data.qos() );
-        // let requested_qos = topic_qos
-        //   .unwrap_or_else( QosPolicies::default )
-        //   .modify_by( &drd.subscription_topic_data.qos() );
-        let requested_qos = drd.subscription_topic_data.qos();
-        writer.update_reader_proxy(
-          &RtpsReaderProxy::from_discovered_reader_data(drd, &[], &[]),
-          &requested_qos,
-        );
+      if remote_reader.subscription_topic_data.topic_name() == writer.topic_name() {
+        #[cfg(not(feature = "security"))]
+        let match_to_reader = true;
+        #[cfg(feature = "security")]
+        let match_to_reader = if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+          // Security is enabled.
+          let local_writer_guid = writer.guid();
+          let remote_reader_guid = remote_reader.reader_proxy.remote_reader_guid;
+
+          // Check do we have compatible security with the remote
+          let local_writer_sec_info_opt = plugins_handle
+            .get_plugins()
+            .get_writer_sec_attributes(writer.guid(), writer.topic_name().clone())
+            .map(EndpointSecurityInfo::from)
+            .ok();
+          let remote_reader_sec_info_opt = remote_reader
+            .subscription_topic_data
+            .security_info()
+            .clone();
+
+          let compatible = check_are_endpoints_securities_compatible(
+            local_writer_sec_info_opt,
+            remote_reader_sec_info_opt,
+          );
+          if !compatible {
+            security_error!(
+              "Local writer {:?} and remote reader {:?} have incompatible security, ignoring the \
+               remote.",
+              writer.guid(),
+              remote_reader_guid
+            );
+            false // match_to_reader
+          } else {
+            // Signal Secure discovery to exchange keys with the remote
+            // TODO: do this only at first encounter with the remote / before keys have been
+            // sent, not every time
+            if let Err(e) = self.discovery_command_sender.send(
+              DiscoveryCommand::StartKeyExchangeWithRemoteEndpoint {
+                local_endpoint_guid: local_writer_guid,
+                remote_endpoint_guid: remote_reader_guid,
+              },
+            ) {
+              error!(
+                "Could not signal Secure Discovery to start the key exchange with remote reader \
+                 {:?}. Reason: {}.",
+                remote_reader_guid, e
+              );
+            }
+            true // match_to_reader
+          }
+        } else {
+          // No security enabled. Always match
+          true // match_to_reader
+        };
+
+        if match_to_reader {
+          // Should we check if the participant has published a QoS for the topic?
+          let requested_qos = remote_reader.subscription_topic_data.qos();
+          writer.update_reader_proxy(
+            &RtpsReaderProxy::from_discovered_reader_data(remote_reader, &[], &[]),
+            &requested_qos,
+          );
+        }
       }
     }
   }
@@ -664,31 +713,77 @@ impl DPEventLoop {
     }
   }
 
-  fn remote_writer_discovered(&mut self, dwd: &DiscoveredWriterData) {
+  fn remote_writer_discovered(&mut self, remote_writer: &DiscoveredWriterData) {
     // update writer proxies in local readers
     for reader in self.message_receiver.available_readers.values_mut() {
-      if &dwd.publication_topic_data.topic_name == reader.topic_name() {
-        let offered_qos = dwd.publication_topic_data.qos();
-        // // see if the participant has published a QoS for the topic
-        // // If yes, we take that as a basis QoS
-        // let topic_qos = self.discovery_db.read().unwrap()
-        //   .get_topic_for_participant(&dwd.publication_topic_data.topic_name,
-        //     dwd.writer_proxy.remote_writer_guid.prefix )
-        //   .map( |dtd| dtd.topic_data.qos() );
-        // let offered_qos = topic_qos
-        //   .unwrap_or_else( QosPolicies::default )
-        //   .modify_by( &dwd.publication_topic_data.qos() );
+      if &remote_writer.publication_topic_data.topic_name == reader.topic_name() {
+        #[cfg(not(feature = "security"))]
+        let match_to_writer = true;
+        #[cfg(feature = "security")]
+        let match_to_writer = if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+          // Security is enabled.
+          let local_reader_guid = reader.guid();
+          let remote_writer_guid = remote_writer.writer_proxy.remote_writer_guid;
 
-        reader.update_writer_proxy(
-          RtpsWriterProxy::from_discovered_writer_data(dwd, &[], &[]),
-          &offered_qos,
-        );
+          // Check do we have compatible security with the remote
+          let local_reader_sec_info_opt = plugins_handle
+            .get_plugins()
+            .get_reader_sec_attributes(local_reader_guid, reader.topic_name().clone())
+            .map(EndpointSecurityInfo::from)
+            .ok();
+          let remote_writer_sec_info_opt =
+            remote_writer.publication_topic_data.security_info.clone();
+
+          let compatible = check_are_endpoints_securities_compatible(
+            local_reader_sec_info_opt,
+            remote_writer_sec_info_opt,
+          );
+
+          if !compatible {
+            security_error!(
+              "Local reader {:?} and remote writer {:?} have incompatible security, ignoring the \
+               remote.",
+              local_reader_guid,
+              remote_writer_guid
+            );
+            false // match_to_writer
+          } else {
+            // Signal Secure discovery to exchange keys with the remote
+            // TODO: do this only at first encounter with the remote / before keys have been
+            // sent, not every time
+            if let Err(e) = self.discovery_command_sender.send(
+              DiscoveryCommand::StartKeyExchangeWithRemoteEndpoint {
+                local_endpoint_guid: local_reader_guid,
+                remote_endpoint_guid: remote_writer_guid,
+              },
+            ) {
+              error!(
+                "Could not signal Secure Discovery to start the key exchange with remote writer \
+                 {:?}. Reason: {}.",
+                remote_writer_guid, e
+              );
+            }
+            true // match_to_writer
+          }
+        } else {
+          // No security enabled. Always match
+          true // match_to_writer
+        };
+
+        if match_to_writer {
+          let offered_qos = remote_writer.publication_topic_data.qos();
+          // Should we check if the participant has published a QoS for the topic?
+          reader.update_writer_proxy(
+            RtpsWriterProxy::from_discovered_writer_data(remote_writer, &[], &[]),
+            &offered_qos,
+          );
+        }
       }
     }
     // notify DDSCache to create topic if it does not exist yet
     match self.ddscache.write() {
       Ok(mut ddsc) => {
-        let ptd = &dwd.publication_topic_data;
+        let ptd = &remote_writer.publication_topic_data;
         ddsc.add_new_topic(
           ptd.topic_name.clone(),
           TypeDesc::new(ptd.type_name.clone()),
@@ -855,6 +950,43 @@ impl DPEventLoop {
         );
       }
     }
+  }
+}
+
+#[cfg(feature = "security")]
+fn check_are_endpoints_securities_compatible(
+  local_info_opt: Option<EndpointSecurityInfo>,
+  remote_info_opt: Option<EndpointSecurityInfo>,
+) -> bool {
+  let (local_info, remote_info) = match (local_info_opt, remote_info_opt) {
+    (None, None) => {
+      // Neither has security info. Pass?
+      return true;
+    }
+    (Some(_info), None) | (None, Some(_info)) => {
+      // Only one of the endpoints has security info. Reject.
+      return false;
+    }
+    (Some(local_info), Some(remote_info)) => (local_info, remote_info),
+  };
+
+  // See Security specification section 7.2.8 EndpointSecurityInfo
+  if local_info.endpoint_security_attributes.is_valid()
+    && local_info.plugin_endpoint_security_attributes.is_valid()
+    && remote_info.endpoint_security_attributes.is_valid()
+    && remote_info.plugin_endpoint_security_attributes.is_valid()
+  {
+    // When all masks are valid, values need to be equal
+    local_info == remote_info
+  } else {
+    // From the spec:
+    // "If the is_valid is set to zero on either of the masks, the comparison
+    // between the local and remote setting for the EndpointSecurityInfo shall
+    // ignore the attribute"
+
+    // TODO: Does it actually make sense to ignore the masks if they're not valid?
+    // Seems a bit strange. Currently we require that all masks are valid
+    false
   }
 }
 

@@ -1,5 +1,5 @@
 use std::{
-  collections::HashMap,
+  collections::{HashMap, HashSet},
   sync::{Arc, RwLock},
 };
 
@@ -18,7 +18,7 @@ use crate::{
     DiscoveryNotificationType, SECURE_BUILTIN_READERS_INIT_LIST, SECURE_BUILTIN_WRITERS_INIT_LIST,
   },
   security::{
-    access_control::{ParticipantSecurityAttributes, PermissionsToken},
+    access_control::{EndpointSecurityAttributes, ParticipantSecurityAttributes, PermissionsToken},
     authentication::{
       authentication_builtin::DiscHandshakeState, HandshakeMessageToken, IdentityToken,
       ValidationOutcome, GMCLASSID_SECURITY_AUTH_HANDSHAKE,
@@ -96,6 +96,8 @@ pub(crate) struct SecureDiscovery {
   // Here we store the latest authentication message that we've sent to each remote,
   // in case they need to be sent again
   stored_authentication_messages: HashMap<GuidPrefix, StoredAuthenticationMessage>,
+
+  user_data_endpoints_with_keys_already_sent_to: HashSet<GUID>,
 }
 
 impl SecureDiscovery {
@@ -234,6 +236,7 @@ impl SecureDiscovery {
       generic_message_helper: ParticipantGenericMessageHelper::new(),
       handshake_states: HashMap::new(),
       stored_authentication_messages: HashMap::new(),
+      user_data_endpoints_with_keys_already_sent_to: HashSet::new(),
     })
   }
 
@@ -1671,7 +1674,7 @@ impl SecureDiscovery {
   // been matched in dp_event_loop, since otherwise the key exchange messages that
   // we send (in topic ParticipantVolatileMessageSecure) won't reach the remote
   // participant.
-  pub fn start_key_exchange_with_remote(
+  pub fn start_key_exchange_with_remote_participant(
     &mut self,
     remote_guid_prefix: GuidPrefix,
     key_exchange_writer: &no_key::DataWriter<ParticipantVolatileMessageSecure>,
@@ -1840,6 +1843,189 @@ impl SecureDiscovery {
         }
       }
     }
+  }
+
+  pub fn start_key_exchange_with_remote_endpoint(
+    &mut self,
+    local_endpoint_guid: GUID,
+    remote_endpoint_guid: GUID,
+    key_exchange_writer: &no_key::DataWriter<ParticipantVolatileMessageSecure>,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) {
+    // First check if we have already sent our keys
+    if self
+      .user_data_endpoints_with_keys_already_sent_to
+      .contains(&remote_endpoint_guid)
+    {
+      // Do nothing
+      return;
+    }
+
+    let remote_is_writer = remote_endpoint_guid.entity_id.entity_kind.is_writer();
+
+    // Dig out remote's security attributes
+    let sec_info_opt = if remote_is_writer {
+      discovery_db_read(discovery_db)
+        .get_topic_writer(&remote_endpoint_guid)
+        .map(|writer| writer.publication_topic_data.security_info().clone())
+    } else {
+      discovery_db_read(discovery_db)
+        .get_topic_reader(&remote_endpoint_guid)
+        .map(|reader| reader.subscription_topic_data.security_info().clone())
+    };
+
+    let sec_attr = match sec_info_opt.flatten() {
+      Some(info) => EndpointSecurityAttributes::from(info),
+      None => {
+        security_error!(
+          "Could not find EndpointSecurityAttributes for remote {:?}",
+          remote_endpoint_guid,
+        );
+        return;
+      }
+    };
+
+    // Inspect if we need to send crypto tokens at all
+    // See '8.8.9.2 Key Exchange with remote DataReader' and
+    // '8.8.9.3 Key Exchange with remote DataWriter' in the spec
+    let key_exchange_needed = if remote_is_writer {
+      sec_attr.is_payload_protected || sec_attr.is_submessage_protected
+    } else {
+      // For reader only is_submessage_protected matters
+      sec_attr.is_submessage_protected
+    };
+
+    if !key_exchange_needed {
+      trace!(
+        "Key exchange is not needed with remote {:?}",
+        remote_endpoint_guid
+      );
+      return;
+    }
+
+    // Register the remote
+    let register_result = if remote_is_writer {
+      self
+        .security_plugins
+        .get_plugins()
+        .register_matched_remote_writer(remote_endpoint_guid, local_endpoint_guid)
+    } else {
+      self
+        .security_plugins
+        .get_plugins()
+        // Here we pass relay_only as false always. TODO: pass the correct value!
+        .register_matched_remote_reader(remote_endpoint_guid, local_endpoint_guid, false)
+    };
+
+    if let Err(e) = register_result {
+      security_error!(
+        "Failed to register remote endpoint {:?} to crypto plugin: {}",
+        remote_endpoint_guid,
+        e,
+      );
+      return;
+    }
+    // TODO: If the registration succeeded but some next step fails,
+    // then Secure discovery will try to run this function again at some point.
+    // At this next time, the registration will likely fail since the remote has
+    // already been registered. Therefore, we need to (for example) keep track
+    // of which endpoints have already been registered and skip the registration
+    // part for them in this function.
+
+    // Get the crypto tokens for the remote
+    let crypto_tokens_res = if remote_is_writer {
+      self
+        .security_plugins
+        .get_plugins()
+        .create_local_writer_crypto_tokens(local_endpoint_guid, remote_endpoint_guid)
+    } else {
+      self
+        .security_plugins
+        .get_plugins()
+        .create_local_reader_crypto_tokens(local_endpoint_guid, remote_endpoint_guid)
+    };
+
+    let crypto_tokens = match crypto_tokens_res {
+      Ok(tokens) => tokens,
+      Err(e) => {
+        security_error!(
+          "Failed to create get CryptoTokens: {}. Local endpoint: {:?}",
+          e,
+          local_endpoint_guid,
+        );
+        return;
+      }
+    };
+
+    // Shortcut: if the remote is actually our endpoint, set tokens directly (no
+    // need to send then to the network)
+    let remote_is_us = remote_endpoint_guid.prefix == self.local_participant_guid.prefix;
+    if remote_is_us {
+      let set_res = if remote_is_writer {
+        self
+          .security_plugins
+          .get_plugins()
+          .set_remote_writer_crypto_tokens(remote_endpoint_guid, local_endpoint_guid, crypto_tokens)
+      } else {
+        self
+          .security_plugins
+          .get_plugins()
+          .set_remote_reader_crypto_tokens(remote_endpoint_guid, local_endpoint_guid, crypto_tokens)
+      };
+
+      if let Err(e) = set_res {
+        security_error!(
+          "Failed to set our own crypto tokens as remote tokens: {}. Guid: {:?}",
+          e,
+          remote_endpoint_guid
+        );
+        return;
+      } else {
+        debug!(
+          "Set our own crypto tokens as remote tokens. Guid: {:?}",
+          remote_endpoint_guid
+        );
+      }
+    } else {
+      // It's a real remote, send tokens to network
+
+      // Create the volatile message containing the tokens
+      let vol_msg = if remote_is_writer {
+        self.new_volatile_message(
+          GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS,
+          key_exchange_writer.guid(),
+          local_endpoint_guid,
+          remote_endpoint_guid.prefix,
+          remote_endpoint_guid,
+          crypto_tokens.as_ref(),
+        )
+      } else {
+        self.new_volatile_message(
+          GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS,
+          key_exchange_writer.guid(),
+          local_endpoint_guid,
+          remote_endpoint_guid.prefix,
+          remote_endpoint_guid,
+          crypto_tokens.as_ref(),
+        )
+      };
+
+      let opts = WriteOptionsBuilder::new()
+        .to_single_reader(remote_endpoint_guid)
+        .build();
+
+      if let Err(e) = key_exchange_writer.write_with_options(vol_msg, opts) {
+        error!("DataWriter write operation failed: {}", e);
+        return;
+      } else {
+        debug!("Sent crypto tokens to {:?}", remote_endpoint_guid);
+      }
+    }
+
+    // Remember that we have successfully sent the keys
+    self
+      .user_data_endpoints_with_keys_already_sent_to
+      .insert(remote_endpoint_guid);
   }
 
   fn validate_remote_participant_permissions(

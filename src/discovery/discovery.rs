@@ -73,6 +73,12 @@ pub enum DiscoveryCommand {
   StartKeyExchangeWithRemoteParticipant {
     participant_guid_prefix: GuidPrefix,
   },
+
+  #[cfg(feature = "security")]
+  StartKeyExchangeWithRemoteEndpoint {
+    local_endpoint_guid: GUID,
+    remote_endpoint_guid: GUID,
+  },
 }
 
 pub struct LivelinessState {
@@ -782,8 +788,22 @@ impl Discovery {
                   participant_guid_prefix,
                 } => {
                   if let Some(security) = self.security_opt.as_mut() {
-                    security.start_key_exchange_with_remote(
+                    security.start_key_exchange_with_remote_participant(
                       participant_guid_prefix,
+                      &self.dcps_participant_volatile_message_secure.writer,
+                      &self.discovery_db,
+                    );
+                  }
+                }
+                #[cfg(feature = "security")]
+                DiscoveryCommand::StartKeyExchangeWithRemoteEndpoint {
+                  local_endpoint_guid,
+                  remote_endpoint_guid,
+                } => {
+                  if let Some(security) = self.security_opt.as_mut() {
+                    security.start_key_exchange_with_remote_endpoint(
+                      local_endpoint_guid,
+                      remote_endpoint_guid,
                       &self.dcps_participant_volatile_message_secure.writer,
                       &self.discovery_db,
                     );
