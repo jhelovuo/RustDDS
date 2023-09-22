@@ -38,7 +38,11 @@ pub fn test_config() -> SecurityConfig {
       name: "dds.sec.auth.private_key".to_string(),
       value: [
         path_start.clone(),
-        [test_participant_name.clone(),"_private_key.pem".to_string()].concat(),
+        [
+          test_participant_name.clone(),
+          "_private_key.pem".to_string(),
+        ]
+        .concat(),
       ]
       .concat(),
       propagate: false,
@@ -52,7 +56,7 @@ pub fn test_config() -> SecurityConfig {
       name: "dds.sec.auth.identity_certificate".to_string(),
       value: [
         path_start.clone(),
-        [test_participant_name,"_certificate.pem".to_string()].concat(),
+        [test_participant_name, "_certificate.pem".to_string()].concat(),
       ]
       .concat(),
       propagate: false,
