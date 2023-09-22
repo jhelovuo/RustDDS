@@ -1230,9 +1230,7 @@ impl SecureDiscovery {
         );
 
         // Set handshake state as pending final message
-        self
-          .handshake_states
-          .insert(remote_guid_prefix, DiscHandshakeState::PendingFinalMessage);
+        self.update_handshake_state(remote_guid_prefix, DiscHandshakeState::PendingFinalMessage);
       }
       Ok((other_outcome, _reply_token)) => {
         // Other outcomes should not be possible
@@ -1329,7 +1327,7 @@ impl SecureDiscovery {
         );
 
         // Set handshake state as completed with final message
-        self.handshake_states.insert(
+        self.update_handshake_state(
           remote_guid_prefix,
           DiscHandshakeState::CompletedWithFinalMessageSent,
         );
@@ -1407,7 +1405,7 @@ impl SecureDiscovery {
         // Everything went OK
 
         // Set handshake state as completed with final message
-        self.handshake_states.insert(
+        self.update_handshake_state(
           remote_guid_prefix,
           DiscHandshakeState::CompletedWithFinalMessageReceived,
         );
