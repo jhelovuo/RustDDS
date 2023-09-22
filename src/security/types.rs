@@ -669,8 +669,17 @@ pub type PluginParticipantSecurityAttributesMask = PluginSecurityAttributesMask;
 
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
 pub struct EndpointSecurityInfo {
-  endpoint_security_attributes: EndpointSecurityAttributesMask,
-  plugin_endpoint_security_attributes: PluginEndpointSecurityAttributesMask,
+  pub endpoint_security_attributes: EndpointSecurityAttributesMask,
+  pub plugin_endpoint_security_attributes: PluginEndpointSecurityAttributesMask,
+}
+
+impl From<EndpointSecurityAttributes> for EndpointSecurityInfo {
+  fn from(ep_attributes: EndpointSecurityAttributes) -> Self {
+    Self {
+      endpoint_security_attributes: EndpointSecurityAttributesMask::from(ep_attributes.clone()),
+      plugin_endpoint_security_attributes: ep_attributes.plugin_endpoint_attributes,
+    }
+  }
 }
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Copy, Readable, Writable)]
@@ -697,12 +706,10 @@ pub enum EndpointSecurityAttributesMaskFlags {
 pub struct EndpointSecurityAttributesMask(pub BitFlags<EndpointSecurityAttributesMaskFlags>);
 
 impl EndpointSecurityAttributesMask {
-  // currently unused
-
-  // pub fn is_valid(&self) -> bool {
-  //   let Self(value) = self;
-  //   value.contains(EndpointSecurityAttributesMaskFlags::IsValid)
-  // }
+  pub fn is_valid(&self) -> bool {
+    let Self(value) = self;
+    value.contains(EndpointSecurityAttributesMaskFlags::IsValid)
+  }
 }
 
 impl<'a, C: Context> Readable<'a, C> for EndpointSecurityAttributesMask {
@@ -1039,7 +1046,7 @@ use crate::{
   discovery::{sedp_messages::Endpoint_GUID, spdp_participant_data::Participant_GUID},
   structure::rpc,
 };
-use super::access_control::ParticipantSecurityAttributes;
+use super::access_control::{EndpointSecurityAttributes, ParticipantSecurityAttributes};
 
 // This is the transport (message) type for specialized versions above.
 // DDS Security Spec v1.1

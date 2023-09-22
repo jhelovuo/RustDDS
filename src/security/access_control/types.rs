@@ -3,7 +3,7 @@ use speedy::{Readable, Writable};
 
 use crate::security::{
   DataHolder, EndpointSecurityAttributesMask, EndpointSecurityAttributesMaskFlags,
-  ParticipantSecurityAttributesMask, ParticipantSecurityAttributesMaskFlags,
+  EndpointSecurityInfo, ParticipantSecurityAttributesMask, ParticipantSecurityAttributesMaskFlags,
   PluginParticipantSecurityAttributesMask, PluginSecurityAttributesMask, Property,
 };
 
@@ -182,5 +182,31 @@ impl From<EndpointSecurityAttributes> for EndpointSecurityAttributesMask {
       mask.insert(EndpointSecurityAttributesMaskFlags::IsLivelinessProtected);
     }
     Self(mask)
+  }
+}
+
+impl From<EndpointSecurityInfo> for EndpointSecurityAttributes {
+  fn from(info: EndpointSecurityInfo) -> Self {
+    let bitflags = info.endpoint_security_attributes.0;
+
+    // TODO: check validity?
+    EndpointSecurityAttributes {
+      topic_security_attributes: TopicSecurityAttributes {
+        is_read_protected: bitflags.contains(EndpointSecurityAttributesMaskFlags::IsReadProtected),
+        is_write_protected: bitflags
+          .contains(EndpointSecurityAttributesMaskFlags::IsWriteProtected),
+        is_discovery_protected: bitflags
+          .contains(EndpointSecurityAttributesMaskFlags::IsDiscoveryProtected),
+        is_liveliness_protected: bitflags
+          .contains(EndpointSecurityAttributesMaskFlags::IsLivelinessProtected),
+      },
+      is_submessage_protected: bitflags
+        .contains(EndpointSecurityAttributesMaskFlags::IsSubmessageProtected),
+      is_payload_protected: bitflags
+        .contains(EndpointSecurityAttributesMaskFlags::IsPayloadProtected),
+      is_key_protected: bitflags.contains(EndpointSecurityAttributesMaskFlags::IsKeyProtected),
+      plugin_endpoint_attributes: info.plugin_endpoint_security_attributes,
+      ac_endpoint_properties: vec![],
+    }
   }
 }

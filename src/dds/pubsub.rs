@@ -54,10 +54,10 @@ use super::{
 #[cfg(feature = "security")]
 use crate::{
   create_error_internal, create_error_not_allowed_by_security,
-  security::security_plugins::SecurityPluginsHandle,
+  security::{security_plugins::SecurityPluginsHandle, EndpointSecurityInfo},
 };
 #[cfg(not(feature = "security"))]
-use crate::no_security::security_plugins::SecurityPluginsHandle;
+use crate::no_security::{security_plugins::SecurityPluginsHandle, EndpointSecurityInfo};
 
 // -------------------------------------------------------------------
 
@@ -575,8 +575,35 @@ impl InnerPublisher {
       .map_err(|e| CreateError::Poisoned {
         reason: format!("Discovery DB: {e}"),
       })?;
-    // TODO: "None" below hardwires security_info to None. So we do not publish any.
-    let dwd = DiscoveredWriterData::new(&data_writer, topic, &dp, None);
+
+    #[cfg(not(feature = "security"))]
+    let security_info = None;
+    #[cfg(feature = "security")]
+    let security_info = if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security enabled
+      if guid.entity_id.entity_kind.is_user_defined() {
+        match sec_handle
+          .get_plugins()
+          .get_writer_sec_attributes(guid, topic.name())
+        {
+          Ok(attr) => EndpointSecurityInfo::from(attr).into(),
+          Err(e) => {
+            return create_error_internal!(
+              "Failed to get security info for writer: {}. Guid: {:?}",
+              e,
+              guid
+            );
+          }
+        }
+      } else {
+        None // For the built-in topics
+      }
+    } else {
+      // No security enabled
+      None
+    };
+
+    let dwd = DiscoveredWriterData::new(&data_writer, topic, &dp, security_info);
     db.update_local_topic_writer(dwd);
     db.update_topic_data_p(topic);
 
@@ -1080,12 +1107,39 @@ impl InnerSubscriber {
       security_plugins: self.security_plugins_handle.clone(),
     };
 
+    #[cfg(not(feature = "security"))]
+    let security_info: Option<EndpointSecurityInfo> = None;
+    #[cfg(feature = "security")]
+    let security_info = if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security enabled
+      if reader_guid.entity_id.entity_kind.is_user_defined() {
+        match sec_handle
+          .get_plugins()
+          .get_reader_sec_attributes(reader_guid, topic.name())
+        {
+          Ok(attr) => EndpointSecurityInfo::from(attr).into(),
+          Err(e) => {
+            return create_error_internal!(
+              "Failed to get security info for reader: {}. Guid: {:?}",
+              e,
+              reader_guid
+            );
+          }
+        }
+      } else {
+        None // For the built-in topics
+      }
+    } else {
+      // No security enabled
+      None
+    };
+
     {
       let mut db = self
         .discovery_db
         .write()
         .or_else(|e| create_error_poisoned!("Cannot lock discovery_db. {}", e))?;
-      db.update_local_topic_reader(&dp, topic, &new_reader);
+      db.update_local_topic_reader(&dp, topic, &new_reader, security_info);
       db.update_topic_data_p(topic);
     }
 

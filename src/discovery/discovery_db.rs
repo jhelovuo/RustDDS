@@ -31,8 +31,10 @@ use super::{
   },
   spdp_participant_data::SpdpDiscoveredParticipantData,
 };
+#[cfg(not(feature = "security"))]
+use crate::no_security::EndpointSecurityInfo;
 #[cfg(feature = "security")]
-use super::secure_discovery::AuthenticationStatus;
+use crate::{discovery::secure_discovery::AuthenticationStatus, security::EndpointSecurityInfo};
 
 // If remote participant does not specify lease duration, how long silence
 // until we pronounce it dead.
@@ -584,6 +586,7 @@ impl DiscoveryDB {
     domain_participant: &DomainParticipant,
     topic: &Topic,
     reader: &ReaderIngredients,
+    sec_info_opt: Option<EndpointSecurityInfo>,
   ) {
     let reader_guid = reader.guid;
 
@@ -595,7 +598,7 @@ impl DiscoveryDB {
       topic.name(),
       topic.get_type().name().to_string(),
       &topic.qos(),
-      None, // <<---------------TODO: None here means we have no EndpointSecurityInfo
+      sec_info_opt,
     );
 
     // TODO: possibly change content filter to dynamic value
@@ -932,12 +935,12 @@ mod tests {
     };
 
     // Add the reader to the database and verify the info is updated
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader1_ing);
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader1_ing, None);
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
     // Verify that the info does not change if the reader is added a second time
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader1_ing);
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader1_ing, None);
     assert_eq!(discoverydb.local_topic_readers.len(), 1);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 1);
 
@@ -970,7 +973,7 @@ mod tests {
     };
 
     // Add the second reader to the database and verify the info is updated
-    discoverydb.update_local_topic_reader(&dp, &topic, &reader2_ing);
+    discoverydb.update_local_topic_reader(&dp, &topic, &reader2_ing, None);
     assert_eq!(discoverydb.get_local_topic_readers(&topic).len(), 2);
     assert_eq!(discoverydb.get_all_local_topic_readers().count(), 2);
   }
