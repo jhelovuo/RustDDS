@@ -1923,14 +1923,9 @@ impl SecureDiscovery {
         remote_endpoint_guid,
         e,
       );
-      return;
+      // Keep on going, since if the error was due to the remote already being
+      // registered, sending the keys can still succeed
     }
-    // TODO: If the registration succeeded but some next step fails,
-    // then Secure discovery will try to run this function again at some point.
-    // At this next time, the registration will likely fail since the remote has
-    // already been registered. Therefore, we need to (for example) keep track
-    // of which endpoints have already been registered and skip the registration
-    // part for them in this function.
 
     // Get the crypto tokens for the remote
     let crypto_tokens_res = if remote_is_writer {
