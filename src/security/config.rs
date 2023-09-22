@@ -1,3 +1,4 @@
+pub mod paths;
 use crate::{qos, security};
 
 // Temporary module for determining security configurations for development
@@ -11,16 +12,30 @@ pub struct SecurityConfig {
 pub fn test_config() -> SecurityConfig {
   let security_enabled = true;
 
+  let path_start = [
+    "file:".to_string(),
+    paths::EXAMPLE_SECURITY_CONFIGURATION_FILES.to_string(),
+  ]
+  .concat();
+
   let properties = vec![
     // For the authentication plugin
     security::types::Property {
       name: "dds.sec.auth.identity_ca".to_string(),
-      value: "file:example_security_configuration_files/identity_ca_certificate.pem".to_string(),
+      value: [
+        path_start.clone(),
+        "identity_ca_certificate.pem".to_string(),
+      ]
+      .concat(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.auth.private_key".to_string(),
-      value: "file:example_security_configuration_files/participant1_private_key.pem".to_string(),
+      value: [
+        path_start.clone(),
+        "participant1_private_key.pem".to_string(),
+      ]
+      .concat(),
       propagate: false,
     },
     security::types::Property {
@@ -30,23 +45,31 @@ pub fn test_config() -> SecurityConfig {
     },
     security::types::Property {
       name: "dds.sec.auth.identity_certificate".to_string(),
-      value: "file:example_security_configuration_files/participant1_certificate.pem".to_string(),
+      value: [
+        path_start.clone(),
+        "participant1_certificate.pem".to_string(),
+      ]
+      .concat(),
       propagate: false,
     },
     // For the access control plugin
     security::types::Property {
       name: "dds.sec.access.permissions_ca".to_string(),
-      value: "file:example_security_configuration_files/permissions_ca_certificate.pem".to_string(),
+      value: [
+        path_start.clone(),
+        "permissions_ca_certificate.pem".to_string(),
+      ]
+      .concat(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.access.governance".to_string(),
-      value: "file:example_security_configuration_files/permissive_governance.p7s".to_string(),
+      value: [path_start.clone(), "permissive_governance.p7s".to_string()].concat(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.access.permissions".to_string(),
-      value: "file:example_security_configuration_files/permissive_permissions.p7s".to_string(),
+      value: [path_start, "permissive_permissions.p7s".to_string()].concat(),
       propagate: false,
     },
   ];
