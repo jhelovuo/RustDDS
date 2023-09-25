@@ -2002,7 +2002,7 @@ impl SecureDiscovery {
       // Create the volatile message containing the tokens
       let vol_msg = if remote_is_writer {
         self.new_volatile_message(
-          GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS,
+          GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS,
           key_exchange_writer.guid(),
           local_endpoint_guid,
           remote_endpoint_guid.prefix,
@@ -2011,7 +2011,7 @@ impl SecureDiscovery {
         )
       } else {
         self.new_volatile_message(
-          GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS,
+          GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS,
           key_exchange_writer.guid(),
           local_endpoint_guid,
           remote_endpoint_guid.prefix,
