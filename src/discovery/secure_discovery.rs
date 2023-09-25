@@ -2005,8 +2005,10 @@ impl SecureDiscovery {
         )
       };
 
+      let remote_volatile_reader_guid =
+        remote_endpoint_guid.from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER);
       let opts = WriteOptionsBuilder::new()
-        .to_single_reader(remote_endpoint_guid)
+        .to_single_reader(remote_volatile_reader_guid)
         .build();
 
       if let Err(e) = key_exchange_writer.write_with_options(vol_msg, opts) {
