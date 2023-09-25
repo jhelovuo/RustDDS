@@ -71,20 +71,20 @@ pub(super) fn compute_mac(
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
 ) -> SecurityResult<BuiltinMAC> {
-  // ring encrypts + tags (signs) in place, so we must create a buffer for that.
-  let mut in_out_data = Vec::from(data);
-
-  // Section "9.5.3.3.4.4 Result from encode_serialized_payload" :
+  // 9.5 (.0)
   //
-  // "The common_mac in the CryptoFooter is the authentication tag generated
-  // by the same AES-GCM where the Additional Authenticated Data is empty."
+  //The AES-GMAC transformation is defined as the special case where the
+  // plaintext “P” is empty (zero length). This transformation produces only an
+  // AuthenticationTag (Message Authentication Code) on the AAD data:
+  //
+  //T = AES-GMAC(K, AAD, IV) = AES-GCM(K, “”, AAD, IV)
 
   let mut sealing_key = SealingKey::new(
     to_unbound_AES_GCM_key(key)?,
     TrivialNonceSequence::new(initialization_vector),
   );
 
-  let tag = sealing_key.seal_in_place_separate_tag(Aad::empty(), &mut in_out_data)?;
+  let tag = sealing_key.seal_in_place_separate_tag(Aad::from(data), &mut [])?;
 
   Ok(to_builtin_mac(&tag))
 }
@@ -109,15 +109,14 @@ pub(super) fn encrypt(
   Ok((in_out_data, to_builtin_mac(&tag)))
 }
 
-// Computes the MAC for the data and compares it with the one provided
+// Validates the MAC
 pub(super) fn validate_mac(
   key: &BuiltinKey,
   initialization_vector: BuiltinInitializationVector,
   data: &[u8],
   mac: BuiltinMAC,
 ) -> SecurityResult<()> {
-  let mut in_out = Vec::with_capacity(data.len() + MAC_LENGTH);
-  in_out.extend_from_slice(data);
+  let mut in_out = Vec::with_capacity(MAC_LENGTH);
   in_out.extend_from_slice(&mac);
 
   let mut opening_key = OpeningKey::new(
@@ -126,7 +125,7 @@ pub(super) fn validate_mac(
   );
 
   // This will return `Err(..)` if verification fails
-  let _plaintext = opening_key.open_in_place(Aad::empty(), &mut in_out)?;
+  let _plaintext = opening_key.open_in_place(Aad::from(data), &mut in_out)?;
   // If we get here, the mac ("tag") was valid.
   Ok(())
 }
