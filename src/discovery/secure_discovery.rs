@@ -98,6 +98,9 @@ pub(crate) struct SecureDiscovery {
   stored_authentication_messages: HashMap<GuidPrefix, StoredAuthenticationMessage>,
 
   user_data_endpoints_with_keys_already_sent_to: HashSet<GUID>,
+
+  // A set for keeping track which remote readers are relay-only
+  relay_only_remote_readers: HashSet<GUID>,
 }
 
 impl SecureDiscovery {
@@ -237,6 +240,7 @@ impl SecureDiscovery {
       handshake_states: HashMap::new(),
       stored_authentication_messages: HashMap::new(),
       user_data_endpoints_with_keys_already_sent_to: HashSet::new(),
+      relay_only_remote_readers: HashSet::new(),
     })
   }
 
@@ -478,14 +482,20 @@ impl SecureDiscovery {
                   self.domain_id,
                   reader_data,
                 ) {
-                Ok((check_passed, _relay_only)) => {
+                Ok((check_passed, relay_only)) => {
                   if check_passed {
-                    // TODO: use the relay_only value
                     security_log!(
                       "Access control check passed for authenticated participant {:?} to read \
                        topic {topic_name}.",
                       participant_guidp
                     );
+
+                    if relay_only {
+                      self
+                        .relay_only_remote_readers
+                        .insert(reader_data.reader_proxy.remote_reader_guid);
+                    }
+
                     NormalDiscoveryPermission::Allow
                   } else {
                     security_log!(
@@ -1913,8 +1923,13 @@ impl SecureDiscovery {
       self
         .security_plugins
         .get_plugins()
-        // Here we pass relay_only as false always. TODO: pass the correct value!
-        .register_matched_remote_reader(remote_endpoint_guid, local_endpoint_guid, false)
+        .register_matched_remote_reader(
+          remote_endpoint_guid,
+          local_endpoint_guid,
+          self
+            .relay_only_remote_readers
+            .contains(&remote_endpoint_guid),
+        )
     };
 
     if let Err(e) = register_result {
