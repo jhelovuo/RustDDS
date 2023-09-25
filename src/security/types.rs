@@ -1023,7 +1023,7 @@ pub fn volatile_reader_recognition_property() -> Property {
 // specification
 //
 // spec: typedef ParticipantVolatileMessageSecure ParticipantGenericMessage;
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ParticipantVolatileMessageSecure {
   pub generic: ParticipantGenericMessage,
 }

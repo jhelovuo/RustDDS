@@ -97,6 +97,8 @@ pub(crate) struct SecureDiscovery {
   // in case they need to be sent again
   stored_authentication_messages: HashMap<GuidPrefix, StoredAuthenticationMessage>,
 
+  // In the key, first GUID is local endpoint's, second is remote endpoint's
+  stored_volatile_messages: HashMap<(GUID, GUID), ParticipantVolatileMessageSecure>,
   user_data_endpoints_with_keys_already_sent_to: HashSet<GUID>,
 
   // A set for keeping track which remote readers are relay-only
@@ -239,6 +241,7 @@ impl SecureDiscovery {
       generic_message_helper: ParticipantGenericMessageHelper::new(),
       handshake_states: HashMap::new(),
       stored_authentication_messages: HashMap::new(),
+      stored_volatile_messages: HashMap::new(),
       user_data_endpoints_with_keys_already_sent_to: HashSet::new(),
       relay_only_remote_readers: HashSet::new(),
     })
@@ -1511,20 +1514,24 @@ impl SecureDiscovery {
         // Got data writer crypto tokens, see "7.4.4.6.2 Data for message class
         // GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS" of the security spec
 
-        if let Err(e) = self
+        let set_result = self
           .security_plugins
           .get_plugins()
           .set_remote_writer_crypto_tokens(
             msg.generic.source_endpoint_guid,
             msg.generic.destination_endpoint_guid,
             crypto_tokens,
-          )
-        {
+          );
+
+        if let Err(e) = set_result {
           security_error!(
             "Failed to set remote writer crypto tokens: {}. Remote: {:?}",
             e,
             msg.generic.source_endpoint_guid
           );
+          // We need to set the crypto tokens later (after we have registered the remote
+          // writer)
+          self.store_received_volatile_message(msg.clone());
         } else {
           info!(
             "Set crypto tokens for remote writer {:?}",
@@ -1537,20 +1544,23 @@ impl SecureDiscovery {
         // Got data reader crypto tokens, see "7.4.4.6.3 Data for message class
         // GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS" of the security spec
 
-        if let Err(e) = self
+        let set_result = self
           .security_plugins
           .get_plugins()
           .set_remote_reader_crypto_tokens(
             msg.generic.source_endpoint_guid,
             msg.generic.destination_endpoint_guid,
             crypto_tokens,
-          )
-        {
+          );
+        if let Err(e) = set_result {
           security_error!(
             "Failed to set remote reader crypto tokens: {}. Remote: {:?}",
             e,
             msg.generic.source_endpoint_guid
           );
+          // We need to set the crypto tokens later (after we have registered the remote
+          // reader)
+          self.store_received_volatile_message(msg.clone());
         } else {
           info!(
             "Set crypto tokens for remote reader {:?}",
@@ -1562,6 +1572,18 @@ impl SecureDiscovery {
         debug!("Unknown message_class_id in a volatile message: {}", other);
       }
     }
+  }
+
+  fn store_received_volatile_message(&mut self, msg: ParticipantVolatileMessageSecure) {
+    let local_endpoint_guid = msg.generic.destination_endpoint_guid;
+    let remote_endpoint_guid = msg.generic.source_endpoint_guid;
+    debug!(
+      "Storing crypto tokens of remote {:?} for later use.",
+      remote_endpoint_guid
+    );
+    self
+      .stored_volatile_messages
+      .insert((local_endpoint_guid, remote_endpoint_guid), msg);
   }
 
   fn on_remote_participant_authenticated(
@@ -1862,16 +1884,89 @@ impl SecureDiscovery {
     key_exchange_writer: &no_key::DataWriter<ParticipantVolatileMessageSecure>,
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
   ) {
-    // First check if we have already sent our keys
-    if self
-      .user_data_endpoints_with_keys_already_sent_to
-      .contains(&remote_endpoint_guid)
-    {
-      // Do nothing
-      return;
+    let remote_is_writer = remote_endpoint_guid.entity_id.entity_kind.is_writer();
+
+    // Register the remote
+    let register_result = if remote_is_writer {
+      self
+        .security_plugins
+        .get_plugins()
+        .register_matched_remote_writer_if_not_already(remote_endpoint_guid, local_endpoint_guid)
+    } else {
+      self
+        .security_plugins
+        .get_plugins()
+        .register_matched_remote_reader_if_not_already(
+          remote_endpoint_guid,
+          local_endpoint_guid,
+          self
+            .relay_only_remote_readers
+            .contains(&remote_endpoint_guid),
+        )
+    };
+
+    if let Err(e) = register_result {
+      security_error!(
+        "Failed to register remote endpoint {:?} to crypto plugin: {}",
+        remote_endpoint_guid,
+        e,
+      );
+      // Keep on going, since if the error was due to the remote already being
+      // registered, sending the keys can still succeed
     }
 
-    let remote_is_writer = remote_endpoint_guid.entity_id.entity_kind.is_writer();
+    // Check if we have stored keys which the remote has sent for this
+    // (local, remote) endpoint pair. This happens if we have received keys from the
+    // remote before we have registered the remote endpoint
+    if let Some(msg) = self
+      .stored_volatile_messages
+      .get(&(local_endpoint_guid, remote_endpoint_guid))
+    {
+      // Get crypto tokens from the stored message & set them
+      let crypto_tokens = msg
+        .generic
+        .message_data
+        .iter()
+        .map(|dh| CryptoToken::from(dh.clone()))
+        .collect();
+
+      let set_res = if remote_is_writer {
+        self
+          .security_plugins
+          .get_plugins()
+          .set_remote_writer_crypto_tokens(remote_endpoint_guid, local_endpoint_guid, crypto_tokens)
+      } else {
+        self
+          .security_plugins
+          .get_plugins()
+          .set_remote_reader_crypto_tokens(remote_endpoint_guid, local_endpoint_guid, crypto_tokens)
+      };
+
+      if let Err(e) = set_res {
+        security_error!(
+          "Failed to set stored remote reader crypto tokens: {}. Remote: {:?}",
+          e,
+          remote_endpoint_guid
+        );
+      } else {
+        debug!(
+          "Set stored remote crypto tokens. Remote: {:?}",
+          remote_endpoint_guid
+        );
+        // Remove the stored message
+        self
+          .stored_volatile_messages
+          .remove(&(local_endpoint_guid, remote_endpoint_guid));
+      }
+    }
+
+    // See if we have already sent our keys. Do nothing if so.
+    let we_have_sent_ours = self
+      .user_data_endpoints_with_keys_already_sent_to
+      .contains(&remote_endpoint_guid);
+    if we_have_sent_ours {
+      return;
+    }
 
     // Dig out remote's security attributes
     let sec_info_opt = if remote_is_writer {
@@ -1910,36 +2005,11 @@ impl SecureDiscovery {
         "Key exchange is not needed with remote {:?}",
         remote_endpoint_guid
       );
+      // Mark as if we have sent keys to the remote
+      self
+        .user_data_endpoints_with_keys_already_sent_to
+        .insert(remote_endpoint_guid);
       return;
-    }
-
-    // Register the remote
-    let register_result = if remote_is_writer {
-      self
-        .security_plugins
-        .get_plugins()
-        .register_matched_remote_writer(remote_endpoint_guid, local_endpoint_guid)
-    } else {
-      self
-        .security_plugins
-        .get_plugins()
-        .register_matched_remote_reader(
-          remote_endpoint_guid,
-          local_endpoint_guid,
-          self
-            .relay_only_remote_readers
-            .contains(&remote_endpoint_guid),
-        )
-    };
-
-    if let Err(e) = register_result {
-      security_error!(
-        "Failed to register remote endpoint {:?} to crypto plugin: {}",
-        remote_endpoint_guid,
-        e,
-      );
-      // Keep on going, since if the error was due to the remote already being
-      // registered, sending the keys can still succeed
     }
 
     // Get the crypto tokens for the remote
@@ -2249,7 +2319,7 @@ fn register_remote_to_crypto(
 
     security_plugins_handle
       .get_plugins()
-      .register_matched_remote_reader(remote_reader_guid, local_writer_guid, false)
+      .register_matched_remote_reader_if_not_already(remote_reader_guid, local_writer_guid, false)
       .map_err(|e| {
         security_error!(
           "Failed to register remote built-in reader {:?} to crypto plugin: {}",
@@ -2270,7 +2340,7 @@ fn register_remote_to_crypto(
 
     security_plugins_handle
       .get_plugins()
-      .register_matched_remote_writer(remote_writer_guid, local_reader_guid)
+      .register_matched_remote_writer_if_not_already(remote_writer_guid, local_reader_guid)
       .map_err(|e| {
         security_error!(
           "Failed to register remote built-in writer {:?} to crypto plugin: {}",

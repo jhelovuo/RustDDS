@@ -250,6 +250,16 @@ impl SecurityPlugins {
       );
     }
   }
+
+  fn has_remote_endpoint_been_registered_already(
+    &self,
+    local_guid: GUID,
+    remote_guid: GUID,
+  ) -> bool {
+    self
+      .remote_endpoint_crypto_handle_cache
+      .contains_key(&(local_guid, remote_guid))
+  }
 }
 
 /// Interface for using the Authentication plugin
@@ -723,12 +733,17 @@ impl SecurityPlugins {
     Ok(())
   }
 
-  pub fn register_matched_remote_reader(
+  pub fn register_matched_remote_reader_if_not_already(
     &mut self,
     remote_reader_guid: GUID,
     local_writer_guid: GUID,
     relay_only: bool,
   ) -> SecurityResult<()> {
+    // If remote has already been registered, do nothing
+    if self.has_remote_endpoint_been_registered_already(local_writer_guid, remote_reader_guid) {
+      return Ok(());
+    }
+
     // First get the secret shared by the participants
     let shared_secret = self.get_shared_secret(remote_reader_guid.prefix)?;
 
@@ -750,11 +765,16 @@ impl SecurityPlugins {
     Ok(())
   }
 
-  pub fn register_matched_remote_writer(
+  pub fn register_matched_remote_writer_if_not_already(
     &mut self,
     remote_writer_guid: GUID,
     local_reader_guid: GUID,
   ) -> SecurityResult<()> {
+    // If remote has already been registered, do nothing
+    if self.has_remote_endpoint_been_registered_already(local_reader_guid, remote_writer_guid) {
+      return Ok(());
+    }
+
     // First get the secret shared by the participants
     let shared_secret = self.get_shared_secret(remote_writer_guid.prefix)?;
 
