@@ -334,15 +334,21 @@ impl TryFrom<Serializable_KeyMaterial_AES_GCM_GMAC> for KeyMaterial_AES_GCM_GMAC
     // Map generic transformation_kind to builtin
     let transformation_kind = BuiltinCryptoTransformationKind::try_from(transformation_kind)?;
 
-    let key_len = KeyLength::from(transformation_kind);
+    let key_length = KeyLength::from(transformation_kind);
+
+    let master_receiver_specific_key = if receiver_specific_key_id.eq(&CryptoTransformKeyId::ZERO) {
+      BuiltinKey::None
+    } else {
+      BuiltinKey::from_bytes(key_length, &master_receiver_specific_key)?
+    };
 
     Ok(Self {
       transformation_kind,
-      master_salt: BuiltinKey::from_bytes(key_len, &master_salt)?,
+      master_salt: BuiltinKey::from_bytes(key_length, &master_salt)?,
       sender_key_id,
-      master_sender_key: BuiltinKey::from_bytes(key_len, &master_sender_key)?,
+      master_sender_key: BuiltinKey::from_bytes(key_length, &master_sender_key)?,
       receiver_specific_key_id,
-      master_receiver_specific_key: BuiltinKey::from_bytes(key_len, &master_receiver_specific_key)?,
+      master_receiver_specific_key,
     })
   }
 }
