@@ -315,7 +315,7 @@ impl CryptoTransform for CryptographicBuiltin {
     }: Message,
     _receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<Message> {
+  ) -> SecurityResult<DecodeOutcome<Message>> {
     // we expect SecureRTPSPRefix + some submessages + SecureRTPSPostfix
     if let
       [ Submessage { body:
@@ -343,12 +343,15 @@ impl CryptoTransform for CryptographicBuiltin {
         = BuiltinCryptoFooter::try_from(crypto_footer.clone())?;
 
       // Get decode key material
-      let decode_key_material = self.session_decode_crypto_materials(
+      let decode_key_material = match self.get_session_decode_crypto_materials(
         sending_participant_crypto_handle,
         transformation_key_id,
         KeyMaterialScope::MessageOrSubmessage,
         initialization_vector,
-      )?;
+      ){
+        Some(decode_key_material)=>decode_key_material,
+        None=> return Ok(DecodeOutcome::KeysNotFound(transformation_key_id))
+      };
 
       // Check that the key id matches the header
       if transformation_key_id != decode_key_material.key_id {
@@ -465,7 +468,7 @@ impl CryptoTransform for CryptographicBuiltin {
       }
       .and_then( |(submessages, info_source)| {
         if InfoSource::from(rtps_header) == info_source {
-          Ok(Message { header: rtps_header, submessages })
+          Ok(DecodeOutcome::Success(Message { header: rtps_header, submessages }))
         } else {
           Err(security_error!(
             "The RTPS header did not match the encoded InfoSource: {:?} expected to match {:?}",

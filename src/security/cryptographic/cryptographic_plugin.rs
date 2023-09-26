@@ -233,7 +233,7 @@ pub trait CryptoTransform: Send {
     encoded_message: Message,
     receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<Message>;
+  ) -> SecurityResult<DecodeOutcome<Message>>;
 
   // Combines the functionality of preprocess_secure_submsg and the subsequent
   // call of decode_datawriter_submessage or decode_datareader_submessage from

@@ -24,7 +24,10 @@ use crate::{
   },
 };
 #[cfg(feature = "security")]
-use crate::security::security_plugins::SecurityPluginsHandle;
+use crate::security::{
+  cryptographic::{DecodeOutcome, DecodedSubmessage},
+  security_plugins::SecurityPluginsHandle,
+};
 #[cfg(feature = "security")]
 use crate::messages::submessages::{secure_postfix::SecurePostfix, secure_prefix::SecurePrefix};
 #[cfg(not(feature = "security"))]
@@ -261,7 +264,15 @@ impl MessageReceiver {
         }) = rtps_message.submessages.first()
         {
           match security_plugins.decode_rtps_message(rtps_message, &self.source_guid_prefix) {
-            Ok(message) => message,
+            Ok(DecodeOutcome::Success(message)) => message,
+            Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
+              return trace!(
+                "No matching message decode keys found for the key id {:?} for the remote \
+                 participant {:?}",
+                header_key_id,
+                self.source_guid_prefix
+              )
+            }
             Err(e) => return error!("{e:?}"),
           }
         } else if security_plugins.rtps_not_protected(&self.dest_guid_prefix) {
@@ -784,8 +795,6 @@ impl MessageReceiver {
     encoded_submessage: &Submessage,
     sec_postfix: &SecurePostfix,
   ) {
-    use crate::security::cryptographic::{DecodeOutcome, DecodedSubmessage};
-
     let security_plugins = self.security_plugins.clone();
     match security_plugins {
       None => {
@@ -882,7 +891,8 @@ impl MessageReceiver {
           }
           Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
             trace!(
-              "No matching decode keys found for the key id {:?} for the remote participant {:?}",
+              "No matching submessage decode keys found for the key id {:?} for the remote \
+               participant {:?}",
               header_key_id,
               self.source_guid_prefix
             );

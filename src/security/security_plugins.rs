@@ -1057,7 +1057,7 @@ impl SecurityPlugins {
     &self,
     encoded_message: Message,
     source_guid_prefix: &GuidPrefix,
-  ) -> SecurityResult<Message> {
+  ) -> SecurityResult<DecodeOutcome<Message>> {
     self.crypto.decode_rtps_message(
       encoded_message,
       self.get_local_participant_crypto_handle()?,
