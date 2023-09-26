@@ -23,8 +23,8 @@ use super::{
   authentication::*,
   cryptographic::{
     DatareaderCryptoHandle, DatareaderCryptoToken, DatawriterCryptoHandle, DatawriterCryptoToken,
-    DecodedSubmessage, EncodedSubmessage, EndpointCryptoHandle, ParticipantCryptoHandle,
-    ParticipantCryptoToken,
+    DecodeOutcome, DecodedSubmessage, EncodedSubmessage, EndpointCryptoHandle,
+    ParticipantCryptoHandle, ParticipantCryptoToken,
   },
   types::*,
   AccessControl, Cryptographic,
@@ -1072,7 +1072,7 @@ impl SecurityPlugins {
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     source_guid_prefix: &GuidPrefix,
-  ) -> SecurityResult<DecodedSubmessage> {
+  ) -> SecurityResult<DecodeOutcome<DecodedSubmessage>> {
     self.crypto.decode_submessage(
       encoded_rtps_submessage,
       self.get_local_participant_crypto_handle()?,

@@ -250,7 +250,7 @@ pub trait CryptoTransform: Send {
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     receiving_local_participant_crypto_handle: ParticipantCryptoHandle,
     sending_remote_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<DecodedSubmessage>;
+  ) -> SecurityResult<DecodeOutcome<DecodedSubmessage>>;
 
   /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
   /// (v. 1.1)

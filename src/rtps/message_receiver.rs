@@ -784,6 +784,8 @@ impl MessageReceiver {
     encoded_submessage: &Submessage,
     sec_postfix: &SecurePostfix,
   ) {
+    use crate::security::cryptographic::{DecodeOutcome, DecodedSubmessage};
+
     let security_plugins = self.security_plugins.clone();
     match security_plugins {
       None => {
@@ -805,10 +807,10 @@ impl MessageReceiver {
           Err(e) => {
             error!("Submessage decoding failed: {e:?}");
           }
-          Ok(crate::security::cryptographic::DecodedSubmessage::Writer(
+          Ok(DecodeOutcome::Success(DecodedSubmessage::Writer(
             decoded_writer_submessage,
             approved_receiving_datareader_crypto_handles,
-          )) => {
+          ))) => {
             let receiver_entity_id = decoded_writer_submessage.receiver_entity_id();
 
             // If the receiver entity ID is unknown, we try to find the correct id based on
@@ -857,10 +859,10 @@ impl MessageReceiver {
               }
             }
           }
-          Ok(crate::security::cryptographic::DecodedSubmessage::Reader(
+          Ok(DecodeOutcome::Success(DecodedSubmessage::Reader(
             decoded_reader_submessage,
             approved_receiving_datawriter_crypto_handles,
-          )) => {
+          ))) => {
             let receiver_entity_id = decoded_reader_submessage.receiver_entity_id();
             let receiver_guid = GUID {
               prefix: self.dest_guid_prefix,
@@ -877,6 +879,13 @@ impl MessageReceiver {
             } else {
               error!("Destination GUID did not match the handle used for decoding.");
             }
+          }
+          Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
+            trace!(
+              "No matching decode keys found for the key id {:?} for the remote participant {:?}",
+              header_key_id,
+              self.source_guid_prefix
+            );
           }
         }
       }

@@ -484,7 +484,7 @@ impl CryptoTransform for CryptographicBuiltin {
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     _receiving_local_participant_crypto_handle: ParticipantCryptoHandle,
     sending_remote_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<DecodedSubmessage> {
+  ) -> SecurityResult<DecodeOutcome<DecodedSubmessage>> {
     // Destructure header and footer
     let (SecurePrefix { crypto_header }, encoded_submessage, SecurePostfix { crypto_footer }) =
       encoded_rtps_submessage;
@@ -550,7 +550,7 @@ impl CryptoTransform for CryptographicBuiltin {
           }
         },
       )
-      // Make sure there is exactly one
+      // Make sure the key is unambiguous
       .reduce(|accumulator, session_key_result| {
         accumulator.and_then(|acc_session_key| {
           session_key_result.and_then(|current_session_key| {
@@ -566,14 +566,14 @@ impl CryptoTransform for CryptographicBuiltin {
             }
           })
         })
-      })
-      .ok_or_else(|| {
-        security_error!(
-          "No matching decode keys found for the key id {:?} for the remote participant {}",
-          header_key_id,
-          sending_remote_participant_crypto_handle
-        )
-      })??;
+      });
+
+    let decode_key = match decode_key {
+      Some(key_result) => key_result?,
+      None => {
+        return Ok(DecodeOutcome::KeysNotFound(header_key_id));
+      }
+    };
 
     let receiver_specific_keys_and_macs = SecurityResult::<Vec<_>>::from_iter(
       matching_decode_materials
@@ -643,10 +643,10 @@ impl CryptoTransform for CryptographicBuiltin {
             },
           ),
         )?;
-        Ok(DecodedSubmessage::Writer(
+        Ok(DecodeOutcome::Success(DecodedSubmessage::Writer(
           writer_submessage,
           matching_readers,
-        ))
+        )))
       }
       SubmessageBody::Reader(reader_submessage) => {
         let matching_writers = SecurityResult::from_iter(
@@ -671,10 +671,10 @@ impl CryptoTransform for CryptographicBuiltin {
             },
           ),
         )?;
-        Ok(DecodedSubmessage::Reader(
+        Ok(DecodeOutcome::Success(DecodedSubmessage::Reader(
           reader_submessage,
           matching_writers,
-        ))
+        )))
       }
 
       SubmessageBody::Interpreter(_) => Err(security_error!(
