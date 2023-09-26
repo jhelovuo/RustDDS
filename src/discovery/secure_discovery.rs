@@ -1993,14 +1993,14 @@ impl SecureDiscovery {
     // Inspect if we need to send crypto tokens at all
     // See '8.8.9.2 Key Exchange with remote DataReader' and
     // '8.8.9.3 Key Exchange with remote DataWriter' in the spec
-    let key_exchange_needed = if remote_is_writer {
-      sec_attr.is_payload_protected || sec_attr.is_submessage_protected
+    let need_to_send_keys = if remote_is_writer {
+      sec_attr.is_submessage_protected
     } else {
       // For reader only is_submessage_protected matters
-      sec_attr.is_submessage_protected
+      sec_attr.is_payload_protected || sec_attr.is_submessage_protected
     };
 
-    if !key_exchange_needed {
+    if !need_to_send_keys {
       trace!(
         "Key exchange is not needed with remote {:?}",
         remote_endpoint_guid
@@ -2017,19 +2017,19 @@ impl SecureDiscovery {
       self
         .security_plugins
         .get_plugins()
-        .create_local_writer_crypto_tokens(local_endpoint_guid, remote_endpoint_guid)
+        .create_local_reader_crypto_tokens(local_endpoint_guid, remote_endpoint_guid)
     } else {
       self
         .security_plugins
         .get_plugins()
-        .create_local_reader_crypto_tokens(local_endpoint_guid, remote_endpoint_guid)
+        .create_local_writer_crypto_tokens(local_endpoint_guid, remote_endpoint_guid)
     };
 
     let crypto_tokens = match crypto_tokens_res {
       Ok(tokens) => tokens,
       Err(e) => {
         security_error!(
-          "Failed to create get CryptoTokens: {}. Local endpoint: {:?}",
+          "Failed to create CryptoTokens: {}. Local endpoint: {:?}",
           e,
           local_endpoint_guid,
         );
