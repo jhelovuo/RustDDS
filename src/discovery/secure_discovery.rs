@@ -32,7 +32,7 @@ use crate::{
     DataHolder, ParticipantGenericMessage, ParticipantSecurityInfo, ParticipantStatelessMessage,
     ParticipantVolatileMessageSecure, SecurityError, SecurityResult,
   },
-  security_error, security_log,
+  security_error, security_info,
   serialization::pl_cdr_adapters::PlCdrSerialize,
   structure::{
     entity::RTPSEntity,
@@ -310,7 +310,7 @@ impl SecureDiscovery {
           {
             // But configuration still allows matching with the participant (in a limited
             // way)
-            security_log!(
+            security_info!(
               "Remote participant has incompatible Security, but matching with it anyways, since \
                configuration allows this. Remote guid: {:?}",
               participant_data.participant_guid
@@ -318,7 +318,7 @@ impl SecureDiscovery {
             AuthenticationStatus::Unauthenticated
           } else {
             // Not allowed to match
-            security_log!(
+            security_info!(
               "Remote participant has incompatible Security, not matching with it. Remote guid: \
                {:?}",
               participant_data.participant_guid
@@ -439,7 +439,7 @@ impl SecureDiscovery {
 
     if topic_sec_attributes.is_discovery_protected {
       // Message should come from DCPSSubscriptionsSecure topic. Ignore this one.
-      security_log!(
+      security_info!(
         "Received a non-secure DCPSSubscription message for topic {topic_name} whose discovery is \
          protected. Ignoring message. Participant: {:?}",
         participant_guidp
@@ -457,14 +457,14 @@ impl SecureDiscovery {
             // Section 8.8.7.1 "AccessControl behavior with discovered endpoints from
             // “Unauthenticated” DomainParticipant" from the spec
             if topic_sec_attributes.is_read_protected {
-              security_log!(
+              security_info!(
                 "Unauthenticated participant {:?} attempted to read protected topic {topic_name}. \
                  Rejecting.",
                 participant_guidp
               );
               NormalDiscoveryPermission::Deny
             } else {
-              security_log!(
+              security_info!(
                 "Unauthenticated participant {:?} wants to read unprotected topic {topic_name}. \
                  Allowing.",
                 participant_guidp
@@ -487,7 +487,7 @@ impl SecureDiscovery {
                 ) {
                 Ok((check_passed, relay_only)) => {
                   if check_passed {
-                    security_log!(
+                    security_info!(
                       "Access control check passed for authenticated participant {:?} to read \
                        topic {topic_name}.",
                       participant_guidp
@@ -501,7 +501,7 @@ impl SecureDiscovery {
 
                     NormalDiscoveryPermission::Allow
                   } else {
-                    security_log!(
+                    security_info!(
                       "Access control check did not pass for authenticated participant {:?} to \
                        read topic {topic_name}. Rejecting.",
                       participant_guidp
@@ -520,7 +520,7 @@ impl SecureDiscovery {
               }
             } else {
               // Read is not protected. Allow.
-              security_log!(
+              security_info!(
                 "Authenticated participant {:?} wants to read unprotected topic {topic_name}. \
                  Allowing.",
                 participant_guidp
@@ -530,7 +530,7 @@ impl SecureDiscovery {
           }
           other => {
             // Authentication status other than Authenticated/Unauthenticated
-            security_log!(
+            security_info!(
               "Received a DCPSSubscription message from a participant with authentication status: \
                {:?}. Ignoring message. Participant: {:?}",
               other,
@@ -546,7 +546,7 @@ impl SecureDiscovery {
           Some(AuthenticationStatus::Unauthenticated)
           | Some(AuthenticationStatus::Authenticated) => {
             // Allow dispose for Unauthenticated/Authenticated participants
-            security_log!(
+            security_info!(
               "Participant {:?} with authentication status {:?} disposes its reader in topic \
                {topic_name}.",
               participant_guidp,
@@ -556,7 +556,7 @@ impl SecureDiscovery {
           }
           other_status => {
             // Reject dispose message if authentication status is something else
-            security_log!(
+            security_info!(
               "Participant {:?} with authentication status {:?} attempts to disposes its reader \
                in topic {topic_name}. Rejecting.",
               other_status,
@@ -611,7 +611,7 @@ impl SecureDiscovery {
 
     if topic_sec_attributes.is_discovery_protected {
       // Message should come from DCPSPublicationsSecure topic. Ignore this one.
-      security_log!(
+      security_info!(
         "Received a non-secure DCPSPublication message for topic {topic_name} whose discovery is \
          protected. Ignoring message. Participant: {:?}",
         participant_guidp
@@ -629,14 +629,14 @@ impl SecureDiscovery {
             // Section 8.8.7.1 "AccessControl behavior with discovered endpoints from
             // “Unauthenticated” DomainParticipant" from the spec
             if topic_sec_attributes.is_write_protected {
-              security_log!(
+              security_info!(
                 "Unauthenticated participant {:?} attempted to publish to protected topic \
                  {topic_name}. Rejecting.",
                 participant_guidp
               );
               NormalDiscoveryPermission::Deny
             } else {
-              security_log!(
+              security_info!(
                 "Unauthenticated participant {:?} wants to publish to unprotected topic \
                  {topic_name}. Allowing.",
                 participant_guidp
@@ -659,14 +659,14 @@ impl SecureDiscovery {
                 ) {
                 Ok(check_passed) => {
                   if check_passed {
-                    security_log!(
+                    security_info!(
                       "Access control check passed for authenticated participant {:?} to publish \
                        to topic {topic_name}.",
                       participant_guidp
                     );
                     NormalDiscoveryPermission::Allow
                   } else {
-                    security_log!(
+                    security_info!(
                       "Access control check did not pass for authenticated participant {:?} to \
                        publish to topic {topic_name}. Rejecting.",
                       participant_guidp
@@ -685,7 +685,7 @@ impl SecureDiscovery {
               }
             } else {
               // Write is not protected. Allow.
-              security_log!(
+              security_info!(
                 "Authenticated participant {:?} wants to publish to unprotected topic \
                  {topic_name}. Allowing.",
                 participant_guidp
@@ -695,7 +695,7 @@ impl SecureDiscovery {
           }
           other => {
             // Authentication status other than Authenticated/Unauthenticated
-            security_log!(
+            security_info!(
               "Received a DCPSPublication message from a participant with authentication status: \
                {:?}. Ignoring message. Participant: {:?}",
               other,
@@ -711,7 +711,7 @@ impl SecureDiscovery {
           Some(AuthenticationStatus::Unauthenticated)
           | Some(AuthenticationStatus::Authenticated) => {
             // Allow dispose for Unauthenticated/Authenticated participants
-            security_log!(
+            security_info!(
               "Participant {:?} with authentication status {:?} disposes its writer in topic \
                {topic_name}.",
               participant_guidp,
@@ -721,7 +721,7 @@ impl SecureDiscovery {
           }
           other_status => {
             // Reject dispose message if authentication status is something else
-            security_log!(
+            security_info!(
               "Participant {:?} with authentication status {:?} attempts to disposes its writer \
                in topic {topic_name}. Rejecting.",
               other_status,
@@ -866,7 +866,7 @@ impl SecureDiscovery {
       }
       Err(e) => {
         // Validation failed
-        security_log!(
+        security_info!(
           "Failed to validate the identity of a remote participant with guid: {:?}. Info: {}",
           remote_guid,
           e.msg
@@ -876,7 +876,7 @@ impl SecureDiscovery {
           .local_dp_sec_attributes
           .allow_unauthenticated_participants
         {
-          security_log!(
+          security_info!(
             "Treating the participant with guid {:?} as Unauthenticated, since configuration \
              allows this.",
             remote_guid,
@@ -1592,7 +1592,7 @@ impl SecureDiscovery {
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
     discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
   ) {
-    security_log!(
+    security_info!(
       "Authenticated participant with GUID prefix {:?}",
       remote_guid_prefix
     );
@@ -1608,7 +1608,7 @@ impl SecureDiscovery {
         );
       }
       Err(e) => {
-        security_log!(
+        security_info!(
           "Validating permissions for remote failed: {}. Rejecting the remote. Guid prefix: {:?}",
           e,
           remote_guid_prefix
@@ -1633,13 +1633,13 @@ impl SecureDiscovery {
         Ok(check_passed) => {
           if check_passed {
             // All good
-            security_log!(
+            security_info!(
               "Allowing remote participant {:?} to join the domain.",
               remote_guid_prefix
             );
           } else {
             // Not allowed
-            security_log!(
+            security_info!(
               "Remote participant {:?} is not allowed to join the domain. Rejecting the remote.",
               remote_guid_prefix
             );
