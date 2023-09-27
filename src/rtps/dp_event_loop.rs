@@ -36,8 +36,8 @@ use crate::{
 #[cfg(feature = "security")]
 use crate::{
   discovery::secure_discovery::AuthenticationStatus,
-  security::{security_plugins::SecurityPluginsHandle, EndpointSecurityInfo, SecurityError},
-  security_error,
+  security::{security_plugins::SecurityPluginsHandle, EndpointSecurityInfo},
+  security_warn,
 };
 #[cfg(not(feature = "security"))]
 use crate::no_security::security_plugins::SecurityPluginsHandle;
@@ -665,7 +665,7 @@ impl DPEventLoop {
             remote_reader_sec_info_opt,
           );
           if !compatible {
-            security_error!(
+            security_warn!(
               "Local writer {:?} and remote reader {:?} have incompatible security, ignoring the \
                remote.",
               writer.guid(),
@@ -740,7 +740,7 @@ impl DPEventLoop {
           );
 
           if !compatible {
-            security_error!(
+            security_warn!(
               "Local reader {:?} and remote writer {:?} have incompatible security, ignoring the \
                remote.",
               local_reader_guid,
