@@ -724,6 +724,7 @@ impl CryptoTransform for CryptographicBuiltin {
     let (content_bytes, footer_bytes) =
       content_and_footer_bytes.split_at(content_and_footer_bytes.len() - foot_len);
 
+    let crypto_header = CryptoHeader::read_from_buffer(header_bytes)?;
     // Deserialize crypto header and footer
     let BuiltinCryptoHeader {
       transform_identifier:
@@ -732,7 +733,7 @@ impl CryptoTransform for CryptographicBuiltin {
           transformation_key_id,
         },
       builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
-    } = BuiltinCryptoHeader::read_from_buffer(header_bytes)?;
+    } = crypto_header.try_into()?;
     // .read_from_buffer() does not need endianness, because BuiltinCryptoHeader
     // only contains byte-oriented data, which is insensitive to endianness.
 

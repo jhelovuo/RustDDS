@@ -100,7 +100,7 @@ impl From<BuiltinCryptoToken> for KeyMaterial_AES_GCM_GMAC {
 /// Valid values for CryptoTransformKind from section 9.5.2.1.1 of the Security
 /// specification (v. 1.1)
 #[allow(non_camel_case_types)] // We use the names from the spec
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Readable)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub(crate) enum BuiltinCryptoTransformationKind {
   CRYPTO_TRANSFORMATION_KIND_NONE,
   CRYPTO_TRANSFORMATION_KIND_AES128_GMAC,
@@ -137,7 +137,6 @@ impl From<BuiltinCryptoTransformationKind> for CryptoTransformKind {
 
 /// CryptoTransformIdentifier type from section 9.5.2.2 of the Security
 /// specification (v. 1.1)
-#[derive(Readable)]
 pub(super) struct BuiltinCryptoTransformIdentifier {
   pub transformation_kind: BuiltinCryptoTransformationKind,
   pub transformation_key_id: CryptoTransformKeyId,
@@ -223,7 +222,7 @@ impl SessionId {
   }
 }
 
-#[derive(Debug, Clone, Copy, Readable)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct BuiltinCryptoHeaderExtra(pub(super) BuiltinInitializationVector);
 
 /// Methods for getting the contained data
@@ -293,7 +292,6 @@ impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
 
 /// CryptoHeader type from section 9.5.2.3 of the Security specification (v.
 /// 1.1)
-#[derive(Readable)]
 pub(super) struct BuiltinCryptoHeader {
   pub transform_identifier: BuiltinCryptoTransformIdentifier, // 4+4 bytes
   pub builtin_crypto_header_extra: BuiltinCryptoHeaderExtra,  // 4+8 bytes

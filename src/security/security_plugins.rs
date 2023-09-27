@@ -5,11 +5,13 @@ use std::{
 };
 
 use log::{debug, error};
+use speedy::Readable;
 
 use crate::{
   discovery::{DiscoveredReaderData, DiscoveredWriterData},
   messages::submessages::{
-    elements::parameter_list::ParameterList, secure_postfix::SecurePostfix,
+    elements::{crypto_content::CryptoContent, parameter_list::ParameterList},
+    secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
   },
   qos,
@@ -1096,7 +1098,7 @@ impl SecurityPlugins {
       Ok(encoded_payload)
     } else {
       self.crypto.decode_serialized_payload(
-        encoded_payload,
+        CryptoContent::read_from_buffer_copying_data(&encoded_payload)?.data, //TODO needs changes for interoperability
         inline_qos,
         self.get_local_endpoint_crypto_handle(destination_guid)?,
         self.get_remote_endpoint_crypto_handle((destination_guid, source_guid))?,
