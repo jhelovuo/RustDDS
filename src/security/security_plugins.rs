@@ -127,6 +127,14 @@ impl SecurityPlugins {
       .ok_or_else(|| security_error("Local participant crypto handle has not been set"))
   }
 
+  // TODO do we need this?
+  /*  fn remove_local_participant_crypto_handle(&mut self) -> Option<ParticipantCryptoHandle> {
+    self.local_participant_crypto_handle.take().or_else(|| {
+      debug!("No local participant crypto handle to remove");
+      None
+    })
+  } */
+
   fn get_remote_participant_crypto_handle(
     &self,
     guid_prefix: &GuidPrefix,
@@ -143,6 +151,22 @@ impl SecurityPlugins {
       .copied()
   }
 
+  fn remove_remote_participant_crypto_handle(
+    &mut self,
+    guid_prefix: &GuidPrefix,
+  ) -> Option<ParticipantCryptoHandle> {
+    self
+      .remote_participant_crypto_handle_cache
+      .remove(guid_prefix)
+      .or_else(|| {
+        debug!(
+          "Could not find a ParticipantCryptoHandle to remove for the GuidPrefix {:?}",
+          guid_prefix,
+        );
+        None
+      })
+  }
+
   fn get_local_endpoint_crypto_handle(&self, guid: &GUID) -> SecurityResult<EndpointCryptoHandle> {
     self
       .local_endpoint_crypto_handle_cache
@@ -154,6 +178,21 @@ impl SecurityPlugins {
         )
       })
       .copied()
+  }
+
+  fn remove_local_endpoint_crypto_handle(&mut self, guid: &GUID) -> Option<EndpointCryptoHandle> {
+    self
+      .local_endpoint_crypto_handle_cache
+      .remove(guid)
+      .or_else(|| {
+        if !self.submessage_not_protected(guid) || !self.payload_not_protected(guid) {
+          error!(
+            "Could not find a local EndpointCryptoHandle to remove for the GUID {:?}",
+            guid
+          );
+        }
+        None
+      })
   }
 
   fn insert_to_identity_handle_cache(
@@ -234,6 +273,28 @@ impl SecurityPlugins {
         )
       })
       .copied()
+  }
+
+  fn remove_remote_endpoint_crypto_handle(
+    &mut self,
+    (local_endpoint_guid, proxy_guid): (&GUID, &GUID),
+  ) -> Option<EndpointCryptoHandle> {
+    let local_and_proxy_guid_pair = (*local_endpoint_guid, *proxy_guid);
+    self
+      .remote_endpoint_crypto_handle_cache
+      .remove(&local_and_proxy_guid_pair)
+      .or_else(|| {
+        if !self.submessage_not_protected(local_endpoint_guid)
+          || !self.payload_not_protected(local_endpoint_guid)
+        {
+          error!(
+            "Could not find a remote EndpointCryptoHandle to remove for the (local_endpoint_guid, \
+             proxy_guid) pair {:?}",
+            local_and_proxy_guid_pair
+          );
+        }
+        None
+      })
   }
 
   fn store_remote_endpoint_crypto_handle(
@@ -797,14 +858,70 @@ impl SecurityPlugins {
     Ok(())
   }
 
+  // TODO do we need this?
+  /* pub fn unregister_local_participant(&mut self) -> SecurityResult<()> {
+    self
+      .identity_handle_cache
+      .remove(remote_participant_guid_prefix);
+    self
+      .permissions_handle_cache
+      .remove(remote_participant_guid_prefix);
+    self
+      .handshake_handle_cache
+      .remove(remote_participant_guid_prefix);
+    self
+      .remove_local_participant_crypto_handle()
+      .map_or(Ok(()), |handle| self.crypto.unregister_participant(handle))
+  } */
+
   pub fn unregister_local_reader(&mut self, reader_guid: &GUID) -> SecurityResult<()> {
-    let handle = self.get_local_endpoint_crypto_handle(reader_guid)?;
-    self.crypto.unregister_datareader(handle)
+    self
+      .remove_local_endpoint_crypto_handle(reader_guid)
+      .map_or(Ok(()), |handle| self.crypto.unregister_datareader(handle))
   }
 
   pub fn unregister_local_writer(&mut self, writer_guid: &GUID) -> SecurityResult<()> {
-    let handle = self.get_local_endpoint_crypto_handle(writer_guid)?;
-    self.crypto.unregister_datawriter(handle)
+    self
+      .remove_local_endpoint_crypto_handle(writer_guid)
+      .map_or(Ok(()), |handle| self.crypto.unregister_datawriter(handle))
+  }
+
+  pub fn unregister_remote_participant(
+    &mut self,
+    remote_participant_guid_prefix: &GuidPrefix,
+  ) -> SecurityResult<()> {
+    self
+      .identity_handle_cache
+      .remove(remote_participant_guid_prefix);
+    self
+      .permissions_handle_cache
+      .remove(remote_participant_guid_prefix);
+    self
+      .handshake_handle_cache
+      .remove(remote_participant_guid_prefix);
+    self
+      .remove_remote_participant_crypto_handle(remote_participant_guid_prefix)
+      .map_or(Ok(()), |handle| self.crypto.unregister_participant(handle))
+  }
+
+  pub fn unregister_remote_reader(
+    &mut self,
+    matched_local_writer_guid: &GUID,
+    reader_guid: &GUID,
+  ) -> SecurityResult<()> {
+    self
+      .remove_remote_endpoint_crypto_handle((matched_local_writer_guid, reader_guid))
+      .map_or(Ok(()), |handle| self.crypto.unregister_datareader(handle))
+  }
+
+  pub fn unregister_remote_writer(
+    &mut self,
+    matched_local_reader_guid: &GUID,
+    writer_guid: &GUID,
+  ) -> SecurityResult<()> {
+    self
+      .remove_remote_endpoint_crypto_handle((matched_local_reader_guid, writer_guid))
+      .map_or(Ok(()), |handle| self.crypto.unregister_datawriter(handle))
   }
 }
 

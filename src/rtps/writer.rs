@@ -478,7 +478,7 @@ impl Writer {
     while let Ok(cc) = self.writer_command_receiver.try_recv() {
       match cc {
         WriterCommand::DDSData {
-          ddsdata,
+          ddsdata: dds_data,
           write_options,
           sequence_number,
         } => {
@@ -497,9 +497,9 @@ impl Writer {
           // 2. Send out data. If we are pushing data, send the DATA submessage and
           // HEARTBEAT. If we are not pushing, send out HEARTBEAT only. Readers will then
           // ask for the DATA with ACKNACK, if they are interested.
-          let fragmentation_needed = ddsdata.payload_size() > self.data_max_size_serialized;
+          let fragmentation_needed = dds_data.payload_size() > self.data_max_size_serialized;
           let timestamp =
-            self.insert_to_history_cache(ddsdata, write_options.clone(), sequence_number);
+            self.insert_to_history_cache(dds_data, write_options.clone(), sequence_number);
 
           self.increase_heartbeat_counter();
           let mut message_builder = MessageBuilder::new();
@@ -582,7 +582,7 @@ impl Writer {
 
             let data_hb_message = message_builder.add_header_and_build(self.my_guid.prefix);
 
-            // send message, either to all readers or jsut one
+            // send message, either to all readers or just one
             match write_options.to_single_reader() {
               None => self.send_message_to_readers(
                 DeliveryMode::Multicast,
@@ -812,7 +812,7 @@ impl Writer {
         hb_message
       );
 
-      // In the volatle key exchange topic we cannot send to multiple readers by any
+      // In the volatile key exchange topic we cannot send to multiple readers by any
       // means, so we handle that separately.
       if self.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER {
         for rp in self.readers.values() {
@@ -1474,6 +1474,13 @@ impl Writer {
       );
       debug!("Removed reader proxy details: {:?}", removed_reader);
     }
+    #[cfg(feature = "security")]
+    if let Some(security_plugins_handle) = &self.security_plugins {
+      security_plugins_handle
+        .get_plugins()
+        .unregister_remote_reader(&self.my_guid, &guid)
+        .unwrap_or_else(|e| error!("{e}"));
+    }
     removed
   }
 
@@ -1512,8 +1519,11 @@ impl Writer {
     self.readers.get_mut(&guid)
   }
 
-  pub fn sequence_number_to_instant(&self, seqnumber: SequenceNumber) -> Option<Timestamp> {
-    self.sequence_number_to_instant.get(&seqnumber).copied()
+  pub fn sequence_number_to_instant(&self, sequence_number: SequenceNumber) -> Option<Timestamp> {
+    self
+      .sequence_number_to_instant
+      .get(&sequence_number)
+      .copied()
   }
 
   pub fn topic_name(&self) -> &String {

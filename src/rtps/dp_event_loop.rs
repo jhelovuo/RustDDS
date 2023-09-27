@@ -56,7 +56,7 @@ pub(crate) enum EventLoopCommand {
 pub struct DPEventLoop {
   domain_info: DomainInfo,
   poll: Poll,
-  ddscache: Arc<RwLock<DDSCache>>,
+  dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   udp_listeners: HashMap<Token, UDPListener>,
   message_receiver: MessageReceiver, // This contains our Readers
@@ -91,7 +91,7 @@ impl DPEventLoop {
   pub(crate) fn new(
     domain_info: DomainInfo,
     udp_listeners: HashMap<Token, UDPListener>,
-    ddscache: Arc<RwLock<DDSCache>>,
+    dds_cache: Arc<RwLock<DDSCache>>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     participant_guid_prefix: GuidPrefix,
     add_reader_receiver: TokenReceiverPair<ReaderIngredients>,
@@ -193,7 +193,7 @@ impl DPEventLoop {
     Self {
       domain_info,
       poll,
-      ddscache,
+      dds_cache,
       discovery_db,
       udp_listeners,
       udp_sender: Rc::new(udp_sender),
@@ -636,6 +636,14 @@ impl DPEventLoop {
     for reader in self.message_receiver.available_readers.values_mut() {
       reader.participant_lost(participant_guid_prefix);
     }
+
+    #[cfg(feature = "security")]
+    if let Some(security_plugins_handle) = &self.security_plugins_opt {
+      security_plugins_handle
+        .get_plugins()
+        .unregister_remote_participant(&participant_guid_prefix)
+        .unwrap_or_else(|e| error!("{e}"));
+    }
   }
 
   fn remote_reader_discovered(&mut self, remote_reader: &DiscoveredReaderData) {
@@ -781,10 +789,10 @@ impl DPEventLoop {
       }
     }
     // notify DDSCache to create topic if it does not exist yet
-    match self.ddscache.write() {
-      Ok(mut ddsc) => {
+    match self.dds_cache.write() {
+      Ok(mut dds_cache) => {
         let ptd = &remote_writer.publication_topic_data;
-        ddsc.add_new_topic(
+        dds_cache.add_new_topic(
           ptd.topic_name.clone(),
           TypeDesc::new(ptd.type_name.clone()),
           &ptd.qos(),
@@ -1210,7 +1218,7 @@ mod tests {
   //   let (_discovery_update_notification_sender,
   // discovery_update_notification_receiver) =     mio_channel::channel();
 
-  //   let ddshc = Arc::new(RwLock::new(DDSCache::new()));
+  //   let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
   //   let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
 
   //   let domain_info = DomainInfo {
@@ -1222,7 +1230,7 @@ mod tests {
   //   let dp_event_loop = DPEventLoop::new(
   //     domain_info,
   //     HashMap::new(),
-  //     ddshc,
+  //     dds_cache,
   //     discovery_db,
   //     GuidPrefix::default(),
   //     TokenReceiverPair {
