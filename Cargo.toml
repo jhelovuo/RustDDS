@@ -1,6 +1,6 @@
 [package]
 name = "rustdds"
-version = "0.8.4"
+version = "0.8.5"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", 
   "Oiva Moisio <oiva.moisio@atostek.com>", 
   "Miska Melkinen <miska.melkinen@atostek.com>", 
@@ -64,14 +64,14 @@ serde-xml-rs = { version = "0.6" , optional = true } # for reading spec-mandated
 glob = { version = "0.3" , optional = true } # for reading spec-mandated XML config files
 mailparse = { version = "0.14" , optional = true } # for reading S/MIME-encoded (XML) config files
 x509-certificate = { version = "0.21" , optional = true } # for configuration certificates
-x509-cert = { version = "*" , optional = true }
+x509-cert = { version = "0.2" , optional = true }
 tempfile = { version = "3" , optional = true } # for calling external openssl command. Remove when no longer used.
 newline-converter = { version = "0.3" , optional = true } # helper for handling S/MIME
-ring = { version = "*" , optional = true } # Cryptographic primitives
-cms = { version = "*" , optional = true } # for ASN.1 parsing
-der = { version = "*" , optional = true } # ASN.1 DER encoding
-bcder = { version = "*" , optional = true } # ASN.1 DER encoding
-const-oid = { version = "*" , optional = true } # more ASN.1
+ring = { version = "0.16" , optional = true } # Cryptographic primitives
+cms = { version = "0.2" , optional = true } # for ASN.1 parsing
+der = { version = "0.7" , optional = true } # ASN.1 DER encoding
+bcder = { version = "0.7" , optional = true } # ASN.1 DER encoding
+const-oid = { version = "0.9" , optional = true } # more ASN.1
 
 [target.'cfg(windows)'.dependencies]
 local-ip-address = "0.5.3"

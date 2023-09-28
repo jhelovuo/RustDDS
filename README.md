@@ -18,6 +18,13 @@ Currently, the implementation is complete enough to do data exchange with [ROS2]
 
 The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talking to ROS components. The `ros2` module within RustDDS should not be used anymore.
 
+## Version 0.8.5
+
+* Feature `security` merged to master, but it is still work-in-progress, so does not work yet.
+* Should work on Windows again
+* Less strict lifetime bound in deserialization
+* Simplify Key trait usage
+
 ## Version 0.8
 
 New features:
