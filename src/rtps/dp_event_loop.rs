@@ -930,7 +930,6 @@ impl DPEventLoop {
 #[cfg(test)]
 mod tests {
   use std::{
-    collections::BTreeMap,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -949,7 +948,6 @@ mod tests {
     },
     mio_source,
     structure::dds_cache::DDSCache,
-    SequenceNumber,
   };
 
   //#[test]
@@ -1043,9 +1041,6 @@ mod tests {
       &QosPolicies::qos_none(),
     );
 
-    let last_read_sequence_number_ref =
-      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
-
     let num_of_readers = 3;
 
     // Send some 'add reader' commands
@@ -1069,7 +1064,6 @@ mod tests {
         notification_sender,
         status_sender,
         topic_cache_handle: topic_cache.clone(),
-        last_read_sequence_number_ref: last_read_sequence_number_ref.clone(),
         topic_name: "test".to_string(),
         like_stateless: false,
         qos_policy: QosPolicies::qos_none(),

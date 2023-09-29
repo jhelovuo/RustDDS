@@ -48,10 +48,11 @@ pub(crate) enum ReaderCommand {
 }
 
 // This is helper struct.
-// Most mutable state needed for reading should go here.
+// All mutable state needed for reading should go here.
 pub(crate) struct ReadState<K: Key> {
   latest_instant: Timestamp, /* This is used as a read pointer from dds_cache for BEST_EFFORT
                               * reading */
+  last_read_sn: BTreeMap<GUID, SequenceNumber>, // collection of read pointers for RELIABLE reading
   /// hash_to_key_map is used for decoding received key hashes back to original
   /// key values. This is needed when we receive a dispose message via hash
   /// only.
@@ -62,8 +63,26 @@ impl<K: Key> ReadState<K> {
   fn new() -> Self {
     ReadState {
       latest_instant: Timestamp::ZERO,
+      last_read_sn: BTreeMap::new(),
       hash_to_key_map: BTreeMap::<KeyHash, K>::new(),
     }
+  }
+
+  // This is a helper function so that borrow checker understands
+  // that we are splitting one mutable borrow into two _disjoint_ mutable
+  // borrows.
+  fn get_sn_map_and_hash_map(
+    &mut self,
+  ) -> (
+    &mut BTreeMap<GUID, SequenceNumber>,
+    &mut BTreeMap<KeyHash, K>,
+  ) {
+    let ReadState {
+      last_read_sn,
+      hash_to_key_map,
+      ..
+    } = self;
+    (last_read_sn, hash_to_key_map)
   }
 }
 
@@ -82,9 +101,6 @@ pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializ
 
   // SimpleDataReader stores a pointer to a mutex on the topic cache
   topic_cache: Arc<Mutex<TopicCache>>,
-
-  // collection of read pointers for RELIABLE reading
-  last_read_sequence_number_ref: Arc<Mutex<BTreeMap<GUID, SequenceNumber>>>,
 
   read_state: Mutex<ReadState<<D as Keyed>::K>>,
 
@@ -141,7 +157,6 @@ where
     // Each notification sent to this channel must be try_recv'd
     notification_receiver: mio_channel::Receiver<()>,
     topic_cache: Arc<Mutex<TopicCache>>,
-    last_read_sequence_number_ref: Arc<Mutex<BTreeMap<GUID, SequenceNumber>>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
     status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
@@ -177,7 +192,6 @@ where
       my_guid,
       notification_receiver,
       topic_cache,
-      last_read_sequence_number_ref,
       read_state: Mutex::new(ReadState::new()),
       my_topic: topic,
       deserializer_type: PhantomData,
@@ -305,13 +319,12 @@ where
 
     let mut read_state_ref = self.read_state.lock().unwrap();
     let latest_instant = read_state_ref.latest_instant;
-    let mut last_read_sequence_number = self.last_read_sequence_number_ref.lock().unwrap();
-    let hash_to_key_map = &mut read_state_ref.hash_to_key_map;
+    let (last_read_sn, hash_to_key_map) = read_state_ref.get_sn_map_and_hash_map();
     let (timestamp, cc) = match Self::try_take_undecoded(
       is_reliable,
       &topic_cache,
       latest_instant,
-      &last_read_sequence_number,
+      last_read_sn,
     )
     .next()
     {
@@ -322,7 +335,9 @@ where
     match Self::deserialize(timestamp, cc, hash_to_key_map) {
       Ok(dcc) => {
         read_state_ref.latest_instant = max(read_state_ref.latest_instant, timestamp);
-        last_read_sequence_number.insert(dcc.writer_guid, dcc.sequence_number);
+        read_state_ref
+          .last_read_sn
+          .insert(dcc.writer_guid, dcc.sequence_number);
         Ok(Some(dcc))
       }
       Err(ser_err) => Err(ReadError::Deserialization {

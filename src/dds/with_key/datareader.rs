@@ -986,7 +986,7 @@ where
 
 #[cfg(test)]
 mod tests {
-  use std::{collections::BTreeMap, rc::Rc};
+  use std::rc::Rc;
 
   use bytes::Bytes;
   use mio_extras::channel as mio_channel;
@@ -1042,9 +1042,6 @@ mod tests {
         .unwrap()
         .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
 
-    let last_read_sequence_number_ref =
-      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
-
     // Create a Reader
     let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
     let (_notification_event_source, notification_event_sender) =
@@ -1065,7 +1062,6 @@ mod tests {
       status_sender,
       topic_name: topic.name(),
       topic_cache_handle: topic_cache,
-      last_read_sequence_number_ref,
       like_stateless: false,
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
@@ -1202,9 +1198,6 @@ mod tests {
         .unwrap()
         .add_new_topic(topic.name(), topic.get_type(), &topic.qos());
 
-    let last_read_sequence_number_ref =
-      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
-
     // Create a Reader
     let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
     let (_notification_event_source, notification_event_sender) =
@@ -1225,7 +1218,6 @@ mod tests {
       status_sender,
       topic_name: topic.name(),
       topic_cache_handle: topic_cache,
-      last_read_sequence_number_ref,
       like_stateless: false,
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,

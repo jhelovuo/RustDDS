@@ -70,7 +70,6 @@ pub(crate) struct ReaderIngredients {
   pub topic_name: String,
   pub(crate) topic_cache_handle: Arc<Mutex<TopicCache>>, /* A handle to the topic cache in DDS
                                                           * cache */
-  pub(crate) last_read_sequence_number_ref: Arc<Mutex<BTreeMap<GUID, SequenceNumber>>>,
   pub(crate) like_stateless: bool, // Usually false (see like_stateless attribute of Reader)
   pub qos_policy: QosPolicies,
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
@@ -113,9 +112,6 @@ pub(crate) struct Reader {
   reliability: policy::Reliability,
   // Reader stores a pointer to a mutex on the topic cache
   topic_cache: Arc<Mutex<TopicCache>>,
-
-  // Reader stores a pointer to a mutex on the last read sequence numbers so they can be reset
-  last_read_sequence_number_ref: Arc<Mutex<BTreeMap<GUID, SequenceNumber>>>,
 
   #[cfg(test)]
   seqnum_instant_map: BTreeMap<SequenceNumber, Timestamp>,
@@ -180,7 +176,6 @@ impl Reader {
         .unwrap_or(policy::Reliability::BestEffort), // or default to BestEffort
       topic_cache: i.topic_cache_handle,
       topic_name: i.topic_name,
-      last_read_sequence_number_ref: i.last_read_sequence_number_ref,
       qos_policy: i.qos_policy,
 
       #[cfg(test)]
@@ -410,34 +405,18 @@ impl Reader {
 
   // return value counts how many new proxies were added
   fn matched_writer_update(&mut self, proxy: RtpsWriterProxy) -> i32 {
-    let proxy_guid = proxy.remote_writer_guid;
-    if let Some(op) = self.matched_writer_mut(proxy_guid) {
+    if let Some(op) = self.matched_writer_mut(proxy.remote_writer_guid) {
       op.update_contents(proxy);
       0
     } else {
-      // A writer is discovered
       self.matched_writers.insert(proxy.remote_writer_guid, proxy);
-      // In case of rediscovery, clear old entries associated with the same GUID from
-      // the topic cache
-      let mut topic_cache = self.acquire_the_topic_cache_guard();
-      topic_cache.clear_starting_from(proxy_guid, SequenceNumber::zero());
-      // In case of rediscovery, reset the last read sequence number for the GUID to
-      // restart sequence numbering from zero
-      let mut last_read_sequence_number = self.acquire_the_last_read_sequence_number_guard();
-      last_read_sequence_number.insert(proxy_guid, SequenceNumber::zero());
       1
     }
   }
 
   pub fn remove_writer_proxy(&mut self, writer_guid: GUID) {
     if self.matched_writers.contains_key(&writer_guid) {
-      if let Some(writer_proxy) = self.matched_writers.remove(&writer_guid) {
-        // Clear unackable cache changes
-        self.acquire_the_topic_cache_guard().clear_starting_from(
-          writer_proxy.remote_writer_guid,
-          writer_proxy.all_ackable_before(),
-        );
-      }
+      self.matched_writers.remove(&writer_guid);
       self.send_status_change(DataReaderStatus::SubscriptionMatched {
         total: CountWithChange::new(self.writer_match_count_total, 0),
         current: CountWithChange::new(self.matched_writers.len() as i32, -1),
@@ -1349,20 +1328,6 @@ impl Reader {
       )
     })
   }
-
-  fn acquire_the_last_read_sequence_number_guard(
-    &self,
-  ) -> MutexGuard<BTreeMap<GUID, SequenceNumber>> {
-    self
-      .last_read_sequence_number_ref
-      .lock()
-      .unwrap_or_else(|e| {
-        panic!(
-          "The BTreeMap storing last read sequence numbers is poisoned. Error: {}",
-          e
-        )
-      })
-  }
 } // impl
 
 impl HasQoSPolicy for Reader {
@@ -1422,9 +1387,6 @@ mod tests {
       &qos_policy,
     );
 
-    let last_read_sequence_number_ref =
-      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
-
     // Create notification mechanisms
     // mio-0.6 channel:
     let (notification_sender, notification_receiver) = mio_channel::sync_channel::<()>(100);
@@ -1449,7 +1411,6 @@ mod tests {
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle,
-      last_read_sequence_number_ref,
       like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
@@ -1513,9 +1474,6 @@ mod tests {
       &qos_policy,
     );
 
-    let last_read_sequence_number_ref =
-      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
-
     // Create mechanisms for notifications, statuses & commands
     let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
     let (_notification_event_source, notification_event_sender) =
@@ -1535,7 +1493,6 @@ mod tests {
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle: topic_cache_handle.clone(),
-      last_read_sequence_number_ref,
       like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
@@ -1620,9 +1577,6 @@ mod tests {
       &reliable_qos,
     );
 
-    let last_read_sequence_number_ref =
-      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
-
     // Create mechanisms for notifications, statuses & commands
     let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
     let (_notification_event_source, notification_event_sender) =
@@ -1642,7 +1596,6 @@ mod tests {
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle,
-      last_read_sequence_number_ref,
       like_stateless: false,
       qos_policy: reliable_qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
@@ -1730,9 +1683,6 @@ mod tests {
       &qos_policy,
     );
 
-    let last_read_sequence_number_ref =
-      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
-
     // Create mechanisms for notifications, statuses & commands
     let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
     let (_notification_event_source, notification_event_sender) =
@@ -1752,7 +1702,6 @@ mod tests {
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle,
-      last_read_sequence_number_ref,
       like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,

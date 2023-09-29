@@ -1115,17 +1115,12 @@ mod tests {
       TypeDesc::new("test".to_string()),
       &qos_policy,
     );
-
-    let last_read_sequence_number_ref =
-      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
-
     let reader_ing = ReaderIngredients {
       guid: reader_guid,
       notification_sender,
       status_sender,
       topic_name: "test".to_string(),
       topic_cache_handle: topic_cache_handle.clone(),
-      last_read_sequence_number_ref,
       like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
