@@ -1818,9 +1818,6 @@ mod tests {
       &qos_policy,
     );
 
-    let last_read_sequence_number_ref =
-      Arc::new(Mutex::new(BTreeMap::<GUID, SequenceNumber>::new()));
-
     // Create mechanisms for notifications, statuses & commands
     let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
     let (_notification_event_source, notification_event_sender) =
@@ -1840,7 +1837,6 @@ mod tests {
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle,
-      last_read_sequence_number_ref,
       like_stateless,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,

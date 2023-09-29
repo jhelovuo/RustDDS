@@ -43,6 +43,10 @@ impl SequenceNumber {
   pub const fn zero() -> Self {
     Self(0)
   }
+
+  pub const fn plus_1(&self) -> Self {
+    SequenceNumber( self.0 + 1 )
+  }
 }
 
 impl SequenceNumber {
@@ -74,6 +78,9 @@ impl From<SequenceNumber> for i64 {
     sequence_number.0
   }
 }
+
+
+// ---------------------------------------
 
 #[derive(Clone, Copy, Debug)]
 pub struct SequenceNumberRange {

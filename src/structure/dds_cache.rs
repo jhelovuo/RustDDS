@@ -258,8 +258,6 @@ impl TopicCache {
       self
         .changes
         .range((Excluded(start_instant), Included(end_instant)))
-        // .filter(move |(_,cc)| ! limit_by_reliability || cc.sequence_number <
-        // self.reliable_before(cc.writer_guid) )
         .map(|(i, c)| (*i, c)),
     )
   }
@@ -278,6 +276,8 @@ impl TopicCache {
             .cloned()
             .unwrap_or(SequenceNumber::zero());
           let upper_bound_exc = self.reliable_before(*guid);
+          // make sure lower < upper, so that `.range()` does not panic.
+          let upper_bound_exc = max(upper_bound_exc, lower_bound_exc.plus_1() );
           sn_map.range((Excluded(lower_bound_exc), Excluded(upper_bound_exc)))
         }) // we get iterator of Timestamp
         .filter_map(|(_sn, t)| self.get_change(t).map(|cc| (*t, cc))),
