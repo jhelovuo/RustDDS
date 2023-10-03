@@ -11,17 +11,17 @@ pub struct ProtocolVersion {
 impl ProtocolVersion {
   pub const THIS_IMPLEMENTATION: Self = Self::PROTOCOLVERSION_2_4;
 
-  #[allow(dead_code)] // Specification defines this, but not necessarily used.
+  // Specification defines this, but not necessarily used.
   pub const PROTOCOLVERSION_1_0: Self = Self { major: 1, minor: 0 };
-  #[allow(dead_code)] // Specification defines this, but not necessarily used.
+  // Specification defines this, but not necessarily used.
   pub const PROTOCOLVERSION_1_1: Self = Self { major: 1, minor: 1 };
-  #[allow(dead_code)] // Specification defines this, but not necessarily used.
+  // Specification defines this, but not necessarily used.
   pub const PROTOCOLVERSION_2_0: Self = Self { major: 2, minor: 0 };
-  #[allow(dead_code)] // Specification defines this, but not necessarily used.
+  // Specification defines this, but not necessarily used.
   pub const PROTOCOLVERSION_2_1: Self = Self { major: 2, minor: 1 };
-  #[allow(dead_code)] // Specification defines this, but not necessarily used.
+  // Specification defines this, but not necessarily used.
   pub const PROTOCOLVERSION_2_2: Self = Self { major: 2, minor: 2 };
-  #[allow(dead_code)] // Specification defines this, but not necessarily used.
+  // Specification defines this, but not necessarily used.
   pub const PROTOCOLVERSION_2_3: Self = Self { major: 2, minor: 3 };
   pub const PROTOCOLVERSION_2_4: Self = Self { major: 2, minor: 4 };
 }

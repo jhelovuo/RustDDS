@@ -82,7 +82,7 @@ impl DomainParticipantBuilder {
   }
 
   #[cfg(feature = "security")]
-  pub fn add_builtin_security(&mut self) -> &mut DomainParticipantBuilder {
+  pub fn add_builtin_security(mut self) -> Self {
     let security_test_configs = security::config::test_config();
 
     if security_test_configs.security_enabled {
@@ -288,7 +288,6 @@ pub struct DomainParticipant {
   dpi: Arc<Mutex<DomainParticipantDisc>>,
 }
 
-#[allow(clippy::new_without_default)]
 impl DomainParticipant {
   /// # Examples
   /// ```
@@ -297,14 +296,13 @@ impl DomainParticipant {
   /// let domain_participant = DomainParticipant::new(0).unwrap();
   /// ```
   pub fn new(domain_id: u16) -> CreateResult<Self> {
-    #[allow(unused_mut)] // only security feature mutates this
-    let mut dp_builder = DomainParticipantBuilder::new(domain_id);
+    let dp_builder = DomainParticipantBuilder::new(domain_id);
+
+    #[cfg(feature = "security")]
     // Add security if so configured in security configs
     // This is meant to be included only in the development phase for convenience
-    #[cfg(feature = "security")]
-    {
-      dp_builder.add_builtin_security();
-    }
+    let dp_builder = dp_builder.add_builtin_security();
+
     dp_builder.build()
   }
 
@@ -836,7 +834,6 @@ impl Drop for DomainParticipantInner {
   }
 }
 
-#[allow(clippy::new_without_default)]
 impl DomainParticipantInner {
   fn new(
     domain_id: u16,

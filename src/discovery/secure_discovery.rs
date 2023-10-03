@@ -275,7 +275,6 @@ impl SecureDiscovery {
   // The authentication protocol is possibly started
   // The return value tells if normal Discovery is allowed to process
   // the message.
-  #[allow(clippy::needless_bool)] // for return value clarity
   fn participant_data_read(
     &mut self,
     participant_data: &SpdpDiscoveredParticipantData,

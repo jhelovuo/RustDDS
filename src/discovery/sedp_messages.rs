@@ -357,13 +357,13 @@ impl PlCdrDeserialize for DiscoveredReaderData {
 
     let unicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
       "unicast locators",
     )?;
     let multicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
       "multicast locators",
     )?;
@@ -795,13 +795,13 @@ impl PlCdrDeserialize for DiscoveredWriterData {
 
     let unicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
       "unicast locators",
     )?;
     let multicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
       "multicast locators",
     )?;
@@ -1186,7 +1186,7 @@ pub struct ParticipantMessageDataKind {
 }
 
 impl ParticipantMessageDataKind {
-  #[allow(dead_code)] // This is defined in the spec, but currently unused.
+  // This is defined in the spec, but currently unused.
   pub const UNKNOWN: Self = Self {
     value: [0x00, 0x00, 0x00, 0x00],
   };

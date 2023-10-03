@@ -159,9 +159,9 @@ mod no_key {
 // Enum indicating if secure discovery allows normal discovery to process
 // something
 #[derive(PartialEq)]
-#[allow(dead_code)] // Deny variant is never constructed if security feature is not on
 pub(crate) enum NormalDiscoveryPermission {
   Allow,
+  #[cfg(feature = "security")] // Deny variant is never constructed if security feature is not on
   Deny,
 }
 
@@ -202,7 +202,6 @@ pub(crate) struct Discovery {
   dcps_publication: with_key::DiscoveryTopicPlCdr<DiscoveredWriterData>,
 
   // Topic "DCPSTopic" - announcing and detecting topics
-  #[allow(dead_code)] // Technically, the topic is not accessed after initialization
   dcps_topic: with_key::DiscoveryTopicPlCdr<DiscoveredTopicData>,
   topic_cleanup_timer: Timer<()>,
 
@@ -240,13 +239,11 @@ pub(crate) struct Discovery {
   // 77.4.3 New DCPSParticipantStatelessMessage builtin Topic
   // !!! TODO: By the spec, this topic must use _stateless_ reader and writer, which are
   // insensitive to sequence number attacks.
-  #[allow(dead_code)] // TODO: Remove when handlers implemented
   #[cfg(feature = "security")]
   dcps_participant_stateless_message: no_key::DiscoveryTopicCDR<ParticipantStatelessMessage>,
 
   // DCPSParticipantVolatileMessageSecure
   // 7.4.4 New DCPSParticipantVolatileMessageSecure builtin Topic
-  #[allow(dead_code)] // TODO: Remove when handlers implemented
   #[cfg(feature = "security")]
   dcps_participant_volatile_message_secure:
     no_key::DiscoveryTopicCDR<ParticipantVolatileMessageSecure>, // CDR?

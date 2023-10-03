@@ -270,25 +270,25 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
 
     let metatraffic_unicast_locators: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR,
       "Metatraffic unicast locators",
     )?;
     let metatraffic_multicast_locators: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR,
       "Metatraffic multicast locators",
     )?;
     let default_unicast_locators: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
       "Default unicast locators",
     )?;
     let default_multicast_locators: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
       "Default multicast locators",
     )?;

@@ -22,5 +22,5 @@ openssl req -newkey param:ec_parameters.pem -keyout participant2_private_key.pem
 
 # Sign the certificate request s
 openssl x509 -req -days 999999 -in identity_certificate_requests/participant1.pem -CA identity_ca_certificate.pem -CAkey identity_ca_private_key.pem -passin file:password -out participant1_certificate.pem -set_serial 1
-openssl x509 -req -days 999999 -in identity_certificate_requests/participant2.pem -CA identity_ca_certificate.pem -CAkey identity_ca_private_key.pem -passin file:password -out participant2_certificate.pem -set_serial 1
+openssl x509 -req -days 999999 -in identity_certificate_requests/participant2.pem -CA identity_ca_certificate.pem -CAkey identity_ca_private_key.pem -passin file:password -out participant2_certificate.pem -set_serial 2
 

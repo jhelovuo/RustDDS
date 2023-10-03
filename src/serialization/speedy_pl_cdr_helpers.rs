@@ -158,10 +158,9 @@ where
 }
 
 // same, but gets all occurrences
-#[allow(clippy::needless_pass_by_value)]
 pub(crate) fn get_all_from_pl_map<'a, C, D>(
   pl_map: &'a BTreeMap<ParameterId, Vec<&Parameter>>,
-  ctx: C,
+  ctx: &C,
   pid: ParameterId,
   name: &str,
 ) -> Result<Vec<D>, PlCdrDeserializeError>

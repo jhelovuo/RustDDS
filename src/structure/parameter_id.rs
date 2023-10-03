@@ -8,7 +8,6 @@ pub struct ParameterId {
   value: u16,
 }
 
-#[allow(dead_code)] // since we do not necessarily use all of the named constants, but that's ok
 impl ParameterId {
   pub const PID_PAD: Self = Self { value: 0x0000 };
   pub const PID_SENTINEL: Self = Self { value: 0x0001 };
