@@ -126,6 +126,10 @@ pub(crate) struct MessageReceiver {
   secure_receiver_state: Option<SecureReceiverState>,
   #[cfg(feature = "security")]
   secure_rtps_wrapped: Option<SecureWrapping>,
+  #[cfg(feature = "security")]
+  // For certain topics we have to allow unprotected rtps messages even if the domain is
+  // rtps-protected
+  must_be_rtps_protection_special_case: bool,
 }
 
 impl MessageReceiver {
@@ -154,6 +158,9 @@ impl MessageReceiver {
       secure_receiver_state: None,
       #[cfg(feature = "security")]
       secure_rtps_wrapped: None,
+      #[cfg(feature = "security")]
+      // Protection on by default
+      must_be_rtps_protection_special_case: true,
     }
   }
 
@@ -251,7 +258,10 @@ impl MessageReceiver {
 
     #[cfg(feature = "security")]
     let decoded_message = match &self.security_plugins {
-      None => rtps_message,
+      None => {
+        self.must_be_rtps_protection_special_case = false; // No plugins, no protection
+        rtps_message
+      }
 
       Some(security_plugins_handle) => {
         let security_plugins = security_plugins_handle.get_plugins();
@@ -264,7 +274,10 @@ impl MessageReceiver {
         }) = rtps_message.submessages.first()
         {
           match security_plugins.decode_rtps_message(rtps_message, &self.source_guid_prefix) {
-            Ok(DecodeOutcome::Success(message)) => message,
+            Ok(DecodeOutcome::Success(message)) => {
+              self.must_be_rtps_protection_special_case = false; // Message was protected
+              message
+            }
             Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
               return trace!(
                 "No matching message decode keys found for the key id {:?} for the remote \
@@ -273,17 +286,30 @@ impl MessageReceiver {
                 self.source_guid_prefix
               )
             }
+            Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(guid_prefix)) => {
+              return trace!(
+                "No participant crypto handle found for the participant {:?} for rtps message \
+                 decoding.",
+                guid_prefix
+              )
+            }
             Err(e) => return error!("{e:?}"),
           }
-        } else if security_plugins.rtps_not_protected(&self.dest_guid_prefix) {
-          // The domain is not protected, pass through
-          rtps_message
         } else {
-          return error!(
-            "Rejecting a message from participant {:?} to {:?}. The messages in a rtps-protected \
-             domain are expected to start with SecureRTPSPrefix.",
-            self.source_guid_prefix, self.dest_guid_prefix
-          );
+          if security_plugins.rtps_not_protected(&self.dest_guid_prefix) {
+            // The domain is not rtps-protected, the additional check does not apply
+            self.must_be_rtps_protection_special_case = false;
+          } else {
+            // The messages in a rtps-protected domain are expected to start
+            // with SecureRTPSPrefix. The only exception is if the
+            // message contains only submessages for the following
+            // builtin topics: DCPSParticipants,
+            // DCPSParticipantStatelessMessage,
+            // DCPSParticipantVolatileMessageSecure
+            // (8.4.2.4, table 27).
+            self.must_be_rtps_protection_special_case = true;
+          }
+          rtps_message
         }
       }
     };
@@ -505,6 +531,23 @@ impl MessageReceiver {
         self.dest_guid_prefix, self.own_guid_prefix
       );
       return;
+    }
+
+    #[cfg(feature = "security")]
+    if self.must_be_rtps_protection_special_case {
+      match target_reader_entity_id {
+        // These submessages are the special case
+        EntityId::SPDP_BUILTIN_PARTICIPANT_READER
+        | EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER
+        | EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER => (),
+        // Otherwise we have to reject
+        other => {
+          return error!(
+            "Received an unprotected message containing a writer submessage for the reader \
+             {other:?} in an rtps-protected domain."
+          )
+        }
+      }
     }
 
     let mr_state = self.clone_partial_message_receiver_state();
@@ -766,6 +809,23 @@ impl MessageReceiver {
       return;
     }
 
+    #[cfg(feature = "security")]
+    if self.must_be_rtps_protection_special_case {
+      match submessage.receiver_entity_id() {
+        // These submessages are the special case
+        EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
+        | EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER
+        | EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER => (),
+        // Otherwise we have to reject
+        other => {
+          return error!(
+            "Received an unprotected message containing a reader submessage for the writer \
+             {other:?} in an rtps-protected domain."
+          )
+        }
+      }
+    }
+
     match submessage {
       ReaderSubmessage::AckNack(acknack, _) => {
         // Note: This must not block, because the receiving end is the same thread,
@@ -895,6 +955,13 @@ impl MessageReceiver {
                participant {:?}",
               header_key_id,
               self.source_guid_prefix
+            );
+          }
+          Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(guid_prefix)) => {
+            trace!(
+              "No participant crypto handle found for the participant {:?} for submessage \
+               decoding.",
+              guid_prefix
             );
           }
         }

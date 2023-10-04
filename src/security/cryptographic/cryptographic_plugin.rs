@@ -182,6 +182,12 @@ pub trait CryptoTransform: Send {
   /// `encoded_rtps_submessage`.
   /// `receiving_datareader_crypto_list_index` is dropped.
   ///
+  /// NOTE! [crate::security::security_plugins::SecurityPlugins::is_rtps_protection_special_case] relies on the assumption that
+  /// in the topic DCPSParticipantVolatileMessageSecure
+  /// the CryptoTransformIdentifier has transformation_key_id=0 like it does in
+  /// the builtin plugin. If a custom plugin that does not adhere to this is
+  /// used, that check needs to also be modified.
+  ///
   /// # Panics
   /// The function may panic if `plain_rtps_submessage.body` is not
   /// [SubmessageBody::Writer].
@@ -197,6 +203,12 @@ pub trait CryptoTransform: Send {
   ///
   /// Return the submessages that would be written in
   /// `encoded_rtps_submessage`.
+  ///
+  /// NOTE! [crate::security::security_plugins::SecurityPlugins::is_rtps_protection_special_case] relies on the assumption that
+  /// in the topic DCPSParticipantVolatileMessageSecure
+  /// the CryptoTransformIdentifier has transformation_key_id=0 like it does in
+  /// the builtin plugin. If a custom plugin that does not adhere to this is
+  /// used, that check needs to also be modified.
   ///
   /// # Panics
   /// The function may panic if `plain_rtps_submessage.body` is not

@@ -10,12 +10,16 @@ use speedy::Readable;
 use crate::{
   discovery::{DiscoveredReaderData, DiscoveredWriterData},
   messages::submessages::{
-    elements::{crypto_content::CryptoContent, parameter_list::ParameterList},
+    elements::{
+      crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
+    },
     secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
+    submessage::{HasEntityIds, SecuritySubmessage},
   },
   qos,
   rtps::{Message, Submessage, SubmessageBody},
+  security::cryptographic::CryptoTransformIdentifier,
   security_error,
   structure::guid::{EntityId, GuidPrefix},
   QosPolicies, GUID,
@@ -1132,6 +1136,68 @@ impl SecurityPlugins {
     }
   }
 
+  // Rtps protection does not apply to messages with submessages only for topics
+  // DCPSParticipants, DCPSParticipantStatelessMessage and
+  // DCPSParticipantVolatileMessageSecure (8.4.2.4, table 27).
+  // This function checks if a message corresponds with this special case.
+  //
+  // NOTE! Relies on the assumption that in DCPSParticipantVolatileMessageSecure
+  // the CryptoTransformIdentifier has transformation_key_id=0 like it does in the
+  // builtin plugin. If a custom plugin that does not adhere to this is used, this
+  // check needs to also be modified.
+  fn is_rtps_protection_special_case(
+    Message { submessages, .. }: &Message,
+  ) -> SecurityResult<bool> {
+    submessages
+      .iter()
+      .filter_map(|submessage| match &submessage.body {
+        SubmessageBody::Reader(reader_submessage) => {
+          Some(Ok(match reader_submessage.sender_entity_id() {
+            EntityId::SPDP_BUILTIN_PARTICIPANT_READER
+            | EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER => true,
+            _other => false,
+          }))
+        }
+
+        SubmessageBody::Writer(writer_submessage) => {
+          Some(Ok(match writer_submessage.sender_entity_id() {
+            EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
+            | EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER => true,
+            _other => false,
+          }))
+        }
+        SubmessageBody::Security(SecuritySubmessage::SecurePrefix(
+          SecurePrefix {
+            crypto_header:
+              CryptoHeader {
+                transformation_id:
+                  CryptoTransformIdentifier {
+                    transformation_key_id,
+                    ..
+                  },
+                ..
+              },
+          },
+          _,
+        )) => Some(Ok(transformation_key_id.is_zero())), // If 0 id, then volatile
+        _ => None,
+      })
+      .reduce(|acc, current| {
+        acc.and_then(|acc_value| {
+          if current.unwrap().eq(&acc_value) {
+            Ok(acc_value)
+          } else {
+            Err(security_error(
+              "A message mixes submessages for the topics DCPSParticipants, \
+               DCPSParticipantStatelessMessage and DCPSParticipantVolatileMessageSecure, which \
+               cannot be protected on the rtps level, with normal ones, which have to be.",
+            ))
+          }
+        })
+      })
+      .unwrap_or(Ok(false))
+  }
+
   /// Calls [super::cryptographic::cryptographic_plugin::CryptoTransform::encode_rtps_message]
   // Currently only those RTPS messages whose source is the local participant
   // can be encoded.
@@ -1147,25 +1213,27 @@ impl SecurityPlugins {
       return Ok(plain_message);
     }
 
-    if self.rtps_not_protected(source_guid_prefix) {
+    if self.rtps_not_protected(source_guid_prefix)
+      || Self::is_rtps_protection_special_case(&plain_message)?
+    {
       return Ok(plain_message);
     }
 
     // Convert the destination GUID prefixes to crypto handles
-    let mut receiving_datawriter_crypto_list: Vec<DatawriterCryptoHandle> =
+    let mut receiving_participant_crypto_list: Vec<DatawriterCryptoHandle> =
       SecurityResult::from_iter(destination_guid_prefix_list.iter().map(
         |destination_guid_prefix| {
           self.get_remote_participant_crypto_handle(destination_guid_prefix)
         },
       ))?;
     // Remove duplicates
-    receiving_datawriter_crypto_list.sort();
-    receiving_datawriter_crypto_list.dedup();
+    receiving_participant_crypto_list.sort();
+    receiving_participant_crypto_list.dedup();
 
     self.crypto.encode_rtps_message(
       plain_message,
       self.get_local_participant_crypto_handle()?,
-      receiving_datawriter_crypto_list,
+      receiving_participant_crypto_list,
     )
   }
 
@@ -1177,11 +1245,21 @@ impl SecurityPlugins {
     encoded_message: Message,
     source_guid_prefix: &GuidPrefix,
   ) -> SecurityResult<DecodeOutcome<Message>> {
-    self.crypto.decode_rtps_message(
-      encoded_message,
-      self.get_local_participant_crypto_handle()?,
-      self.get_remote_participant_crypto_handle(source_guid_prefix)?,
-    )
+    self
+      .remote_participant_crypto_handle_cache
+      .get(source_guid_prefix)
+      .map_or(
+        Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(
+          *source_guid_prefix,
+        )),
+        |source_crypto_handle| {
+          self.crypto.decode_rtps_message(
+            encoded_message,
+            self.get_local_participant_crypto_handle()?,
+            *source_crypto_handle,
+          )
+        },
+      )
   }
 
   // Currently only those submessages whose destination is the local participant
@@ -1192,11 +1270,21 @@ impl SecurityPlugins {
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
     source_guid_prefix: &GuidPrefix,
   ) -> SecurityResult<DecodeOutcome<DecodedSubmessage>> {
-    self.crypto.decode_submessage(
-      encoded_rtps_submessage,
-      self.get_local_participant_crypto_handle()?,
-      self.get_remote_participant_crypto_handle(source_guid_prefix)?,
-    )
+    self
+      .remote_participant_crypto_handle_cache
+      .get(source_guid_prefix)
+      .map_or(
+        Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(
+          *source_guid_prefix,
+        )),
+        |source_crypto_handle| {
+          self.crypto.decode_submessage(
+            encoded_rtps_submessage,
+            self.get_local_participant_crypto_handle()?,
+            *source_crypto_handle,
+          )
+        },
+      )
   }
 
   pub fn decode_serialized_payload(

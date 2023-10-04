@@ -7,6 +7,7 @@ use crate::{
   messages::submessages::submessage::{ReaderSubmessage, WriterSubmessage},
   rtps::Submessage,
   security::types::DataHolder,
+  structure::guid::GuidPrefix,
 };
 
 // Crypto related message class IDs for GenericMessageClassId:
@@ -120,12 +121,15 @@ pub enum DecodedSubmessage {
   Reader(ReaderSubmessage, Vec<EndpointCryptoHandle>),
 }
 
-/// It is normal to receive encoded communication that is meant for another
-/// participant, in which case the keys are missing and we cannot decode, but we
-/// cannot distinguish this case without searching through the available keys.
-/// In other words, not finding keys is not necessarily erroneous behavior, and
-/// such communication should just be ignored.
 pub enum DecodeOutcome<T> {
   Success(T),
+  /// It is normal to receive encoded communication that is meant for another
+  /// participant, in which case the keys are missing and we cannot decode, but
+  /// we cannot distinguish this case without searching through the available
+  /// keys. In other words, not finding keys is not necessarily erroneous
+  /// behavior, and such communication should just be ignored.
   KeysNotFound(CryptoTransformKeyId),
+  /// It is also normal to receive encoded messages from participants that have
+  /// not been matched with.
+  ParticipantCryptoHandleNotFound(GuidPrefix),
 }

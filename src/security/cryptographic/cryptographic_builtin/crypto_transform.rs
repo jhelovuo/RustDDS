@@ -280,7 +280,7 @@ impl CryptoTransform for CryptographicBuiltin {
     };
 
     // Build crypto header and security prefix
-    let prefix = SecurePrefix {
+    let prefix = SecureRTPSPrefix {
       crypto_header: CryptoHeader::from(BuiltinCryptoHeader {
         transform_identifier: BuiltinCryptoTransformIdentifier {
           transformation_kind,
@@ -291,7 +291,7 @@ impl CryptoTransform for CryptographicBuiltin {
     };
 
     // Build security postfix
-    let postfix = SecurePostfix {
+    let postfix = SecureRTPSPostfix {
       crypto_footer: CryptoFooter::try_from(crypto_footer)?,
     };
 
