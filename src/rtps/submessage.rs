@@ -45,7 +45,7 @@ pub struct Submessage {
   pub body: SubmessageBody,
   pub original_bytes: Option<Bytes>,
   // original_bytes contains the original bytes if Submessage was created by parsing from Bytes.
-  // If mesasge was constructed from components instead, it is None.
+  // If message was constructed from components instead, it is None.
 }
 
 // We implement this instead of Speedy trait Readable, because
@@ -334,7 +334,7 @@ mod tests {
 
   #[test]
   fn submessage_data_submessage_deserialization() {
-    // this is wireshark captured shapesdemo data_submessage
+    // this is wireshark captured shapes demo data_submessage
     let serialized_data_submessage = Bytes::from_static(&[
       0x15, 0x05, 0x2c, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x01,
       0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x04, 0x00,
