@@ -243,18 +243,9 @@ impl CryptoTransform for CryptographicBuiltin {
     // Compute encoded submessages and footer
     let (encoded_submessages, crypto_footer) = match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        // TODO this is mainly for testing and debugging
-        (
-          submessages_with_info_source,
-          encode_gmac(
-            &session_key,
-            initialization_vector,
-            &plaintext,
-            &receiver_specific_keys,
-          )?,
-        )
-        /*  // TODO? switch to the following to avoid unnecessary pre/postfixes
-        return Ok(EncodeResult::One(plain_rtps_message)); */
+        return Err(security_error!(
+          "encode_rtps_message called when transformation kind is NONE."
+        ));
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => (
@@ -381,16 +372,22 @@ impl CryptoTransform for CryptographicBuiltin {
       let decode_key = decode_key_material.session_key;
 
       match decode_key_material.transformation_kind {
-        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE
-        | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
-        | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-          // Validate signature even if it is not requested to avoid
-          // unauthorized data injection attack.
-          if decode_key_material.transformation_kind ==
-            BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
-            warn!("decode_rtps_message with crypto transformation kind = none. \
-              Does not make sense, but validating MAC anyway.");
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE =>{
+          let submessages_with_info_source = encoded_content; // rename for clarity
+          // We expect an InfoSource submessage followed by the original message
+          if let
+            [ Submessage { body: SubmessageBody::Interpreter(
+                InterpreterSubmessage::InfoSource(info_source, _)), .. },
+              submessages @ ..  // this is all the rest of the submessages
+            ] = submessages_with_info_source
+          {
+            Ok((Vec::from(submessages), *info_source))
+          } else {
+            Err(security_error!("Expected the first submessage to be InfoSource."))
           }
+        }
+        BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+        | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
           let submessages_with_info_source = encoded_content; // rename for clarity
           // We expect an InfoSource submessage followed by the original message
           if let
