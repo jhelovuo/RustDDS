@@ -286,6 +286,9 @@ impl MessageReceiver {
                 self.source_guid_prefix
               )
             }
+            Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed) => {
+              return trace!("Failed to validate the receiver-specif MAC for the rtps message.");
+            }
             Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(guid_prefix)) => {
               return trace!(
                 "No participant crypto handle found for the participant {:?} for rtps message \
@@ -956,6 +959,9 @@ impl MessageReceiver {
               header_key_id,
               self.source_guid_prefix
             );
+          }
+          Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed) => {
+            trace!("No endpoints passed the receiver-specific MAC validation for the submessage.");
           }
           Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(guid_prefix)) => {
             trace!(

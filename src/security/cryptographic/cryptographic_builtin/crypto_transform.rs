@@ -24,9 +24,10 @@ use crate::{
   security_error,
 };
 use super::{
-  decode::{decode_submessage_gcm, decode_submessage_gmac, find_receiver_specific_mac},
+  aes_gcm_gmac::{decrypt, validate_mac},
   encode::{encode_gcm, encode_gmac},
   key_material::*,
+  validate_receiver_specific_macs::validate_receiver_specific_mac,
 };
 
 impl CryptographicBuiltin {
@@ -361,15 +362,7 @@ impl CryptoTransform for CryptographicBuiltin {
         ))?;
       }
 
-      // Get the receiver-specific MAC if one is expected
-      let receiver_specific_key_and_mac =decode_key_material.receiver_specific_key
-      // If the key is None, we are not expecting a receiver-specific MAC
-      .map(|receiver_specific_key|find_receiver_specific_mac(
-        &receiver_specific_key,
-        &receiver_specific_macs,
-      )).transpose()?;
-
-      let decode_key = decode_key_material.session_key;
+      let decode_key = &decode_key_material.session_key;
 
       match decode_key_material.transformation_kind {
         BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE =>{
@@ -401,19 +394,13 @@ impl CryptoTransform for CryptographicBuiltin {
               .fold(Vec::<u8>::with_capacity(512), move |mut a,s| {
                 a.extend_from_slice(s.original_bytes.as_ref().unwrap_or(&Bytes::new()).as_ref()); a }
               );
+
+            // Validate receiver-specific MAC if one is expected
+            if !validate_receiver_specific_mac(&decode_key_material,&initialization_vector,&serialized_submessages,&receiver_specific_macs){
+              return Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed);
+            }
             // Validate the common MAC
-            aes_gcm_gmac::validate_mac(&decode_key, initialization_vector, &serialized_submessages, common_mac)
-              // Validate the receiver-specific MAC if one exists
-              .and_then( |()|
-                // common mac was ok, let's see if there is receiver-specific MAC
-                receiver_specific_key_and_mac
-                  .map(|(key,mac)|
-                    aes_gcm_gmac::validate_mac( &key,initialization_vector, &serialized_submessages, mac ) )
-                  // this is :Option<SecurityResult<()>>
-                  .transpose(),
-                  // to SecurityResult<Option<()>>, so we catch Err, if any.
-                  // Value Some(()) means receiver-specific mac was ok, None means it was not required
-                )
+            validate_mac(decode_key, initialization_vector, &serialized_submessages, common_mac)
               // If the MACs are ok, return content. 
               .map( |_| (Vec::from(submessages), *info_source))
           } else {
@@ -427,14 +414,14 @@ impl CryptoTransform for CryptographicBuiltin {
                     SecureBody { crypto_content: CryptoContent { data: ciphertext },}, _ )), ..  }
             ] = encoded_content
           {
-            // Validate the receiver-specific MAC if one exists, and exit on error
-            if let Some((key,mac)) = receiver_specific_key_and_mac {
-              aes_gcm_gmac::validate_mac( &key, initialization_vector, ciphertext, mac)?;
+            // Validate receiver-specific MAC if one is expected
+            if !validate_receiver_specific_mac(&decode_key_material,&initialization_vector,ciphertext,&receiver_specific_macs){
+              return Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed);
             }
             // Authenticated decryption, or exit on failure
             let mut plaintext =
               Bytes::copy_from_slice(
-                &aes_gcm_gmac::decrypt(&decode_key, initialization_vector, ciphertext, common_mac)?);
+                &decrypt(decode_key, initialization_vector, ciphertext, common_mac)?);
 
             // We expect an InfoSource submessage followed by the original submessage sequence
             let info_source =
@@ -514,30 +501,32 @@ impl CryptoTransform for CryptographicBuiltin {
         )
       })?;
 
-    let (matching_decode_materials, sending_endpoint_infos): (Vec<_>, Vec<EndpointInfo>) =
-      sending_participant_endpoints
-        .iter()
-        .filter_map(|sending_endpoint_info| {
-          self
-            .get_session_decode_crypto_materials(
-              sending_endpoint_info.crypto_handle,
-              header_key_id,
-              KeyMaterialScope::MessageOrSubmessage,
-              initialization_vector,
-            )
-            .map(|decode_materials| (decode_materials, sending_endpoint_info))
-        })
-        .unzip();
+    let matching_decode_materials = sending_participant_endpoints
+      .iter()
+      .filter_map(|sending_endpoint_info| {
+        self
+          .get_session_decode_crypto_materials(
+            sending_endpoint_info.crypto_handle,
+            header_key_id,
+            KeyMaterialScope::MessageOrSubmessage,
+            initialization_vector,
+          )
+          .map(|decode_materials| (decode_materials, sending_endpoint_info))
+      })
+      .collect::<Vec<_>>();
 
     let decode_key = matching_decode_materials
       .iter()
       // Check that for all matched ids transformation kind matches the header
       .map(
-        |DecodeSessionMaterials {
-           transformation_kind,
-           session_key,
-           ..
-         }| {
+        |(
+          DecodeSessionMaterials {
+            transformation_kind,
+            session_key,
+            ..
+          },
+          _,
+        )| {
           if transformation_kind.eq(&header_transformation_kind) {
             Ok(session_key)
           } else {
@@ -575,53 +564,106 @@ impl CryptoTransform for CryptographicBuiltin {
       }
     };
 
-    let receiver_specific_keys_and_macs = SecurityResult::<Vec<_>>::from_iter(
-      matching_decode_materials
-        .iter()
-        .filter_map(
-          |DecodeSessionMaterials {
-             receiver_specific_key,
-             ..
-           }| receiver_specific_key.as_ref(),
-        )
-        .map(|receiver_specific_key| {
-          find_receiver_specific_mac(receiver_specific_key, &receiver_specific_macs)
-        }),
-    )?;
-
-    let decoded_submessage = match header_transformation_kind {
+    let (decoded_submessage, sending_endpoint_infos) = match header_transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
         // Does this even make sense?
         warn!("Decode submessage success, but crypto transformation kind is none.");
 
-        encoded_submessage.body
+        let sending_endpoint_infos = matching_decode_materials
+          .iter()
+          .map(|(_, sending_endpoint_info)| sending_endpoint_info)
+          .collect::<Vec<_>>();
+
+        (encoded_submessage.body, sending_endpoint_infos)
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        decode_submessage_gmac(
-          decode_key,
-          initialization_vector,
-          &encoded_submessage,
-          common_mac,
-          &receiver_specific_keys_and_macs,
-        )?; // return verify error here, or continue
-        encoded_submessage.body // it was plaintext anyway.
+        if let Submessage {
+          original_bytes: Some(data),
+          ..
+        } = encoded_submessage
+        {
+          // Check receiver-specific MACS and filter the list of endpoints by them
+          let sending_endpoint_infos = matching_decode_materials
+            .iter()
+            .filter_map(|(decode_materials, sending_endpoint_info)| {
+              validate_receiver_specific_mac(
+                decode_materials,
+                &initialization_vector,
+                &data,
+                &receiver_specific_macs,
+              )
+              .then_some(sending_endpoint_info)
+            })
+            .collect::<Vec<_>>();
+
+          validate_mac(decode_key, initialization_vector, &data, common_mac)?; // return verify error here, or continue
+
+          (encoded_submessage.body, sending_endpoint_infos)
+        } else {
+          Err(security_error!("Submessage bytes are missing."))?
+        }
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        decode_submessage_gcm(
-          decode_key,
-          initialization_vector,
-          &encoded_submessage,
-          common_mac,
-          &receiver_specific_keys_and_macs,
-        )?
+        // Destructure to get ciphertext
+        if let Submessage {
+          body:
+            SubmessageBody::Security(SecuritySubmessage::SecureBody(
+              SecureBody {
+                crypto_content: CryptoContent { data: ciphertext },
+              },
+              _,
+            )),
+          ..
+        } = encoded_submessage
+        {
+          // Check receiver-specific MACS and filter the list of endpoints by them
+          let sending_endpoint_infos = matching_decode_materials
+            .iter()
+            .filter_map(|(decode_materials, sending_endpoint_info)| {
+              validate_receiver_specific_mac(
+                decode_materials,
+                &initialization_vector,
+                &ciphertext,
+                &receiver_specific_macs,
+              )
+              .then_some(sending_endpoint_info)
+            })
+            .collect::<Vec<_>>();
+
+          // Authenticated decryption
+          let mut plaintext = Bytes::copy_from_slice(&decrypt(
+            decode_key,
+            initialization_vector,
+            &ciphertext,
+            common_mac,
+          )?);
+
+          // Deserialize (submessage deserialization is a bit funky atm)
+          let decoded_submessage = match Submessage::read_from_buffer(&mut plaintext)
+            .map_err(|e| security_error!("Failed to deserialize the plaintext: {}", e))?
+          {
+            Some(Submessage { body, .. }) => body,
+            None => Err(security_error!(
+              "Failed to deserialize the plaintext into a submessage. It could have been PAD or \
+               vendor-specific or otherwise unrecognized submessage kind."
+            ))?,
+          };
+          (decoded_submessage, sending_endpoint_infos)
+        } else {
+          Err(security_error!(
+            "When transformation kind is GCM, decode_datawriter_submessage expects a SecureBody, \
+             received {:?}",
+            encoded_submessage.header.kind
+          ))?
+        }
       }
     };
 
     match decoded_submessage {
       SubmessageBody::Writer(writer_submessage) => {
-        let matching_readers = SecurityResult::from_iter(
+        let matching_readers = SecurityResult::<Vec<_>>::from_iter(
           sending_endpoint_infos.iter().filter_map(
             |EndpointInfo {
                crypto_handle: remote_endpoint_crypto_handle,
@@ -643,13 +685,18 @@ impl CryptoTransform for CryptographicBuiltin {
             },
           ),
         )?;
-        Ok(DecodeOutcome::Success(DecodedSubmessage::Writer(
-          writer_submessage,
-          matching_readers,
-        )))
+        if matching_readers.is_empty() {
+          // All remote writers failed the MAC check
+          Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed)
+        } else {
+          Ok(DecodeOutcome::Success(DecodedSubmessage::Writer(
+            writer_submessage,
+            matching_readers,
+          )))
+        }
       }
       SubmessageBody::Reader(reader_submessage) => {
-        let matching_writers = SecurityResult::from_iter(
+        let matching_writers = SecurityResult::<Vec<_>>::from_iter(
           sending_endpoint_infos.iter().filter_map(
             |EndpointInfo {
                crypto_handle: remote_endpoint_crypto_handle,
@@ -671,10 +718,15 @@ impl CryptoTransform for CryptographicBuiltin {
             },
           ),
         )?;
-        Ok(DecodeOutcome::Success(DecodedSubmessage::Reader(
-          reader_submessage,
-          matching_writers,
-        )))
+        if matching_writers.is_empty() {
+          // All remote readers failed the MAC check
+          Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed)
+        } else {
+          Ok(DecodeOutcome::Success(DecodedSubmessage::Reader(
+            reader_submessage,
+            matching_writers,
+          )))
+        }
       }
 
       SubmessageBody::Interpreter(_) => Err(security_error!(

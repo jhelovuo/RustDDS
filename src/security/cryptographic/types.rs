@@ -129,7 +129,10 @@ pub enum DecodeOutcome<T> {
   /// keys. In other words, not finding keys is not necessarily erroneous
   /// behavior, and such communication should just be ignored.
   KeysNotFound(CryptoTransformKeyId),
-  /// It is also normal to receive encoded messages from participants that have
+  /// It is normal to receive messages or submessages that are missing the
+  /// required receiver-specific MAC due to multicasting.
+  ValidatingReceiverSpecificMACFailed,
+  /// It is normal to receive encoded messages from participants that have
   /// not been matched with.
   ParticipantCryptoHandleNotFound(GuidPrefix),
 }

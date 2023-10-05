@@ -3,10 +3,10 @@ mod builtin_key;
 mod crypto_key_exchange;
 mod crypto_key_factory;
 mod crypto_transform;
-mod decode;
 mod encode;
 mod key_material;
 pub(crate) mod types;
+mod validate_receiver_specific_macs;
 
 use std::collections::{HashMap, HashSet};
 
