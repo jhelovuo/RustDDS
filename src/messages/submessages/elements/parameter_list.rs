@@ -4,7 +4,9 @@ use bytes::Bytes;
 use speedy::{Context, Readable, Writable, Writer};
 
 use crate::{
-  messages::submessages::elements::parameter::Parameter, structure::parameter_id::ParameterId,
+  messages::submessages::elements::parameter::Parameter,
+  serialization::pl_cdr_adapters::PlCdrSerializeError, structure::parameter_id::ParameterId,
+  RepresentationIdentifier,
 };
 
 /// ParameterList is used as part of several messages to encapsulate
@@ -97,4 +99,12 @@ impl<'a, C: Context> Readable<'a, C> for ParameterList {
       });
     }
   }
+}
+
+// Trait for structs which can be converted to a ParameterList
+pub trait ParameterListable {
+  fn to_parameter_list(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<ParameterList, PlCdrSerializeError>;
 }

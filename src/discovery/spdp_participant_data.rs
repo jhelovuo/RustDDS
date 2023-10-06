@@ -13,7 +13,10 @@ use crate::{
   dds::{participant::DomainParticipant, qos::QosPolicies},
   messages::{
     protocol_version::ProtocolVersion,
-    submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
+    submessages::elements::{
+      parameter::Parameter,
+      parameter_list::{ParameterList, ParameterListable},
+    },
     vendor_id::VendorId,
   },
   rtps::{constant::*, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
@@ -382,6 +385,18 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = self.to_parameter_list(encoding)?;
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
+  }
+}
+
+impl ParameterListable for SpdpDiscoveredParticipantData {
+  fn to_parameter_list(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<ParameterList, PlCdrSerializeError> {
     // This "unnecessary" binding is to trigger a warning if we forget to
     // serialize any fields.
     let Self {
@@ -496,9 +511,7 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
       );
     }
 
-    let bytes = pl.serialize_to_bytes(ctx)?;
-
-    Ok(bytes)
+    Ok(pl)
   }
 }
 

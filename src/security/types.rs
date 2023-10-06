@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use enumflags2::{bitflags, BitFlags};
 use log::error;
 use speedy::{Context, Readable, Reader, Writable, Writer};
@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
   dds::qos,
   discovery,
-  messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
+  messages::submessages::elements::{
+    parameter::Parameter,
+    parameter_list::{ParameterList, ParameterListable},
+  },
   security,
   security::config::ConfigError,
   serialization::{
@@ -805,11 +808,11 @@ impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
-    let mut pl = ParameterList::new();
+    let mut token_pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
       ($pid:ident, $member:expr, $type:ty) => {
-        pl.push(Parameter::new(ParameterId::$pid, {
+        token_pl.push(Parameter::new(ParameterId::$pid, {
           let m: &$type = $member;
           m.write_to_vec_with_ctx(ctx)?
         }))
@@ -820,13 +823,12 @@ impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
       &self.identity_status_token,
       security::authentication::IdentityStatusToken
     );
-    let bytes = pl.serialize_to_bytes(ctx)?;
 
-    let part_data_bytes = self.participant_data.to_pl_cdr_bytes(encoding)?;
-    let mut result = BytesMut::new();
-    result.extend_from_slice(&part_data_bytes);
-    result.extend_from_slice(&bytes);
-    Ok(result.freeze())
+    let mut pl = self.participant_data.to_parameter_list(encoding)?;
+    pl.concat(token_pl);
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 
@@ -879,24 +881,23 @@ impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
-    let mut pl = ParameterList::new();
+    let mut data_tag_pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
       ($pid:ident, $member:expr, $type:ty) => {
-        pl.push(Parameter::new(ParameterId::$pid, {
+        data_tag_pl.push(Parameter::new(ParameterId::$pid, {
           let m: &$type = $member;
           m.write_to_vec_with_ctx(ctx)?
         }))
       };
     }
     emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
-    let bytes = pl.serialize_to_bytes(ctx)?;
 
-    let part_data_bytes = self.discovered_writer_data.to_pl_cdr_bytes(encoding)?;
-    let mut result = BytesMut::new();
-    result.extend_from_slice(&part_data_bytes);
-    result.extend_from_slice(&bytes);
-    Ok(result.freeze())
+    let mut pl = self.discovered_writer_data.to_parameter_list(encoding)?;
+    pl.concat(data_tag_pl);
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 
@@ -947,24 +948,23 @@ impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
-    let mut pl = ParameterList::new();
+    let mut data_tag_pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
       ($pid:ident, $member:expr, $type:ty) => {
-        pl.push(Parameter::new(ParameterId::$pid, {
+        data_tag_pl.push(Parameter::new(ParameterId::$pid, {
           let m: &$type = $member;
           m.write_to_vec_with_ctx(ctx)?
         }))
       };
     }
     emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
-    let bytes = pl.serialize_to_bytes(ctx)?;
 
-    let part_data_bytes = self.discovered_reader_data.to_pl_cdr_bytes(encoding)?;
-    let mut result = BytesMut::new();
-    result.extend_from_slice(&part_data_bytes);
-    result.extend_from_slice(&bytes);
-    Ok(result.freeze())
+    let mut pl = self.discovered_reader_data.to_parameter_list(encoding)?;
+    pl.concat(data_tag_pl);
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 

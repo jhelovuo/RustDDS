@@ -23,7 +23,10 @@ use crate::{
     with_key::datawriter::DataWriter,
   },
   discovery::content_filter_property::ContentFilterProperty,
-  messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
+  messages::submessages::elements::{
+    parameter::Parameter,
+    parameter_list::{ParameterList, ParameterListable},
+  },
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
   rtps::{rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
   serialization::{
@@ -426,6 +429,18 @@ impl PlCdrSerialize for DiscoveredReaderData {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = self.to_parameter_list(encoding)?;
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
+  }
+}
+
+impl ParameterListable for DiscoveredReaderData {
+  fn to_parameter_list(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<ParameterList, PlCdrSerializeError> {
     let DiscoveredReaderData {
       reader_proxy:
         ReaderProxy {
@@ -458,7 +473,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
           topic_aliases,
 
           #[cfg(feature = "security")]
-          security_info, // TODO: missing implementation
+          security_info,
         },
       content_filter,
     } = self;
@@ -542,8 +557,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
       EndpointSecurityInfo
     );
 
-    let bytes = pl.serialize_to_bytes(ctx)?;
-    Ok(bytes)
+    Ok(pl)
   }
 }
 
@@ -858,6 +872,18 @@ impl PlCdrSerialize for DiscoveredWriterData {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = self.to_parameter_list(encoding)?;
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
+  }
+}
+
+impl ParameterListable for DiscoveredWriterData {
+  fn to_parameter_list(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<ParameterList, PlCdrSerializeError> {
     let DiscoveredWriterData {
       last_updated: _, // This is never serialized
       writer_proxy:
@@ -968,8 +994,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
       EndpointSecurityInfo
     );
 
-    let bytes = pl.serialize_to_bytes(ctx)?;
-    Ok(bytes)
+    Ok(pl)
   }
 }
 
