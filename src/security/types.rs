@@ -764,9 +764,10 @@ impl PluginSecurityAttributesMask {
 
 // ParticipantBuiltinTopicDataSecure from section 7.4.1.6 of the Security
 // specification
+#[derive(Debug)]
 pub struct ParticipantBuiltinTopicDataSecure {
   pub participant_data: discovery::spdp_participant_data::SpdpDiscoveredParticipantData,
-  pub identity_status_token: security::authentication::IdentityStatusToken,
+  pub identity_status_token_opt: Option<security::authentication::IdentityStatusToken>,
 }
 impl Keyed for ParticipantBuiltinTopicDataSecure {
   type K = Participant_GUID;
@@ -783,7 +784,7 @@ impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
-    let identity_status_token = get_first_from_pl_map(
+    let identity_status_token_opt = get_first_from_pl_map(
       &pl_map,
       ctx,
       ParameterId::PID_IDENTITY_STATUS_TOKEN,
@@ -798,7 +799,7 @@ impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
 
     Ok(Self {
       participant_data,
-      identity_status_token,
+      identity_status_token_opt,
     })
   }
 }
@@ -818,9 +819,16 @@ impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
         }))
       };
     }
-    emit!(
+    macro_rules! emit_option {
+      ($pid:ident, $member:expr, $type:ty) => {
+        if let Some(m) = $member {
+          emit!($pid, m, $type)
+        }
+      };
+    }
+    emit_option!(
       PID_IDENTITY_STATUS_TOKEN,
-      &self.identity_status_token,
+      &self.identity_status_token_opt,
       security::authentication::IdentityStatusToken
     );
 
