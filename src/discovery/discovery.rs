@@ -696,29 +696,7 @@ impl Discovery {
               match command {
                 DiscoveryCommand::StopDiscovery => {
                   info!("Stopping Discovery");
-                  // disposing readers
-                  let db = discovery_db_read(&self.discovery_db);
-                  for reader in db.get_all_local_topic_readers() {
-                    self
-                      .dcps_subscription
-                      .writer
-                      .dispose(&Endpoint_GUID(reader.reader_proxy.remote_reader_guid), None)
-                      .unwrap_or(());
-                  }
-
-                  for writer in db.get_all_local_topic_writers() {
-                    self
-                      .dcps_publication
-                      .writer
-                      .dispose(&Endpoint_GUID(writer.writer_proxy.remote_writer_guid), None)
-                      .unwrap_or(());
-                  }
-                  // finally disposing the participant we have
-                  self
-                    .dcps_participant
-                    .writer
-                    .dispose(&Participant_GUID(self.domain_participant.guid()), None)
-                    .unwrap_or(());
+                  self.on_participant_shutting_down();
                   info!("Stopped Discovery");
                   return; // terminate event loop
                 }
@@ -726,25 +704,14 @@ impl Discovery {
                   if guid == self.dcps_publication.writer.guid() {
                     continue;
                   }
-                  self
-                    .dcps_publication
-                    .writer
-                    .dispose(&Endpoint_GUID(guid), None)
-                    .unwrap_or_else(|e| error!("Disposing local Writer: {e:?}"));
-
+                  self.send_endpoint_dispose_message(guid);
                   discovery_db_write(&self.discovery_db).remove_local_topic_writer(guid);
                 }
                 DiscoveryCommand::RemoveLocalReader { guid } => {
                   if guid == self.dcps_subscription.writer.guid() {
                     continue;
                   }
-
-                  self
-                    .dcps_subscription
-                    .writer
-                    .dispose(&Endpoint_GUID(guid), None)
-                    .unwrap_or_else(|e| error!("Disposing local Reader: {e:?}"));
-
+                  self.send_endpoint_dispose_message(guid);
                   discovery_db_write(&self.discovery_db).remove_local_topic_reader(guid);
                 }
                 DiscoveryCommand::ManualAssertLiveliness => {
@@ -1096,6 +1063,42 @@ impl Discovery {
     self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
       guid_prefix: participant_guidp,
     });
+  }
+
+  fn send_endpoint_dispose_message(&self, endpoint_guid: GUID) {
+    let is_writer = endpoint_guid.entity_id.entity_kind.is_writer();
+    if is_writer {
+      self
+        .dcps_publication
+        .writer
+        .dispose(&Endpoint_GUID(endpoint_guid), None)
+        .unwrap_or_else(|e| error!("Disposing local Writer: {e:?}"));
+    } else {
+      // is reader
+      self
+        .dcps_subscription
+        .writer
+        .dispose(&Endpoint_GUID(endpoint_guid), None)
+        .unwrap_or_else(|e| error!("Disposing local Reader: {e:?}"));
+    }
+  }
+
+  fn on_participant_shutting_down(&mut self) {
+    let db = discovery_db_read(&self.discovery_db);
+
+    for reader in db.get_all_local_topic_readers() {
+      self.send_endpoint_dispose_message(reader.reader_proxy.remote_reader_guid);
+    }
+
+    for writer in db.get_all_local_topic_writers() {
+      self.send_endpoint_dispose_message(writer.writer_proxy.remote_writer_guid);
+    }
+
+    self
+      .dcps_participant
+      .writer
+      .dispose(&Participant_GUID(self.domain_participant.guid()), None)
+      .unwrap_or(());
   }
 
   // Check if there are messages about new Readers
