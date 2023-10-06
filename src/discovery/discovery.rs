@@ -45,6 +45,7 @@ use crate::{
     time::Timestamp,
   },
   with_key::{DataReader, DataWriter, Sample},
+  DomainParticipant,
 };
 #[cfg(feature = "security")]
 use crate::{
@@ -804,29 +805,12 @@ impl Discovery {
           }
 
           DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN => {
-            let strong_dp = if let Some(dp) = self.domain_participant.clone().upgrade() {
-              dp
+            if let Some(dp) = self.domain_participant.clone().upgrade() {
+              self.send_participant_info(&dp);
             } else {
               error!("DomainParticipant doesn't exist anymore, exiting Discovery.");
               return;
             };
-
-            // setting 5 times the duration so lease doesn't break if update fails once or
-            // twice
-            let data = SpdpDiscoveredParticipantData::from_local_participant(
-              &strong_dp,
-              &self.self_locators,
-              &self.security_opt,
-              5.0 * Duration::from(Self::SEND_PARTICIPANT_INFO_PERIOD),
-            );
-
-            self
-              .dcps_participant
-              .writer
-              .write(data, None)
-              .unwrap_or_else(|e| {
-                error!("Discovery: Publishing to DCPS participant topic failed: {e:?}");
-              });
             // reschedule timer
             self
               .dcps_participant
@@ -1067,30 +1051,11 @@ impl Discovery {
                   "handle_participant_reader discovered {:?}",
                   &participant_data
                 );
-                let was_new =
-                  discovery_db_write(&self.discovery_db).update_participant(&participant_data);
-                let guid_prefix = participant_data.participant_guid.prefix;
-                self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated {
-                  guid_prefix,
-                });
-                if was_new {
-                  // This may be a rediscovery of a previously seen participant that
-                  // was temporarily lost due to network outage. Check if we already know
-                  // what it has (readers, writers, topics).
-                  debug!("Participant rediscovery start");
-                  self.handle_topic_reader(Some(guid_prefix));
-                  self.handle_subscription_reader(Some(guid_prefix));
-                  self.handle_publication_reader(Some(guid_prefix));
-                  debug!("Participant rediscovery finished");
-                }
+                self.process_discovered_participant_data(&participant_data);
               }
               // Sample::Dispose means that DomainParticipant was disposed
               Sample::Dispose(participant_guid) => {
-                discovery_db_write(&self.discovery_db)
-                  .remove_participant(participant_guid.0.prefix, true); // true = actively removed
-                self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
-                  guid_prefix: participant_guid.0.prefix,
-                });
+                self.process_participant_dispose(participant_guid.0.prefix);
               }
             }
           }
@@ -1105,6 +1070,32 @@ impl Discovery {
         }
       }
     } // loop
+  }
+
+  fn process_discovered_participant_data(
+    &mut self,
+    participant_data: &SpdpDiscoveredParticipantData,
+  ) {
+    let was_new = discovery_db_write(&self.discovery_db).update_participant(participant_data);
+    let guid_prefix = participant_data.participant_guid.prefix;
+    self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated { guid_prefix });
+    if was_new {
+      // This may be a rediscovery of a previously seen participant that
+      // was temporarily lost due to network outage. Check if we already know
+      // what it has (readers, writers, topics).
+      debug!("Participant rediscovery start");
+      self.handle_topic_reader(Some(guid_prefix));
+      self.handle_subscription_reader(Some(guid_prefix));
+      self.handle_publication_reader(Some(guid_prefix));
+      debug!("Participant rediscovery finished");
+    }
+  }
+
+  fn process_participant_dispose(&mut self, participant_guidp: GuidPrefix) {
+    discovery_db_write(&self.discovery_db).remove_participant(participant_guidp, true); // true = actively removed
+    self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
+      guid_prefix: participant_guidp,
+    });
   }
 
   // Check if there are messages about new Readers
@@ -1328,6 +1319,25 @@ impl Discovery {
     for msg in msgs.into_iter() {
       db.update_lease_duration(&msg);
     }
+  }
+
+  fn send_participant_info(&self, local_dp: &DomainParticipant) {
+    // setting 5 times the duration so lease doesn't break if update fails once or
+    // twice
+    let data = SpdpDiscoveredParticipantData::from_local_participant(
+      local_dp,
+      &self.self_locators,
+      &self.security_opt,
+      5.0 * Duration::from(Self::SEND_PARTICIPANT_INFO_PERIOD),
+    );
+
+    self
+      .dcps_participant
+      .writer
+      .write(data, None)
+      .unwrap_or_else(|e| {
+        error!("Discovery: Publishing to DCPS participant topic failed: {e:?}");
+      });
   }
 
   // TODO: Explain what happens here and by what logic
