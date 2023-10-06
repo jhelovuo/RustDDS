@@ -784,7 +784,7 @@ impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
-    let identity_status_token_opt = get_first_from_pl_map(
+    let identity_status_token_opt = get_option_from_pl_map(
       &pl_map,
       ctx,
       ParameterId::PID_IDENTITY_STATUS_TOKEN,
