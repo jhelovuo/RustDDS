@@ -216,7 +216,6 @@ pub(crate) struct Discovery {
   // Following topics from DDS Security spec v1.1
 
   // DCPSParticipantSecure - 7.4.1.6 New DCPSParticipantSecure Builtin Topic
-  #[allow(dead_code)] // TODO: Remove when handlers implemented
   #[cfg(feature = "security")]
   dcps_participant_secure: with_key::DiscoveryTopicPlCdr<ParticipantBuiltinTopicDataSecure>,
 
@@ -850,6 +849,10 @@ impl Discovery {
             #[cfg(feature = "security")]
             self.handle_volatile_message_secure_reader();
           }
+          SECURE_DISCOVERY_PARTICIPANT_DATA_TOKEN => {
+            #[cfg(feature = "security")]
+            self.handle_secure_participant_reader();
+          }
           SECURE_DISCOVERY_READER_DATA_TOKEN => {
             #[cfg(feature = "security")]
             self.handle_secure_subscription_reader(None);
@@ -1073,10 +1076,22 @@ impl Discovery {
         .writer
         .dispose(&Endpoint_GUID(endpoint_guid), None)
         .unwrap_or_else(|e| error!("Disposing local Writer: {e:?}"));
+      #[cfg(feature = "security")]
+      self
+        .dcps_publications_secure
+        .writer
+        .dispose(&Endpoint_GUID(endpoint_guid), None)
+        .unwrap_or_else(|e| error!("Disposing local Writer: {e:?}"));
     } else {
       // is reader
       self
         .dcps_subscription
+        .writer
+        .dispose(&Endpoint_GUID(endpoint_guid), None)
+        .unwrap_or_else(|e| error!("Disposing local Reader: {e:?}"));
+      #[cfg(feature = "security")]
+      self
+        .dcps_subscriptions_secure
         .writer
         .dispose(&Endpoint_GUID(endpoint_guid), None)
         .unwrap_or_else(|e| error!("Disposing local Reader: {e:?}"));
@@ -1096,6 +1111,12 @@ impl Discovery {
 
     self
       .dcps_participant
+      .writer
+      .dispose(&Participant_GUID(self.domain_participant.guid()), None)
+      .unwrap_or(());
+    #[cfg(feature = "security")]
+    self
+      .dcps_participant_secure
       .writer
       .dispose(&Participant_GUID(self.domain_participant.guid()), None)
       .unwrap_or(());
@@ -1334,6 +1355,11 @@ impl Discovery {
       5.0 * Duration::from(Self::SEND_PARTICIPANT_INFO_PERIOD),
     );
 
+    #[cfg(feature = "security")]
+    if let Some(security) = self.security_opt.as_ref() {
+      security.send_secure_participant_info(&self.dcps_participant_secure.writer, data.clone());
+    }
+
     self
       .dcps_participant
       .writer
@@ -1488,6 +1514,43 @@ impl Discovery {
   }
 
   #[cfg(feature = "security")]
+  pub fn handle_secure_participant_reader(&mut self) {
+    let sample_iter = match self.dcps_participant_secure.reader.into_iterator() {
+      Ok(iter) => iter,
+      Err(e) => {
+        error!("handle_secure_participant_reader: {e:?}");
+        return;
+      }
+    };
+
+    for sample in sample_iter {
+      let permission = if let Some(security) = self.security_opt.as_mut() {
+        security.secure_participant_read(
+          &sample,
+          &self.discovery_db,
+          &self.discovery_updated_sender,
+        )
+      } else {
+        debug!("In handle_secure_participant_reader even though security not enabled?");
+        return;
+      };
+
+      if permission == NormalDiscoveryPermission::Allow {
+        match sample {
+          Sample::Value(sec_data) => {
+            let participant_data = sec_data.participant_data;
+            self.process_discovered_participant_data(&participant_data);
+          }
+          // Sample::Dispose means that DomainParticipant was disposed
+          Sample::Dispose(participant_guid) => {
+            self.process_participant_dispose(participant_guid.0.prefix);
+          }
+        }
+      }
+    }
+  }
+
+  #[cfg(feature = "security")]
   pub fn handle_secure_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let sec_subs: Vec<Sample<SubscriptionBuiltinTopicDataSecure, GUID>> =
       match self.dcps_subscriptions_secure.reader.into_iterator() {
@@ -1528,7 +1591,7 @@ impl Discovery {
             });
           }
           Sample::Dispose(reader_guid) => {
-            info!("Dispose Reader {:?}", reader_guid);
+            info!("Secure Dispose Reader {:?}", reader_guid);
             discovery_db_write(&self.discovery_db).remove_topic_reader(reader_guid);
             self.send_discovery_notification(DiscoveryNotificationType::ReaderLost { reader_guid });
           }
@@ -1584,7 +1647,7 @@ impl Discovery {
             });
           }
           Sample::Dispose(writer_guid) => {
-            info!("Dispose Writer {:?}", writer_guid);
+            info!("Secure Dispose Writer {:?}", writer_guid);
             discovery_db_write(&self.discovery_db).remove_topic_writer(writer_guid);
             self.send_discovery_notification(DiscoveryNotificationType::WriterLost { writer_guid });
           }

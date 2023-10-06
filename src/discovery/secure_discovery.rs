@@ -29,9 +29,10 @@ use crate::{
     },
     security_error,
     security_plugins::SecurityPluginsHandle,
-    DataHolder, ParticipantGenericMessage, ParticipantSecurityInfo, ParticipantStatelessMessage,
-    ParticipantVolatileMessageSecure, PublicationBuiltinTopicDataSecure, SecurityError,
-    SecurityResult, SubscriptionBuiltinTopicDataSecure,
+    DataHolder, ParticipantBuiltinTopicDataSecure, ParticipantGenericMessage,
+    ParticipantSecurityInfo, ParticipantStatelessMessage, ParticipantVolatileMessageSecure,
+    PublicationBuiltinTopicDataSecure, SecurityError, SecurityResult,
+    SubscriptionBuiltinTopicDataSecure,
   },
   security_error, security_info, security_warn,
   serialization::pl_cdr_adapters::PlCdrSerialize,
@@ -44,7 +45,8 @@ use crate::{
 use super::{
   discovery::{DataWriterPlCdr, NormalDiscoveryPermission},
   discovery_db::{discovery_db_read, discovery_db_write, DiscoveryDB},
-  DiscoveredReaderData, DiscoveredWriterData, Participant_GUID, SpdpDiscoveredParticipantData,
+  spdp_participant_data, DiscoveredReaderData, DiscoveredWriterData, Participant_GUID,
+  SpdpDiscoveredParticipantData,
 };
 
 // Enum for authentication status of a remote participant
@@ -734,6 +736,58 @@ impl SecureDiscovery {
     }
   }
 
+  pub fn secure_participant_read(
+    &mut self,
+    ds: &with_key::Sample<
+      ParticipantBuiltinTopicDataSecure,
+      spdp_participant_data::Participant_GUID,
+    >,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+    _discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
+  ) -> NormalDiscoveryPermission {
+    // First check that the participant is authenticated (should be at this point)
+    let guidp = match ds {
+      with_key::Sample::Value(data) => data.participant_data.participant_guid.prefix,
+      with_key::Sample::Dispose(pguid) => pguid.0.prefix,
+    };
+
+    let auth_status = discovery_db_read(discovery_db).get_authentication_status(guidp);
+    if auth_status != Some(AuthenticationStatus::Authenticated) {
+      security_warn!(
+        "Received a DCPSParticipantsSecure message from a non-authenticated participant. Auth \
+         status: {:?}",
+        auth_status
+      );
+      return NormalDiscoveryPermission::Deny;
+    }
+
+    match ds {
+      with_key::Sample::Value(_data) => {
+        // TODO: do something with the IdentityStatusToken in the data?
+        NormalDiscoveryPermission::Allow
+      }
+      with_key::Sample::Dispose(_pguid) => {
+        // Always allow
+        NormalDiscoveryPermission::Allow
+      }
+    }
+  }
+
+  pub fn send_secure_participant_info(
+    &self,
+    secure_participant_writer: &DataWriterPlCdr<ParticipantBuiltinTopicDataSecure>,
+    participant_data: SpdpDiscoveredParticipantData,
+  ) {
+    let participant_secure_data = ParticipantBuiltinTopicDataSecure {
+      participant_data,
+      identity_status_token_opt: None, // Currently no status token sent
+    };
+
+    if let Err(e) = secure_participant_writer.write(participant_secure_data, None) {
+      error!("Publishing to ParticipantBuiltinTopicDataSecure failed: {e:?}");
+    }
+  }
+
   pub fn write_readers_info(
     &self,
     nonsecure_sub_writer: &DataWriterPlCdr<DiscoveredReaderData>,
@@ -759,8 +813,6 @@ impl SecureDiscovery {
             "Failed to write subscription to DCPSSubscriptionsSecure: {}",
             e
           );
-        } else {
-          info!("Sent DCPSSubscriptionsSecure message: {:?}", data);
         }
       } else {
         // Do a non-secure write
@@ -796,8 +848,6 @@ impl SecureDiscovery {
             "Failed to write publication to DCPSPublicationsSecure: {}",
             e
           );
-        } else {
-          info!("Sent DCPSPublicationsSecure message: {:?}", data);
         }
       } else {
         // Do a non-secure write
