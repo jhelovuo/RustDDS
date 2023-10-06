@@ -30,9 +30,10 @@ use crate::{
     security_error,
     security_plugins::SecurityPluginsHandle,
     DataHolder, ParticipantGenericMessage, ParticipantSecurityInfo, ParticipantStatelessMessage,
-    ParticipantVolatileMessageSecure, SecurityError, SecurityResult,
+    ParticipantVolatileMessageSecure, PublicationBuiltinTopicDataSecure, SecurityError,
+    SecurityResult, SubscriptionBuiltinTopicDataSecure,
   },
-  security_error, security_info,
+  security_error, security_info, security_warn,
   serialization::pl_cdr_adapters::PlCdrSerialize,
   structure::{
     entity::RTPSEntity,
@@ -41,7 +42,7 @@ use crate::{
   with_key, RepresentationIdentifier, SequenceNumber, GUID,
 };
 use super::{
-  discovery::NormalDiscoveryPermission,
+  discovery::{DataWriterPlCdr, NormalDiscoveryPermission},
   discovery_db::{discovery_db_read, discovery_db_write, DiscoveryDB},
   DiscoveredReaderData, DiscoveredWriterData, Participant_GUID, SpdpDiscoveredParticipantData,
 };
@@ -729,6 +730,316 @@ impl SecureDiscovery {
             NormalDiscoveryPermission::Deny
           }
         }
+      }
+    }
+  }
+
+  pub fn write_readers_info(
+    &self,
+    nonsecure_sub_writer: &DataWriterPlCdr<DiscoveredReaderData>,
+    secure_sub_writer: &DataWriterPlCdr<SubscriptionBuiltinTopicDataSecure>,
+    local_user_readers: &Vec<&DiscoveredReaderData>,
+  ) {
+    for data in local_user_readers {
+      // See if this subscription needs to be written to DCPSSubscriptionsSecure or
+      // the normal one
+      let do_secure_write = if let Some(sec_info) = data.subscription_topic_data.security_info() {
+        let sec_attributes = EndpointSecurityAttributes::from(sec_info.clone());
+        sec_attributes
+          .topic_security_attributes
+          .is_discovery_protected
+      } else {
+        false
+      };
+
+      if do_secure_write {
+        let sec_sub_data = SubscriptionBuiltinTopicDataSecure::from((*data).clone());
+        if let Err(e) = secure_sub_writer.write(sec_sub_data, None) {
+          error!(
+            "Failed to write subscription to DCPSSubscriptionsSecure: {}",
+            e
+          );
+        } else {
+          info!("Sent DCPSSubscriptionsSecure message: {:?}", data);
+        }
+      } else {
+        // Do a non-secure write
+        if let Err(e) = nonsecure_sub_writer.write((*data).clone(), None) {
+          error!("Failed to write subscription to DCPSSubscriptions: {}", e);
+        }
+      }
+    }
+  }
+
+  pub fn write_writers_info(
+    &self,
+    nonsecure_pub_writer: &DataWriterPlCdr<DiscoveredWriterData>,
+    secure_pub_writer: &DataWriterPlCdr<PublicationBuiltinTopicDataSecure>,
+    local_user_writers: &Vec<&DiscoveredWriterData>,
+  ) {
+    for data in local_user_writers {
+      // See if this publication needs to be written to DCPSPublicationsSecure or the
+      // normal one
+      let do_secure_write = if let Some(sec_info) = data.publication_topic_data.security_info() {
+        let sec_attributes = EndpointSecurityAttributes::from(sec_info.clone());
+        sec_attributes
+          .topic_security_attributes
+          .is_discovery_protected
+      } else {
+        false
+      };
+
+      if do_secure_write {
+        let sec_pub_data = PublicationBuiltinTopicDataSecure::from((*data).clone());
+        if let Err(e) = secure_pub_writer.write(sec_pub_data, None) {
+          error!(
+            "Failed to write publication to DCPSPublicationsSecure: {}",
+            e
+          );
+        } else {
+          info!("Sent DCPSPublicationsSecure message: {:?}", data);
+        }
+      } else {
+        // Do a non-secure write
+        if let Err(e) = nonsecure_pub_writer.write((*data).clone(), None) {
+          error!("Failed to write publication to DCPSPublications: {}", e);
+        }
+      }
+    }
+  }
+
+  pub fn check_secure_subscription_read(
+    &mut self,
+    sample: &with_key::Sample<SubscriptionBuiltinTopicDataSecure, GUID>,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) -> NormalDiscoveryPermission {
+    // First get topic name & participant guid
+    let (topic_name, participant_guidp) = match sample {
+      Sample::Value(sub_data) => (
+        sub_data
+          .discovered_reader_data
+          .subscription_topic_data
+          .topic_name()
+          .clone(),
+        sub_data
+          .discovered_reader_data
+          .reader_proxy
+          .remote_reader_guid
+          .prefix,
+      ),
+      Sample::Dispose(reader_guid) => {
+        if let Some(reader) = discovery_db_read(discovery_db).get_topic_reader(reader_guid) {
+          // We do know a reader with this guid
+          (
+            reader.subscription_topic_data.topic_name().clone(),
+            reader_guid.prefix,
+          )
+        } else {
+          // We do not now such a reader. Deny processing just in case.
+          return NormalDiscoveryPermission::Deny;
+        }
+      }
+    };
+
+    // Check that the participant is authenticated (should be since the sample came
+    // from a secured topic)
+    let auth_status = discovery_db_read(discovery_db).get_authentication_status(participant_guidp);
+    if auth_status != Some(AuthenticationStatus::Authenticated) {
+      security_warn!(
+        "DCPSSubscriptionsSecure data from non-authenticated participant {:?}",
+        participant_guidp
+      );
+      return NormalDiscoveryPermission::Deny;
+    }
+
+    // Get topic security attributes
+    let topic_sec_attributes = match self
+      .security_plugins
+      .get_plugins()
+      .get_topic_sec_attributes(participant_guidp, &topic_name)
+    {
+      Ok(attr) => attr,
+      Err(e) => {
+        security_error!(
+          "Failed to get topic security attributes: {}. Topic: {topic_name}",
+          e
+        );
+        return NormalDiscoveryPermission::Deny;
+      }
+    };
+
+    match sample {
+      Sample::Value(sub_data) => {
+        // Participant wants to subscribe to the topic
+        if topic_sec_attributes.is_read_protected {
+          // We need to check from access control
+          match self
+            .security_plugins
+            .get_plugins()
+            .check_remote_datareader_from_secure(participant_guidp, self.domain_id, sub_data)
+          {
+            Ok((check_passed, relay_only)) => {
+              if check_passed {
+                security_info!(
+                  "Access control check passed for authenticated participant {:?} to read topic \
+                   {topic_name}.",
+                  participant_guidp
+                );
+
+                if relay_only {
+                  self.relay_only_remote_readers.insert(
+                    sub_data
+                      .discovered_reader_data
+                      .reader_proxy
+                      .remote_reader_guid,
+                  );
+                }
+
+                NormalDiscoveryPermission::Allow
+              } else {
+                security_info!(
+                  "Access control check did not pass for authenticated participant {:?} to read \
+                   topic {topic_name}. Rejecting.",
+                  participant_guidp
+                );
+                NormalDiscoveryPermission::Deny
+              }
+            }
+            Err(e) => {
+              security_error!(
+                "Something went wrong in checking permissions of a remote datareader: {}. Topic: \
+                 {topic_name}",
+                e
+              );
+              NormalDiscoveryPermission::Deny
+            }
+          }
+        } else {
+          // Read is not protected. Allow.
+          security_info!(
+            "Authenticated participant {:?} wants to read unprotected topic {topic_name}. \
+             Allowing.",
+            participant_guidp
+          );
+          NormalDiscoveryPermission::Allow
+        }
+      }
+      Sample::Dispose(_reader_guid) => {
+        // Participant wants to dispose its reader. Allow
+        NormalDiscoveryPermission::Allow
+      }
+    }
+  }
+
+  pub fn check_secure_publication_read(
+    &mut self,
+    sample: &with_key::Sample<PublicationBuiltinTopicDataSecure, GUID>,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) -> NormalDiscoveryPermission {
+    // First get topic name & participant guid
+    let (topic_name, participant_guidp) = match sample {
+      Sample::Value(pub_data) => (
+        pub_data
+          .discovered_writer_data
+          .publication_topic_data
+          .topic_name()
+          .clone(),
+        pub_data
+          .discovered_writer_data
+          .writer_proxy
+          .remote_writer_guid
+          .prefix,
+      ),
+      Sample::Dispose(writer_guid) => {
+        if let Some(writer) = discovery_db_read(discovery_db).get_topic_writer(writer_guid) {
+          // We do know a writer with this guid
+          (
+            writer.publication_topic_data.topic_name().clone(),
+            writer_guid.prefix,
+          )
+        } else {
+          // We do not now such a writer. Deny processing just in case.
+          return NormalDiscoveryPermission::Deny;
+        }
+      }
+    };
+
+    // Check that the participant is authenticated (should be since the sample came
+    // from a secured topic)
+    let auth_status = discovery_db_read(discovery_db).get_authentication_status(participant_guidp);
+    if auth_status != Some(AuthenticationStatus::Authenticated) {
+      security_warn!(
+        "DCPSPublicationsSecure data from non-authenticated participant {:?}",
+        participant_guidp
+      );
+      return NormalDiscoveryPermission::Deny;
+    }
+
+    // Get topic security attributes
+    let topic_sec_attributes = match self
+      .security_plugins
+      .get_plugins()
+      .get_topic_sec_attributes(participant_guidp, &topic_name)
+    {
+      Ok(attr) => attr,
+      Err(e) => {
+        security_error!(
+          "Failed to get topic security attributes: {}. Topic: {topic_name}",
+          e
+        );
+        return NormalDiscoveryPermission::Deny;
+      }
+    };
+
+    match sample {
+      Sample::Value(pub_data) => {
+        // Participant wants to publish to the topic
+        if topic_sec_attributes.is_write_protected {
+          // We need to check from access control
+          match self
+            .security_plugins
+            .get_plugins()
+            .check_remote_datawriter_from_secure(participant_guidp, self.domain_id, pub_data)
+          {
+            Ok(check_passed) => {
+              if check_passed {
+                security_info!(
+                  "Access control check passed for authenticated participant {:?} to publish to \
+                   topic {topic_name}.",
+                  participant_guidp
+                );
+                NormalDiscoveryPermission::Allow
+              } else {
+                security_info!(
+                  "Access control check did not pass for authenticated participant {:?} to \
+                   publish to topic {topic_name}. Rejecting.",
+                  participant_guidp
+                );
+                NormalDiscoveryPermission::Deny
+              }
+            }
+            Err(e) => {
+              security_error!(
+                "Something went wrong in checking permissions of a remote DataWriter: {}. Topic: \
+                 {topic_name}",
+                e
+              );
+              NormalDiscoveryPermission::Deny
+            }
+          }
+        } else {
+          // Write is not protected. Allow.
+          security_info!(
+            "Authenticated participant {:?} wants to publish to unprotected topic {topic_name}. \
+             Allowing.",
+            participant_guidp
+          );
+          NormalDiscoveryPermission::Allow
+        }
+      }
+      Sample::Dispose(_writer_guid) => {
+        // Participant wants to dispose its writer. Allow
+        NormalDiscoveryPermission::Allow
       }
     }
   }

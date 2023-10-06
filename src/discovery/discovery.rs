@@ -98,8 +98,8 @@ impl LivelinessState {
 // TODO: Refactor this. Maybe the repeating groups of "topic", "reader",
 // "writer", "timer" below could be abstracted to a common struct:
 
-type DataReaderPlCdr<D> = DataReader<D, PlCdrDeserializerAdapter<D>>;
-type DataWriterPlCdr<D> = DataWriter<D, PlCdrSerializerAdapter<D>>;
+pub(super) type DataReaderPlCdr<D> = DataReader<D, PlCdrDeserializerAdapter<D>>;
+pub(super) type DataWriterPlCdr<D> = DataWriter<D, PlCdrSerializerAdapter<D>>;
 
 mod with_key {
   use serde::{de::DeserializeOwned, Serialize};
@@ -236,9 +236,7 @@ pub(crate) struct Discovery {
   dcps_participant_message_secure: with_key::DiscoveryTopicCDR<ParticipantMessageData>, /* CDR, not PL_CDR */
 
   // DCPSParticipantStatelessMessageSecure
-  // 77.4.3 New DCPSParticipantStatelessMessage builtin Topic
-  // !!! TODO: By the spec, this topic must use _stateless_ reader and writer, which are
-  // insensitive to sequence number attacks.
+  // 7.4.3 New DCPSParticipantStatelessMessage builtin Topic
   #[cfg(feature = "security")]
   dcps_participant_stateless_message: no_key::DiscoveryTopicCDR<ParticipantStatelessMessage>,
 
@@ -278,22 +276,6 @@ impl Discovery {
     #[cfg(feature = "security")]
     property: None,
   };
-
-  // pub(crate) const PARTICIPANT_STATELESS_MESSAGE_QOS: QosPolicies = QosPolicies
-  // {   durability: None,
-  //   presentation: None,
-  //   deadline: None,
-  //   latency_budget: None,
-  //   ownership: None,
-  //   liveliness: None,
-  //   time_based_filter: None,
-  //   reliability: Some(Reliability::BestEffort), // Important (see Security spec
-  // section 7.3.4)   destination_order: None,
-  //   history: Some(History::KeepLast { depth: 1 }),
-  //   resource_limits: None,
-  //   lifespan: None,
-  //   #[cfg(feature="security")] property: None,
-  // };
 
   #[allow(clippy::too_many_arguments)]
   pub fn new(
@@ -919,6 +901,14 @@ impl Discovery {
             #[cfg(feature = "security")]
             self.handle_volatile_message_secure_reader();
           }
+          SECURE_DISCOVERY_READER_DATA_TOKEN => {
+            #[cfg(feature = "security")]
+            self.handle_secure_subscription_reader(None);
+          }
+          SECURE_DISCOVERY_WRITER_DATA_TOKEN => {
+            #[cfg(feature = "security")]
+            self.handle_secure_publication_reader(None);
+          }
           SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN
           | SECURE_DISCOVERY_SEND_READERS_INFO_TOKEN
           | SECURE_DISCOVERY_SEND_WRITERS_INFO_TOKEN
@@ -1487,6 +1477,112 @@ impl Discovery {
   }
 
   #[cfg(feature = "security")]
+  pub fn handle_secure_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
+    let sec_subs: Vec<Sample<SubscriptionBuiltinTopicDataSecure, GUID>> =
+      match self.dcps_subscriptions_secure.reader.into_iterator() {
+        Ok(ds) => ds
+          .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
+          .filter(|d|
+              // If a participant was specified, we must match its GUID prefix.
+              match (read_history, d) {
+                (None, _) => true, // Not asked to filter by participant
+                (Some(participant_to_update), Sample::Value(sec_sub)) =>
+                sec_sub.discovered_reader_data.reader_proxy.remote_reader_guid.prefix == participant_to_update,
+                (Some(participant_to_update), Sample::Dispose(guid)) =>
+                  guid.prefix == participant_to_update,
+              })
+          .collect(),
+        Err(e) => {
+          error!("handle_secure_subscription_reader: {e:?}");
+          return;
+        }
+      };
+
+    for sec_sub_sample in sec_subs {
+      let permission = if let Some(security) = self.security_opt.as_mut() {
+        security.check_secure_subscription_read(&sec_sub_sample, &self.discovery_db)
+      } else {
+        debug!("In handle_secure_subscription_reader even though security not enabled?");
+        return;
+      };
+
+      if permission == NormalDiscoveryPermission::Allow {
+        match sec_sub_sample {
+          Sample::Value(sec_sub) => {
+            // Currently we use only the DiscoveredReaderData field, no DataTag
+            let drd_from_topic = sec_sub.discovered_reader_data;
+            let drd = discovery_db_write(&self.discovery_db).update_subscription(&drd_from_topic);
+            self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
+              discovered_reader_data: drd,
+            });
+          }
+          Sample::Dispose(reader_guid) => {
+            info!("Dispose Reader {:?}", reader_guid);
+            discovery_db_write(&self.discovery_db).remove_topic_reader(reader_guid);
+            self.send_discovery_notification(DiscoveryNotificationType::ReaderLost { reader_guid });
+          }
+        }
+      }
+    }
+  }
+
+  #[cfg(feature = "security")]
+  pub fn handle_secure_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
+    let sec_pubs: Vec<Sample<PublicationBuiltinTopicDataSecure, GUID>> =
+      match self.dcps_publications_secure.reader.into_iterator() {
+        Ok(ds) => ds
+          .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
+          // If a participant was specified, we must match its GUID prefix.
+          .filter(|d| match (read_history, d) {
+            (None, _) => true, // Not asked to filter by participant
+            (Some(participant_to_update), Sample::Value(sec_pub)) => {
+              sec_pub
+                .discovered_writer_data
+                .writer_proxy
+                .remote_writer_guid
+                .prefix
+                == participant_to_update
+            }
+            (Some(participant_to_update), Sample::Dispose(guid)) => {
+              guid.prefix == participant_to_update
+            }
+          })
+          .collect(),
+        Err(e) => {
+          error!("handle_secure_publication_reader: {e:?}");
+          return;
+        }
+      };
+
+    for sec_pub_sample in sec_pubs {
+      let permission = if let Some(security) = self.security_opt.as_mut() {
+        security.check_secure_publication_read(&sec_pub_sample, &self.discovery_db)
+      } else {
+        debug!("In handle_secure_publication_reader even though security not enabled?");
+        return;
+      };
+
+      if permission == NormalDiscoveryPermission::Allow {
+        match sec_pub_sample {
+          Sample::Value(se_pub) => {
+            // Currently we use only the DiscoveredWriterData field, no DataTag
+            let dwd_from_topic = se_pub.discovered_writer_data;
+            let dwd = discovery_db_write(&self.discovery_db).update_publication(&dwd_from_topic);
+            self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
+              discovered_writer_data: dwd,
+            });
+          }
+          Sample::Dispose(writer_guid) => {
+            info!("Dispose Writer {:?}", writer_guid);
+            discovery_db_write(&self.discovery_db).remove_topic_writer(writer_guid);
+            self.send_discovery_notification(DiscoveryNotificationType::WriterLost { writer_guid });
+          }
+        }
+      }
+    }
+  }
+
+  #[cfg(feature = "security")]
   fn on_authentication_message_resend_triggered(&mut self) {
     if let Some(security) = self.security_opt.as_mut() {
       // Security is enabled
@@ -1515,48 +1611,92 @@ impl Discovery {
 
   pub fn write_readers_info(&self) {
     let db = discovery_db_read(&self.discovery_db);
-    let local_user_readers = db.get_all_local_topic_readers().filter(|p| {
-      p.reader_proxy
-        .remote_reader_guid
-        .entity_id
-        .kind()
-        .is_user_defined()
-    });
-    let mut count = 0;
-    for data in local_user_readers {
-      match self.dcps_subscription.writer.write(data.clone(), None) {
-        Ok(_) => {
-          count += 1;
+    let local_user_readers: Vec<&DiscoveredReaderData> = db
+      .get_all_local_topic_readers()
+      .filter(|p| {
+        p.reader_proxy
+          .remote_reader_guid
+          .entity_id
+          .kind()
+          .is_user_defined()
+      })
+      .collect();
+
+    #[cfg(not(feature = "security"))]
+    let do_nonsecure_write = true;
+
+    #[cfg(feature = "security")]
+    let do_nonsecure_write = if let Some(security) = self.security_opt.as_ref() {
+      // Write subscriptions in Secure discovery
+      security.write_readers_info(
+        &self.dcps_subscription.writer,
+        &self.dcps_subscriptions_secure.writer,
+        &local_user_readers,
+      );
+      false
+    } else {
+      true // No security configured
+    };
+
+    if do_nonsecure_write {
+      let mut count = 0;
+      for data in local_user_readers {
+        match self.dcps_subscription.writer.write(data.clone(), None) {
+          Ok(_) => {
+            count += 1;
+          }
+          Err(e) => error!("Unable to write new readers info. {e:?}"),
         }
-        Err(e) => error!("Unable to write new readers info. {e:?}"),
       }
+      debug!("Announced {} readers", count);
     }
-    debug!("Announced {} readers", count);
   }
 
   pub fn write_writers_info(&self) {
-    let db = discovery_db_read(&self.discovery_db);
-    let local_user_writers = db.get_all_local_topic_writers().filter(|p| {
-      p.writer_proxy
-        .remote_writer_guid
-        .entity_id
-        .kind()
-        .is_user_defined()
-    });
-    let mut count = 0;
-    for data in local_user_writers {
-      if self
-        .dcps_publication
-        .writer
-        .write(data.clone(), None)
-        .is_err()
-      {
-        error!("Unable to write new writers info.");
-      } else {
-        count += 1;
+    let db: std::sync::RwLockReadGuard<'_, DiscoveryDB> = discovery_db_read(&self.discovery_db);
+    let local_user_writers: Vec<&DiscoveredWriterData> = db
+      .get_all_local_topic_writers()
+      .filter(|p| {
+        p.writer_proxy
+          .remote_writer_guid
+          .entity_id
+          .kind()
+          .is_user_defined()
+      })
+      .collect();
+
+    #[cfg(not(feature = "security"))]
+    let do_nonsecure_write = true;
+
+    #[cfg(feature = "security")]
+    let do_nonsecure_write = if let Some(security) = self.security_opt.as_ref() {
+      // Write publications in Secure discovery
+      security.write_writers_info(
+        &self.dcps_publication.writer,
+        &self.dcps_publications_secure.writer,
+        &local_user_writers,
+      );
+      false
+    } else {
+      true // No security configured
+    };
+
+    if do_nonsecure_write {
+      let mut count = 0;
+      for data in local_user_writers {
+        if self
+          .dcps_publication
+          .writer
+          .write(data.clone(), None)
+          .is_err()
+        {
+          error!("Unable to write new writers info.");
+        } else {
+          count += 1;
+        }
       }
+      debug!("Announced {} writers", count);
     }
-    debug!("Announced {} writers", count);
   }
 
   pub fn write_topic_info(&self) {

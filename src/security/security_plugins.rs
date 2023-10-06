@@ -602,6 +602,20 @@ impl SecurityPlugins {
       .check_remote_datareader(handle, domain_id, &secure_sub_data)
   }
 
+  // This function is called when DataReaders from secure discovery
+  // need to be checked
+  pub fn check_remote_datareader_from_secure(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    sub_data: &SubscriptionBuiltinTopicDataSecure,
+  ) -> SecurityResult<(bool, bool)> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    self
+      .access
+      .check_remote_datareader(handle, domain_id, sub_data)
+  }
+
   // This function is called when DataWriters from non-secure discovery
   // need to be checked
   pub fn check_remote_datawriter_from_nonsecure(
@@ -617,6 +631,20 @@ impl SecurityPlugins {
     self
       .access
       .check_remote_datawriter(handle, domain_id, &secure_pub_data)
+  }
+
+  // This function is called when DataWriters from secure discovery
+  // need to be checked
+  pub fn check_remote_datawriter_from_secure(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    pub_data: &PublicationBuiltinTopicDataSecure,
+  ) -> SecurityResult<bool> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    self
+      .access
+      .check_remote_datawriter(handle, domain_id, pub_data)
   }
 
   pub fn get_permissions_token(
