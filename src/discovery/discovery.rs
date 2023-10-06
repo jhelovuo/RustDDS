@@ -220,12 +220,10 @@ pub(crate) struct Discovery {
   dcps_participant_secure: with_key::DiscoveryTopicPlCdr<ParticipantBuiltinTopicDataSecure>,
 
   // DCPSPublicationsSecure - 7.4.1.7 New DCPSPublicationsSecure Builtin Topic
-  #[allow(dead_code)] // TODO: Remove when handlers implemented
   #[cfg(feature = "security")]
   dcps_publications_secure: with_key::DiscoveryTopicPlCdr<PublicationBuiltinTopicDataSecure>,
 
   // DCPSSubscriptionsSecure - 7.4.1.8 New DCPSSubscriptionsSecure Builtin Topic
-  #[allow(dead_code)] // TODO: Remove when handlers implemented
   #[cfg(feature = "security")]
   dcps_subscriptions_secure: with_key::DiscoveryTopicPlCdr<SubscriptionBuiltinTopicDataSecure>,
 
