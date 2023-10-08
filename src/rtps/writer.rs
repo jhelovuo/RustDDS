@@ -1013,11 +1013,7 @@ impl Writer {
     // Note: The reader_proxy is now removed from readers map
     let reader_guid = reader_proxy.remote_reader_guid;
     let mut partial_message = MessageBuilder::new()
-      .dst_submessage(self.endianness, reader_guid.prefix)
-      .ts_msg(self.endianness, Some(Timestamp::now()));
-    // TODO: This timestamp should probably not be
-    // the current (retransmit) time, but the initial sample production timestamp,
-    // i.e. should be read from DDSCache (and be implemented there)
+      .dst_submessage(self.endianness, reader_guid.prefix);
     debug!(
       "Repair data send due to ACKNACK. ReaderProxy Unsent changes: {:?}",
       reader_proxy.unsent_changes_debug()
@@ -1035,6 +1031,14 @@ impl Writer {
         if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp) {
           // CacheChange found, check if we can send it in one piece (i.e. DATA)
           if cache_change.data_value.payload_size() <= self.data_max_size_serialized {
+            // if there was a source timestamp, add that
+            let ts = cache_change.write_options.source_timestamp();
+            partial_message = 
+              if ts.is_some() {
+                partial_message.ts_msg(self.endianness, ts)
+              } else {
+                partial_message
+              };
             // construct DATA submessage
             partial_message = partial_message.data_msg(
               cache_change,
