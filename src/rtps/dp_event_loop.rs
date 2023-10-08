@@ -36,10 +36,8 @@ use crate::{
 use crate::discovery::secure_discovery::AuthenticationStatus;
 #[cfg(feature = "security")]
 use crate::security::security_plugins::SecurityPluginsHandle;
-
 #[cfg(not(feature = "security"))]
 use crate::no_security::security_plugins::SecurityPluginsHandle;
-
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,

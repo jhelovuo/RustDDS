@@ -45,7 +45,7 @@ impl SequenceNumber {
   }
 
   pub const fn plus_1(&self) -> Self {
-    SequenceNumber( self.0 + 1 )
+    SequenceNumber(self.0 + 1)
   }
 }
 
@@ -78,7 +78,6 @@ impl From<SequenceNumber> for i64 {
     sequence_number.0
   }
 }
-
 
 // ---------------------------------------
 
@@ -404,7 +403,7 @@ where
           end
         };
         // sanity ok. Now do the actual work.
-        let num_bits = i64::from( end - base + N::from(1) );
+        let num_bits = i64::from(end - base + N::from(1));
         let mut sns = Self::new(base, num_bits as u32);
         for s in set.iter().filter(|s| base <= **s && **s <= end) {
           sns.insert(*s);
