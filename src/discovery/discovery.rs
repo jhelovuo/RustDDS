@@ -824,7 +824,7 @@ impl Discovery {
               //.topic_info_send_timer
               .set_timeout(Self::SEND_TOPIC_INFO_PERIOD, ());
           }
-          DISCOVERY_PARTICIPANT_MESSAGE_TOKEN => {
+          DISCOVERY_PARTICIPANT_MESSAGE_TOKEN | P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TOKEN => {
             self.handle_participant_message_reader();
           }
           DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN => {
@@ -1320,29 +1320,44 @@ impl Discovery {
   // These messages are for updating participant liveliness
   // The protocol distinguishes between automatic (by DDS library)
   // and manual (by by application, via DDS API call) liveness
-  // TODO: rewrite this function according to the pattern above
   pub fn handle_participant_message_reader(&mut self) {
-    let participant_messages: Option<Vec<ParticipantMessageData>> = match self
+    // First read from nonsecure reader
+    let mut samples = match self
       .dcps_participant_message
       .reader
-      .take(100, ReadCondition::any())
+      .take(usize::MAX, ReadCondition::any())
     {
-      Ok(msgs) => Some(
-        msgs
-          .into_iter()
-          .filter_map(|p| p.value().clone().value())
-          .collect(),
-      ),
-      _ => None,
+      Ok(nonsecure_samples) => nonsecure_samples,
+      Err(e) => {
+        error!("handle_participant_message_reader: {e:?}");
+        return;
+      }
     };
 
-    let msgs = match participant_messages {
-      Some(d) => d,
-      None => return,
+    // Then from secure reader if needed
+    #[cfg(not(feature = "security"))]
+    let mut secure_samples = vec![];
+    #[cfg(feature = "security")]
+    let mut secure_samples = match self
+      .dcps_participant_message_secure
+      .reader
+      .take(usize::MAX, ReadCondition::any())
+    {
+      Ok(secure_samples) => secure_samples,
+      Err(e) => {
+        error!("Secure handle_participant_message_reader: {e:?}");
+        return;
+      }
     };
+
+    samples.append(&mut secure_samples);
+
+    let msgs = samples
+      .into_iter()
+      .filter_map(|p| p.value().clone().value());
 
     let mut db = discovery_db_write(&self.discovery_db);
-    for msg in msgs.into_iter() {
+    for msg in msgs {
       db.update_lease_duration(&msg);
     }
   }
@@ -1391,6 +1406,8 @@ impl Discovery {
 
     let timenow = Timestamp::now();
 
+    let mut messages_to_be_sent: Vec<ParticipantMessageData> = vec![];
+
     // Send Automatic liveness update if needed
     if let Some(min_auto_duration) = min_automatic_lease_duration_opt {
       let time_since_last_auto_update =
@@ -1404,19 +1421,12 @@ impl Discovery {
       // We choose to send a new liveliness message if longer than half of the min
       // auto duration has elapsed since last message
       if time_since_last_auto_update > min_auto_duration / 2 {
-        let pp = ParticipantMessageData {
+        let msg = ParticipantMessageData {
           guid: self.domain_participant.guid_prefix(),
           kind: ParticipantMessageDataKind::AUTOMATIC_LIVELINESS_UPDATE,
           data: Vec::new(),
         };
-        match self.dcps_participant_message.writer.write(pp, None) {
-          Ok(_) => (),
-          Err(e) => {
-            error!("Failed to write ParticipantMessageData auto. {e:?}");
-            return;
-          }
-        }
-        self.liveliness_state.last_auto_update = timenow;
+        messages_to_be_sent.push(msg);
       }
     }
 
@@ -1431,20 +1441,49 @@ impl Discovery {
       .liveliness_state
       .manual_participant_liveness_refresh_requested
     {
-      let pp = ParticipantMessageData {
+      let msg = ParticipantMessageData {
         guid: self.domain_participant.guid_prefix(),
         kind: ParticipantMessageDataKind::MANUAL_LIVELINESS_UPDATE,
         data: Vec::new(),
       };
-      match self.dcps_participant_message.writer.write(pp, None) {
+      messages_to_be_sent.push(msg);
+    }
+
+    for msg in messages_to_be_sent {
+      let msg_kind = msg.kind;
+
+      #[cfg(not(feature = "security"))]
+      let write_result = self.dcps_participant_message.writer.write(msg, None);
+
+      #[cfg(feature = "security")]
+      let write_result = if let Some(security) = self.security_opt.as_ref() {
+        security.write_liveness_message(
+          &self.dcps_participant_message_secure.writer,
+          &self.dcps_participant_message.writer,
+          msg,
+        )
+      } else {
+        // No security enabled
+        self.dcps_participant_message.writer.write(msg, None)
+      };
+
+      match write_result {
         Ok(_) => {
-          // We delivered the request
-          self
-            .liveliness_state
-            .manual_participant_liveness_refresh_requested = false;
+          match msg_kind {
+            ParticipantMessageDataKind::AUTOMATIC_LIVELINESS_UPDATE => {
+              self.liveliness_state.last_auto_update = timenow;
+            }
+            ParticipantMessageDataKind::MANUAL_LIVELINESS_UPDATE => {
+              // We delivered what was requested
+              self
+                .liveliness_state
+                .manual_participant_liveness_refresh_requested = false;
+            }
+            _ => (),
+          }
         }
         Err(e) => {
-          error!("Failed to writer ParticipantMessageData manual. {e:?}");
+          error!("Failed to writer ParticipantMessageData. {e:?}");
         }
       }
     }

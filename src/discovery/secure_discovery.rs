@@ -12,6 +12,7 @@ use crate::{
     no_key,
     participant::DomainParticipantWeak,
     with_key::{DataSample, Sample, WriteOptionsBuilder},
+    WriteError,
   },
   qos, rpc,
   rtps::constant::{
@@ -40,13 +41,14 @@ use crate::{
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix},
   },
-  with_key, RepresentationIdentifier, SequenceNumber, GUID,
+  with_key::{self, DataWriterCdr},
+  RepresentationIdentifier, SequenceNumber, GUID,
 };
 use super::{
   discovery::{DataWriterPlCdr, NormalDiscoveryPermission},
   discovery_db::{discovery_db_read, discovery_db_write, DiscoveryDB},
-  spdp_participant_data, DiscoveredReaderData, DiscoveredWriterData, Participant_GUID,
-  SpdpDiscoveredParticipantData,
+  spdp_participant_data, DiscoveredReaderData, DiscoveredWriterData, ParticipantMessageData,
+  Participant_GUID, SpdpDiscoveredParticipantData,
 };
 
 // Enum for authentication status of a remote participant
@@ -855,6 +857,19 @@ impl SecureDiscovery {
           error!("Failed to write publication to DCPSPublications: {}", e);
         }
       }
+    }
+  }
+
+  pub fn write_liveness_message(
+    &self,
+    secure_writer: &DataWriterCdr<ParticipantMessageData>,
+    nonsecure_writer: &DataWriterCdr<ParticipantMessageData>,
+    msg: ParticipantMessageData,
+  ) -> Result<(), WriteError<ParticipantMessageData>> {
+    if self.local_dp_sec_attributes.is_liveliness_protected {
+      secure_writer.write(msg, None)
+    } else {
+      nonsecure_writer.write(msg, None)
     }
   }
 
