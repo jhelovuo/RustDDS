@@ -84,14 +84,14 @@ pub enum DiscoveryCommand {
 
 pub struct LivelinessState {
   last_auto_update: Timestamp,
-  last_manual_participant_update: Timestamp,
+  manual_participant_liveness_refresh_requested: bool,
 }
 
 impl LivelinessState {
   pub fn new() -> Self {
     Self {
       last_auto_update: Timestamp::now(),
-      last_manual_participant_update: Timestamp::now(),
+      manual_participant_liveness_refresh_requested: false,
     }
   }
 }
@@ -714,7 +714,9 @@ impl Discovery {
                   discovery_db_write(&self.discovery_db).remove_local_topic_reader(guid);
                 }
                 DiscoveryCommand::ManualAssertLiveliness => {
-                  self.liveliness_state.last_manual_participant_update = Timestamp::now();
+                  self
+                    .liveliness_state
+                    .manual_participant_liveness_refresh_requested = true;
                 }
                 DiscoveryCommand::AssertTopicLiveliness {
                   writer_guid,
@@ -1369,98 +1371,82 @@ impl Discovery {
       });
   }
 
-  // TODO: Explain what happens here and by what logic
   pub fn write_participant_message(&mut self) {
-    let writer_liveliness: Vec<Liveliness> = discovery_db_read(&self.discovery_db)
-      .get_all_local_topic_writers()
-      .filter_map(|p| {
-        let liveliness = match p.publication_topic_data.liveliness {
-          Some(lv) => lv,
-          None => return None,
-        };
+    // Inspect if we need to send liveness messages
+    // See 8.4.13.5 "Implementing Writer Liveliness Protocol .." in the RPTS spec
 
-        Some(liveliness)
-      })
+    // Dig out the smallest lease duration for writers with Automatic liveliness QoS
+    let writer_livelinesses: Vec<Liveliness> = discovery_db_read(&self.discovery_db)
+      .get_all_local_topic_writers()
+      .filter_map(|p| p.publication_topic_data.liveliness)
       .collect();
 
-    let (automatic, manual): (Vec<&Liveliness>, Vec<&Liveliness>) =
-      writer_liveliness.iter().partition(|p| match p {
-        Liveliness::Automatic { lease_duration: _ } => true,
-        Liveliness::ManualByParticipant { lease_duration: _ } => false,
-        Liveliness::ManualByTopic { lease_duration: _ } => false,
-      });
+    let min_automatic_lease_duration_opt = writer_livelinesses
+      .iter()
+      .filter_map(|liveliness| match liveliness {
+        Liveliness::Automatic { lease_duration } => Some(*lease_duration),
+        _other => None,
+      })
+      .min();
 
-    let (manual_by_participant, _manual_by_topic): (Vec<&Liveliness>, Vec<&Liveliness>) =
-      manual.iter().partition(|p| match p {
-        Liveliness::Automatic { lease_duration: _ } => false,
-        Liveliness::ManualByParticipant { lease_duration: _ } => true,
-        Liveliness::ManualByTopic { lease_duration: _ } => false,
-      });
+    let timenow = Timestamp::now();
 
-    let inow = Timestamp::now();
-
-    // Automatic
-    {
-      let current_duration = inow.duration_since(self.liveliness_state.last_auto_update) / 3;
-      let min_automatic = automatic
-        .iter()
-        .map(|lv| match lv {
-          Liveliness::Automatic { lease_duration }
-          | Liveliness::ManualByParticipant { lease_duration }
-          | Liveliness::ManualByTopic { lease_duration } => lease_duration,
-        })
-        .min();
+    // Send Automatic liveness update if needed
+    if let Some(min_auto_duration) = min_automatic_lease_duration_opt {
+      let time_since_last_auto_update =
+        timenow.duration_since(self.liveliness_state.last_auto_update);
       trace!(
-        "Current auto duration {:?}. Min auto duration {:?}",
-        current_duration,
-        min_automatic
+        "time_since_last_auto_update: {:?}, min_auto_duration {:?}",
+        time_since_last_auto_update,
+        min_auto_duration
       );
-      if let Some(&mm) = min_automatic {
-        if current_duration > mm {
-          let pp = ParticipantMessageData {
-            guid: self.domain_participant.guid_prefix(),
-            kind: ParticipantMessageDataKind::AUTOMATIC_LIVELINESS_UPDATE,
-            data: Vec::new(),
-          };
-          match self.dcps_participant_message.writer.write(pp, None) {
-            Ok(_) => (),
-            Err(e) => {
-              error!("Failed to write ParticipantMessageData auto. {e:?}");
-              return;
-            }
+
+      // We choose to send a new liveliness message if longer than half of the min
+      // auto duration has elapsed since last message
+      if time_since_last_auto_update > min_auto_duration / 2 {
+        let pp = ParticipantMessageData {
+          guid: self.domain_participant.guid_prefix(),
+          kind: ParticipantMessageDataKind::AUTOMATIC_LIVELINESS_UPDATE,
+          data: Vec::new(),
+        };
+        match self.dcps_participant_message.writer.write(pp, None) {
+          Ok(_) => (),
+          Err(e) => {
+            error!("Failed to write ParticipantMessageData auto. {e:?}");
+            return;
           }
-          self.liveliness_state.last_auto_update = inow;
         }
-      };
+        self.liveliness_state.last_auto_update = timenow;
+      }
     }
 
-    // Manual By Participant
+    // Send ManualByParticipant liveliness update if someone has requested us to do
+    // so.
+    // Note: According to the RTPS spec (8.7.2.2.3 LIVELINESS) the interval at which
+    // we check if we need to send a manual liveness update should depend on the
+    // lease durations of writers with ManualByParticipant liveness QoS.
+    // Now we just check this at the same interval as with Automatic liveness.
+    // So TODO if needed: comply with the spec.
+    if self
+      .liveliness_state
+      .manual_participant_liveness_refresh_requested
     {
-      let current_duration =
-        inow.duration_since(self.liveliness_state.last_manual_participant_update) / 3;
-      let min_manual_participant = manual_by_participant
-        .iter()
-        .map(|lv| match lv {
-          Liveliness::Automatic { lease_duration }
-          | Liveliness::ManualByParticipant { lease_duration }
-          | Liveliness::ManualByTopic { lease_duration } => lease_duration,
-        })
-        .min();
-      if let Some(&dur) = min_manual_participant {
-        if current_duration > dur {
-          let pp = ParticipantMessageData {
-            guid: self.domain_participant.guid_prefix(),
-            kind: ParticipantMessageDataKind::MANUAL_LIVELINESS_UPDATE,
-            data: Vec::new(),
-          };
-          match self.dcps_participant_message.writer.write(pp, None) {
-            Ok(_) => (),
-            Err(e) => {
-              error!("Failed to writer ParticipantMessageData manual. {e:?}");
-            }
-          }
-        }
+      let pp = ParticipantMessageData {
+        guid: self.domain_participant.guid_prefix(),
+        kind: ParticipantMessageDataKind::MANUAL_LIVELINESS_UPDATE,
+        data: Vec::new(),
       };
+      match self.dcps_participant_message.writer.write(pp, None) {
+        Ok(_) => {
+          // We delivered the request
+          self
+            .liveliness_state
+            .manual_participant_liveness_refresh_requested = false;
+        }
+        Err(e) => {
+          error!("Failed to writer ParticipantMessageData manual. {e:?}");
+        }
+      }
     }
   }
 
