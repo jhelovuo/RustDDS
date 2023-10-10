@@ -229,7 +229,6 @@ pub(crate) struct Discovery {
 
   // DCPSParticipantMessageSecure - used by participants to communicate secure liveness
   // 7.4.2 New DCPSParticipantMessageSecure builtin Topic
-  #[allow(dead_code)] // TODO: Remove when handlers implemented
   #[cfg(feature = "security")]
   dcps_participant_message_secure: with_key::DiscoveryTopicCDR<ParticipantMessageData>, /* CDR, not PL_CDR */
 
