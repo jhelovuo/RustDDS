@@ -8,7 +8,7 @@ use log::{debug, error};
 use speedy::Readable;
 
 use crate::{
-  discovery::{DiscoveredReaderData, DiscoveredWriterData},
+  discovery::{DiscoveredReaderData, DiscoveredWriterData, TopicBuiltinTopicData},
   messages::submessages::{
     elements::{
       crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
@@ -645,6 +645,18 @@ impl SecurityPlugins {
     self
       .access
       .check_remote_datawriter(handle, domain_id, pub_data)
+  }
+
+  pub fn check_remote_topic(
+    &self,
+    participant_guidp: GuidPrefix,
+    domain_id: u16,
+    topic_data: &TopicBuiltinTopicData,
+  ) -> SecurityResult<bool> {
+    let handle = self.get_permissions_handle(&participant_guidp)?;
+    self
+      .access
+      .check_remote_topic(handle, domain_id, topic_data)
   }
 
   pub fn get_permissions_token(

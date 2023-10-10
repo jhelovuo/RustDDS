@@ -47,8 +47,8 @@ use crate::{
 use super::{
   discovery::{DataWriterPlCdr, NormalDiscoveryPermission},
   discovery_db::{discovery_db_read, discovery_db_write, DiscoveryDB},
-  spdp_participant_data, DiscoveredReaderData, DiscoveredWriterData, ParticipantMessageData,
-  Participant_GUID, SpdpDiscoveredParticipantData,
+  spdp_participant_data, DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData,
+  ParticipantMessageData, Participant_GUID, SpdpDiscoveredParticipantData,
 };
 
 // Enum for authentication status of a remote participant
@@ -734,6 +734,68 @@ impl SecureDiscovery {
             NormalDiscoveryPermission::Deny
           }
         }
+      }
+    }
+  }
+
+  pub fn check_topic_read(
+    &mut self,
+    sample: &with_key::Sample<(DiscoveredTopicData, GUID), GUID>,
+    discovery_db: &Arc<RwLock<DiscoveryDB>>,
+  ) -> NormalDiscoveryPermission {
+    // Check that the participant has been authenticated
+    let participant_guidp = match sample {
+      Sample::Value((_topic_data, guid)) => guid.prefix,
+      Sample::Dispose(guid) => guid.prefix,
+    };
+
+    // TODO: should we allow also Unauthenticated participants?
+    let auth_status = discovery_db_read(discovery_db).get_authentication_status(participant_guidp);
+    if auth_status != Some(AuthenticationStatus::Authenticated) {
+      security_warn!(
+        "DCPSTopic data from non-authenticated participant {:?}",
+        participant_guidp
+      );
+      return NormalDiscoveryPermission::Deny;
+    }
+
+    match sample {
+      Sample::Value((disc_topic, _guid)) => {
+        match self.security_plugins.get_plugins().check_remote_topic(
+          participant_guidp,
+          self.domain_id,
+          &disc_topic.topic_data,
+        ) {
+          Ok(check_passed) => {
+            if check_passed {
+              security_info!(
+                "Access control check passed for participant {:?} to create topic {}.",
+                participant_guidp,
+                disc_topic.topic_data.name
+              );
+              NormalDiscoveryPermission::Allow
+            } else {
+              security_info!(
+                "Access control check did not pass for participant {:?} to create topic {}.",
+                participant_guidp,
+                disc_topic.topic_data.name
+              );
+              NormalDiscoveryPermission::Deny
+            }
+          }
+          Err(e) => {
+            security_error!(
+              "Something went wrong in checking remote permissions for topic {}: {:?}",
+              disc_topic.topic_data.name,
+              e
+            );
+            NormalDiscoveryPermission::Deny
+          }
+        }
+      }
+      Sample::Dispose(_guid) => {
+        // Always allow
+        NormalDiscoveryPermission::Allow
       }
     }
   }

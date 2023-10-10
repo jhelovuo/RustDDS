@@ -1277,40 +1277,57 @@ impl Discovery {
     };
 
     for t in ts {
-      match t {
-        Sample::Value((topic_data, writer)) => {
-          debug!("handle_topic_reader discovered {:?}", &topic_data);
-          discovery_db_write(&self.discovery_db).update_topic_data(
-            &topic_data,
-            writer,
-            DiscoveredVia::Topic,
-          );
-          // Now check if we know any readers of writers to this topic. The topic QoS
-          // could cause these to became viable matches against local
-          // writers/readers. This is because at least RTI Connext sends QoS
-          // policies on a Topic, and then (apparently) assumes that its
-          // readers/writers inherit those policies unless specified otherwise.
+      #[cfg(not(feature = "security"))]
+      let permission = NormalDiscoveryPermission::Allow;
 
-          let writers = discovery_db_read(&self.discovery_db)
-            .writers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
-          debug!("writers {:?}", &writers);
-          for discovered_writer_data in writers {
-            self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
-              discovered_writer_data,
-            });
-          }
+      #[cfg(feature = "security")]
+      let permission = if let Some(security) = self.security_opt.as_mut() {
+        // Security is enabled. Do a secure read
+        security.check_topic_read(&t, &self.discovery_db)
+      } else {
+        // No security configured, always allowed
+        NormalDiscoveryPermission::Allow
+      };
 
-          let readers = discovery_db_read(&self.discovery_db)
-            .readers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
-          for discovered_reader_data in readers {
-            self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-              discovered_reader_data,
-            });
+      if permission == NormalDiscoveryPermission::Allow {
+        match t {
+          Sample::Value((topic_data, writer)) => {
+            debug!("handle_topic_reader discovered {:?}", &topic_data);
+            discovery_db_write(&self.discovery_db).update_topic_data(
+              &topic_data,
+              writer,
+              DiscoveredVia::Topic,
+            );
+            // Now check if we know any readers of writers to this topic. The topic QoS
+            // could cause these to became viable matches against local
+            // writers/readers. This is because at least RTI Connext sends QoS
+            // policies on a Topic, and then (apparently) assumes that its
+            // readers/writers inherit those policies unless specified otherwise.
+
+            // Note that additional security checks are not needed here, since if a
+            // reader/writer is in our DiscoveryDB, it has already passed the security
+            // checks.
+            let writers = discovery_db_read(&self.discovery_db)
+              .writers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
+            debug!("writers {:?}", &writers);
+            for discovered_writer_data in writers {
+              self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
+                discovered_writer_data,
+              });
+            }
+
+            let readers = discovery_db_read(&self.discovery_db)
+              .readers_on_topic_and_participant(topic_data.topic_name(), writer.prefix);
+            for discovered_reader_data in readers {
+              self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
+                discovered_reader_data,
+              });
+            }
           }
-        }
-        // Sample::Dispose means disposed
-        Sample::Dispose(key) => {
-          warn!("not implemented - Topic was disposed: {:?}", &key);
+          // Sample::Dispose means disposed
+          Sample::Dispose(key) => {
+            warn!("not implemented - Topic was disposed: {:?}", &key);
+          }
         }
       }
     } // loop
