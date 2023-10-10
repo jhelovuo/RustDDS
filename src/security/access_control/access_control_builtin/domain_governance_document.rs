@@ -129,9 +129,6 @@ mod xml {
   // The data is structured maybe a bit oddly, because it must mirror the
   // structure of the XSD given in the DDS Security spec.
 
-  // TODO: Allow Boolean literals also in all uppercase, e.g. "TRUE" in addition
-  // to "true".
-
   #[derive(Debug, Serialize, Deserialize, PartialEq)]
   #[serde(rename = "dds")]
   pub struct DomainGovernanceDocument {
@@ -149,7 +146,9 @@ mod xml {
   #[serde(rename = "domain_rule")]
   pub struct DomainRule {
     pub domains: DomainIdSet,
+    #[serde(deserialize_with = "my_bool_deser")]
     pub allow_unauthenticated_participants: bool,
+    #[serde(deserialize_with = "my_bool_deser")]
     pub enable_join_access_control: bool,
     pub discovery_protection_kind: ProtectionKind,
     pub liveliness_protection_kind: ProtectionKind,
@@ -214,9 +213,13 @@ mod xml {
   #[derive(Debug, Serialize, Deserialize, PartialEq)]
   pub struct TopicRule {
     pub topic_expression: TopicExpression,
+    #[serde(deserialize_with = "my_bool_deser")]
     pub enable_discovery_protection: bool,
+    #[serde(deserialize_with = "my_bool_deser")]
     pub enable_liveliness_protection: bool,
+    #[serde(deserialize_with = "my_bool_deser")]
     pub enable_read_access_control: bool,
+    #[serde(deserialize_with = "my_bool_deser")]
     pub enable_write_access_control: bool,
     pub metadata_protection_kind: ProtectionKind,
     pub data_protection_kind: BasicProtectionKind,
@@ -227,6 +230,22 @@ mod xml {
     #[serde(rename = "$value")]
     pub expression: String,
   }
+
+
+  // This is a bool adapter, because the built-in
+  // serde-xml-rs only accepts lowercase boolean literals.
+  use serde::Deserializer;
+
+  fn my_bool_deser<'de, D:Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    String::deserialize(deserializer).and_then(|string| {
+      match string.as_str() {
+        "false" | "FALSE" | "0" => Ok(false),
+        "true" | "TRUE" | "1" => Ok(true),
+        other => Err(serde::de::Error::custom(format!("Expected bool: true or false, got {other:?}"))),
+      }
+    })
+  }
+
 } // mod xml
 
 #[cfg(test)]
@@ -281,9 +300,9 @@ xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg
           <enable_discovery_protection>true
           </enable_discovery_protection>
           <enable_liveliness_protection>false</enable_liveliness_protection>
-          <enable_read_access_control>false
+          <enable_read_access_control>FALSE
           </enable_read_access_control>
-          <enable_write_access_control>true
+          <enable_write_access_control>TRUE
           </enable_write_access_control>
           <metadata_protection_kind>ENCRYPT
           </metadata_protection_kind>
@@ -358,7 +377,7 @@ xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg
           <enable_liveliness_protection>false</enable_liveliness_protection>
           <enable_read_access_control>true
           </enable_read_access_control>
-          <enable_write_access_control>true
+          <enable_write_access_control>TRUE
           </enable_write_access_control>
           <metadata_protection_kind>ENCRYPT
           </metadata_protection_kind>
