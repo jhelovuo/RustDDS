@@ -231,21 +231,19 @@ mod xml {
     pub expression: String,
   }
 
-
   // This is a bool adapter, because the built-in
   // serde-xml-rs only accepts lowercase boolean literals.
   use serde::Deserializer;
 
-  fn my_bool_deser<'de, D:Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
-    String::deserialize(deserializer).and_then(|string| {
-      match string.as_str() {
-        "false" | "FALSE" | "0" => Ok(false),
-        "true" | "TRUE" | "1" => Ok(true),
-        other => Err(serde::de::Error::custom(format!("Expected bool: true or false, got {other:?}"))),
-      }
+  fn my_bool_deser<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    String::deserialize(deserializer).and_then(|string| match string.as_str() {
+      "false" | "FALSE" | "0" => Ok(false),
+      "true" | "TRUE" | "1" => Ok(true),
+      other => Err(serde::de::Error::custom(format!(
+        "Expected bool: true or false, got {other:?}"
+      ))),
     })
   }
-
 } // mod xml
 
 #[cfg(test)]
