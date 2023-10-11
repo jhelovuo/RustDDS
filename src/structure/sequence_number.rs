@@ -45,7 +45,23 @@ impl SequenceNumber {
   }
 
   pub const fn plus_1(&self) -> Self {
-    SequenceNumber(self.0 + 1)
+    SequenceNumber( self.0 + 1 )
+  }
+
+  pub fn next(&self) -> SequenceNumber {
+    self.plus_1()
+  }
+
+  pub fn from_high_low(high: i32, low: u32) -> Self {
+    Self( ((high as i64) << 32) + (low as i64) )
+  }
+
+  pub fn high(&self) -> i32 {
+    (self.0 >> 32) as i32
+  }
+
+  pub fn low(&self) -> u32 {
+    (self.0 & 0xFFFF_FFFF) as u32
   }
 }
 
@@ -78,6 +94,7 @@ impl From<SequenceNumber> for i64 {
     sequence_number.0
   }
 }
+
 
 // ---------------------------------------
 
@@ -403,7 +420,7 @@ where
           end
         };
         // sanity ok. Now do the actual work.
-        let num_bits = i64::from(end - base + N::from(1));
+        let num_bits = i64::from( end - base + N::from(1) );
         let mut sns = Self::new(base, num_bits as u32);
         for s in set.iter().filter(|s| base <= **s && **s <= end) {
           sns.insert(*s);
