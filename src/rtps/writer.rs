@@ -1,7 +1,6 @@
 use std::{
   cmp::max,
   collections::{BTreeMap, BTreeSet, HashSet},
-  iter::FromIterator,
   ops::Bound::Included,
   rc::Rc,
   sync::{Arc, Mutex, MutexGuard},
@@ -1041,75 +1040,85 @@ impl Writer {
       reader_proxy.unsent_changes_debug()
     );
 
-    let mut no_longer_relevant = Vec::new();
-    let mut found_data = false;
+    let mut no_longer_relevant = BTreeSet::new();
+    let mut found_something_to_send = false;
     let mut sending_data = false;
     let mut sending_gap = false;
     let mut trigger_send_repair_frags = false;
     if let Some(unsent_sn) = reader_proxy.first_unsent_change() {
       // There are unsent changes.
-      if let Some(timestamp) = self.sequence_number_to_instant(unsent_sn) {
-        // Try to find the cache change from topic cache
-        if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp) {
-          // CacheChange found, check if we can send it in one piece (i.e. DATA)
-          if cache_change.data_value.payload_size() <= self.data_max_size_serialized {
-            // construct DATA submessage
-            partial_message = partial_message.data_msg(
-              cache_change,
-              reader_guid.entity_id, // reader
-              self.my_guid,          // writer
-              self.endianness,
-              self.security_plugins.as_ref(),
-            );
-            // TODO: Here we are cloning the entire payload. We need to rewrite
-            // the transmit path to avoid copying.
-            sending_data = true;
+
+      // If we have set the reader as pending GAP for the unsent sequence number,
+      // just send a GAP message
+      let pending_gaps = reader_proxy.get_pending_gap();
+      if pending_gaps.contains(&unsent_sn) {
+        no_longer_relevant.insert(unsent_sn);
+      } else {
+        // Otherwise, inspect if we can send the actual data
+
+        if let Some(timestamp) = self.sequence_number_to_instant(unsent_sn) {
+          // Try to find the cache change from topic cache
+          if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp) {
+            // CacheChange found, check if we can send it in one piece (i.e. DATA)
+            if cache_change.data_value.payload_size() <= self.data_max_size_serialized {
+              // construct DATA submessage
+              partial_message = partial_message.data_msg(
+                cache_change,
+                reader_guid.entity_id, // reader
+                self.my_guid,          // writer
+                self.endianness,
+                self.security_plugins.as_ref(),
+              );
+              // TODO: Here we are cloning the entire payload. We need to rewrite
+              // the transmit path to avoid copying.
+              sending_data = true;
+            } else {
+              // Large data: arrange DATAFRAGs to be sent
+              let (num_frags, _frag_size) =
+                self.num_frags_and_frag_size(cache_change.data_value.payload_size());
+              reader_proxy.mark_all_frags_requested(unsent_sn, num_frags);
+              // We cannot set up a repair timer right here, because self is already borrowed
+              // So just set a flag.
+              trigger_send_repair_frags = true;
+            }
           } else {
-            // Large data: arrange DATAFRAGs to be sent
-            let (num_frags, _frag_size) =
-              self.num_frags_and_frag_size(cache_change.data_value.payload_size());
-            reader_proxy.mark_all_frags_requested(unsent_sn, num_frags);
-            // We cannot set up a repair timer right here, because self is already borrowed
-            // So just set a flag.
-            trigger_send_repair_frags = true;
+            // Change not in cache anymore, mark SN as not relevant anymore
+            no_longer_relevant.insert(unsent_sn);
           }
         } else {
-          // Change not in cache anymore, mark SN as not relevant anymore
-          no_longer_relevant.push(unsent_sn);
-        }
-      } else {
-        // SN did not map to an Instant. Maybe it has been removed?
-        if unsent_sn < self.first_change_sequence_number {
-          debug!(
-            "Reader {:?} requested too old data {:?}. I have only from {:?}. Topic {:?}",
-            &reader_proxy, unsent_sn, self.first_change_sequence_number, &self.my_topic_name
-          );
-          // noting to do
-        } else if self.disposed_sequence_numbers.contains(&unsent_sn) {
-          debug!(
-            "Reader {:?} requested disposed {:?}. Topic {:?}",
-            &reader_proxy, unsent_sn, &self.my_topic_name
-          );
-          // nothing to do
-        } else {
-          // we are running out of excuses
-          error!(
-            "handle ack_nack writer {:?} seq.number {:?} missing from instant map",
-            self.my_guid, unsent_sn
-          );
-        }
-        no_longer_relevant.push(unsent_sn);
-      } // match
+          // SN did not map to an Instant. Maybe it has been removed?
+          if unsent_sn < self.first_change_sequence_number {
+            debug!(
+              "Reader {:?} requested too old data {:?}. I have only from {:?}. Topic {:?}",
+              &reader_proxy, unsent_sn, self.first_change_sequence_number, &self.my_topic_name
+            );
+            // noting to do
+          } else if self.disposed_sequence_numbers.contains(&unsent_sn) {
+            debug!(
+              "Reader {:?} requested disposed {:?}. Topic {:?}",
+              &reader_proxy, unsent_sn, &self.my_topic_name
+            );
+            // nothing to do
+          } else {
+            // we are running out of excuses
+            error!(
+              "handle ack_nack writer {:?} seq.number {:?} missing from instant map",
+              self.my_guid, unsent_sn
+            );
+          }
+          no_longer_relevant.insert(unsent_sn);
+        } // match
+      }
 
       // This SN will be sent or found no longer relevant => remove
       // from unsent list.
       reader_proxy.mark_change_sent(unsent_sn);
-      found_data = true;
+      found_something_to_send = true;
     }
-    // Add GAP submessage, if some cache changes could not be found.
+    // Add GAP submessage if we marked a sequence number as no longer relevant
     if !no_longer_relevant.is_empty() {
       partial_message = partial_message.gap_msg(
-        &BTreeSet::from_iter(no_longer_relevant),
+        &no_longer_relevant,
         self.entity_id(),
         self.endianness,
         reader_guid,
@@ -1135,7 +1144,7 @@ impl Writer {
       );
     }
     // Update repair_mode flag
-    if found_data {
+    if found_something_to_send {
       // Data was found. Continue repairing.
     } else {
       // Unsent list is empty. Switch off repair mode.
@@ -1453,13 +1462,21 @@ impl Writer {
   // return 1 if it was new ( = count of added reader proxies)
   fn matched_reader_update(&mut self, updated_reader_proxy: &RtpsReaderProxy) -> i32 {
     let mut new = 0;
+    let is_volatile = self.qos().is_volatile(); // Get this in advance to work with the borrow checker
     self
       .readers
       .entry(updated_reader_proxy.remote_reader_guid)
       .and_modify(|rp| rp.update(updated_reader_proxy))
       .or_insert_with(|| {
         new = 1;
-        updated_reader_proxy.clone()
+        let mut new_proxy = updated_reader_proxy.clone();
+        if is_volatile {
+          // With Durabilty::Volatile QoS we won't send the sequence numbers which existed
+          // before matching with this reader. Therefore we set the reader as pending GAP
+          // for all existing sequence numbers
+          new_proxy.set_pending_gap_up_to(self.last_change_sequence_number);
+        }
+        new_proxy
       });
     new
   }

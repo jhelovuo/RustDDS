@@ -12,7 +12,7 @@ use crate::{
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,
-    sequence_number::{FragmentNumber, FragmentNumberSet, SequenceNumber},
+    sequence_number::{FragmentNumber, FragmentNumberSet, SequenceNumber, SequenceNumberRange},
   },
 };
 use super::reader::ReaderIngredients;
@@ -237,6 +237,14 @@ impl RtpsReaderProxy {
 
   pub fn insert_pending_gap(&mut self, seq_num: SequenceNumber) {
     self.pending_gap.insert(seq_num);
+  }
+
+  pub fn set_pending_gap_up_to(&mut self, last_gap_sn: SequenceNumber) {
+    // form SN range from 1 to last_gap_sn (inclusive)
+    let gap_sn_range = SequenceNumberRange::new(SequenceNumber::new(1), last_gap_sn);
+    // Convert to a set and insert the SNs to pending_gap
+    let gap_sn_set = BTreeSet::from_iter(gap_sn_range);
+    self.pending_gap.extend(gap_sn_set);
   }
 
   pub fn get_pending_gap(&self) -> &BTreeSet<SequenceNumber> {

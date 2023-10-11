@@ -223,6 +223,10 @@ impl QosPolicies {
     self.durability
   }
 
+  pub fn is_volatile(&self) -> bool {
+    matches!(self.durability, Some(policy::Durability::Volatile))
+  }
+
   pub const fn presentation(&self) -> Option<policy::Presentation> {
     self.presentation
   }
