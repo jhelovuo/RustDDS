@@ -1,9 +1,7 @@
 use crate::{
   messages::submessages::{
-    elements::parameter_list::ParameterList,
-    secure_postfix::SecurePostfix,
+    elements::parameter_list::ParameterList, secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
-    submessages::{ReaderSubmessage, WriterSubmessage},
   },
   rtps::{Message, Submessage},
   security::{
@@ -180,12 +178,15 @@ pub trait CryptoTransform: Send {
   /// encode_datawriter_submessage: section 8.5.1.9.2 of the Security
   /// specification (v. 1.1)
   ///
-  /// In an [EncodeResult], return the submessages that would be written in
+  /// Return the submessages that would be written in
   /// `encoded_rtps_submessage`.
-  /// In case of [EncodeResult::One], the same result will be use for all
-  /// receivers, while [EncodeResult::Many] shall contain a result for each
-  /// receiving datareader in `receiving_datareader_crypto_list`.
   /// `receiving_datareader_crypto_list_index` is dropped.
+  ///
+  /// NOTE! [crate::security::security_plugins::SecurityPlugins::is_rtps_protection_special_case] relies on the assumption that
+  /// in the topic DCPSParticipantVolatileMessageSecure
+  /// the CryptoTransformIdentifier has transformation_key_id=0 like it does in
+  /// the builtin plugin. If a custom plugin that does not adhere to this is
+  /// used, that check needs to also be modified.
   ///
   /// # Panics
   /// The function may panic if `plain_rtps_submessage.body` is not
@@ -200,11 +201,14 @@ pub trait CryptoTransform: Send {
   /// encode_datareader_submessage: section 8.5.1.9.3 of the Security
   /// specification (v. 1.1)
   ///
-  /// In an [EncodeResult], return the submessages that would be written in
+  /// Return the submessages that would be written in
   /// `encoded_rtps_submessage`.
-  /// In case of [EncodeResult::One], the same result will be use for all
-  /// receivers, while [EncodeResult::Many] shall contain a result for each
-  /// receiving datawriter in `receiving_datawriter_crypto_list`.
+  ///
+  /// NOTE! [crate::security::security_plugins::SecurityPlugins::is_rtps_protection_special_case] relies on the assumption that
+  /// in the topic DCPSParticipantVolatileMessageSecure
+  /// the CryptoTransformIdentifier has transformation_key_id=0 like it does in
+  /// the builtin plugin. If a custom plugin that does not adhere to this is
+  /// used, that check needs to also be modified.
   ///
   /// # Panics
   /// The function may panic if `plain_rtps_submessage.body` is not
@@ -219,15 +223,12 @@ pub trait CryptoTransform: Send {
   /// encode_rtps_message: section 8.5.1.9.4 of the Security specification (v.
   /// 1.1)
   ///
-  /// In an [EncodeResult], return the message that would be written in
+  /// Return the message that would be written in
   /// `encoded_rtps_message`.
-  /// In case of [EncodeResult::One], the same result will be use for all
-  /// receivers, while [EncodeResult::Many] shall contain a result for each
-  /// receiving participant in `receiving_participant_crypto_list`.
   /// in the case that no transformation is performed and the plain message
-  /// should be sent, the plain message shall be returned in
-  /// [EncodeResult::One] (instead of returning false, see the spec).
-  /// `receiving_participant_crypto_list_index` is dropped.
+  /// should be sent, the plain message shall be returned (instead of returning
+  /// false, see the spec). `receiving_participant_crypto_list_index` is
+  /// dropped.
   fn encode_rtps_message(
     &self,
     plain_rtps_message: Message,
@@ -244,54 +245,24 @@ pub trait CryptoTransform: Send {
     encoded_message: Message,
     receiving_participant_crypto_handle: ParticipantCryptoHandle,
     sending_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<Message>;
+  ) -> SecurityResult<DecodeOutcome<Message>>;
 
-  /// preprocess_secure_submsg: section 8.5.1.9.6 of the Security specification
+  // Combines the functionality of preprocess_secure_submsg and the subsequent
+  // call of decode_datawriter_submessage or decode_datareader_submessage from
+  // sections 8.5.1.9.6–8 of the Security specification
   /// (v. 1.1)
   ///
-  /// Return the secure submessage category that would be written in
-  /// `secure_submessage_category`. The [DatawriterCryptoHandle] and
-  /// [DatareaderCryptoHandle] that would be written in `datawriter_crypto` and
-  /// `datareader_crypto` shall be returned in
-  /// [SecureSubmessageCategory::DatawriterSubmessage] or
-  /// [SecureSubmessageCategory::DatareaderSubmessage] in the order
-  /// (sender,receiver). In the case `INFO_SUBMESSAGE`,
-  /// [SecureSubmessageCategory::InfoSubmessage] is returned instead of `false`.
-  ///
-  /// A vector of handle pairs is included in the SecureSubmessageCategory
-  /// instead of one pair, since there can be multiple receiving local
-  /// endpoints matched to the sending remote endpoint, which in this case
-  /// would also have a different CryptoHandle for each match
-  fn preprocess_secure_submessage(
-    &self,
-    secure_prefix: &SecurePrefix,
-    receiving_participant_crypto_handle: ParticipantCryptoHandle,
-    sending_participant_crypto_handle: ParticipantCryptoHandle,
-  ) -> SecurityResult<SecureSubmessageCategory>;
-
-  /// decode_datawriter_submessage: section 8.5.1.9.7 of the Security
-  /// specification (v. 1.1)
-  ///
-  /// Return the writer submessage that would be written in
-  /// `plain_rtps_submessage`.
-  fn decode_datawriter_submessage(
+  /// Return the body of the submessage that would be written in
+  /// `plain_rtps_submessage` of the appropriate decode method, and a list of
+  /// endpoint crypto handles, the decode keys of which match the one used for
+  /// decoding, i.e. which are approved to receive the submessage by access
+  /// control.
+  fn decode_submessage(
     &self,
     encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datareader_crypto_handle: DatareaderCryptoHandle,
-    sending_datawriter_crypto_handle: DatawriterCryptoHandle,
-  ) -> SecurityResult<WriterSubmessage>;
-
-  /// decode_datareader_submessage: section 8.5.1.9.8 of the Security
-  /// specification (v. 1.1)
-  ///
-  /// Return the reader submessage that would be written in
-  /// `plain_rtps_submessage`.
-  fn decode_datareader_submessage(
-    &self,
-    encoded_rtps_submessage: (SecurePrefix, Submessage, SecurePostfix),
-    receiving_datawriter_crypto_handle: DatawriterCryptoHandle,
-    sending_datareader_crypto_handle: DatareaderCryptoHandle,
-  ) -> SecurityResult<ReaderSubmessage>;
+    receiving_local_participant_crypto_handle: ParticipantCryptoHandle,
+    sending_remote_participant_crypto_handle: ParticipantCryptoHandle,
+  ) -> SecurityResult<DecodeOutcome<DecodedSubmessage>>;
 
   /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
   /// (v. 1.1)

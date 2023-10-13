@@ -13,7 +13,10 @@ use crate::{
   dds::{participant::DomainParticipant, qos::QosPolicies},
   messages::{
     protocol_version::ProtocolVersion,
-    submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
+    submessages::elements::{
+      parameter::Parameter,
+      parameter_list::{ParameterList, ParameterListable},
+    },
     vendor_id::VendorId,
   },
   rtps::{constant::*, rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
@@ -270,25 +273,25 @@ impl PlCdrDeserialize for SpdpDiscoveredParticipantData {
 
     let metatraffic_unicast_locators: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_METATRAFFIC_UNICAST_LOCATOR,
       "Metatraffic unicast locators",
     )?;
     let metatraffic_multicast_locators: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_METATRAFFIC_MULTICAST_LOCATOR,
       "Metatraffic multicast locators",
     )?;
     let default_unicast_locators: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
       "Default unicast locators",
     )?;
     let default_multicast_locators: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
       "Default multicast locators",
     )?;
@@ -382,6 +385,18 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = self.to_parameter_list(encoding)?;
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
+  }
+}
+
+impl ParameterListable for SpdpDiscoveredParticipantData {
+  fn to_parameter_list(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<ParameterList, PlCdrSerializeError> {
     // This "unnecessary" binding is to trigger a warning if we forget to
     // serialize any fields.
     let Self {
@@ -496,9 +511,7 @@ impl PlCdrSerialize for SpdpDiscoveredParticipantData {
       );
     }
 
-    let bytes = pl.serialize_to_bytes(ctx)?;
-
-    Ok(bytes)
+    Ok(pl)
   }
 }
 
@@ -579,56 +592,52 @@ mod tests {
 
     for submsg in &submsgs {
       match &submsg.body {
-        SubmessageBody::Writer(v) => match v {
-          WriterSubmessage::Data(d, _) => {
-            let participant_data: SpdpDiscoveredParticipantData =
-              PlCdrDeserializerAdapter::from_bytes(
-                &d.no_crypto_decoded()
-                  .serialized_payload
-                  .as_ref()
-                  .unwrap()
-                  .value,
-                RepresentationIdentifier::PL_CDR_LE,
-              )
-              .unwrap();
-            let sdata = participant_data
-              .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
-              .unwrap();
-            eprintln!("message data = {:?}", &data);
-            eprintln!(
-              "payload    = {:?}",
+        SubmessageBody::Writer(WriterSubmessage::Data(d, _)) => {
+          let participant_data: SpdpDiscoveredParticipantData =
+            PlCdrDeserializerAdapter::from_bytes(
               &d.no_crypto_decoded()
                 .serialized_payload
                 .as_ref()
                 .unwrap()
-                .value
-                .to_vec()
-            );
-            eprintln!("deserialized  = {:?}", &participant_data);
-            eprintln!("serialized = {:?}", &sdata);
-            // order cannot be known at this point
-            // assert_eq!(
-            //  sdata.len(),
-            //  d.serialized_payload.as_ref().unwrap().value.len()
-            //);
+                .value,
+              RepresentationIdentifier::PL_CDR_LE,
+            )
+            .unwrap();
+          let sdata = participant_data
+            .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+            .unwrap();
+          eprintln!("message data = {:?}", &data);
+          eprintln!(
+            "payload    = {:?}",
+            &d.no_crypto_decoded()
+              .serialized_payload
+              .as_ref()
+              .unwrap()
+              .value
+              .to_vec()
+          );
+          eprintln!("deserialized  = {:?}", &participant_data);
+          eprintln!("serialized = {:?}", &sdata);
+          // order cannot be known at this point
+          // assert_eq!(
+          //  sdata.len(),
+          //  d.serialized_payload.as_ref().unwrap().value.len()
+          //);
 
-            let mut participant_data_2: SpdpDiscoveredParticipantData =
-              PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE)
-                .unwrap();
-            // force timestamps to be the same, as these are not serialized/deserialized,
-            // but stamped during deserialization
-            participant_data_2.updated_time = participant_data.updated_time;
-
-            eprintln!("again deserialized = {:?}", &participant_data_2);
-            let _sdata_2 = participant_data
-              .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+          let mut participant_data_2: SpdpDiscoveredParticipantData =
+            PlCdrDeserializerAdapter::from_bytes(&sdata, RepresentationIdentifier::PL_CDR_LE)
               .unwrap();
-            // now the order of bytes should be the same
-            assert_eq!(&participant_data_2, &participant_data);
-          }
+          // force timestamps to be the same, as these are not serialized/deserialized,
+          // but stamped during deserialization
+          participant_data_2.updated_time = participant_data.updated_time;
 
-          _ => continue,
-        },
+          eprintln!("again deserialized = {:?}", &participant_data_2);
+          let _sdata_2 = participant_data
+            .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
+            .unwrap();
+          // now the order of bytes should be the same
+          assert_eq!(&participant_data_2, &participant_data);
+        }
         SubmessageBody::Interpreter(_) => (),
         _ => continue,
       }
@@ -653,32 +662,28 @@ mod tests {
 
     for submsg in &submsgs {
       match &submsg.body {
-        SubmessageBody::Writer(v) => match v {
-          WriterSubmessage::Data(d, _) => {
-            let participant_data: Result<SpdpDiscoveredParticipantData, PlCdrDeserializeError> =
-              PlCdrDeserializerAdapter::from_bytes(
-                &d.no_crypto_decoded()
-                  .serialized_payload
-                  .as_ref()
-                  .unwrap()
-                  .value,
-                RepresentationIdentifier::PL_CDR_LE,
-              );
-            eprintln!("message data = {:?}", &data);
-            eprintln!(
-              "payload    = {:?}",
+        SubmessageBody::Writer(WriterSubmessage::Data(d, _)) => {
+          let participant_data: Result<SpdpDiscoveredParticipantData, PlCdrDeserializeError> =
+            PlCdrDeserializerAdapter::from_bytes(
               &d.no_crypto_decoded()
                 .serialized_payload
                 .as_ref()
                 .unwrap()
-                .value
-                .to_vec()
+                .value,
+              RepresentationIdentifier::PL_CDR_LE,
             );
-            eprintln!("deserialized  = {:?}", &participant_data);
-          }
-
-          _ => continue,
-        },
+          eprintln!("message data = {:?}", &data);
+          eprintln!(
+            "payload    = {:?}",
+            &d.no_crypto_decoded()
+              .serialized_payload
+              .as_ref()
+              .unwrap()
+              .value
+              .to_vec()
+          );
+          eprintln!("deserialized  = {:?}", &participant_data);
+        }
         SubmessageBody::Interpreter(_) => (),
         _ => continue,
       }
@@ -702,32 +707,29 @@ mod tests {
 
     for submsg in &submsgs {
       match &submsg.body {
-        SubmessageBody::Writer(v) => match v {
-          WriterSubmessage::Data(d, _) => {
-            let participant_data: Result<SpdpDiscoveredParticipantData, PlCdrDeserializeError> =
-              PlCdrDeserializerAdapter::from_bytes(
-                &d.no_crypto_decoded()
-                  .serialized_payload
-                  .as_ref()
-                  .unwrap()
-                  .value,
-                RepresentationIdentifier::PL_CDR_LE,
-              );
-            eprintln!("message data = {:?}", &data);
-            eprintln!(
-              "payload    = {:?}",
+        SubmessageBody::Writer(WriterSubmessage::Data(d, _)) => {
+          let participant_data: Result<SpdpDiscoveredParticipantData, PlCdrDeserializeError> =
+            PlCdrDeserializerAdapter::from_bytes(
               &d.no_crypto_decoded()
                 .serialized_payload
                 .as_ref()
                 .unwrap()
-                .value
-                .to_vec()
+                .value,
+              RepresentationIdentifier::PL_CDR_LE,
             );
-            eprintln!("deserialized  = {:?}", &participant_data);
-          }
+          eprintln!("message data = {:?}", &data);
+          eprintln!(
+            "payload    = {:?}",
+            &d.no_crypto_decoded()
+              .serialized_payload
+              .as_ref()
+              .unwrap()
+              .value
+              .to_vec()
+          );
+          eprintln!("deserialized  = {:?}", &participant_data);
+        }
 
-          _ => continue,
-        },
         SubmessageBody::Interpreter(_) => (),
         _ => continue,
       }
@@ -759,32 +761,28 @@ mod tests {
 
     for submsg in &submsgs {
       match &submsg.body {
-        SubmessageBody::Writer(v) => match v {
-          WriterSubmessage::Data(d, _) => {
-            let participant_data: Result<SpdpDiscoveredParticipantData, PlCdrDeserializeError> =
-              PlCdrDeserializerAdapter::from_bytes(
-                &d.no_crypto_decoded()
-                  .serialized_payload
-                  .as_ref()
-                  .unwrap()
-                  .value,
-                RepresentationIdentifier::PL_CDR_LE,
-              );
-            eprintln!("message data = {:?}", &data);
-            eprintln!(
-              "payload    = {:?}",
+        SubmessageBody::Writer(WriterSubmessage::Data(d, _)) => {
+          let participant_data: Result<SpdpDiscoveredParticipantData, PlCdrDeserializeError> =
+            PlCdrDeserializerAdapter::from_bytes(
               &d.no_crypto_decoded()
                 .serialized_payload
                 .as_ref()
                 .unwrap()
-                .value
-                .to_vec()
+                .value,
+              RepresentationIdentifier::PL_CDR_LE,
             );
-            eprintln!("deserialized  = {:?}", &participant_data);
-          }
-
-          _ => continue,
-        },
+          eprintln!("message data = {:?}", &data);
+          eprintln!(
+            "payload    = {:?}",
+            &d.no_crypto_decoded()
+              .serialized_payload
+              .as_ref()
+              .unwrap()
+              .value
+              .to_vec()
+          );
+          eprintln!("deserialized  = {:?}", &participant_data);
+        }
         SubmessageBody::Interpreter(_) => (),
         _ => continue,
       }

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use bytes::{Bytes, BytesMut};
+use bytes::Bytes;
 use enumflags2::{bitflags, BitFlags};
 use log::error;
 use speedy::{Context, Readable, Reader, Writable, Writer};
@@ -9,7 +9,10 @@ use serde::{Deserialize, Serialize};
 use crate::{
   dds::qos,
   discovery,
-  messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
+  messages::submessages::elements::{
+    parameter::Parameter,
+    parameter_list::{ParameterList, ParameterListable},
+  },
   security,
   security::config::ConfigError,
   serialization::{
@@ -366,16 +369,6 @@ impl DataHolderBuilder {
     }
   }
 
-  pub fn add_property(mut self, name: &str, value: String, propagate: bool) -> Self {
-    let property = Property {
-      name: name.to_string(),
-      value,
-      propagate,
-    };
-    self.properties.push(property);
-    self
-  }
-
   pub fn add_property_opt(mut self, name: &str, value: Option<String>, propagate: bool) -> Self {
     if let Some(value) = value {
       let property = Property {
@@ -520,8 +513,13 @@ impl<C: Context> Writable<C> for DataHolder {
 pub(super) struct PluginClassId {
   plugin_class_name: String,
   major_version: String, // Can be changed to number if needed
+  #[allow(dead_code)]
   minor_version: String, // Can be changed to number if needed
 }
+
+// TODO: This struct should be used in
+// auhtentication/authentication_builtin/types.rs instead of fixed strings.
+
 impl PluginClassId {
   pub fn matches_up_to_major_version(
     &self,
@@ -589,7 +587,7 @@ impl TryFrom<String> for PluginClassId {
 }
 
 // Token type from section 7.2.4 of the Security specification (v. 1.1)
-pub type Token = DataHolder;
+//pub type Token = DataHolder; // never actually used in code.
 
 // DDS Security spec v1.1 Section 7.2.7 ParticipantSecurityInfo
 // This is communicated over Discovery
@@ -674,8 +672,17 @@ pub type PluginParticipantSecurityAttributesMask = PluginSecurityAttributesMask;
 
 #[derive(Debug, Clone, PartialEq, Eq, Readable, Writable)]
 pub struct EndpointSecurityInfo {
-  endpoint_security_attributes: EndpointSecurityAttributesMask,
-  plugin_endpoint_security_attributes: PluginEndpointSecurityAttributesMask,
+  pub endpoint_security_attributes: EndpointSecurityAttributesMask,
+  pub plugin_endpoint_security_attributes: PluginEndpointSecurityAttributesMask,
+}
+
+impl From<EndpointSecurityAttributes> for EndpointSecurityInfo {
+  fn from(ep_attributes: EndpointSecurityAttributes) -> Self {
+    Self {
+      endpoint_security_attributes: EndpointSecurityAttributesMask::from(ep_attributes.clone()),
+      plugin_endpoint_security_attributes: ep_attributes.plugin_endpoint_attributes,
+    }
+  }
 }
 
 #[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Clone, Copy, Readable, Writable)]
@@ -757,9 +764,10 @@ impl PluginSecurityAttributesMask {
 
 // ParticipantBuiltinTopicDataSecure from section 7.4.1.6 of the Security
 // specification
+#[derive(Debug)]
 pub struct ParticipantBuiltinTopicDataSecure {
   pub participant_data: discovery::spdp_participant_data::SpdpDiscoveredParticipantData,
-  pub identity_status_token: security::authentication::IdentityStatusToken,
+  pub identity_status_token_opt: Option<security::authentication::IdentityStatusToken>,
 }
 impl Keyed for ParticipantBuiltinTopicDataSecure {
   type K = Participant_GUID;
@@ -776,7 +784,7 @@ impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
-    let identity_status_token = get_first_from_pl_map(
+    let identity_status_token_opt = get_option_from_pl_map(
       &pl_map,
       ctx,
       ParameterId::PID_IDENTITY_STATUS_TOKEN,
@@ -791,7 +799,7 @@ impl PlCdrDeserialize for ParticipantBuiltinTopicDataSecure {
 
     Ok(Self {
       participant_data,
-      identity_status_token,
+      identity_status_token_opt,
     })
   }
 }
@@ -801,28 +809,34 @@ impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
-    let mut pl = ParameterList::new();
+    let mut token_pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
       ($pid:ident, $member:expr, $type:ty) => {
-        pl.push(Parameter::new(ParameterId::$pid, {
+        token_pl.push(Parameter::new(ParameterId::$pid, {
           let m: &$type = $member;
           m.write_to_vec_with_ctx(ctx)?
         }))
       };
     }
-    emit!(
+    macro_rules! emit_option {
+      ($pid:ident, $member:expr, $type:ty) => {
+        if let Some(m) = $member {
+          emit!($pid, m, $type)
+        }
+      };
+    }
+    emit_option!(
       PID_IDENTITY_STATUS_TOKEN,
-      &self.identity_status_token,
+      &self.identity_status_token_opt,
       security::authentication::IdentityStatusToken
     );
-    let bytes = pl.serialize_to_bytes(ctx)?;
 
-    let part_data_bytes = self.participant_data.to_pl_cdr_bytes(encoding)?;
-    let mut result = BytesMut::new();
-    result.extend_from_slice(&part_data_bytes);
-    result.extend_from_slice(&bytes);
-    Ok(result.freeze())
+    let mut pl = self.participant_data.to_parameter_list(encoding)?;
+    pl.concat(token_pl);
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 
@@ -839,6 +853,16 @@ impl Keyed for PublicationBuiltinTopicDataSecure {
     self.discovered_writer_data.key()
   }
 }
+
+impl From<discovery::sedp_messages::DiscoveredWriterData> for PublicationBuiltinTopicDataSecure {
+  fn from(dwd: discovery::sedp_messages::DiscoveredWriterData) -> Self {
+    Self {
+      discovered_writer_data: dwd,
+      data_tags: qos::policy::DataTag::default(),
+    }
+  }
+}
+
 impl PlCdrDeserialize for PublicationBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
@@ -865,24 +889,23 @@ impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
-    let mut pl = ParameterList::new();
+    let mut data_tag_pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
       ($pid:ident, $member:expr, $type:ty) => {
-        pl.push(Parameter::new(ParameterId::$pid, {
+        data_tag_pl.push(Parameter::new(ParameterId::$pid, {
           let m: &$type = $member;
           m.write_to_vec_with_ctx(ctx)?
         }))
       };
     }
     emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
-    let bytes = pl.serialize_to_bytes(ctx)?;
 
-    let part_data_bytes = self.discovered_writer_data.to_pl_cdr_bytes(encoding)?;
-    let mut result = BytesMut::new();
-    result.extend_from_slice(&part_data_bytes);
-    result.extend_from_slice(&bytes);
-    Ok(result.freeze())
+    let mut pl = self.discovered_writer_data.to_parameter_list(encoding)?;
+    pl.concat(data_tag_pl);
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 
@@ -898,6 +921,15 @@ impl Keyed for SubscriptionBuiltinTopicDataSecure {
     self.discovered_reader_data.key()
   }
 }
+impl From<discovery::sedp_messages::DiscoveredReaderData> for SubscriptionBuiltinTopicDataSecure {
+  fn from(drd: discovery::sedp_messages::DiscoveredReaderData) -> Self {
+    Self {
+      discovered_reader_data: drd,
+      data_tags: qos::policy::DataTag::default(),
+    }
+  }
+}
+
 impl PlCdrDeserialize for SubscriptionBuiltinTopicDataSecure {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
@@ -924,24 +956,23 @@ impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
     &self,
     encoding: RepresentationIdentifier,
   ) -> Result<Bytes, PlCdrSerializeError> {
-    let mut pl = ParameterList::new();
+    let mut data_tag_pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
       ($pid:ident, $member:expr, $type:ty) => {
-        pl.push(Parameter::new(ParameterId::$pid, {
+        data_tag_pl.push(Parameter::new(ParameterId::$pid, {
           let m: &$type = $member;
           m.write_to_vec_with_ctx(ctx)?
         }))
       };
     }
     emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
-    let bytes = pl.serialize_to_bytes(ctx)?;
 
-    let part_data_bytes = self.discovered_reader_data.to_pl_cdr_bytes(encoding)?;
-    let mut result = BytesMut::new();
-    result.extend_from_slice(&part_data_bytes);
-    result.extend_from_slice(&bytes);
-    Ok(result.freeze())
+    let mut pl = self.discovered_reader_data.to_parameter_list(encoding)?;
+    pl.concat(data_tag_pl);
+
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
   }
 }
 
@@ -970,11 +1001,37 @@ impl From<ParticipantGenericMessage> for ParticipantStatelessMessage {
   }
 }
 
+pub const VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME: &str = "dds.sec.builtin_endpoint_name";
+pub const VOLATILE_WRITER_RECOGNITION_PROPERTY_VALUE: &str =
+  "BuiltinParticipantVolatileMessageSecureWriter";
+pub const VOLATILE_READER_RECOGNITION_PROPERTY_VALUE: &str =
+  "BuiltinParticipantVolatileMessageSecureReader";
+
+// Property from which crypto plugin detects a volatile writer
+// See 8.8.8.1 of the Security spec
+pub fn volatile_writer_recognition_property() -> Property {
+  Property {
+    name: VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME.to_string(),
+    value: VOLATILE_WRITER_RECOGNITION_PROPERTY_VALUE.to_string(),
+    propagate: false,
+  }
+}
+
+// Property from which crypto plugin detects a volatile reader
+// See 8.8.8.1 of the Security spec
+pub fn volatile_reader_recognition_property() -> Property {
+  Property {
+    name: VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME.to_string(),
+    value: VOLATILE_READER_RECOGNITION_PROPERTY_VALUE.to_string(),
+    propagate: false,
+  }
+}
+
 // ParticipantVolatileMessageSecure from section 7.4.4.3 of the Security
 // specification
 //
 // spec: typedef ParticipantVolatileMessageSecure ParticipantGenericMessage;
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct ParticipantVolatileMessageSecure {
   pub generic: ParticipantGenericMessage,
 }
@@ -997,7 +1054,7 @@ use crate::{
   discovery::{sedp_messages::Endpoint_GUID, spdp_participant_data::Participant_GUID},
   structure::rpc,
 };
-use super::access_control::ParticipantSecurityAttributes;
+use super::access_control::{EndpointSecurityAttributes, ParticipantSecurityAttributes};
 
 // This is the transport (message) type for specialized versions above.
 // DDS Security Spec v1.1

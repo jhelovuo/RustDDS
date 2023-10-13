@@ -50,9 +50,12 @@ use super::{
   with_key::simpledatareader::ReaderCommand,
 };
 #[cfg(feature = "security")]
-use crate::security::security_plugins::SecurityPluginsHandle;
+use crate::{
+  create_error_internal, create_error_not_allowed_by_security,
+  security::{security_plugins::SecurityPluginsHandle, EndpointSecurityInfo},
+};
 #[cfg(not(feature = "security"))]
-use crate::no_security::security_plugins::SecurityPluginsHandle;
+use crate::no_security::{security_plugins::SecurityPluginsHandle, EndpointSecurityInfo};
 
 // -------------------------------------------------------------------
 
@@ -486,6 +489,55 @@ impl InnerPublisher {
 
     let guid = GUID::new_with_prefix_and_id(dp.guid().prefix, entity_id);
 
+    #[cfg(feature = "security")]
+    if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security is enabled.
+      // Check are we allowed to create the DataWriter from Access control
+      let check_res = sec_handle.get_plugins().check_create_datawriter(
+        guid.prefix,
+        dp.domain_id(),
+        topic.name(),
+        &writer_qos,
+      );
+      match check_res {
+        Ok(check_passed) => {
+          if !check_passed {
+            return create_error_not_allowed_by_security!(
+              "Not allowed to create a DataWriter to topic {}",
+              topic.name()
+            );
+          }
+        }
+        Err(e) => {
+          // Something went wrong in the check
+          return create_error_internal!(
+            "Failed to check DataWriter rights from Access control: {}",
+            e.msg
+          );
+        }
+      };
+
+      // Register Writer to crypto plugin
+      if let Err(e) = {
+        let writer_security_attributes = sec_handle
+          .get_plugins()
+          .get_writer_sec_attributes(guid, topic.name()); // Release lock
+        writer_security_attributes.and_then(|attributes| {
+          sec_handle
+            .get_plugins()
+            .register_local_writer(guid, writer_qos.property(), attributes)
+        })
+      } {
+        return create_error_internal!(
+          "Failed to register writer to crypto plugin: {} . GUID: {:?}",
+          e,
+          guid
+        );
+      } else {
+        info!("Registered local writer to crypto plugin. GUID: {:?}", guid);
+      }
+    }
+
     let new_writer = WriterIngredients {
       guid,
       writer_command_receiver: hccc_download,
@@ -521,8 +573,35 @@ impl InnerPublisher {
       .map_err(|e| CreateError::Poisoned {
         reason: format!("Discovery DB: {e}"),
       })?;
-    // TODO: "None" below hardwires security_info to None. So we do not publish any.
-    let dwd = DiscoveredWriterData::new(&data_writer, topic, &dp, None);
+
+    #[cfg(not(feature = "security"))]
+    let security_info = None;
+    #[cfg(feature = "security")]
+    let security_info = if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security enabled
+      if guid.entity_id.entity_kind.is_user_defined() {
+        match sec_handle
+          .get_plugins()
+          .get_writer_sec_attributes(guid, topic.name())
+        {
+          Ok(attr) => EndpointSecurityInfo::from(attr).into(),
+          Err(e) => {
+            return create_error_internal!(
+              "Failed to get security info for writer: {}. Guid: {:?}",
+              e,
+              guid
+            );
+          }
+        }
+      } else {
+        None // For the built-in topics
+      }
+    } else {
+      // No security enabled
+      None
+    };
+
+    let dwd = DiscoveredWriterData::new(&data_writer, topic, &dp, security_info);
     db.update_local_topic_writer(dwd);
     db.update_topic_data_p(topic);
 
@@ -953,6 +1032,58 @@ impl InnerSubscriber {
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);
 
+    #[cfg(feature = "security")]
+    if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security is enabled.
+      // Check are we allowed to create the DataReader from Access control
+      let check_res = sec_handle.get_plugins().check_create_datareader(
+        reader_guid.prefix,
+        dp.domain_id(),
+        topic.name(),
+        &qos,
+      );
+      match check_res {
+        Ok(check_passed) => {
+          if !check_passed {
+            return create_error_not_allowed_by_security!(
+              "Not allowed to create a DataReader to topic {}",
+              topic.name()
+            );
+          }
+        }
+        Err(e) => {
+          // Something went wrong in the check
+          return create_error_internal!(
+            "Failed to check DataReader rights from Access control: {}",
+            e.msg
+          );
+        }
+      };
+
+      // Register Reader to crypto plugin
+      if let Err(e) = {
+        let reader_security_attributes = sec_handle
+          .get_plugins()
+          .get_reader_sec_attributes(reader_guid, topic.name()); // Release lock
+        reader_security_attributes.and_then(|attributes| {
+          sec_handle
+            .get_plugins()
+            .register_local_reader(reader_guid, qos.property(), attributes)
+        })
+      } {
+        return create_error_internal!(
+          "Failed to register reader to crypto plugin: {} . GUID: {:?}",
+          e,
+          reader_guid
+        );
+      } else {
+        info!(
+          "Registered local reader to crypto plugin. GUID: {:?}",
+          reader_guid
+        );
+      }
+    }
+
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (poll_event_source, poll_event_sender) = mio_source::make_poll_channel()?;
@@ -971,12 +1102,39 @@ impl InnerSubscriber {
       security_plugins: self.security_plugins_handle.clone(),
     };
 
+    #[cfg(not(feature = "security"))]
+    let security_info: Option<EndpointSecurityInfo> = None;
+    #[cfg(feature = "security")]
+    let security_info = if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security enabled
+      if reader_guid.entity_id.entity_kind.is_user_defined() {
+        match sec_handle
+          .get_plugins()
+          .get_reader_sec_attributes(reader_guid, topic.name())
+        {
+          Ok(attr) => EndpointSecurityInfo::from(attr).into(),
+          Err(e) => {
+            return create_error_internal!(
+              "Failed to get security info for reader: {}. Guid: {:?}",
+              e,
+              reader_guid
+            );
+          }
+        }
+      } else {
+        None // For the built-in topics
+      }
+    } else {
+      // No security enabled
+      None
+    };
+
     {
       let mut db = self
         .discovery_db
         .write()
         .or_else(|e| create_error_poisoned!("Cannot lock discovery_db. {}", e))?;
-      db.update_local_topic_reader(&dp, topic, &new_reader);
+      db.update_local_topic_reader(&dp, topic, &new_reader, security_info);
       db.update_topic_data_p(topic);
     }
 

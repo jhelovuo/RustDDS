@@ -9,7 +9,8 @@ use crate::{
 
 // Some generic message class IDs for authentication (see section 7.4.3.5 of the
 // Security spec)
-pub const GMCLASSID_SECURITY_AUTH_REQUEST: &str = "dds.sec.auth_request";
+//pub const GMCLASSID_SECURITY_AUTH_REQUEST: &str = "dds.sec.auth_request"; //
+// apparently never used?
 pub const GMCLASSID_SECURITY_AUTH_HANDSHAKE: &str = "dds.sec.auth";
 
 // ValidationOutcome is like ValidationResult_t in the the Security

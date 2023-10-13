@@ -35,13 +35,13 @@ impl BuiltinKey {
     }
   }
 
-  pub(super) fn len(&self) -> usize {
-    match self {
-      BuiltinKey::None => 0,
-      BuiltinKey::AES128(d) => d.len(),
-      BuiltinKey::AES256(d) => d.len(),
-    }
-  }
+  // pub(super) fn len(&self) -> usize {
+  //   match self {
+  //     BuiltinKey::None => 0,
+  //     BuiltinKey::AES128(d) => d.len(),
+  //     BuiltinKey::AES256(d) => d.len(),
+  //   }
+  // }
 
   pub(super) fn key_length(&self) -> KeyLength {
     match self {
@@ -65,10 +65,8 @@ impl BuiltinKey {
 }
 
 pub(super) const AES128_KEY_LENGTH: usize = 16;
-pub(super) type AES128Key = [u8; AES128_KEY_LENGTH];
 
 pub(super) const AES256_KEY_LENGTH: usize = 32;
-pub(super) type AES256Key = [u8; AES256_KEY_LENGTH];
 
 #[derive(Debug, Clone, Copy)]
 pub(super) enum KeyLength {

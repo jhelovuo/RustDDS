@@ -103,9 +103,9 @@ pub(crate) struct Reader {
   udp_sender: Rc<UDPSender>,
 
   // By default, this reader is a StatefulReader (see RTPS spec section 8.4.12)
-  // If like_stateless is true, then the reader mimics the behaviour of a StatelessReader
+  // If like_stateless is true, then the reader mimics the behavior of a StatelessReader
   // This means for example that the reader does not keep track of matched remote writers.
-  // This behaviour is needed only for a single built-in discovery topic of Secure DDS
+  // This behavior is needed only for a single built-in discovery topic of Secure DDS
   // (topic DCPSParticipantStatelessMessage)
   like_stateless: bool,
   // Reliability Qos. Note that a StatelessReader cannot be Reliable (RTPS Spec: Section 8.4.11.2)
@@ -160,7 +160,7 @@ impl Reader {
       );
     }
 
-    // If reader should be stateless, only BestEffor QoS is supported
+    // If reader should be stateless, only BestEffort QoS is supported
     if i.like_stateless && i.qos_policy.is_reliable() {
       panic!("Attempted to create a stateless Reader with other than BestEffort reliability");
     }
@@ -417,6 +417,13 @@ impl Reader {
   pub fn remove_writer_proxy(&mut self, writer_guid: GUID) {
     if self.matched_writers.contains_key(&writer_guid) {
       self.matched_writers.remove(&writer_guid);
+      #[cfg(feature = "security")]
+      if let Some(security_plugins_handle) = &self.security_plugins {
+        security_plugins_handle
+          .get_plugins()
+          .unregister_remote_writer(&self.my_guid, &writer_guid)
+          .unwrap_or_else(|e| error!("{e}"));
+      }
       self.send_status_change(DataReaderStatus::SubscriptionMatched {
         total: CountWithChange::new(self.writer_match_count_total, 0),
         current: CountWithChange::new(self.matched_writers.len() as i32, -1),
@@ -492,22 +499,25 @@ impl Reader {
       write_options_b = write_options_b.source_timestamp(source_timestamp);
     }
     // Check if the message specifies a related_sample_identity
-    let ri = DATA_Flags::cdr_representation_identifier(data_flags);
-    if let Some(related_sample_identity) = data.inline_qos.as_ref().and_then(|iqos| {
-      InlineQos::related_sample_identity(iqos, ri).unwrap_or_else(|e| {
-        error!("Deserializing related_sample_identity: {:?}", &e);
-        None
+    let representation_identifier = DATA_Flags::cdr_representation_identifier(data_flags);
+    if let Some(related_sample_identity) =
+      data.inline_qos.as_ref().and_then(|inline_qos_parameters| {
+        InlineQos::related_sample_identity(inline_qos_parameters, representation_identifier)
+          .unwrap_or_else(|e| {
+            error!("Deserializing related_sample_identity: {:?}", &e);
+            None
+          })
       })
-    }) {
+    {
       write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let writer_seq_num = data.writer_sn; // for borrow checker
 
-    match self.data_to_ddsdata(data, data_flags) {
-      Ok(ddsdata) => self.process_received_data(
-        ddsdata,
+    match self.data_to_dds_data(data, data_flags) {
+      Ok(dds_data) => self.process_received_data(
+        dds_data,
         receive_timestamp,
         write_options_b.build(),
         writer_guid,
@@ -552,13 +562,19 @@ impl Reader {
       write_options_b = write_options_b.source_timestamp(source_timestamp);
     }
     // Check if the message specifies a related_sample_identity
-    let ri = DATAFRAG_Flags::cdr_representation_identifier(datafrag_flags);
-    if let Some(related_sample_identity) = datafrag.inline_qos.as_ref().and_then(|iqos| {
-      InlineQos::related_sample_identity(iqos, ri).unwrap_or_else(|e| {
-        error!("Deserializing related_sample_identity: {:?}", &e);
-        None
-      })
-    }) {
+    let representation_identifier = DATAFRAG_Flags::cdr_representation_identifier(datafrag_flags);
+    if let Some(related_sample_identity) =
+      datafrag
+        .inline_qos
+        .as_ref()
+        .and_then(|inline_qos_parameters| {
+          InlineQos::related_sample_identity(inline_qos_parameters, representation_identifier)
+            .unwrap_or_else(|e| {
+              error!("Deserializing related_sample_identity: {:?}", &e);
+              None
+            })
+        })
+    {
       write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
 
@@ -569,11 +585,11 @@ impl Reader {
       .new_datafrag(datafrag, datafrag_flags);
 
     // ... and continue processing, if data was completed.
-    if let Some(ddsdata) = completed_dds_data {
+    if let Some(dds_data) = completed_dds_data {
       // Source timestamp (if any) will be the timestamp of the last fragment (that
       // completes the sample).
       self.process_received_data(
-        ddsdata,
+        dds_data,
         receive_timestamp,
         write_options_b.build(),
         writer_guid,
@@ -626,7 +642,7 @@ impl Reader {
   // received)
   fn process_received_data(
     &mut self,
-    ddsdata: DDSData,
+    dds_data: DDSData,
     receive_timestamp: Timestamp,
     write_options: WriteOptions,
     writer_guid: GUID,
@@ -675,7 +691,7 @@ impl Reader {
     }
 
     self.make_cache_change(
-      ddsdata,
+      dds_data,
       receive_timestamp,
       write_options,
       writer_guid,
@@ -689,7 +705,7 @@ impl Reader {
     self.notify_cache_change();
   }
 
-  fn data_to_ddsdata(
+  fn data_to_dds_data(
     &self,
     data: DecodedData,
     data_flags: BitFlags<DATA_Flags>,
@@ -718,8 +734,8 @@ impl Reader {
         // no data, no key. Maybe there is inline QoS?
         // At least we should find key hash, or we do not know WTF the writer is talking
         // about
-        let key_hash = if let Some(h) = data.inline_qos.as_ref().and_then(|iqos| {
-          InlineQos::key_hash(iqos).unwrap_or_else(|e| {
+        let key_hash = if let Some(h) = data.inline_qos.as_ref().and_then(|inline_qos_parameters| {
+          InlineQos::key_hash(inline_qos_parameters).unwrap_or_else(|e| {
             error!("Deserializing key_hash: {:?}", &e);
             None
           })
@@ -917,10 +933,10 @@ impl Reader {
 
           // The acknack can be sent now or later. The rest of the RTPS message
           // needs to be constructed. p. 48
-          let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
+          let acknack_flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
             | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
 
-          let fflags = BitFlags::<NACKFRAG_Flags>::from_flag(NACKFRAG_Flags::Endianness);
+          let nackfrag_flags = BitFlags::<NACKFRAG_Flags>::from_flag(NACKFRAG_Flags::Endianness);
 
           // send NackFrags, if any
           let mut nackfrags = Vec::new();
@@ -950,7 +966,7 @@ impl Reader {
 
           if !nackfrags.is_empty() {
             this.send_nackfrags_to(
-              fflags,
+              nackfrag_flags,
               nackfrags,
               InfoDestination {
                 guid_prefix: mr_state.source_guid_prefix,
@@ -961,7 +977,7 @@ impl Reader {
           }
 
           this.send_acknack_to(
-            flags,
+            acknack_flags,
             response_ack_nack,
             InfoDestination {
               guid_prefix: mr_state.source_guid_prefix,
@@ -1065,10 +1081,10 @@ impl Reader {
   fn deduce_change_kind(
     inline_qos: &Option<ParameterList>,
     no_writers: bool,
-    ri: RepresentationIdentifier,
+    representation_identifier: RepresentationIdentifier,
   ) -> ChangeKind {
-    match inline_qos.as_ref().and_then(|iqos| {
-      InlineQos::status_info(iqos, ri).map_or_else(
+    match inline_qos.as_ref().and_then(|inline_qos_parameters| {
+      InlineQos::status_info(inline_qos_parameters, representation_identifier).map_or_else(
         |e| {
           error!("Deserializing status_info: {:?}", &e);
           None
@@ -1545,12 +1561,12 @@ mod tests {
 
     // 6. Verify that the content of the cache change is as expected
     // Construct a cache change with the expected content
-    let ddsdata = DDSData::new(data.no_crypto_decoded().serialized_payload.unwrap());
+    let dds_data = DDSData::new(data.no_crypto_decoded().serialized_payload.unwrap());
     let cc_locally_built = CacheChange::new(
       writer_guid,
       sequence_num,
       WriteOptions::from(Some(source_timestamp)),
-      ddsdata,
+      dds_data,
     );
 
     assert_eq!(

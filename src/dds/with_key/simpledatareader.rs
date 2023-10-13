@@ -89,9 +89,6 @@ impl<K: Key> ReadState<K> {
 /// SimpleDataReaders can only do "take" semantics and does not have
 /// any deduplication or other DataSampleCache functionality.
 pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
-  #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
-  // any subscriber-wide QoS policies, such as ordered or coherent access.
-  // Remove this attribute when/if such things are implemented.
   my_subscriber: Subscriber,
 
   my_topic: Topic,
