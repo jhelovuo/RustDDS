@@ -19,7 +19,9 @@ pub fn pl_cdr_rep_id_to_speedy(
     RepresentationIdentifier::PL_CDR_BE => Ok(speedy::Endianness::BigEndian),
     RepresentationIdentifier::CDR_LE => Ok(speedy::Endianness::LittleEndian),
     RepresentationIdentifier::CDR_BE => Ok(speedy::Endianness::BigEndian),
-    rep_id => Err(PlCdrSerializeError::NotSupported(format!("Unknown {rep_id:?}"))),
+    rep_id => Err(PlCdrSerializeError::NotSupported(format!(
+      "Unknown {rep_id:?}"
+    ))),
   }
 }
 
@@ -31,7 +33,9 @@ pub fn pl_cdr_rep_id_to_speedy_d(
     RepresentationIdentifier::PL_CDR_BE => Ok(speedy::Endianness::BigEndian),
     RepresentationIdentifier::CDR_LE => Ok(speedy::Endianness::LittleEndian),
     RepresentationIdentifier::CDR_BE => Ok(speedy::Endianness::BigEndian),
-    rep_id => Err(PlCdrDeserializeError::NotSupported(format!("Unknown {rep_id:?}"))),
+    rep_id => Err(PlCdrDeserializeError::NotSupported(format!(
+      "Unknown {rep_id:?}"
+    ))),
   }
 }
 
