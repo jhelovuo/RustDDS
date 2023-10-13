@@ -45,7 +45,7 @@ pub struct Submessage {
   pub body: SubmessageBody,
   pub original_bytes: Option<Bytes>,
   // original_bytes contains the original bytes if Submessage was created by parsing from Bytes.
-  // If mesasge was constructed from components instead, it is None.
+  // If message was constructed from components instead, it is None.
 }
 
 // We implement this instead of Speedy trait Readable, because
@@ -300,17 +300,24 @@ pub enum SubmessageBody {
 
   Interpreter(InterpreterSubmessage),
 }
-
-impl<C: Context> Writable<C> for Submessage {
+impl<C: Context> Writable<C> for SubmessageBody {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    writer.write_value(&self.header)?;
-    match &self.body {
+    match &self {
       SubmessageBody::Writer(m) => writer.write_value(&m),
       SubmessageBody::Reader(m) => writer.write_value(&m),
       SubmessageBody::Interpreter(m) => writer.write_value(&m),
       #[cfg(feature = "security")]
       SubmessageBody::Security(m) => writer.write_value(&m),
     }
+  }
+}
+
+impl<C: Context> Writable<C> for Submessage {
+  fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+    let Submessage { header, body, .. } = self;
+    writer.write_value(header)?;
+    let body_endianness = endianness_flag(header.flags);
+    writer.write_bytes(&body.write_to_vec_with_ctx(body_endianness)?)
   }
 }
 
@@ -327,7 +334,7 @@ mod tests {
 
   #[test]
   fn submessage_data_submessage_deserialization() {
-    // this is wireshark captured shapesdemo data_submessage
+    // this is wireshark captured shapes demo data_submessage
     let serialized_data_submessage = Bytes::from_static(&[
       0x15, 0x05, 0x2c, 0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x07, 0x00, 0x00, 0x01,
       0x02, 0x00, 0x00, 0x00, 0x00, 0x5b, 0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x04, 0x00,

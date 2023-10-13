@@ -73,14 +73,18 @@ impl CryptographicBuiltin {
   fn is_volatile(properties: &[Property]) -> bool {
     properties
       .iter()
-      .find(|property| property.name.eq("dds.sec.builtin_endpoint_name"))
+      .find(|property| {
+        property
+          .name
+          .eq(VOLATILE_ENDPOINT_RECOGNITION_PROPERTY_NAME)
+      })
       .map_or(false, |property| {
         property
           .value
-          .eq("BuiltinParticipantVolatileMessageSecureWriter")
+          .eq(VOLATILE_WRITER_RECOGNITION_PROPERTY_VALUE)
           || property
             .value
-            .eq("BuiltinParticipantVolatileMessageSecureReader")
+            .eq(VOLATILE_READER_RECOGNITION_PROPERTY_VALUE)
       })
   }
 
@@ -98,7 +102,6 @@ impl CryptographicBuiltin {
     } else {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
     };
-    let key_length = KeyLength::from(transformation_kind);
 
     let salt_cookie: &[u8] = b"keyexchange salt".as_ref(); // Not a typo
     let key_cookie: &[u8] = b"key exchange key".as_ref();
@@ -106,20 +109,18 @@ impl CryptographicBuiltin {
     let master_salt = Self::hash_shared_secret(
       [challenge1.as_ref(), salt_cookie, challenge2.as_ref()],
       shared_secret,
-      key_length,
     );
 
     let master_sender_key = Self::hash_shared_secret(
       [challenge2.as_ref(), key_cookie, challenge1.as_ref()],
       shared_secret,
-      key_length,
     );
 
     Ok(KeyMaterial_AES_GCM_GMAC_seq::Two(
       KeyMaterial_AES_GCM_GMAC {
         transformation_kind,
         master_salt,
-        sender_key_id: CryptoTransformKeyId::ZERO,
+        sender_key_id: CryptoTransformKeyId::ZERO, // 9.5.2.1.2
         master_sender_key,
         // Leave receiver-specific key empty
         receiver_specific_key_id: CryptoTransformKeyId::ZERO,
@@ -139,11 +140,7 @@ impl CryptographicBuiltin {
 
   // Creates a hmac key out of the challenges and cookie and uses it to hash the
   // secret according to 9.5.2.1.2
-  fn hash_shared_secret(
-    hmac_key_plain: [&[u8]; 3],
-    shared_secret: &SharedSecret,
-    key_length: KeyLength,
-  ) -> BuiltinKey {
+  fn hash_shared_secret(hmac_key_plain: [&[u8]; 3], shared_secret: &SharedSecret) -> BuiltinKey {
     let hmac_key = hmac::Key::new(
       hmac::HMAC_SHA256,
       digest::digest(&digest::SHA256, hmac_key_plain.concat().as_ref()).as_ref(),
@@ -179,9 +176,18 @@ impl CryptographicBuiltin {
     }
   }
 
-  //TODO replace with proper functionality
+  fn generate_key_id(&mut self) -> CryptoTransformKeyId {
+    loop {
+      let candidate = CryptoTransformKeyId::random();
+      if !self.used_local_key_ids.contains(&candidate) {
+        return candidate;
+      }
+      // Else there was a collision, retry
+    }
+  }
+
   fn generate_key_material(
-    crypto_handle: CryptoHandle,
+    &mut self,
     transformation_kind: BuiltinCryptoTransformationKind,
   ) -> KeyMaterial_AES_GCM_GMAC {
     let key_length = KeyLength::from(transformation_kind);
@@ -190,7 +196,7 @@ impl CryptographicBuiltin {
 
       master_salt: BuiltinKey::generate_random(key_length),
 
-      sender_key_id: CryptoTransformKeyId::ZERO, // TODO
+      sender_key_id: self.generate_key_id(),
       master_sender_key: keygen(key_length),
       // Leave receiver-specific key empty initially
       receiver_specific_key_id: CryptoTransformKeyId::ZERO,
@@ -198,24 +204,16 @@ impl CryptographicBuiltin {
     }
   }
 
-  fn generate_mock_key(crypto_handle: CryptoHandle) -> KeyMaterial_AES_GCM_GMAC {
-    Self::generate_key_material(
-      crypto_handle,
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE,
-    )
-  }
-
   fn generate_receiver_specific_key(
     &mut self,
     key_materials: KeyMaterial_AES_GCM_GMAC_seq,
     origin_authentication: bool,
-    crypto_handle: CryptoHandle,
   ) -> KeyMaterial_AES_GCM_GMAC_seq {
     if origin_authentication {
       let master_receiver_specific_key =
         keygen(key_materials.key_material().transformation_kind.into());
-      let key_id = key_materials.key_material().sender_key_id; // TODO: Is this correct?
-      key_materials.add_master_receiver_specific_key(key_id, master_receiver_specific_key)
+      key_materials
+        .add_master_receiver_specific_key(self.generate_key_id(), master_receiver_specific_key)
     } else {
       key_materials.add_master_receiver_specific_key(CryptoTransformKeyId::ZERO, BuiltinKey::None)
     }
@@ -288,14 +286,11 @@ impl CryptoKeyFactory for CryptographicBuiltin {
       )?;
     let crypto_handle = self.generate_crypto_handle();
 
-    let key_material = Self::generate_key_material(
-      crypto_handle,
-      Self::transformation_kind(
-        participant_security_attributes.is_rtps_protected,
-        plugin_participant_security_attributes.is_rtps_encrypted,
-        Self::use_256_bit_key(participant_properties),
-      ),
-    );
+    let key_material = self.generate_key_material(Self::transformation_kind(
+      participant_security_attributes.is_rtps_protected,
+      plugin_participant_security_attributes.is_rtps_encrypted,
+      Self::use_256_bit_key(participant_properties),
+    ));
     self
       .insert_common_encode_key_materials(
         crypto_handle,
@@ -310,7 +305,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     local_participant_crypto_handle: ParticipantCryptoHandle,
     _remote_participant_identity: IdentityHandle,
     _remote_participant_permissions: PermissionsHandle,
-    shared_secret: SharedSecretHandle,
+    _shared_secret: SharedSecretHandle,
   ) -> SecurityResult<ParticipantCryptoHandle> {
     //TODO: this is only a mock implementation
 
@@ -351,7 +346,6 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     let key_materials = self.generate_receiver_specific_key(
       local_participant_key_materials,
       is_rtps_origin_authenticated,
-      remote_participant_crypto_handle,
     );
 
     self.insert_receiver_specific_encode_key_materials(
@@ -396,10 +390,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
         use_256_bit_key,
       );
 
-      let submessage_key_material = Self::generate_key_material(
-        local_datawriter_crypto_handle,
-        submessage_transformation_kind,
-      );
+      let submessage_key_material = self.generate_key_material(submessage_transformation_kind);
       // If the transformation kinds match, key reuse is possible: 9.5.3.1
       let key_materials = if submessage_transformation_kind == payload_transformation_kind
       /* && additional configurable condition? */
@@ -408,7 +399,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
       } else {
         KeyMaterial_AES_GCM_GMAC_seq::Two(
           submessage_key_material,
-          Self::generate_key_material(self.generate_crypto_handle(), payload_transformation_kind),
+          self.generate_key_material(payload_transformation_kind),
         )
       };
       self.insert_common_encode_key_materials(
@@ -441,7 +432,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
     local_datawriter_crypto_handle: DatawriterCryptoHandle,
     remote_participant_crypto_handle: ParticipantCryptoHandle,
     shared_secret: SharedSecretHandle,
-    relay_only: bool,
+    _relay_only: bool,
   ) -> SecurityResult<DatareaderCryptoHandle> {
     //TODO: this is only a mock implementation
     let common_encode_key_materials = self
@@ -491,7 +482,6 @@ impl CryptoKeyFactory for CryptographicBuiltin {
         self.generate_receiver_specific_key(
           common_encode_key_materials,
           is_submessage_origin_authenticated,
-          remote_datareader_crypto_handle,
         )
       }
     };
@@ -546,18 +536,14 @@ impl CryptoKeyFactory for CryptographicBuiltin {
         CommonEncodeKeyMaterials::Volatile(use_256_bit_key),
       )?;
     } else {
+      let key_material = self.generate_key_material(Self::transformation_kind(
+        datareader_security_attributes.is_submessage_protected,
+        plugin_endpoint_security_attributes.is_submessage_encrypted,
+        use_256_bit_key,
+      ));
       self.insert_common_encode_key_materials(
         local_datareader_crypto_handle,
-        CommonEncodeKeyMaterials::Some(KeyMaterial_AES_GCM_GMAC_seq::One(
-          Self::generate_key_material(
-            local_datareader_crypto_handle,
-            Self::transformation_kind(
-              datareader_security_attributes.is_submessage_protected,
-              plugin_endpoint_security_attributes.is_submessage_encrypted,
-              use_256_bit_key,
-            ),
-          ),
-        )),
+        CommonEncodeKeyMaterials::Some(KeyMaterial_AES_GCM_GMAC_seq::One(key_material)),
       )?;
     }
     self.insert_endpoint_attributes(
@@ -631,7 +617,6 @@ impl CryptoKeyFactory for CryptographicBuiltin {
         self.generate_receiver_specific_key(
           common_encode_key_materials,
           is_submessage_origin_authenticated,
-          remote_datawriter_crypto_handle,
         )
       }
     };

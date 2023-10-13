@@ -20,6 +20,9 @@ use crate::rtps::{Submessage, SubmessageBody};
 /// that follow.
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Readable, Writable)]
 pub struct InfoSource {
+  /// DDSI-RTPS 2.5 specifies an unused long here in 9.4.5.11
+  pub unused: u32,
+
   /// Indicates the protocol used to encapsulate subsequent Submessages
   pub protocol_version: ProtocolVersion,
 
@@ -35,7 +38,8 @@ pub struct InfoSource {
 impl InfoSource {
   #[cfg(feature = "security")] // currently otherwise unused, clippy warns about this
   pub fn len_serialized(&self) -> usize {
-    std::mem::size_of::<ProtocolVersion>()
+    std::mem::size_of::<u32>()
+      + std::mem::size_of::<ProtocolVersion>()
       + std::mem::size_of::<VendorId>()
       + std::mem::size_of::<GuidPrefix>()
   }
@@ -64,6 +68,7 @@ impl From<Header> for InfoSource {
     }: Header,
   ) -> Self {
     InfoSource {
+      unused: 0,
       protocol_version,
       vendor_id,
       guid_prefix,
@@ -77,6 +82,7 @@ impl From<InfoSource> for Header {
       protocol_version,
       vendor_id,
       guid_prefix,
+      ..
     }: InfoSource,
   ) -> Self {
     Header {
@@ -96,6 +102,7 @@ mod tests {
   {
       info_source,
       InfoSource {
+        unused: 0,
           protocol_version: ProtocolVersion::PROTOCOLVERSION_2_2,
           vendor_id: VendorId {
               vendor_id: [0xFF, 0xAA]
@@ -106,11 +113,13 @@ mod tests {
                           0x01, 0x00, 0x00, 0x00]
           }
       },
-      le = [0x02, 0x02, 0xFF, 0xAA,
+      le = [0x00, 0x00, 0x00, 0x00,
+            0x02, 0x02, 0xFF, 0xAA,
             0x01, 0x02, 0x6D, 0x3F,
             0x7E, 0x07, 0x00, 0x00,
             0x01, 0x00, 0x00, 0x00],
-      be = [0x02, 0x02, 0xFF, 0xAA,
+      be = [0x00, 0x00, 0x00, 0x00,
+            0x02, 0x02, 0xFF, 0xAA,
             0x01, 0x02, 0x6D, 0x3F,
             0x7E, 0x07, 0x00, 0x00,
             0x01, 0x00, 0x00, 0x00]

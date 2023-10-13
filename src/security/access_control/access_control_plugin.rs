@@ -50,21 +50,25 @@ pub trait ParticipantAccessControl: Send {
 
   /// check_create_participant: section 8.4.2.9.3 of the Security
   /// specification
+  /// In the returned Ok-variant, the boolean tells if the participant passed
+  /// the permission check.
   fn check_create_participant(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     qos: &QosPolicies,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /// check_remote_participant: section 8.4.2.9.9 of the Security
   /// specification.
+  /// In the returned Ok-variant, the boolean tells if the participant passed
+  /// the permission check.
   fn check_remote_participant(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     participant_data: Option<&SpdpDiscoveredParticipantData>,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /// get_permissions_token: section 8.4.2.9.17 of the Security
   /// specification.
@@ -96,57 +100,67 @@ pub trait LocalEntityAccessControl: Send {
   /// check_create_datawriter: section 8.4.2.9.4 of the Security
   /// specification. The parameters partition and data_tag have been left out,
   /// since RustDDS does not yet support PartitionQoS or data tagging
+  /// In the returned Ok-variant, the boolean tells if the participant passed
+  /// the permission check.
   fn check_create_datawriter(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_name: String,
     qos: &QosPolicies,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /// check_create_datareader: section 8.4.2.9.5 of the Security
   /// specification. The parameters partition and data_tag have been left out,
   /// since RustDDS does not yet support PartitionQoS or data tagging
+  /// In the returned Ok-variant, the boolean tells if the participant passed
+  /// the permission check.
   fn check_create_datareader(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_name: String,
     qos: &QosPolicies,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /// check_create_topic: section 8.4.2.9.6 of the Security
   /// specification
+  /// In the returned Ok-variant, the boolean tells if the participant passed
+  /// the permission check.
   fn check_create_topic(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_name: String,
     qos: &QosPolicies,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /*
   /// check_local_datawriter_register_instance: section 8.4.2.9.7 of the
   /// Security specification.
+  /// In the returned Ok-variant, the boolean tells if the participant passed
+  /// the permission check.
   // Support for this is not yet implemented as the builtin plugin does not need it
   fn check_local_datawriter_register_instance(
     &self,
     permissions_handle: PermissionsHandle,
     writer: DataWriter,// Needs actual type definition
     key: DynamicData,// Needs actual type definition
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
   */
 
   /*
   /// check_local_datawriter_register_instance: section 8.4.2.9.8 of the
   /// Security specification.
+  /// In the returned Ok-variant, the boolean tells if the participant passed
+  /// the permission check.
   // Support for this is not yet implemented as the builtin plugin does not need it
   fn check_local_datawriter_dispose_instance(
     &self,
     permissions_handle: PermissionsHandle,
     writer: DataWriter,// Needs actual type definition
     key: DynamicData,// Needs actual type definition
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
   */
 
   /// get_topic_sec_attributes: section 8.4.2.9.23 of the Security
@@ -154,7 +168,7 @@ pub trait LocalEntityAccessControl: Send {
   fn get_topic_sec_attributes(
     &self,
     permissions_handle: PermissionsHandle,
-    topic_name: String,
+    topic_name: &str,
   ) -> SecurityResult<TopicSecurityAttributes>;
 
   /// get_datawriter_sec_attributes: section 8.4.2.9.24 of the Security
@@ -182,30 +196,37 @@ pub trait LocalEntityAccessControl: Send {
 pub trait RemoteEntityAccessControl: Send {
   /// check_remote_datawriter: section 8.4.2.9.10 of the Security
   /// specification.
+  /// In the returned Ok-variant, the boolean tells if the participant passed
+  /// the permission check.
   fn check_remote_datawriter(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     publication_data: &PublicationBuiltinTopicDataSecure,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /// check_remote_datareader: section 8.4.2.9.11 of the Security
   /// specification.
+  /// In the returned Ok-variant, the first boolean tells if the remote
+  /// DataReader passed the permission check. The second boolean is the
+  /// relay_only value (see the spec)
   fn check_remote_datareader(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     subscription_data: &SubscriptionBuiltinTopicDataSecure,
-  ) -> SecurityResult<bool>;
+  ) -> SecurityResult<(bool, bool)>;
 
   /// check_remote_topic: section 8.4.2.9.12 of the Security
   /// specification.
+  /// In the returned Ok-variant, the boolean tells if the participant passed
+  /// the permission check.
   fn check_remote_topic(
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     topic_data: &TopicBuiltinTopicData,
-  ) -> SecurityResult<()>;
+  ) -> SecurityResult<bool>;
 
   /*
   /// check_local_datawriter_match: section 8.4.2.9.13 of the Security

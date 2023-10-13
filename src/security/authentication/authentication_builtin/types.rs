@@ -552,7 +552,7 @@ pub(in crate::security) const AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROP
 /// DDS:Auth:PKI-DH AuthenticatedPeerCredentialToken type from section 9.3.2.3
 /// of the Security specification (v. 1.1)
 /// The spec specifies the fields as properties (Strings), but they actually
-/// should be binary properties. See https://issues.omg.org/issues/DDSSEC12-110
+/// should be binary properties. See <https://issues.omg.org/issues/DDSSEC12-110>
 pub(in crate::security) struct BuiltinAuthenticatedPeerCredentialToken {
   pub c_id: Bytes,
   pub c_perm: Bytes,

@@ -1,3 +1,4 @@
+pub mod paths;
 use crate::{qos, security};
 
 // Temporary module for determining security configurations for development
@@ -11,16 +12,39 @@ pub struct SecurityConfig {
 pub fn test_config() -> SecurityConfig {
   let security_enabled = true;
 
+  let path_start = [
+    "file:".to_string(),
+    paths::EXAMPLE_SECURITY_CONFIGURATION_FILES.to_string(),
+  ]
+  .concat();
+
+  let mut test_participant_name = String::new();
+  File::open("test_participant_name")
+    .and_then(|mut file| file.read_to_string(&mut test_participant_name))
+    .unwrap();
+
   let properties = vec![
     // For the authentication plugin
     security::types::Property {
       name: "dds.sec.auth.identity_ca".to_string(),
-      value: "file:example_security_configuration_files/identity_ca_certificate.pem".to_string(),
+      value: [
+        path_start.clone(),
+        "identity_ca_certificate.pem".to_string(),
+      ]
+      .concat(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.auth.private_key".to_string(),
-      value: "file:example_security_configuration_files/participant1_private_key.pem".to_string(),
+      value: [
+        path_start.clone(),
+        [
+          test_participant_name.clone(),
+          "_private_key.pem".to_string(),
+        ]
+        .concat(),
+      ]
+      .concat(),
       propagate: false,
     },
     security::types::Property {
@@ -30,30 +54,31 @@ pub fn test_config() -> SecurityConfig {
     },
     security::types::Property {
       name: "dds.sec.auth.identity_certificate".to_string(),
-      value: "file:example_security_configuration_files/participant1_certificate.pem".to_string(),
-      propagate: false,
-    },
-    security::types::Property {
-      // Custom & temporary property. Should be here only in the development phase.
-      name: "dds.sec.auth.mock_handshakes".to_string(),
-      value: "no" // If "yes", authentication handshakes will be mocked. Otherwise not.
-        .to_string(),
+      value: [
+        path_start.clone(),
+        [test_participant_name, "_certificate.pem".to_string()].concat(),
+      ]
+      .concat(),
       propagate: false,
     },
     // For the access control plugin
     security::types::Property {
       name: "dds.sec.access.permissions_ca".to_string(),
-      value: "file:example_security_configuration_files/permissions_ca_certificate.pem".to_string(),
+      value: [
+        path_start.clone(),
+        "permissions_ca_certificate.pem".to_string(),
+      ]
+      .concat(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.access.governance".to_string(),
-      value: "file:example_security_configuration_files/permissive_governance.p7s".to_string(),
+      value: [path_start.clone(), "test_governance.p7s".to_string()].concat(),
       propagate: false,
     },
     security::types::Property {
       name: "dds.sec.access.permissions".to_string(),
-      value: "file:example_security_configuration_files/permissive_permissions.p7s".to_string(),
+      value: [path_start, "test_permissions.p7s".to_string()].concat(),
       propagate: false,
     },
   ];
@@ -86,7 +111,7 @@ pub(crate) fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
   }
 }
 
-use std::fmt::Debug;
+use std::{fmt::Debug, fs::File, io::Read};
 
 #[derive(Debug)]
 pub enum ConfigError {

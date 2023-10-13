@@ -43,7 +43,7 @@ impl AccessControlBuiltin {
     &self,
     permissions_handle: PermissionsHandle,
     domain_id: u16,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     let grant = self.get_grant(&permissions_handle)?;
     let DomainRule {
       // corresponds to is_access_protected
@@ -63,12 +63,7 @@ impl AccessControlBuiltin {
 
     // The specification seems to have a mistake here for check_create_participant. We should also check for protected topics for which we haver permissions. See https://issues.omg.org/issues/DDSSEC12-79
     let joinable_topics = unprotected_topics || grant.check_participant_join(domain_id);
-
-    joinable_topics.then_some(()).ok_or_else(|| {
-      security_error!(
-        "The participant is not allowed to join any topic by the domain rule nor the grant."
-      )
-    })
+    Ok(joinable_topics)
   }
 }
 
@@ -293,7 +288,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     _qos: &QosPolicies,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     self.check_participant(permissions_handle, domain_id)
   }
 
@@ -303,7 +298,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
     permissions_handle: PermissionsHandle,
     domain_id: u16,
     _participant_data: Option<&SpdpDiscoveredParticipantData>,
-  ) -> SecurityResult<()> {
+  ) -> SecurityResult<bool> {
     // Move the following check to validate_remote_permissions from check_remote_
     // methods, as there we have access to the tokens: "If the PluginClassName
     // or the MajorVersion of the local permissions_token differ from those in

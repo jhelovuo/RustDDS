@@ -223,6 +223,10 @@ impl QosPolicies {
     self.durability
   }
 
+  pub fn is_volatile(&self) -> bool {
+    matches!(self.durability, Some(policy::Durability::Volatile))
+  }
+
   pub const fn presentation(&self) -> Option<policy::Presentation> {
     self.presentation
   }
@@ -941,7 +945,7 @@ pub mod policy {
   //
   // so this is DataTagQosPolicy, which is an alias for "DataTags"
   // We call it qos::policy::DataTag
-  #[derive(Clone, Debug, PartialEq, Eq)]
+  #[derive(Clone, Debug, PartialEq, Eq, Default)]
   #[cfg(feature = "security")]
   pub struct DataTag {
     pub tags: Vec<security::types::Tag>,

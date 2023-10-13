@@ -4,6 +4,7 @@ use bytes::Bytes;
 use chrono::Utc;
 
 use crate::{
+  rtps::constant::builtin_topic_names,
   security::{
     authentication::IdentityHandle,
     certificate::{Certificate, DistinguishedName},
@@ -153,67 +154,70 @@ impl AccessControlBuiltin {
     partitions: &[&str],
     data_tags: &[(&str, &str)],
     entity_kind: &Entity,
-  ) -> SecurityResult<()> {
-    // TODO: remove after testing
-    if true {
-      return Ok(());
+  ) -> SecurityResult<bool> {
+    match topic_name {
+      // Builtin entities always ok
+      builtin_topic_names::DCPS_PARTICIPANT
+      | builtin_topic_names::DCPS_PARTICIPANT_MESSAGE
+      | builtin_topic_names::DCPS_PARTICIPANT_MESSAGE_SECURE
+      | builtin_topic_names::DCPS_PARTICIPANT_SECURE
+      | builtin_topic_names::DCPS_PARTICIPANT_STATELESS_MESSAGE
+      | builtin_topic_names::DCPS_PARTICIPANT_VOLATILE_MESSAGE_SECURE
+      | builtin_topic_names::DCPS_PUBLICATION
+      | builtin_topic_names::DCPS_PUBLICATIONS_SECURE
+      | builtin_topic_names::DCPS_SUBSCRIPTION
+      | builtin_topic_names::DCPS_SUBSCRIPTIONS_SECURE
+      | builtin_topic_names::DCPS_TOPIC => Ok(true),
+
+      // General case
+      topic_name => {
+        let grant = self.get_grant(&permissions_handle)?;
+        let domain_rule = self.get_domain_rule(&permissions_handle)?;
+
+        let requested_access_is_unprotected = domain_rule
+          .find_topic_rule(topic_name)
+          .map(
+            |TopicRule {
+               enable_read_access_control,
+               enable_write_access_control,
+               ..
+             }| match entity_kind {
+              Entity::Datawriter => *enable_write_access_control,
+              Entity::Datareader => *enable_read_access_control,
+              Entity::Topic => *enable_read_access_control && *enable_write_access_control,
+            },
+          )
+          .is_some_and(bool::not);
+
+        let participant_has_write_access = grant
+          .check_action(
+            Action::Publish,
+            domain_id,
+            topic_name,
+            partitions,
+            data_tags,
+          )
+          .into();
+
+        let participant_has_read_access = grant
+          .check_action(
+            Action::Subscribe,
+            domain_id,
+            topic_name,
+            partitions,
+            data_tags,
+          )
+          .into();
+
+        let participant_has_requested_access = match entity_kind {
+          Entity::Datawriter => participant_has_write_access,
+          Entity::Datareader => participant_has_read_access,
+          Entity::Topic => participant_has_write_access || participant_has_read_access,
+        };
+
+        let check_passed = requested_access_is_unprotected || participant_has_requested_access;
+        Ok(check_passed)
+      }
     }
-
-    let grant = self.get_grant(&permissions_handle)?;
-    let domain_rule = self.get_domain_rule(&permissions_handle)?;
-
-    let requested_access_is_unprotected = domain_rule
-      .find_topic_rule(topic_name)
-      .map(
-        |TopicRule {
-           enable_read_access_control,
-           enable_write_access_control,
-           ..
-         }| match entity_kind {
-          Entity::Datawriter => *enable_write_access_control,
-          Entity::Datareader => *enable_read_access_control,
-          Entity::Topic => *enable_read_access_control && *enable_write_access_control,
-        },
-      )
-      .is_some_and(bool::not);
-
-    let participant_has_write_access = grant
-      .check_action(
-        Action::Publish,
-        domain_id,
-        topic_name,
-        partitions,
-        data_tags,
-      )
-      .into();
-
-    let participant_has_read_access = grant
-      .check_action(
-        Action::Subscribe,
-        domain_id,
-        topic_name,
-        partitions,
-        data_tags,
-      )
-      .into();
-
-    let participant_has_requested_access = match entity_kind {
-      Entity::Datawriter => participant_has_write_access,
-      Entity::Datareader => participant_has_read_access,
-      Entity::Topic => participant_has_write_access || participant_has_read_access,
-    };
-
-    (requested_access_is_unprotected || participant_has_requested_access)
-      .then_some(())
-      .ok_or_else(|| {
-        security_error!(
-          "The participant has no {} access to the topic.",
-          match entity_kind {
-            Entity::Datawriter => "write",
-            Entity::Datareader => "read",
-            Entity::Topic => "write nor read",
-          }
-        )
-      })
   }
 }

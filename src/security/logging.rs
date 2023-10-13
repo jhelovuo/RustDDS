@@ -4,8 +4,16 @@
 // logging should be handled with special care (by a security-logging-plugin in
 // the future?) So it acts as a placeholder for more to come.
 #[macro_export]
-macro_rules! security_log {
+macro_rules! security_info {
   ($($arg:tt)*) => (
       {log::info!($($arg)*);}
+    )
+}
+
+// Same as above, just with warn-level
+#[macro_export]
+macro_rules! security_warn {
+  ($($arg:tt)*) => (
+      {log::warn!($($arg)*);}
     )
 }

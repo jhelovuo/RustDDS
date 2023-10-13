@@ -3,7 +3,12 @@ use std::{convert::From, fmt};
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
-use crate::{rtps::Submessage, security::types::DataHolder};
+use crate::{
+  messages::submessages::submessage::{ReaderSubmessage, WriterSubmessage},
+  rtps::Submessage,
+  security::types::DataHolder,
+  structure::guid::GuidPrefix,
+};
 
 // Crypto related message class IDs for GenericMessageClassId:
 // See section 7.4.4.5 of the security spec
@@ -56,7 +61,7 @@ pub struct CryptoTransformIdentifier {
 pub type CryptoTransformKind = [u8; 4];
 /// transformation_key_id: section 8.5.1.5.2 of the Security specification (v.
 /// 1.1)
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Readable, Writable, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Readable, Writable, Serialize, Deserialize, Hash)]
 pub struct CryptoTransformKeyId([u8; 4]);
 
 impl CryptoTransformKeyId {
@@ -64,6 +69,11 @@ impl CryptoTransformKeyId {
 
   pub fn is_zero(&self) -> bool {
     *self == Self::ZERO
+  }
+
+  pub fn random() -> Self {
+    let random_array: [u8; 4] = rand::random();
+    Self(random_array)
   }
 }
 
@@ -77,21 +87,6 @@ impl fmt::Display for CryptoTransformKeyId {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "{:02x?}", self.0)
   }
-}
-
-/// SecureSubmessageCategory_t: section 8.5.1.6 of the Security specification
-/// (v. 1.1)
-///
-/// Used as a return type by
-/// [super::cryptographic_plugin::CryptoTransform::preprocess_secure_submessage],
-/// and therefore includes the crypto handles that would be returned in the
-/// latter two cases.
-
-#[allow(clippy::enum_variant_names)] // We are using variant names from the spec
-pub enum SecureSubmessageCategory {
-  InfoSubmessage,
-  DatawriterSubmessage(Vec<(DatawriterCryptoHandle, DatareaderCryptoHandle)>),
-  DatareaderSubmessage(Vec<(DatareaderCryptoHandle, DatawriterCryptoHandle)>),
 }
 
 /// [super::cryptographic_plugin::CryptoTransform::encode_datawriter_submessage]
@@ -112,4 +107,32 @@ impl From<EncodedSubmessage> for Vec<Submessage> {
       EncodedSubmessage::Encoded(prefix, submessage, postfix) => vec![prefix, submessage, postfix],
     }
   }
+}
+
+/// Result of submessage decoding. Contains the decoded submessage body and a
+/// list of endpoint crypto handles, the decode keys of which match the one used
+/// for decoding, i.e. which are approved to receive the submessage by access
+/// control.
+pub enum DecodedSubmessage {
+  // TODO: Should we support interpreter submessages here? The specification is unclear on this.
+  // See 8.5.1.6
+  //Interpreter(InterpreterSubmessage),
+  Writer(WriterSubmessage, Vec<EndpointCryptoHandle>),
+  Reader(ReaderSubmessage, Vec<EndpointCryptoHandle>),
+}
+
+pub enum DecodeOutcome<T> {
+  Success(T),
+  /// It is normal to receive encoded communication that is meant for another
+  /// participant, in which case the keys are missing and we cannot decode, but
+  /// we cannot distinguish this case without searching through the available
+  /// keys. In other words, not finding keys is not necessarily erroneous
+  /// behavior, and such communication should just be ignored.
+  KeysNotFound(CryptoTransformKeyId),
+  /// It is normal to receive messages or submessages that are missing the
+  /// required receiver-specific MAC due to multicasting.
+  ValidatingReceiverSpecificMACFailed,
+  /// It is normal to receive encoded messages from participants that have
+  /// not been matched with.
+  ParticipantCryptoHandleNotFound(GuidPrefix),
 }

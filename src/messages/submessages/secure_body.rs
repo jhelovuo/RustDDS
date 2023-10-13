@@ -24,7 +24,7 @@ impl SecureBody {
   pub fn create_submessage(self, endianness: speedy::Endianness) -> SecurityResult<Submessage> {
     let flags: BitFlags<SECUREBODY_Flags> = BitFlags::from_endianness(endianness);
     self
-      .write_to_vec()
+      .write_to_vec_with_ctx(endianness)
       .map(|bytes| Submessage {
         header: SubmessageHeader {
           kind: SubmessageKind::SEC_BODY,

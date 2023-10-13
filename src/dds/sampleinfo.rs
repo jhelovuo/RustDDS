@@ -229,7 +229,6 @@ pub struct SampleInfo {
   pub(crate) sequence_number: SequenceNumber,
 }
 
-#[allow(clippy::new_without_default)]
 impl SampleInfo {
   /// Source timestamp is the timestamp that was supplied by the DataWriter
   /// that sent this sample. It is optional to timestamp samples when writing.
