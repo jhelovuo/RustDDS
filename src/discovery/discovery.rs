@@ -1,7 +1,7 @@
 use std::{
   collections::HashMap,
   sync::{Arc, RwLock},
-  time::{Duration as StdDuration, Instant},
+  time::Duration as StdDuration,
 };
 
 #[allow(unused_imports)]
@@ -27,8 +27,7 @@ use crate::{
     discovery_db::{discovery_db_read, discovery_db_write, DiscoveredVia, DiscoveryDB},
     sedp_messages::{
       DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, Endpoint_GUID,
-      ParticipantMessageData, ParticipantMessageDataKind, PublicationBuiltinTopicData, ReaderProxy,
-      SubscriptionBuiltinTopicData, WriterProxy,
+      ParticipantMessageData, ParticipantMessageDataKind,
     },
     spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
@@ -907,86 +906,6 @@ impl Discovery {
     // ReaderProxy and WriterProxy objects for built-in Readers and Writers
     self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated {
       guid_prefix: dp.guid().prefix,
-    });
-
-    // insert a (fake) reader proxy as multicast address, so discovery notifications
-    // are sent somewhere
-    let reader_guid = GUID::new(
-      GuidPrefix::UNKNOWN,
-      EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-    );
-
-    // Do we expect inlineQos in every incoming DATA message?
-    let rustdds_expects_inline_qos = false;
-
-    let reader_proxy = ReaderProxy::new(
-      reader_guid,
-      rustdds_expects_inline_qos,
-      self
-        .self_locators
-        .get(&DISCOVERY_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_default(),
-      self
-        .self_locators
-        .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_default(),
-    );
-
-    let sub_topic_data = SubscriptionBuiltinTopicData::new(
-      reader_guid,
-      Some(dp.guid()),
-      String::from(builtin_topic_names::DCPS_PARTICIPANT),
-      String::from(builtin_topic_type_names::DCPS_PARTICIPANT),
-      &Self::create_spdp_participant_qos(),
-      None, // <<---------------TODO: None here means we advertise no EndpointSecurityInfo
-    );
-    let drd = DiscoveredReaderData {
-      reader_proxy,
-      subscription_topic_data: sub_topic_data,
-      content_filter: None,
-    };
-
-    let writer_guid = GUID::new(dp.guid().prefix, EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER);
-
-    let writer_proxy = WriterProxy::new(
-      writer_guid,
-      self
-        .self_locators
-        .get(&DISCOVERY_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_default(),
-      self
-        .self_locators
-        .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_default(),
-    );
-
-    let pub_topic_data = PublicationBuiltinTopicData::new(
-      writer_guid,
-      Some(dp.guid()),
-      String::from(builtin_topic_names::DCPS_PARTICIPANT),
-      String::from(builtin_topic_type_names::DCPS_PARTICIPANT),
-      None, // TODO: EndpointSecurityInfo is missing from here.
-    );
-    let dwd = DiscoveredWriterData {
-      last_updated: Instant::now(),
-      writer_proxy,
-      publication_topic_data: pub_topic_data,
-    };
-
-    // Notify local Readers and Writers in dp_event_loop
-    // so that they will create WriterProxies and ReaderProxies
-    // and know to communicate with them.
-    info!("Creating DCPSParticipant reader proxy.");
-    self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-      discovered_reader_data: drd,
-    });
-    info!("Creating DCPSParticipant writer proxy for self.");
-    self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
-      discovered_writer_data: dwd,
     });
   }
 
