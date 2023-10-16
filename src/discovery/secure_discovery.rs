@@ -102,8 +102,10 @@ pub(crate) struct SecureDiscovery {
   // in case they need to be sent again
   stored_authentication_messages: HashMap<GuidPrefix, StoredAuthenticationMessage>,
 
+  cached_key_exchange_messages_for_resend: HashSet<ParticipantVolatileMessageSecure>,
+
   // In the key, first GUID is local endpoint's, second is remote endpoint's
-  stored_volatile_messages: HashMap<(GUID, GUID), ParticipantVolatileMessageSecure>,
+  cached_received_key_exchange_messages: HashMap<(GUID, GUID), ParticipantVolatileMessageSecure>,
   user_data_endpoints_with_keys_already_sent_to: HashSet<GUID>,
 
   // A set for keeping track which remote readers are relay-only
@@ -245,8 +247,9 @@ impl SecureDiscovery {
       local_dp_sec_attributes: security_attributes,
       generic_message_helper: ParticipantGenericMessageHelper::new(),
       handshake_states: HashMap::new(),
+      cached_key_exchange_messages_for_resend: HashSet::new(),
       stored_authentication_messages: HashMap::new(),
-      stored_volatile_messages: HashMap::new(),
+      cached_received_key_exchange_messages: HashMap::new(),
       user_data_endpoints_with_keys_already_sent_to: HashSet::new(),
       relay_only_remote_readers: HashSet::new(),
     })
@@ -1482,10 +1485,12 @@ impl SecureDiscovery {
     self.update_handshake_state(remote_guid_prefix, DiscHandshakeState::PendingReplyMessage);
   }
 
-  pub fn resend_unanswered_authentication_messages(
+  pub fn resend_cached_secure_discovery_messages(
     &mut self,
     auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
+    key_exchange_writer: &no_key::DataWriter<ParticipantVolatileMessageSecure>,
   ) {
+    // First resend authentication messages
     for (guid_prefix, stored_message) in self.stored_authentication_messages.iter_mut() {
       // Resend the message unless it's a final message (which needs to be requested
       // from us)
@@ -1511,10 +1516,33 @@ impl SecureDiscovery {
         }
       }
     }
-    // Remove messages with no more resends
+    // Remove authentication messages with no more resends
     self
       .stored_authentication_messages
       .retain(|_guid_prefix, message| message.remaining_resend_counter > 0);
+
+    // Then try to send those key exchange messages that we haven't been able to
+    // send yet
+    let mut msgs_still_to_cache = HashSet::new();
+
+    for msg in self.cached_key_exchange_messages_for_resend.iter() {
+      match self.send_key_exchange_message(key_exchange_writer, msg) {
+        Ok(()) => {
+          debug!(
+            "Successfully sent a cached key exchange message to {:?}",
+            msg.generic.destination_participant_guid
+          );
+        }
+        Err(e) => {
+          security_error!(
+            "Failed again to send some crypto keys to {:?}: {e}",
+            msg.generic.destination_participant_guid
+          );
+          msgs_still_to_cache.insert(msg.clone());
+        }
+      }
+    }
+    self.cached_key_exchange_messages_for_resend = msgs_still_to_cache;
   }
 
   fn reset_stored_message_resend_counter(&mut self, remote_guid_prefix: &GuidPrefix) {
@@ -2019,7 +2047,7 @@ impl SecureDiscovery {
       remote_endpoint_guid
     );
     self
-      .stored_volatile_messages
+      .cached_received_key_exchange_messages
       .insert((local_endpoint_guid, remote_endpoint_guid), msg);
   }
 
@@ -2164,45 +2192,33 @@ impl SecureDiscovery {
 
     // Send local participant crypto tokens to remote
     // TODO: do this only if needed?
-    let local_participant_crypto_tokens = self
+    let crypto_tokens_res = self
       .security_plugins
       .get_plugins()
-      // Get participant crypto tokens
       .create_local_participant_crypto_tokens(remote_guid_prefix); // Release lock
-    let res = local_participant_crypto_tokens
-      .map(|crypto_tokens| {
-        self.new_volatile_message(
+    match crypto_tokens_res {
+      Err(e) => {
+        security_error!(
+          "Failed to create participant crypto tokens: {e }. Remote: {remote_guid_prefix:?}"
+        );
+      }
+      Ok(tokens) => {
+        let message = self.new_volatile_message(
           GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS,
           key_exchange_writer.guid(),
           GUID::GUID_UNKNOWN, // No source endpoint, just the participant
           remote_guid_prefix,
           GUID::GUID_UNKNOWN, // No destination endpoint, just the participant
-          crypto_tokens.as_ref(),
-        )
-      })
-      // Send with writer
-      .and_then(|vol_msg| {
-        let opts = WriteOptionsBuilder::new()
-          .to_single_reader(GUID::new(
-            remote_guid_prefix,
-            EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
-          ))
-          .build();
-        key_exchange_writer
-          .write_with_options(vol_msg, opts)
-          .map_err(|write_err| {
-            security_error(&format!("DataWriter write operation failed: {}", write_err))
-          })
-      });
-
-    if let Err(e) = res {
-      security_error!(
-        "Failed to send participant crypto tokens: {}. Remote: {:?}",
-        e,
-        remote_guid_prefix
-      );
-    } else {
-      info!("Sent participant crypto tokens to {:?}", remote_guid_prefix);
+          &tokens,
+        );
+        if let Err(e) = self.send_key_exchange_message(key_exchange_writer, &message) {
+          security_error!(
+            "Failed to send participant crypto tokens to {remote_guid_prefix:?}: {e}. Trying \
+             again later."
+          );
+          self.cached_key_exchange_messages_for_resend.insert(message);
+        }
+      }
     }
 
     // Send local writers' crypto tokens to the remote readers
@@ -2214,47 +2230,34 @@ impl SecureDiscovery {
         let remote_reader_guid = GUID::new(remote_guid_prefix, *reader_eid);
         let local_writer_guid = self.local_participant_guid.from_prefix(*writer_eid);
 
-        let local_writer_crypto_tokens = self
+        let crypto_tokens_res = self
           .security_plugins
           .get_plugins()
           .create_local_writer_crypto_tokens(local_writer_guid, remote_reader_guid); // Release lock
-        let res = local_writer_crypto_tokens
-          .map(|crypto_tokens| {
-            self.new_volatile_message(
+
+        match crypto_tokens_res {
+          Err(e) => {
+            security_error!(
+              "Failed to create local writer crypto tokens: {e}. Remote: {remote_guid_prefix:?}"
+            );
+          }
+          Ok(tokens) => {
+            let message = self.new_volatile_message(
               GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS,
               key_exchange_writer.guid(),
               local_writer_guid,
               remote_guid_prefix,
               remote_reader_guid,
-              crypto_tokens.as_ref(),
-            )
-          })
-          // Send with writer
-          .and_then(|vol_msg| {
-            let opts = WriteOptionsBuilder::new()
-              .to_single_reader(GUID::new(
-                remote_guid_prefix,
-                EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
-              ))
-              .build();
-            key_exchange_writer
-              .write_with_options(vol_msg, opts)
-              .map_err(|write_err| {
-                security_error(&format!("DataWriter write operation failed: {}", write_err))
-              })
-          });
-
-        if let Err(e) = res {
-          security_error!(
-            "Failed to send local writer crypto tokens: {}. Remote reader: {:?}",
-            e,
-            remote_reader_guid
-          );
-        } else {
-          info!(
-            "Sent local writer crypto tokens to {:?}",
-            remote_reader_guid
-          );
+              &tokens,
+            );
+            if let Err(e) = self.send_key_exchange_message(key_exchange_writer, &message) {
+              security_error!(
+                "Failed to send local writer {writer_eid:?} crypto tokens to \
+                 {remote_reader_guid:?}: {e}. Trying again later."
+              );
+              self.cached_key_exchange_messages_for_resend.insert(message);
+            }
+          }
         }
       }
     }
@@ -2268,50 +2271,38 @@ impl SecureDiscovery {
         let remote_writer_guid = GUID::new(remote_guid_prefix, *writer_eid);
         let local_reader_guid = self.local_participant_guid.from_prefix(*reader_eid);
 
-        let local_reader_crypto_tokens = self
+        let crypto_tokens_res = self
           .security_plugins
           .get_plugins()
           .create_local_reader_crypto_tokens(local_reader_guid, remote_writer_guid); // Release lock
-        let res = local_reader_crypto_tokens
-          .map(|crypto_tokens| {
-            self.new_volatile_message(
+
+        match crypto_tokens_res {
+          Err(e) => {
+            security_error!(
+              "Failed to create local reader crypto tokens: {e}. Remote: {remote_guid_prefix:?}"
+            );
+          }
+          Ok(tokens) => {
+            let message = self.new_volatile_message(
               GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS,
               key_exchange_writer.guid(),
               local_reader_guid,
               remote_guid_prefix,
               remote_writer_guid,
-              crypto_tokens.as_ref(),
-            )
-          })
-          // Send with writer
-          .and_then(|vol_msg| {
-            let opts = WriteOptionsBuilder::new()
-              .to_single_reader(GUID::new(
-                remote_guid_prefix,
-                EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
-              ))
-              .build();
-            key_exchange_writer
-              .write_with_options(vol_msg, opts)
-              .map_err(|write_err| {
-                security_error(&format!("DataWriter write operation failed: {}", write_err))
-              })
-          });
-
-        if let Err(e) = res {
-          security_error!(
-            "Failed to send local reader crypto tokens: {}. Remote writer: {:?}",
-            e,
-            remote_writer_guid
-          );
-        } else {
-          info!(
-            "Sent local reader crypto tokens to {:?}",
-            remote_writer_guid
-          );
+              &tokens,
+            );
+            if let Err(e) = self.send_key_exchange_message(key_exchange_writer, &message) {
+              security_error!(
+                "Failed to send local reader {reader_eid:?} crypto tokens to \
+                 {remote_writer_guid:?}: {e}. Trying again later."
+              );
+              self.cached_key_exchange_messages_for_resend.insert(message);
+            }
+          }
         }
       }
     }
+    debug!("Finished starting key exchange with remote participant {remote_guid_prefix:?}");
   }
 
   pub fn start_key_exchange_with_remote_endpoint(
@@ -2356,7 +2347,7 @@ impl SecureDiscovery {
     // (local, remote) endpoint pair. This happens if we have received keys from the
     // remote before we have registered the remote endpoint
     if let Some(msg) = self
-      .stored_volatile_messages
+      .cached_received_key_exchange_messages
       .get(&(local_endpoint_guid, remote_endpoint_guid))
     {
       // Get crypto tokens from the stored message & set them
@@ -2392,7 +2383,7 @@ impl SecureDiscovery {
         );
         // Remove the stored message
         self
-          .stored_volatile_messages
+          .cached_received_key_exchange_messages
           .remove(&(local_endpoint_guid, remote_endpoint_guid));
       }
     }
@@ -2431,9 +2422,11 @@ impl SecureDiscovery {
     // See '8.8.9.2 Key Exchange with remote DataReader' and
     // '8.8.9.3 Key Exchange with remote DataWriter' in the spec
     let need_to_send_keys = if remote_is_writer {
+      // Our local endpoint is a reader, so only is_submessage_protected matters
       sec_attr.is_submessage_protected
     } else {
-      // For reader only is_submessage_protected matters
+      // Our local endpoint is a writer, so both is_payload_protected and
+      // is_submessage_protected matter
       sec_attr.is_payload_protected || sec_attr.is_submessage_protected
     };
 
@@ -2504,40 +2497,37 @@ impl SecureDiscovery {
         );
       }
     } else {
-      // It's a real remote, send tokens to network
+      // It's a real remote, send tokens over the network
 
       // Create the volatile message containing the tokens
       let vol_msg = if remote_is_writer {
+        // Our local endpoint is a reader
         self.new_volatile_message(
           GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS,
           key_exchange_writer.guid(),
           local_endpoint_guid,
           remote_endpoint_guid.prefix,
           remote_endpoint_guid,
-          crypto_tokens.as_ref(),
+          &crypto_tokens,
         )
       } else {
+        // Our local endpoint is a writer
         self.new_volatile_message(
           GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS,
           key_exchange_writer.guid(),
           local_endpoint_guid,
           remote_endpoint_guid.prefix,
           remote_endpoint_guid,
-          crypto_tokens.as_ref(),
+          &crypto_tokens,
         )
       };
-
-      let remote_volatile_reader_guid =
-        remote_endpoint_guid.from_prefix(EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER);
-      let opts = WriteOptionsBuilder::new()
-        .to_single_reader(remote_volatile_reader_guid)
-        .build();
-
-      if let Err(e) = key_exchange_writer.write_with_options(vol_msg, opts) {
-        error!("DataWriter write operation failed: {}", e);
-        return;
-      } else {
-        debug!("Sent crypto tokens to {:?}", remote_endpoint_guid);
+      if let Err(e) = self.send_key_exchange_message(key_exchange_writer, &vol_msg) {
+        security_error!(
+          "Failed to send local endpoint {:?} crypto tokens to {:?}: {e}. Trying again later.",
+          local_endpoint_guid.entity_id,
+          remote_endpoint_guid
+        );
+        self.cached_key_exchange_messages_for_resend.insert(vol_msg);
       }
     }
 
@@ -2545,6 +2535,8 @@ impl SecureDiscovery {
     self
       .user_data_endpoints_with_keys_already_sent_to
       .insert(remote_endpoint_guid);
+
+    debug!("Finished starting key exchange with remote endpoint {remote_endpoint_guid:?}");
   }
 
   fn validate_remote_participant_permissions(
@@ -2570,6 +2562,31 @@ impl SecureDiscovery {
       &permissions_token,
       &auth_credential_token,
     )
+  }
+
+  fn send_key_exchange_message(
+    &self,
+    key_exchange_writer: &no_key::DataWriter<ParticipantVolatileMessageSecure>,
+    message: &ParticipantVolatileMessageSecure,
+  ) -> Result<(), String> {
+    // The key exchange message is meant only for the remote participant specified
+    // in the message.
+    // It's critical to get the remote guid in WriteOptions
+    // right, since otherwise secret keys will be sent to some other
+    // participant.
+    let remote_guidp = message.generic.destination_participant_guid.prefix;
+    let opts = WriteOptionsBuilder::new()
+      .to_single_reader(GUID::new(
+        remote_guidp,
+        EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
+      ))
+      .build();
+
+    if let Err(e) = key_exchange_writer.write_with_options(message.clone(), opts) {
+      Err(e.to_string())
+    } else {
+      Ok(())
+    }
   }
 
   fn resend_final_handshake_message(
@@ -2744,7 +2761,7 @@ fn register_remote_to_crypto(
         remote_guidp
       )
     })?;
-  debug!(
+  trace!(
     "Registered remote participant {:?} with the crypto plugin.",
     remote_guidp
   );
@@ -2764,7 +2781,7 @@ fn register_remote_to_crypto(
           e,
         )
       })?;
-    debug!(
+    trace!(
       "Registered remote reader with the crypto plugin. GUID: {:?}",
       remote_reader_guid
     );
@@ -2785,7 +2802,7 @@ fn register_remote_to_crypto(
           e,
         )
       })?;
-    debug!(
+    trace!(
       "Registered remote writer with the crypto plugin. GUID: {:?}",
       remote_writer_guid
     );

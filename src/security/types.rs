@@ -102,7 +102,7 @@ macro_rules! security_error {
 }
 
 // Property_t type from section 7.2.1 of the Security specification (v. 1.1)
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)] // for CDR in Discovery
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)] // for CDR in Discovery
 pub struct Property {
   pub(crate) name: String,
   pub(crate) value: String,
@@ -191,7 +191,7 @@ impl QosPolicies {
 // BinaryProperty_t type from section 7.2.2 of the Security specification (v.
 // 1.1)
 // // Serialize, Deserialize for CDR in Discovery
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 #[serde(into = "repr::BinaryProperty", from = "repr::BinaryProperty")]
 pub struct BinaryProperty {
   pub(crate) name: String,    // public because of serialization
@@ -419,7 +419,7 @@ impl DataHolderBuilder {
 
 // DataHolder type from section 7.2.3 of the Security specification (v. 1.1)
 // fields need to be public to make (de)serializable
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq)] // for CDR in Discovery
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash)] // for CDR in Discovery
 pub struct DataHolder {
   pub(crate) class_id: String,
   pub(crate) properties: Vec<Property>,
@@ -1031,7 +1031,7 @@ pub fn volatile_reader_recognition_property() -> Property {
 // specification
 //
 // spec: typedef ParticipantVolatileMessageSecure ParticipantGenericMessage;
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
 pub(crate) struct ParticipantVolatileMessageSecure {
   pub generic: ParticipantGenericMessage,
 }
@@ -1059,7 +1059,7 @@ use super::access_control::{EndpointSecurityAttributes, ParticipantSecurityAttri
 // This is the transport (message) type for specialized versions above.
 // DDS Security Spec v1.1
 // Section 7.2.6 ParticipantGenericMessage
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct ParticipantGenericMessage {
   pub message_identity: rpc::SampleIdentity,
   pub related_message_identity: rpc::SampleIdentity,

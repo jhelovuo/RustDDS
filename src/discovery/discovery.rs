@@ -253,7 +253,7 @@ impl Discovery {
   const SEND_TOPIC_INFO_PERIOD: StdDuration = StdDuration::from_secs(10);
   const CHECK_PARTICIPANT_MESSAGES: StdDuration = StdDuration::from_secs(1);
   #[cfg(feature = "security")]
-  const AUTHENTICATION_MESSAGE_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
+  const CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
 
   pub(crate) const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
@@ -584,8 +584,8 @@ impl Discovery {
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
       P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
-      Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD,
-      CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN,
+      Self::CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD,
+      CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_TIMER_TOKEN,
     );
 
     // p2p Participant volatile message secure, used for key exchange
@@ -842,9 +842,9 @@ impl Discovery {
             #[cfg(feature = "security")]
             self.handle_participant_stateless_message_reader();
           }
-          CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN => {
+          CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_TIMER_TOKEN => {
             #[cfg(feature = "security")]
-            self.on_authentication_message_resend_triggered();
+            self.on_secure_discovery_message_resend_triggered();
           }
           P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN => {
             #[cfg(feature = "security")]
@@ -1698,17 +1698,19 @@ impl Discovery {
   }
 
   #[cfg(feature = "security")]
-  fn on_authentication_message_resend_triggered(&mut self) {
+  fn on_secure_discovery_message_resend_triggered(&mut self) {
     if let Some(security) = self.security_opt.as_mut() {
       // Security is enabled
-      security
-        .resend_unanswered_authentication_messages(&self.dcps_participant_stateless_message.writer);
+      security.resend_cached_secure_discovery_messages(
+        &self.dcps_participant_stateless_message.writer,
+        &self.dcps_participant_volatile_message_secure.writer,
+      );
 
       // Reset timer for resending authentication messages
       self
         .dcps_participant_stateless_message
         .timer
-        .set_timeout(Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD, ());
+        .set_timeout(Self::CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD, ());
     }
   }
 
