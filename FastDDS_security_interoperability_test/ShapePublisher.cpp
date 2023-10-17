@@ -1,5 +1,5 @@
-#include "shapePublisher.hpp"
-#include "shapePubSubTypes.h"
+#include "ShapePublisher.hpp"
+#include "ShapePubSubTypes.h"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/publisher/Publisher.hpp>
@@ -12,7 +12,7 @@
 
 using namespace eprosima::fastdds::dds;
 
-ShapePublisher::ShapePublisher() : participant_(nullptr), publisher_(nullptr), topic_(nullptr), writer_(nullptr), type_(new ShapePubSubType()), listener_() {}
+ShapePublisher::ShapePublisher() : participant_(nullptr), publisher_(nullptr), topic_(nullptr), writer_(nullptr), type_(new ShapeTypePubSubType()), listener_() {}
 
 ShapePublisher::~ShapePublisher()
 {
@@ -94,7 +94,7 @@ void ShapePublisher::run()
 {
     signal(SIGINT, publisher_stop::handle_interrupt);
 
-    Shape sample;
+    ShapeType sample;
     sample.color("BLUE");
     sample.shape_size(12);
 

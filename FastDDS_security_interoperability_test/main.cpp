@@ -1,8 +1,9 @@
-#include "shapePublisher.hpp"
-#include "shapeSubscriber.hpp"
+#include "ShapePublisher.hpp"
+#include "ShapeSubscriber.hpp"
 
 #include <string.h>
 #include <iostream>
+#include <fastdds/dds/log/FileConsumer.hpp>
 
 int main(int number_of_arguments, char **argument_values)
 {
@@ -13,6 +14,11 @@ int main(int number_of_arguments, char **argument_values)
     }
 
     std::cout << "Start ";
+
+    // Enable warning logging (Info does not seem to work)
+    Log::SetVerbosity(Log::Kind::Warning);
+    std::unique_ptr<FileConsumer> file_consumer(new FileConsumer("archive.log"));
+    Log::RegisterConsumer(std::move(file_consumer));
 
     if (strcmp(argument_values[1], "p"))
     {

@@ -1,5 +1,5 @@
-#include "shapeSubscriber.hpp"
-#include "shapePubSubTypes.h"
+#include "ShapeSubscriber.hpp"
+#include "ShapePubSubTypes.h"
 
 #include <fastdds/dds/domain/DomainParticipantFactory.hpp>
 #include <fastdds/dds/subscriber/Subscriber.hpp>
@@ -12,7 +12,7 @@
 
 using namespace eprosima::fastdds::dds;
 
-ShapeSubscriber::ShapeSubscriber() : participant_(nullptr), subscriber_(nullptr), topic_(nullptr), reader_(nullptr), type_(new ShapePubSubType()), listener_() {}
+ShapeSubscriber::ShapeSubscriber() : participant_(nullptr), subscriber_(nullptr), topic_(nullptr), reader_(nullptr), type_(new ShapeTypePubSubType()), listener_() {}
 
 ShapeSubscriber::~ShapeSubscriber()
 {
@@ -102,7 +102,7 @@ void ShapeSubscriber::run()
 
 void ShapeSubscriber::SubscriberListener::on_data_available(DataReader *reader)
 {
-    Shape sample;
+    ShapeType sample;
     SampleInfo info;
 
     ReturnCode_t return_code = reader->take_next_sample(&sample, &info);

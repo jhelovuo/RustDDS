@@ -1,6 +1,7 @@
-struct Shape 
+struct ShapeType 
 {
-  string color; //@key
+  @Key
+  string color; 
   long x;
   long y;
   long shape_size;
