@@ -31,14 +31,14 @@ use mio_08::{Events, Interest, Poll, Token}; // non-blocking i/o polling
 use rand::prelude::*;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-struct Shape {
+struct ShapeType {
   color: String,
   x: i32,
   y: i32,
   shape_size: i32,
 }
 
-impl Keyed for Shape {
+impl Keyed for ShapeType {
   type K = String;
   fn key(&self) -> String {
     self.color.clone()
@@ -162,7 +162,7 @@ fn main() {
     debug!("Publisher");
     let publisher = domain_participant.create_publisher(&qos).unwrap();
     let mut writer = publisher
-      .create_datawriter_cdr::<Shape>(&topic, None) // None = get qos policy from publisher
+      .create_datawriter_cdr::<ShapeType>(&topic, None) // None = get qos policy from publisher
       .unwrap();
     poll
       .registry()
@@ -181,7 +181,7 @@ fn main() {
     debug!("Subscriber");
     let subscriber = domain_participant.create_subscriber(&qos).unwrap();
     let mut reader = subscriber
-      .create_datareader_cdr::<Shape>(&topic, Some(qos))
+      .create_datareader_cdr::<ShapeType>(&topic, Some(qos))
       .unwrap();
     poll
       .registry()
@@ -201,7 +201,7 @@ fn main() {
     None
   };
 
-  let mut shape_sample = Shape {
+  let mut shape_sample = ShapeType {
     color: color.to_string(),
     x: 0,
     y: 0,
@@ -435,7 +435,7 @@ fn get_matches() -> ArgMatches {
 }
 
 #[allow(clippy::similar_names)]
-fn move_shape(shape: Shape, xv: i32, yv: i32) -> (Shape, i32, i32) {
+fn move_shape(shape: ShapeType, xv: i32, yv: i32) -> (ShapeType, i32, i32) {
   let half_size = shape.shape_size / 2 + 1;
   let mut x = shape.x + xv;
   let mut y = shape.y + yv;
@@ -460,7 +460,7 @@ fn move_shape(shape: Shape, xv: i32, yv: i32) -> (Shape, i32, i32) {
     yv_new = -yv;
   }
   (
-    Shape {
+    ShapeType {
       color: shape.color,
       x,
       y,
