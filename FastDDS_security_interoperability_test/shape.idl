@@ -1,0 +1,7 @@
+struct Shape 
+{
+  string color; //@key
+  long x;
+  long y;
+  long shape_size;
+};
