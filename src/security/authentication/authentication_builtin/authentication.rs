@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
-use speedy::Writable;
-use bytes::{Bytes, BytesMut};
+use byteorder::BigEndian;
+use bytes::Bytes;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use ring::{agreement, signature};
@@ -32,6 +32,7 @@ use crate::{
     Authentication, *,
   },
   security_error,
+  serialization::cdr_serializer::to_bytes,
   structure::guid::GuidPrefix,
   QosPolicies, GUID,
 };
@@ -400,7 +401,11 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
-    let hash_c1 = Sha256::hash(&c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
+    let hash_c1 = Sha256::hash(
+      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c_properties).map_err(|e| SecurityError {
+        msg: format!("Error serializing C1: {}", e),
+      })?,
+    );
 
     // Generate new, random Diffie-Hellman key pair "dh1"
     let dh1 = agreement::EphemeralPrivateKey::generate(
@@ -506,8 +511,11 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", request.c_dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", request.c_kagree_algo.clone()),
     ];
-    let computed_c1_hash =
-      Sha256::hash(&c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
+    let computed_c1_hash = Sha256::hash(
+      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c_properties).map_err(|e| SecurityError {
+        msg: format!("Error serializing C1: {}", e),
+      })?,
+    );
 
     // Sanity check, received hash(c1) should match what we computed
     if let Some(received_hash_c1) = request.hash_c1 {
@@ -539,18 +547,31 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
-    let c2_hash =
-      Sha256::hash(&c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
+    let c2_hash = Sha256::hash(
+      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c2_properties).map_err(|e| SecurityError {
+        msg: format!("Error serializing C2: {}", e),
+      })?,
+    );
 
-    // Spec: "Sign(Hash(C2) | Challenge2 | DH2 | Challenge1 | DH1 | Hash(C1)) )"
-    let mut cc2 = BytesMut::with_capacity(1024);
-    cc2.extend_from_slice(c2_hash.as_ref());
-    cc2.extend_from_slice(challenge2.as_ref());
-    cc2.extend_from_slice(dh2_public_key.as_ref());
-    cc2.extend_from_slice(request.challenge1.as_ref());
-    cc2.extend_from_slice(request.dh1.as_ref());
-    cc2.extend_from_slice(computed_c1_hash.as_ref());
-    let contents_signature = local_info.id_cert_private_key.sign(cc2.as_ref())?;
+    // Spec: "Sign(Hash(C2) | Challenge2 | DH2 | Challenge1 | DH1 | Hash(C1)) )",
+    // see Table 50
+    let cc2_properties: Vec<BinaryProperty> = vec![
+      BinaryProperty::with_propagate("hash_c2", Bytes::copy_from_slice(c2_hash.as_ref())),
+      BinaryProperty::with_propagate("challenge2", Bytes::copy_from_slice(challenge2.as_ref())),
+      BinaryProperty::with_propagate("dh2", Bytes::copy_from_slice(dh2_public_key.as_ref())),
+      BinaryProperty::with_propagate(
+        "challenge1",
+        Bytes::copy_from_slice(request.challenge1.as_ref()),
+      ),
+      BinaryProperty::with_propagate("dh1", Bytes::copy_from_slice(request.dh1.as_ref())),
+      BinaryProperty::with_propagate("hash_c1", Bytes::copy_from_slice(computed_c1_hash.as_ref())),
+    ];
+
+    let contents_signature = local_info.id_cert_private_key.sign(
+      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc2_properties).map_err(|e| SecurityError {
+        msg: format!("Error serializing CC2: {}", e),
+      })?,
+    )?;
 
     let reply_token = BuiltinHandshakeMessageToken {
       class_id: Bytes::copy_from_slice(HANDSHAKE_REPLY_CLASS_ID),
@@ -570,7 +591,7 @@ impl Authentication for AuthenticationBuiltin {
       signature: Some(contents_signature),
     };
 
-    // re-borrow as mutabale
+    // re-borrow as mutable
     let remote_info = self.get_remote_participant_info_mutable(&initiator_identity_handle)?;
 
     // Change handshake state to pending final message & save the reply token
@@ -663,8 +684,13 @@ impl Authentication for AuthenticationBuiltin {
           BinaryProperty::with_propagate("c.dsign_algo", reply.c_dsign_algo.clone()),
           BinaryProperty::with_propagate("c.kagree_algo", reply.c_kagree_algo.clone()),
         ];
-        let c2_hash_recomputed =
-          Sha256::hash(&c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
+        let c2_hash_recomputed = Sha256::hash(
+          &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c2_properties).map_err(|e| {
+            SecurityError {
+              msg: format!("Error serializing C2: {}", e),
+            }
+          })?,
+        );
 
         if let Some(received_hash_c2) = reply.hash_c2 {
           if received_hash_c2.as_ref() == c2_hash_recomputed.as_ref() {
@@ -677,21 +703,37 @@ impl Authentication for AuthenticationBuiltin {
         }
 
         // Reconstruct signed data: C2 = Cert2, Perm2, Pdata2, Dsign_algo2, Kagree_algo2
-        // Spec: "Sign(Hash(C2) | Challenge2 | DH2 | Challenge1 | DH1 | Hash(C1)) )"
+        // Spec: "Sign(Hash(C2) | Challenge2 | DH2 | Challenge1 | DH1 | Hash(C1)) )",
+        // see Table 50
         //
         // Note: We already verified above that hash_c1-recomputed vs. hash_c1-stored
         // match and hash_c2 recomputed vs received (if any) match.
-        let mut cc2 = BytesMut::with_capacity(1024);
-        cc2.extend_from_slice(c2_hash_recomputed.as_ref());
-        cc2.extend_from_slice(reply.challenge2.as_ref());
-        cc2.extend_from_slice(reply.dh2.as_ref());
-        cc2.extend_from_slice(reply.challenge1.as_ref());
-        cc2.extend_from_slice(reply.dh1.as_ref());
-        cc2.extend_from_slice(hash_c1.as_ref());
+
+        let cc2_properties: Vec<BinaryProperty> = vec![
+          BinaryProperty::with_propagate(
+            "hash_c2",
+            Bytes::copy_from_slice(c2_hash_recomputed.as_ref()),
+          ),
+          BinaryProperty::with_propagate(
+            "challenge2",
+            Bytes::copy_from_slice(reply.challenge2.as_ref()),
+          ),
+          BinaryProperty::with_propagate("dh2", Bytes::copy_from_slice(reply.dh2.as_ref())),
+          BinaryProperty::with_propagate(
+            "challenge1",
+            Bytes::copy_from_slice(reply.challenge1.as_ref()),
+          ),
+          BinaryProperty::with_propagate("dh1", Bytes::copy_from_slice(reply.dh1.as_ref())),
+          BinaryProperty::with_propagate("hash_c1", Bytes::copy_from_slice(hash_c1.as_ref())),
+        ];
 
         // Verify "C2" contents against reply.signature and 2's public key
         cert2.verify_signed_data_with_algorithm(
-          cc2.as_ref(),
+          to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc2_properties).map_err(|e| {
+            SecurityError {
+              msg: format!("Error serializing CC2: {}", e),
+            }
+          })?,
           reply.signature,
           // TODO: Hardcoded algorithm
           &signature::ECDSA_P256_SHA256_ASN1,
@@ -709,15 +751,30 @@ impl Authentication for AuthenticationBuiltin {
         )?;
 
         // Create signature for final message:
-        // Sign( Hash(C1) | Challenge1 | DH1 | Challenge2 | DH2 | Hash(C2) )
-        let mut cc_final = BytesMut::with_capacity(1024);
-        cc_final.extend_from_slice(hash_c1.as_ref());
-        cc_final.extend_from_slice(challenge1.as_ref());
-        cc_final.extend_from_slice(dh1_public.as_ref());
-        cc_final.extend_from_slice(reply.challenge2.as_ref());
-        cc_final.extend_from_slice(reply.dh2.as_ref());
-        cc_final.extend_from_slice(c2_hash_recomputed.as_ref());
-        let final_contents_signature = local_info.id_cert_private_key.sign(cc_final.as_ref())?;
+        // Sign( Hash(C1) | Challenge1 | DH1 | Challenge2 | DH2 | Hash(C2) ), see Table
+        // 51
+        let cc_final_properties: Vec<BinaryProperty> = vec![
+          BinaryProperty::with_propagate("hash_c1", Bytes::copy_from_slice(hash_c1.as_ref())),
+          BinaryProperty::with_propagate("challenge1", Bytes::copy_from_slice(challenge1.as_ref())),
+          BinaryProperty::with_propagate("dh1", Bytes::copy_from_slice(dh1_public.as_ref())),
+          BinaryProperty::with_propagate(
+            "challenge2",
+            Bytes::copy_from_slice(reply.challenge2.as_ref()),
+          ),
+          BinaryProperty::with_propagate("dh2", Bytes::copy_from_slice(reply.dh2.as_ref())),
+          BinaryProperty::with_propagate(
+            "hash_c2",
+            Bytes::copy_from_slice(c2_hash_recomputed.as_ref()),
+          ),
+        ];
+
+        let final_contents_signature = local_info.id_cert_private_key.sign(
+          &to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc_final_properties).map_err(|e| {
+            SecurityError {
+              msg: format!("Error serializing CC_final: {}", e),
+            }
+          })?,
+        )?;
 
         // Create HandshakeFinalMessageToken to complete handshake
         // DDS Security spec v1.1 Section  "9.3.2.5.3 HandshakeFinalMessageToken"
@@ -825,22 +882,28 @@ impl Authentication for AuthenticationBuiltin {
         // in 9.3.2.5.3." ....
         // signature for final message:
         // Sign( Hash(C1) | Challenge1 | DH1 | Challenge2 | DH2 | Hash(C2) )
+        // see Table 51
         let dh2_public = dh2.compute_public_key()?;
 
-        let mut cc_final = BytesMut::with_capacity(1024);
-        cc_final.extend_from_slice(hash_c1.as_ref());
-        cc_final.extend_from_slice(challenge1.as_ref());
-        cc_final.extend_from_slice(dh1.as_ref());
-        cc_final.extend_from_slice(challenge2.as_ref());
-        cc_final.extend_from_slice(dh2_public.as_ref());
-        cc_final.extend_from_slice(hash_c2.as_ref());
+        let cc_final_properties: Vec<BinaryProperty> = vec![
+          BinaryProperty::with_propagate("hash_c1", Bytes::copy_from_slice(hash_c1.as_ref())),
+          BinaryProperty::with_propagate("challenge1", Bytes::copy_from_slice(challenge1.as_ref())),
+          BinaryProperty::with_propagate("dh1", Bytes::copy_from_slice(dh1.as_ref())),
+          BinaryProperty::with_propagate("challenge2", Bytes::copy_from_slice(challenge2.as_ref())),
+          BinaryProperty::with_propagate("dh2", Bytes::copy_from_slice(dh2_public.as_ref())),
+          BinaryProperty::with_propagate("hash_c2", Bytes::copy_from_slice(hash_c2.as_ref())),
+        ];
 
         // Now we use the remote certificate, which we verified in the previous (request
         // -> reply) step against CA.
         // TODO: Hardcoded algorithm
         remote_id_certificate
           .verify_signed_data_with_algorithm(
-            cc_final.as_ref(),
+            to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc_final_properties).map_err(|e| {
+              SecurityError {
+                msg: format!("Error serializing CC_final: {}", e),
+              }
+            })?,
             final_token.signature,
             &signature::ECDSA_P256_SHA256_ASN1,
           )

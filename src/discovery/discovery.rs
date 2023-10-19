@@ -1,7 +1,7 @@
 use std::{
   collections::HashMap,
   sync::{Arc, RwLock},
-  time::{Duration as StdDuration, Instant},
+  time::Duration as StdDuration,
 };
 
 #[allow(unused_imports)]
@@ -27,8 +27,7 @@ use crate::{
     discovery_db::{discovery_db_read, discovery_db_write, DiscoveredVia, DiscoveryDB},
     sedp_messages::{
       DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, Endpoint_GUID,
-      ParticipantMessageData, ParticipantMessageDataKind, PublicationBuiltinTopicData, ReaderProxy,
-      SubscriptionBuiltinTopicData, WriterProxy,
+      ParticipantMessageData, ParticipantMessageDataKind,
     },
     spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
@@ -253,7 +252,7 @@ impl Discovery {
   const SEND_TOPIC_INFO_PERIOD: StdDuration = StdDuration::from_secs(10);
   const CHECK_PARTICIPANT_MESSAGES: StdDuration = StdDuration::from_secs(1);
   #[cfg(feature = "security")]
-  const AUTHENTICATION_MESSAGE_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
+  const CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
 
   pub(crate) const PARTICIPANT_MESSAGE_QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
@@ -584,8 +583,8 @@ impl Discovery {
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
       P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
-      Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD,
-      CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN,
+      Self::CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD,
+      CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_TIMER_TOKEN,
     );
 
     // p2p Participant volatile message secure, used for key exchange
@@ -842,9 +841,9 @@ impl Discovery {
             #[cfg(feature = "security")]
             self.handle_participant_stateless_message_reader();
           }
-          CHECK_AUTHENTICATION_RESEND_TIMER_TOKEN => {
+          CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_TIMER_TOKEN => {
             #[cfg(feature = "security")]
-            self.on_authentication_message_resend_triggered();
+            self.on_secure_discovery_message_resend_triggered();
           }
           P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN => {
             #[cfg(feature = "security")]
@@ -907,86 +906,6 @@ impl Discovery {
     // ReaderProxy and WriterProxy objects for built-in Readers and Writers
     self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated {
       guid_prefix: dp.guid().prefix,
-    });
-
-    // insert a (fake) reader proxy as multicast address, so discovery notifications
-    // are sent somewhere
-    let reader_guid = GUID::new(
-      GuidPrefix::UNKNOWN,
-      EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-    );
-
-    // Do we expect inlineQos in every incoming DATA message?
-    let rustdds_expects_inline_qos = false;
-
-    let reader_proxy = ReaderProxy::new(
-      reader_guid,
-      rustdds_expects_inline_qos,
-      self
-        .self_locators
-        .get(&DISCOVERY_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_default(),
-      self
-        .self_locators
-        .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_default(),
-    );
-
-    let sub_topic_data = SubscriptionBuiltinTopicData::new(
-      reader_guid,
-      Some(dp.guid()),
-      String::from(builtin_topic_names::DCPS_PARTICIPANT),
-      String::from(builtin_topic_type_names::DCPS_PARTICIPANT),
-      &Self::create_spdp_participant_qos(),
-      None, // <<---------------TODO: None here means we advertise no EndpointSecurityInfo
-    );
-    let drd = DiscoveredReaderData {
-      reader_proxy,
-      subscription_topic_data: sub_topic_data,
-      content_filter: None,
-    };
-
-    let writer_guid = GUID::new(dp.guid().prefix, EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER);
-
-    let writer_proxy = WriterProxy::new(
-      writer_guid,
-      self
-        .self_locators
-        .get(&DISCOVERY_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_default(),
-      self
-        .self_locators
-        .get(&DISCOVERY_MUL_LISTENER_TOKEN)
-        .cloned()
-        .unwrap_or_default(),
-    );
-
-    let pub_topic_data = PublicationBuiltinTopicData::new(
-      writer_guid,
-      Some(dp.guid()),
-      String::from(builtin_topic_names::DCPS_PARTICIPANT),
-      String::from(builtin_topic_type_names::DCPS_PARTICIPANT),
-      None, // TODO: EndpointSecurityInfo is missing from here.
-    );
-    let dwd = DiscoveredWriterData {
-      last_updated: Instant::now(),
-      writer_proxy,
-      publication_topic_data: pub_topic_data,
-    };
-
-    // Notify local Readers and Writers in dp_event_loop
-    // so that they will create WriterProxies and ReaderProxies
-    // and know to communicate with them.
-    info!("Creating DCPSParticipant reader proxy.");
-    self.send_discovery_notification(DiscoveryNotificationType::ReaderUpdated {
-      discovered_reader_data: drd,
-    });
-    info!("Creating DCPSParticipant writer proxy for self.");
-    self.send_discovery_notification(DiscoveryNotificationType::WriterUpdated {
-      discovered_writer_data: dwd,
     });
   }
 
@@ -1698,17 +1617,19 @@ impl Discovery {
   }
 
   #[cfg(feature = "security")]
-  fn on_authentication_message_resend_triggered(&mut self) {
+  fn on_secure_discovery_message_resend_triggered(&mut self) {
     if let Some(security) = self.security_opt.as_mut() {
       // Security is enabled
-      security
-        .resend_unanswered_authentication_messages(&self.dcps_participant_stateless_message.writer);
+      security.resend_cached_secure_discovery_messages(
+        &self.dcps_participant_stateless_message.writer,
+        &self.dcps_participant_volatile_message_secure.writer,
+      );
 
       // Reset timer for resending authentication messages
       self
         .dcps_participant_stateless_message
         .timer
-        .set_timeout(Self::AUTHENTICATION_MESSAGE_RESEND_PERIOD, ());
+        .set_timeout(Self::CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD, ());
     }
   }
 
