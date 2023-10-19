@@ -20,7 +20,7 @@ rust-version = "1.70.0"
 # the science-robotics category is because of ROS2
 
 [features]
-default = ["security"]  # for testing security branch
+# default = ["security"]  # for testing security branch
 # declare the existence of security feaature
 security = [
   "dep:serde-xml-rs", "dep:glob", "dep:mailparse", 
