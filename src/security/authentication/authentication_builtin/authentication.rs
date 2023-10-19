@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use speedy::Writable;
+use byteorder::BigEndian;
 use bytes::{Bytes, BytesMut};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -32,6 +32,7 @@ use crate::{
     Authentication, *,
   },
   security_error,
+  serialization::cdr_serializer::to_bytes,
   structure::guid::GuidPrefix,
   QosPolicies, GUID,
 };
@@ -400,7 +401,11 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
-    let hash_c1 = Sha256::hash(&c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
+    let hash_c1 = Sha256::hash(
+      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c_properties).map_err(|e| SecurityError {
+        msg: format!("Error serializing C1: {}", e),
+      })?,
+    );
 
     // Generate new, random Diffie-Hellman key pair "dh1"
     let dh1 = agreement::EphemeralPrivateKey::generate(
@@ -506,8 +511,11 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", request.c_dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", request.c_kagree_algo.clone()),
     ];
-    let computed_c1_hash =
-      Sha256::hash(&c_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
+    let computed_c1_hash = Sha256::hash(
+      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c_properties).map_err(|e| SecurityError {
+        msg: format!("Error serializing C1: {}", e),
+      })?,
+    );
 
     // Sanity check, received hash(c1) should match what we computed
     if let Some(received_hash_c1) = request.hash_c1 {
@@ -539,8 +547,11 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
-    let c2_hash =
-      Sha256::hash(&c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
+    let c2_hash = Sha256::hash(
+      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c2_properties).map_err(|e| SecurityError {
+        msg: format!("Error serializing C2: {}", e),
+      })?,
+    );
 
     // Spec: "Sign(Hash(C2) | Challenge2 | DH2 | Challenge1 | DH1 | Hash(C1)) )"
     let mut cc2 = BytesMut::with_capacity(1024);
@@ -570,7 +581,7 @@ impl Authentication for AuthenticationBuiltin {
       signature: Some(contents_signature),
     };
 
-    // re-borrow as mutabale
+    // re-borrow as mutable
     let remote_info = self.get_remote_participant_info_mutable(&initiator_identity_handle)?;
 
     // Change handshake state to pending final message & save the reply token
@@ -663,8 +674,13 @@ impl Authentication for AuthenticationBuiltin {
           BinaryProperty::with_propagate("c.dsign_algo", reply.c_dsign_algo.clone()),
           BinaryProperty::with_propagate("c.kagree_algo", reply.c_kagree_algo.clone()),
         ];
-        let c2_hash_recomputed =
-          Sha256::hash(&c2_properties.write_to_vec_with_ctx(speedy::Endianness::BigEndian)?);
+        let c2_hash_recomputed = Sha256::hash(
+          &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c2_properties).map_err(|e| {
+            SecurityError {
+              msg: format!("Error serializing C2: {}", e),
+            }
+          })?,
+        );
 
         if let Some(received_hash_c2) = reply.hash_c2 {
           if received_hash_c2.as_ref() == c2_hash_recomputed.as_ref() {
