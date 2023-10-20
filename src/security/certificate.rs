@@ -141,41 +141,36 @@ impl Certificate {
 //
 // TODO: Implement the structured format and matching.
 #[derive(Debug, Clone)]
-pub struct DistinguishedName {
-  name: String,
-}
-
+pub struct DistinguishedName(x509_cert::name::DistinguishedName);
 impl DistinguishedName {
   pub fn parse(s: &str) -> Result<DistinguishedName, ConfigError> {
-    Ok(DistinguishedName {
-      name: s.to_string(),
-    })
+    x509_cert::name::DistinguishedName::from_str(s)
+      .map(DistinguishedName)
+      .map_err(|e| ConfigError::Parse(format!("Error parsing DistinguishedName: {e:?}")))
   }
 
-  // TODO we need serialized subject names in tokens
-  pub fn serialize(self) -> String {
-    self.name
+  pub fn serialize(&self) -> String {
+    self.0.to_string()
   }
 
+  // TODO is this a too strict equivalence?
   pub fn matches(&self, other: &Self) -> bool {
-    self.name == other.name
+    self.0 == other.0
   }
 }
 
 // This conversion should be non-fallible?
 impl From<x509_cert::name::Name> for DistinguishedName {
-  fn from(n: x509_cert::name::Name) -> DistinguishedName {
-    DistinguishedName {
-      name: format!("{}", n),
-    }
+  fn from(name: x509_cert::name::Name) -> DistinguishedName {
+    DistinguishedName(name)
   }
 }
 
-use std::fmt;
+use std::{fmt, str::FromStr};
 
 impl fmt::Display for DistinguishedName {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-    write!(f, "{}", self.name)
+    write!(f, "{}", self.serialize())
   }
 }
 
