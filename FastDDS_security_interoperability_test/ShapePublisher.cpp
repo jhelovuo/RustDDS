@@ -9,6 +9,7 @@
 
 #include <unistd.h>
 #include <signal.h>
+#include <string>
 
 using namespace eprosima::fastdds::dds;
 
@@ -36,10 +37,43 @@ ShapePublisher::~ShapePublisher()
     }
 }
 
-bool ShapePublisher::init()
+bool ShapePublisher::init(bool with_security)
 {
     DomainParticipantQos participant_qos;
     participant_qos.name("publisher_participant");
+
+    if (with_security)
+    {
+        using namespace std;
+        string example_security_configuration_path = "file://../../example_security_configuration_files/";
+        string dds_sec = "dds.sec.";
+        string auth = dds_sec + "auth.";
+        string auth_plugin = "builtin.PKI-DH";
+        string auth_prefix = auth + auth_plugin + ".";
+        string access = dds_sec + "access.";
+        string access_plugin = "builtin.Access-Permissions";
+        string access_prefix = access + access_plugin + ".";
+        string crypto = dds_sec + "crypto.";
+        string crypto_plugin = "builtin.AES-GCM-GMAC";
+        string plugin = "plugin";
+
+        std::vector<pair<string, string>> security_properties = {
+            pair<string, string>(auth + plugin, auth_plugin),
+            pair<string, string>(access + plugin, access_plugin),
+            pair<string, string>(crypto + plugin, crypto_plugin),
+            pair<string, string>(auth_prefix + "identity_ca", example_security_configuration_path + "identity_ca_certificate.pem"),
+            pair<string, string>(auth_prefix + "identity_certificate", example_security_configuration_path + "participant1_certificate.pem"),
+            pair<string, string>(auth_prefix + "private_key", example_security_configuration_path + "participant1_private_key.pem"),
+            pair<string, string>(access_prefix + "permissions_ca", example_security_configuration_path + "permissions_ca_certificate.pem"),
+            pair<string, string>(access_prefix + "governance", example_security_configuration_path + "test_governance.p7s"),
+            pair<string, string>(access_prefix + "permissions", example_security_configuration_path + "test_permissions.p7s"),
+        };
+
+        for (pair<string, string> property : security_properties)
+        {
+            participant_qos.properties().properties().emplace_back(property.first, property.second);
+        }
+    }
 
     participant_ = DomainParticipantFactory::get_instance()->create_participant(0, participant_qos);
 

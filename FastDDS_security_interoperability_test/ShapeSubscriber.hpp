@@ -13,7 +13,7 @@ public:
 
     ~ShapeSubscriber();
 
-    bool init();
+    bool init(bool with_security);
 
     void run();
 
