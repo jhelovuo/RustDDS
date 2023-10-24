@@ -343,7 +343,7 @@ pub(super) type BuiltinMAC = [u8; MAC_LENGTH];
 
 /// CryptoFooter type from section 9.5.2.5 of the Security specification (v.
 /// 1.1)
-#[derive(Deserialize, Serialize, PartialEq, Readable)]
+#[derive(Deserialize, Serialize, PartialEq)]
 pub(super) struct BuiltinCryptoFooter {
   pub common_mac: BuiltinMAC,
   pub receiver_specific_macs: Vec<ReceiverSpecificMAC>,
@@ -363,14 +363,14 @@ impl BuiltinCryptoFooter {
   }
 }
 
-impl TryFrom<Vec<u8>> for BuiltinCryptoFooter {
+impl TryFrom<&[u8]> for BuiltinCryptoFooter {
   type Error = SecurityError;
-  fn try_from(data: Vec<u8>) -> Result<Self, Self::Error> {
+  fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
     // Deserialize the data
     BuiltinCryptoFooter::deserialize(&mut CdrDeserializer::<
       BigEndian, /* TODO: What's the point of this constructor if we need to specify the byte
                   * order anyway */
-    >::new_big_endian(data.as_ref()))
+    >::new_big_endian(data))
     .map_err(
       // Map deserialization error to SecurityError
       |e| Self::Error {
@@ -381,8 +381,8 @@ impl TryFrom<Vec<u8>> for BuiltinCryptoFooter {
 }
 impl TryFrom<CryptoFooter> for BuiltinCryptoFooter {
   type Error = SecurityError;
-  fn try_from(value: CryptoFooter) -> Result<Self, Self::Error> {
-    <Vec<u8>>::from(value).try_into()
+  fn try_from(CryptoFooter { data }: CryptoFooter) -> Result<Self, Self::Error> {
+    Self::try_from(data.as_ref())
   }
 }
 impl TryFrom<BuiltinCryptoFooter> for Vec<u8> {
@@ -403,7 +403,7 @@ impl TryFrom<BuiltinCryptoFooter> for CryptoFooter {
 
 /// ReceiverSpecificMAC type from section 9.5.2.5 of the Security specification
 /// (v. 1.1)
-#[derive(Deserialize, Serialize, PartialEq, Readable)]
+#[derive(Deserialize, Serialize, PartialEq, Readable, Debug)]
 pub(super) struct ReceiverSpecificMAC {
   pub receiver_mac_key_id: CryptoTransformKeyId,
   pub receiver_mac: BuiltinMAC,
