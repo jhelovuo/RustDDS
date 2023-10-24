@@ -786,8 +786,7 @@ impl CryptoTransform for CryptographicBuiltin {
     // .read_from_buffer() does not need endianness, because BuiltinCryptoHeader
     // only contains byte-oriented data, which is insensitive to endianness.
 
-    let BuiltinCryptoFooter { common_mac, .. } =
-      BuiltinCryptoFooter::read_from_buffer(footer_bytes)?;
+    let BuiltinCryptoFooter { common_mac, .. } = BuiltinCryptoFooter::try_from(footer_bytes)?;
 
     // Get the payload decode key material
     let decode_key_material = self.session_decode_crypto_materials(
