@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
 use crate::{
-  messages::submessages::submessage::{ReaderSubmessage, WriterSubmessage},
+  messages::submessages::submessage::{InterpreterSubmessage, ReaderSubmessage, WriterSubmessage},
   rtps::Submessage,
   security::types::DataHolder,
   structure::guid::GuidPrefix,
@@ -116,7 +116,7 @@ impl From<EncodedSubmessage> for Vec<Submessage> {
 pub enum DecodedSubmessage {
   // TODO: Should we support interpreter submessages here? The specification is unclear on this.
   // See 8.5.1.6
-  //Interpreter(InterpreterSubmessage),
+  Interpreter(InterpreterSubmessage),
   Writer(WriterSubmessage, Vec<EndpointCryptoHandle>),
   Reader(ReaderSubmessage, Vec<EndpointCryptoHandle>),
 }

@@ -952,6 +952,11 @@ impl MessageReceiver {
               error!("Destination GUID did not match the handle used for decoding.");
             }
           }
+          Ok(DecodeOutcome::Success(DecodedSubmessage::Interpreter(interpreter_submessage))) => {
+            // This is not defined in the specification, but we accept for compatibility, as
+            // we would also accept unprotected ones.
+            self.handle_interpreter_submessage(interpreter_submessage);
+          }
           Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
             trace!(
               "No matching submessage decode keys found for the key id {:?} for the remote \
@@ -975,10 +980,10 @@ impl MessageReceiver {
     };
   }
 
-  fn handle_interpreter_submessage(&mut self, interp_subm: InterpreterSubmessage)
+  fn handle_interpreter_submessage(&mut self, interpreter_submessage: InterpreterSubmessage)
   // no return value, just change state of self.
   {
-    match interp_subm {
+    match interpreter_submessage {
       InterpreterSubmessage::InfoTimestamp(ts_struct, _flags) => {
         // flags value was used already when parsing timestamp into an Option
         self.source_timestamp = ts_struct.timestamp;
