@@ -396,7 +396,7 @@ impl CryptoTransform for CryptographicBuiltin {
               );
 
             // Validate receiver-specific MAC if one is expected
-            if !validate_receiver_specific_mac(&decode_key_material,&initialization_vector,&serialized_submessages,&receiver_specific_macs){
+            if !validate_receiver_specific_mac(&decode_key_material,&initialization_vector,&common_mac,&receiver_specific_macs){
               return Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed);
             }
             // Validate the common MAC
@@ -415,7 +415,7 @@ impl CryptoTransform for CryptographicBuiltin {
             ] = encoded_content
           {
             // Validate receiver-specific MAC if one is expected
-            if !validate_receiver_specific_mac(&decode_key_material,&initialization_vector,ciphertext,&receiver_specific_macs){
+            if !validate_receiver_specific_mac(&decode_key_material,&initialization_vector,&common_mac,&receiver_specific_macs){
               return Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed);
             }
             // Authenticated decryption, or exit on failure
@@ -590,7 +590,7 @@ impl CryptoTransform for CryptographicBuiltin {
               validate_receiver_specific_mac(
                 decode_materials,
                 &initialization_vector,
-                &data,
+                &common_mac,
                 &receiver_specific_macs,
               )
               .then_some(sending_endpoint_info)
@@ -625,7 +625,7 @@ impl CryptoTransform for CryptographicBuiltin {
               validate_receiver_specific_mac(
                 decode_materials,
                 &initialization_vector,
-                &ciphertext,
+                &common_mac,
                 &receiver_specific_macs,
               )
               .then_some(sending_endpoint_info)

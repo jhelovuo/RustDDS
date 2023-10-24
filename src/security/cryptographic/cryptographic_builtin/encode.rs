@@ -12,7 +12,6 @@ use super::{
 
 fn compute_receiver_specific_macs(
   initialization_vector: BuiltinInitializationVector,
-  data: &[u8],
   receiver_specific_key_materials: &[ReceiverSpecificKeyMaterial],
   common_mac: BuiltinMAC,
 ) -> SecurityResult<BuiltinCryptoFooter> {
@@ -20,8 +19,9 @@ fn compute_receiver_specific_macs(
   SecurityResult::from_iter(receiver_specific_key_materials.iter().map(
     // Destructure
     |ReceiverSpecificKeyMaterial { key_id, key }| {
-      // Compute MAC
-      compute_mac(key, initialization_vector, data)
+      // The receiver-specific MAC is computed for common_mac, not the ciphertext.
+      // See 9.5.3.3.4
+      compute_mac(key, initialization_vector, &common_mac)
         // Combine with id
         .map(|receiver_mac| ReceiverSpecificMAC {
           receiver_mac_key_id: *key_id,
@@ -48,7 +48,6 @@ pub(super) fn encode_gmac(
     .and_then(|common_mac| {
       compute_receiver_specific_macs(
         initialization_vector,
-        data,
         receiver_specific_key_materials,
         common_mac,
       )
@@ -66,7 +65,6 @@ pub(super) fn encode_gcm(
     // Compute compute_receiver_specific_macs
     compute_receiver_specific_macs(
       initialization_vector,
-      &ciphertext,
       receiver_specific_key_materials,
       common_mac,
     )

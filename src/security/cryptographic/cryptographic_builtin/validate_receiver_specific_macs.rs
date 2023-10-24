@@ -27,7 +27,7 @@ fn find_receiver_specific_mac<'a>(
 pub(super) fn validate_receiver_specific_mac(
   decode_materials: &DecodeSessionMaterials,
   initialization_vector: &BuiltinInitializationVector,
-  data: &[u8],
+  common_mac: &BuiltinMAC,
   receiver_specific_macs: &[ReceiverSpecificMAC],
 ) -> bool {
   if let DecodeSessionMaterials {
@@ -37,7 +37,15 @@ pub(super) fn validate_receiver_specific_mac(
   {
     if let Some(receiver_specific_mac) = find_receiver_specific_mac(key_id, receiver_specific_macs)
     {
-      validate_mac(key, *initialization_vector, data, *receiver_specific_mac).map_or_else(
+      // The receiver-specific MAC is computed for common_mac, not the  ciphertext.
+      // See 9.5.3.3.4
+      validate_mac(
+        key,
+        *initialization_vector,
+        common_mac,
+        *receiver_specific_mac,
+      )
+      .map_or_else(
         |e| {
           error!("Decoding receiver-specific MAC failed: {e}");
           false
