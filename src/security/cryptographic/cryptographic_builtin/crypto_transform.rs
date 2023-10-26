@@ -24,7 +24,7 @@ use crate::{
   security_error,
 };
 use super::{
-  aes_gcm_gmac::{decrypt, validate_mac},
+  aes_gcm_gmac::{compute_mac, decrypt, encrypt, validate_mac},
   encode::{encode_gcm, encode_gmac},
   key_material::*,
   validate_receiver_specific_macs::validate_receiver_specific_mac,
@@ -146,14 +146,20 @@ impl CryptoTransform for CryptographicBuiltin {
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        let mac = aes_gcm_gmac::compute_mac(&session_key, initialization_vector, &plain_buffer)?;
+        let mac = compute_mac(&session_key, initialization_vector, &plain_buffer)?;
         (plain_buffer, BuiltinCryptoFooter::only_common_mac(mac))
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        let (ciphertext, mac) =
-          aes_gcm_gmac::encrypt(&session_key, initialization_vector, &plain_buffer)?;
-        (ciphertext, BuiltinCryptoFooter::only_common_mac(mac))
+        let (ciphertext, mac) = encrypt(&session_key, initialization_vector, &plain_buffer)?;
+        (
+          CryptoContent { data: ciphertext }
+            .write_to_vec()
+            .map_err(|err| {
+              security_error!("Error converting CryptoContent to byte vector: {}", err)
+            })?,
+          BuiltinCryptoFooter::only_common_mac(mac),
+        )
       }
     };
 
@@ -162,9 +168,7 @@ impl CryptoTransform for CryptographicBuiltin {
       .map_err(|err| security_error!("Error converting CryptoHeader to byte vector: {}", err))?;
     let footer_vec = Vec::<u8>::try_from(footer)?;
     Ok((
-      CryptoContent::from([header_vec, encoded_data, footer_vec].concat())
-        .write_to_vec()
-        .map_err(|e| security_error!("Error serializing CryptoContent: {e:?}"))?,
+      [header_vec, encoded_data, footer_vec].concat(),
       ParameterList::new(),
       // TODO: If the payload was not data but key, then construct a key_hash
       // and return that to be appended to the InlineQoS of the outgoing DATA Submessage.
@@ -741,7 +745,7 @@ impl CryptoTransform for CryptographicBuiltin {
 
   fn decode_serialized_payload(
     &self,
-    crypto_header_content_footer_buffer: Vec<u8>,
+    encoded_buffer: Vec<u8>,
     _inline_qos: ParameterList,
     _receiving_datareader_crypto_handle: DatareaderCryptoHandle,
     sending_datawriter_crypto_handle: DatawriterCryptoHandle,
@@ -765,16 +769,19 @@ impl CryptoTransform for CryptographicBuiltin {
 
     // check length so that following split do not panic and subtract does not
     // underflow
-    if crypto_header_content_footer_buffer.len() < head_len + foot_len + 4 {
+    if encoded_buffer.len() < head_len + foot_len {
       return Err(security_error("Encoded payload smaller than minimum size"));
     }
-    let (header_bytes, content_and_footer_bytes) =
-      crypto_header_content_footer_buffer.split_at(head_len);
+    let (header_bytes, content_and_footer_bytes) = encoded_buffer.split_at(head_len);
     let (content_bytes, footer_bytes) =
       content_and_footer_bytes.split_at(content_and_footer_bytes.len() - foot_len);
 
-    let crypto_header = CryptoHeader::read_from_buffer(header_bytes)?;
     // Deserialize crypto header and footer
+
+    // .read_from_buffer() does not need endianness, because BuiltinCryptoHeader
+    // only contains byte-oriented data, which is insensitive to endianness.
+    let crypto_header = CryptoHeader::read_from_buffer(header_bytes)?;
+
     let BuiltinCryptoHeader {
       transform_identifier:
         BuiltinCryptoTransformIdentifier {
@@ -783,8 +790,6 @@ impl CryptoTransform for CryptographicBuiltin {
         },
       builtin_crypto_header_extra: BuiltinCryptoHeaderExtra(initialization_vector),
     } = crypto_header.try_into()?;
-    // .read_from_buffer() does not need endianness, because BuiltinCryptoHeader
-    // only contains byte-oriented data, which is insensitive to endianness.
 
     let BuiltinCryptoFooter { common_mac, .. } = BuiltinCryptoFooter::try_from(footer_bytes)?;
 
@@ -795,17 +800,6 @@ impl CryptoTransform for CryptographicBuiltin {
       KeyMaterialScope::PayloadOnly,
       initialization_vector,
     )?;
-
-    // Check that the key IDs match
-    if decode_key_material.key_id != transformation_key_id {
-      return Err(security_error!(
-        "Mismatched decode key IDs: the decoded CryptoHeader has {}, but the key associated with \
-         the sending datawriter {} has {}.",
-        transformation_key_id,
-        sending_datawriter_crypto_handle,
-        decode_key_material.key_id
-      ));
-    }
 
     // Check that the transformation kind stays consistent
     if decode_key_material.transformation_kind != transformation_kind {
@@ -821,24 +815,20 @@ impl CryptoTransform for CryptographicBuiltin {
     let decode_key = &decode_key_material.session_key;
 
     match transformation_kind {
-      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE
-      | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => Err(security_error!(
+        "Transformation kind NONE found in decode_serialized_payload. If the transformation kind \
+         is NONE, this method should not have been called."
+      )),
+      BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GMAC => {
-        // Validate signature even if it is not requested to avoid
-        // unauthorized data injection attack.
-        if transformation_kind == BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE {
-          warn!(
-            "decode_serialized_payload with crypto transformation kind = none. Does not make \
-             sense, but validating MAC anyway."
-          );
-        }
-        aes_gcm_gmac::validate_mac(decode_key, initialization_vector, content_bytes, common_mac)
+        validate_mac(decode_key, initialization_vector, content_bytes, common_mac)
           // if validate_mac succeeds, then map result to content bytes
           .map(|()| Vec::from(content_bytes))
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
       | BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES256_GCM => {
-        aes_gcm_gmac::decrypt(decode_key, initialization_vector, content_bytes, common_mac)
+        let ciphertext = CryptoContent::read_from_buffer(content_bytes)?.data;
+        decrypt(decode_key, initialization_vector, &ciphertext, common_mac)
       }
     }
   }

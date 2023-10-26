@@ -54,23 +54,22 @@ pub struct DataFrag {
   /// Present only if the InlineQosFlag is set in the header.
   pub inline_qos: Option<ParameterList>,
 
-  /// Depending on the payload transformation kind, contains the serialized
-  /// CryptoContent or serialized payload fragment described below as bytes, so
-  /// that the submessage can be deserialized without knowing which type to
-  /// expect, after which the fragment can be decoded.
-  ///
   /// Encapsulation of a consecutive series of fragments, starting at
   /// fragment_starting_num for a total of fragments_in_submessage.
   /// Represents part of the new value of the data-object
-  /// after the change. Present only if either the DataFlag or the KeyFlag are
-  /// set in the header. Present only if DataFlag is set in the header.
+  /// after the change.
+  ///
+  /// If payloads are protected, contains the buffer that decodes to the series
+  /// of fragments. In particular, a CryptoHeader, a plaintext buffer or
+  /// CryptoContent depending on the transformation kind, and
+  /// CryptoFooter, which have been serialized and concatenated.
   ///
   /// Note: RTPS spec says the serialized_payload is of type SerializedPayload,
   /// but that is technically incorrect. It is a fragment of
   /// SerializedPayload. The headers at the beginning of SerializedPayload
   /// appear only at the first fragment. The fragmentation mechanism here
   /// should treat serialized_payload as an opaque stream of bytes.
-  pub encoded_payload: Bytes,
+  pub serialized_payload: Bytes,
 }
 
 impl DataFrag {
@@ -89,7 +88,7 @@ impl DataFrag {
     2 + // fragmentSize
     4 + // sampleSize
     self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParameterList
-    self.encoded_payload.len()
+    self.serialized_payload.len()
   }
 
   /// Spec talks about (expected) total number of fragments.
@@ -225,7 +224,7 @@ impl DataFrag {
     }
 
     // Payload should be always present, be it data or key fragments.
-    let encoded_payload = buffer.clone().split_off(cursor.position() as usize);
+    let serialized_payload = buffer.clone().split_off(cursor.position() as usize);
 
     let datafrag = Self {
       reader_id,
@@ -236,7 +235,7 @@ impl DataFrag {
       data_size,
       fragment_size,
       inline_qos,
-      encoded_payload,
+      serialized_payload,
     };
 
     // fragment_starting_num strictly positive and must not exceed total number of
@@ -255,32 +254,6 @@ impl DataFrag {
     }
 
     Ok(datafrag)
-  }
-
-  // Creates a DecodedDataFrag with encoded_payload replaced by the input
-  pub fn decoded(self, decoded_payload: Bytes) -> DecodedDataFrag {
-    let Self {
-      reader_id,
-      writer_id,
-      writer_sn,
-      fragment_starting_num,
-      fragments_in_submessage,
-      data_size,
-      fragment_size,
-      inline_qos,
-      ..
-    } = self;
-    DecodedDataFrag {
-      reader_id,
-      writer_id,
-      writer_sn,
-      fragment_starting_num,
-      fragments_in_submessage,
-      data_size,
-      fragment_size,
-      inline_qos,
-      serialized_payload: decoded_payload,
-    }
   }
 }
 
@@ -302,7 +275,7 @@ impl<C: Context> Writable<C> for DataFrag {
     if self.inline_qos.is_some() && !self.inline_qos.as_ref().unwrap().parameters.is_empty() {
       writer.write_value(&self.inline_qos)?;
     }
-    writer.write_bytes(&self.encoded_payload)?;
+    writer.write_bytes(&self.serialized_payload)?;
     Ok(())
   }
 }
@@ -313,67 +286,5 @@ impl HasEntityIds for DataFrag {
   }
   fn sender_entity_id(&self) -> EntityId {
     self.writer_id
-  }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-#[cfg_attr(test, derive(Default))]
-pub struct DecodedDataFrag {
-  /// Identifies the RTPS Reader entity that is being informed of the change
-  /// to the data-object.
-  pub reader_id: EntityId,
-
-  /// Identifies the RTPS Writer entity that made the change to the
-  /// data-object.
-  pub writer_id: EntityId,
-
-  /// Uniquely identifies the change and the relative order for all changes
-  /// made by the RTPS Writer identified by the writerGuid.
-  /// Each change gets a consecutive sequence number.
-  /// Each RTPS Writer maintains is own sequence number.
-  pub writer_sn: SequenceNumber,
-
-  /// Indicates the starting fragment for the series of fragments in
-  /// serialized_data. Fragment numbering starts with number 1.
-  pub fragment_starting_num: FragmentNumber,
-
-  /// The number of consecutive fragments contained in this Submessage,
-  /// starting at fragment_starting_num.
-  pub fragments_in_submessage: u16,
-
-  /// The total size in bytes of the original data before fragmentation.
-  pub data_size: u32,
-
-  /// The size of an individual fragment in bytes. The maximum fragment size
-  /// equals 64K.
-  pub fragment_size: u16,
-
-  /// Contains QoS that may affect the interpretation of the message.
-  /// Present only if the InlineQosFlag is set in the header.
-  pub inline_qos: Option<ParameterList>,
-
-  /// Encapsulation of a consecutive series of fragments, starting at
-  /// fragment_starting_num for a total of fragments_in_submessage.
-  /// Represents part of the new value of the data-object
-  /// after the change. Present only if either the DataFlag or the KeyFlag are
-  /// set in the header. Present only if DataFlag is set in the header.
-  ///
-  /// Note: RTPS spec says the serialized_payload is of type SerializedPayload,
-  /// but that is technically incorrect. It is a fragment of
-  /// SerializedPayload. The headers at the beginning of SerializedPayload
-  /// appear only at the first fragment. The fragmentation mechanism here
-  /// should treat serialized_payload as an opaque stream of bytes.
-  pub serialized_payload: Bytes,
-}
-
-impl DecodedDataFrag {
-  // Duplicate for the method in DataFrag
-  pub fn total_number_of_fragments(&self) -> FragmentNumber {
-    let frag_size = self.fragment_size as u32;
-    if frag_size < 1 {
-      FragmentNumber::INVALID
-    } else {
-      FragmentNumber::new((self.data_size / frag_size) + u32::from(self.data_size % frag_size > 0))
-    }
   }
 }

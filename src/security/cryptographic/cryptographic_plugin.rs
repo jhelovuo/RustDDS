@@ -167,8 +167,8 @@ pub trait CryptoTransform: Send {
   /// (v. 1.1)
   ///
   /// In a tuple, return the results that would be written in `encoded_buffer`,
-  /// which can be `CryptoContent`, or `SerializedPayload` if no encryption is
-  /// performed, and `extra_inline_qos`.
+  /// which is as bytes a serialized payload containing (a fragment of) the
+  /// encoded data, and `extra_inline_qos`.
   fn encode_serialized_payload(
     &self,
     plain_buffer: Vec<u8>, // (a fragment of) serialized `SerializedPayload`
@@ -267,7 +267,7 @@ pub trait CryptoTransform: Send {
   /// decode_serialized_payload: section 8.5.1.9.9 of the Security specification
   /// (v. 1.1)
   ///
-  /// Return the (fragment of) serialized payload that would be written in
+  /// Return the (fragment of the) serialized payload that would be written in
   /// `plain_buffer`
   fn decode_serialized_payload(
     &self,

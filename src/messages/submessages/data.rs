@@ -8,8 +8,9 @@ use crate::{
   messages::submessages::{elements::parameter_list::ParameterList, submessages::*},
   structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
-use super::elements::serialized_payload::SerializedPayload;
 // use log::debug;
+#[cfg(test)]
+use super::elements::serialized_payload::SerializedPayload;
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)
@@ -38,17 +39,14 @@ pub struct Data {
   /// Present only if the InlineQosFlag is set in the header.
   pub inline_qos: Option<ParameterList>,
 
-  /// Depending on the payload transformation kind, contains the serialized
-  /// CryptoHeader + CryptoContent + CryptoFooter, or
-  /// SerializedPayload as bytes, so that the
-  /// submessage can be deserialized without knowing which type to expect,
-  /// after which the payload can be decoded.
-  ///
-  /// If the DataFlag is set, then the SerializedPayload contains the
-  /// encapsulation of the new value of the data-object after the change.
+  /// If the DataFlag is set, then serialized_payload contains the encapsulation
+  /// of the new value of the data-object after the change.
   /// If the KeyFlag is set, then it contains the encapsulation of
   /// the key of the data-object the message refers to.
-  pub encoded_payload: Option<Bytes>,
+  ///
+  /// In case of submessage protection, this payload contains the
+  /// encoded version of the original payload
+  pub serialized_payload: Option<Bytes>,
 }
 
 impl Data {
@@ -127,7 +125,7 @@ impl Data {
       None
     };
 
-    let encoded_payload = if expect_data {
+    let serialized_payload = if expect_data {
       Some(buffer.clone().split_off(cursor.position() as usize))
     } else {
       None
@@ -138,7 +136,7 @@ impl Data {
       writer_id,
       writer_sn: sequence_number,
       inline_qos: parameter_list,
-      encoded_payload,
+      serialized_payload,
     })
   }
 
@@ -153,25 +151,29 @@ impl Data {
     4 + // writerId
     8 + // writerSN
     self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParameterList
-    self.encoded_payload.as_ref().map(|q| q.len()).unwrap_or(0)
+    self.serialized_payload.as_ref().map(|q| q.len()).unwrap_or(0)
   }
 
-  // Creates a DecodedData with encoded_payload replaced by the input
-  pub fn decoded(self, decoded_payload: Option<SerializedPayload>) -> DecodedData {
-    let Self {
-      reader_id,
-      writer_id,
-      writer_sn,
-      inline_qos,
-      ..
-    } = self;
-    DecodedData {
-      reader_id,
-      writer_id,
-      writer_sn,
-      inline_qos,
-      serialized_payload: decoded_payload,
-    }
+  #[cfg(test)]
+  pub(crate) fn unwrap_serialized_payload(&self) -> SerializedPayload {
+    self
+      .serialized_payload
+      .as_ref()
+      .map(SerializedPayload::from_bytes)
+      .unwrap()
+      .unwrap()
+  }
+
+  #[cfg(test)]
+  pub(crate) fn unwrap_serialized_payload_value(&self) -> Bytes {
+    self.unwrap_serialized_payload().value
+  }
+
+  #[cfg(test)]
+  pub(crate) fn update_serialized_payload_value(&mut self, new_value: Bytes) {
+    let mut payload = self.unwrap_serialized_payload();
+    payload.value = new_value;
+    self.serialized_payload = Some(payload.into());
   }
 }
 
@@ -194,8 +196,8 @@ impl<C: Context> Writable<C> for Data {
       writer.write_value(inline_qos)?;
     }
 
-    if let Some(encoded_payload) = self.encoded_payload.as_ref() {
-      writer.write_bytes(encoded_payload)?;
+    if let Some(serialized_payload) = self.serialized_payload.as_ref() {
+      writer.write_bytes(serialized_payload)?;
     }
 
     Ok(())
@@ -208,44 +210,5 @@ impl HasEntityIds for Data {
   }
   fn sender_entity_id(&self) -> EntityId {
     self.writer_id
-  }
-}
-
-// A version of the above struct with the payload decoded
-pub struct DecodedData {
-  /// Identifies the RTPS Reader entity that is being informed of the change
-  /// to the data-object.
-  pub reader_id: EntityId,
-
-  /// Identifies the RTPS Writer entity that made the change to the
-  /// data-object.
-  pub writer_id: EntityId,
-
-  /// Uniquely identifies the change and the relative order for all changes
-  /// made by the RTPS Writer identified by the writerGuid. Each change
-  /// gets a consecutive sequence number. Each RTPS Writer maintains is
-  /// own sequence number.
-  pub writer_sn: SequenceNumber,
-
-  /// Contains QoS that may affect the interpretation of the message.
-  /// Present only if the InlineQosFlag is set in the header.
-  pub inline_qos: Option<ParameterList>,
-
-  /// If the DataFlag is set, then the SerializedPayload contains the
-  /// encapsulation of the new value of the data-object after the change.
-  /// If the KeyFlag is set, then it contains the encapsulation of
-  /// the key of the data-object the message refers to.
-  pub serialized_payload: Option<SerializedPayload>,
-}
-
-#[cfg(test)]
-impl Data {
-  // Restore compatibility with some tests that require DecodedData
-  pub fn no_crypto_decoded(&self) -> DecodedData {
-    let decoded_payload = self
-      .clone()
-      .encoded_payload
-      .map(|payload| SerializedPayload::from_bytes(&payload).unwrap());
-    self.clone().decoded(decoded_payload)
   }
 }

@@ -21,7 +21,8 @@ use crate::RepresentationIdentifier;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SerializedPayload {
   pub representation_identifier: RepresentationIdentifier,
-  pub representation_options: [u8; 2], // Not used. Send as zero, ignore on receive.
+  // Can represent payload protection kind. Currently not used outside security.
+  pub representation_options: [u8; 2],
   pub value: Bytes,
 }
 
@@ -116,7 +117,7 @@ impl<C: Context> Writable<C> for SerializedPayload {
   }
 }
 
-// TODO: Should this be fallibe try_from instead?
+// TODO: Should this be fallible try_from instead?
 // The speedy write_to_buffer() call could in theory fail, but it is hard to see
 // how.
 impl From<SerializedPayload> for Bytes {
