@@ -35,8 +35,8 @@ use crate::{
 use crate::{
   create_error_internal, create_error_not_allowed_by_security,
   security::{
-    config::DomainParticipantSecurityConfigFiles,
     self,
+    config::DomainParticipantSecurityConfigFiles,
     security_plugins::{SecurityPlugins, SecurityPluginsHandle},
     AccessControl, Authentication, Cryptographic,
   },
