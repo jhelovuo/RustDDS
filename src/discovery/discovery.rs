@@ -1962,11 +1962,7 @@ mod tests {
       match &mut submsg.body {
         SubmessageBody::Writer(WriterSubmessage::Data(d, _)) => {
           let mut drd: DiscoveredReaderData = PlCdrDeserializerAdapter::from_bytes(
-            &d.no_crypto_decoded()
-              .serialized_payload
-              .as_ref()
-              .unwrap()
-              .value,
+            &d.unwrap_serialized_payload_value(),
             RepresentationIdentifier::PL_CDR_LE,
           )
           .unwrap();
@@ -1983,11 +1979,7 @@ mod tests {
           data = drd
             .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_LE)
             .unwrap();
-          d.no_crypto_decoded()
-            .serialized_payload
-            .as_mut()
-            .unwrap()
-            .value = data.clone();
+          d.update_serialized_payload_value(data.clone());
         }
         SubmessageBody::Interpreter(_) => (),
         _ => continue,
