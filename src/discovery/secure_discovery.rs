@@ -53,7 +53,7 @@ use super::{
 
 // Enum for authentication status of a remote participant
 #[derive(Clone, Copy, PartialEq, Debug)]
-pub(crate) enum AuthenticationStatus {
+pub enum AuthenticationStatus {
   Authenticated,
   Authenticating, // In the process of being authenticated
   Unauthenticated, /* Not authenticated, but still allowed to communicate with in a limited way
