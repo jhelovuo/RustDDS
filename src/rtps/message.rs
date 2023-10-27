@@ -13,9 +13,7 @@ use crate::{
     protocol_id::ProtocolId,
     protocol_version::ProtocolVersion,
     submessages::{
-      elements::{
-        parameter::Parameter, parameter_list::ParameterList, serialized_payload::SerializedPayload,
-      },
+      elements::{parameter::Parameter, parameter_list::ParameterList},
       submessage::WriterSubmessage,
       submessages::{SubmessageKind, *},
     },
@@ -25,12 +23,11 @@ use crate::{
   structure::{
     cache_change::CacheChange,
     entity::RTPSEntity,
-    guid::{EntityId, EntityKind, GuidPrefix, GUID},
+    guid::{EntityId, GuidPrefix, GUID},
     parameter_id::ParameterId,
     sequence_number::{FragmentNumber, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
-  RepresentationIdentifier,
 };
 #[cfg(feature = "security")]
 use crate::{
@@ -225,22 +222,6 @@ impl MessageBuilder {
       DDSData::DisposeByKey { ref key, .. } => Some(key.clone()),
       DDSData::DisposeByKeyHash { .. } => None,
     };
-    // TODO: please explain this logic here:
-    //
-    // Current hypothesis:
-    // If we are writing to a built-in ( = Discovery) topic, then we mark the
-    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
-    // on a little-endian machine.
-    let serialized_payload = serialized_payload.map(|serialized_payload| {
-      if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
-        SerializedPayload {
-          representation_identifier: RepresentationIdentifier::PL_CDR_LE,
-          ..serialized_payload
-        }
-      } else {
-        serialized_payload
-      }
-    });
 
     #[cfg(not(feature = "security"))]
     let encoded_payload = serialized_payload;
@@ -425,21 +406,6 @@ impl MessageBuilder {
       },
       serialized_payload: Bytes::from(encoded_payload),
     };
-
-    // TODO: please explain this logic here:
-    //
-    // Current hypothesis:
-    // If we are writing to a built-in ( = Discovery) topic, then we mark the
-    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
-    // on a little-endian machine.
-
-    // Is this ever necessary for fragmented data?
-
-    // if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
-    //   if let Some(sp) = data_message.serialized_payload.as_mut() {
-    //     sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE;
-    //   }
-    // }
 
     let flags: BitFlags<DATAFRAG_Flags> =
       // endianness flag
