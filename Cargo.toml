@@ -67,7 +67,7 @@ x509-certificate = { version = "0.21" , optional = true } # for configuration ce
 x509-cert = { version = "0.2" , optional = true }
 tempfile = { version = "3" , optional = true } # for calling external openssl command. Remove when no longer used.
 newline-converter = { version = "0.3" , optional = true } # helper for handling S/MIME
-ring = { version = "0.16" , optional = true } # Cryptographic primitives
+ring = { version = "0.17" , optional = true } # Cryptographic primitives
 cms = { version = "0.2" , optional = true } # for ASN.1 parsing
 der = { version = "0.7" , optional = true } # ASN.1 DER encoding
 bcder = { version = "0.7" , optional = true } # ASN.1 DER encoding
