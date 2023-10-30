@@ -18,6 +18,14 @@ Currently, the implementation is complete enough to do data exchange with [ROS2]
 
 The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talking to ROS components. The `ros2` module within RustDDS should not be used anymore.
 
+## Version 0.8.6
+
+* Feature `security` is nearing completion. RustDDS can securely talk to itself, but interoperability testing against other DDS implementaitons is still in progress.
+* Fix several bugs in SequenceNumber handling.
+* RTPS Writer data sending rewritten.
+* Fixed bug: Source timestamps were missing on retransmitted data.
+
+
 ## Version 0.8.5
 
 * Feature `security` merged to master, but it is still work-in-progress, so does not work yet.
