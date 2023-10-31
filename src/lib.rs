@@ -174,6 +174,8 @@ mod rtps;
 
 #[cfg(feature = "security")]
 mod security;
+#[cfg(feature = "security")]
+pub use security::config::DomainParticipantSecurityConfigFiles;
 
 #[cfg(not(feature = "security"))]
 mod no_security;

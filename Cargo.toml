@@ -1,6 +1,6 @@
 [package]
 name = "rustdds"
-version = "0.8.5"
+version = "0.8.6"
 authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", 
   "Oiva Moisio <oiva.moisio@atostek.com>", 
   "Miska Melkinen <miska.melkinen@atostek.com>", 
@@ -20,8 +20,8 @@ rust-version = "1.70.0"
 # the science-robotics category is because of ROS2
 
 [features]
-default = ["security"]  # for testing security branch
-# declare the existence of security feaature
+# Feature "security" implements the OMG "DDS Security" specification v 1.1
+# It adds a large amount of new code and dependencies.
 security = [
   "dep:serde-xml-rs", "dep:glob", "dep:mailparse", 
   "dep:x509-certificate", "dep:x509-cert", 
@@ -41,7 +41,7 @@ bit-vec = "0.6.2"
 speedy = "0.8.0"
 log = "0.4.11"
 num-traits = "0.2"
-num-derive = "0.3"
+num-derive = "0.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_repr="0.1"
 byteorder = { version = "1.3", features = ["i128"] }
@@ -87,7 +87,7 @@ hex-literal = "0.4"
 anyhow = "1.0" # for test cases
 
 # ros_visualizer
-crossterm = "0.26"
+crossterm = "0.27"
 tui = { version = "0.19", default-features = false, features = ['crossterm'] }
 
 # shapes-demo

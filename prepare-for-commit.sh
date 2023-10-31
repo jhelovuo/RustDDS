@@ -8,6 +8,6 @@ cargo +nightly fmt
 echo cargo +nightly clippy --tests --examples
 cargo +nightly clippy --tests --examples
 
-# Run linter without default features (=without security in the security branch)
-echo cargo +nightly clippy --no-default-features --tests --examples
-cargo +nightly clippy --no-default-features --tests --examples
+# Run linter with all features, including security
+echo cargo +nightly clippy --tests --examples --all-features
+cargo +nightly clippy --tests --examples --all-features

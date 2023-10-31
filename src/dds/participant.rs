@@ -36,6 +36,7 @@ use crate::{
   create_error_internal, create_error_not_allowed_by_security,
   security::{
     self,
+    config::DomainParticipantSecurityConfigFiles,
     security_plugins::{SecurityPlugins, SecurityPluginsHandle},
     AccessControl, Authentication, Cryptographic,
   },
@@ -69,6 +70,7 @@ impl DomainParticipantBuilder {
   }
 
   #[cfg(feature = "security")]
+  /// Low-level security configuration, which allows supplying custom plugins.
   pub fn security(
     &mut self,
     auth: Box<impl Authentication + 'static>,
@@ -82,7 +84,8 @@ impl DomainParticipantBuilder {
   }
 
   #[cfg(feature = "security")]
-  pub fn add_builtin_security(mut self) -> Self {
+  /// For development and test use only
+  fn add_builtin_security_test_config(mut self) -> Self {
     let security_test_configs = security::config::test_config();
 
     if security_test_configs.security_enabled {
@@ -91,6 +94,16 @@ impl DomainParticipantBuilder {
       let crypto = Box::new(security::CryptographicBuiltin::new());
       self.security(auth, access, crypto, security_test_configs.properties);
     }
+    self
+  }
+
+  #[cfg(feature = "security")]
+  /// Easier way to configure security.
+  pub fn builtin_security(mut self, configs: DomainParticipantSecurityConfigFiles) -> Self {
+    let auth = Box::new(security::AuthenticationBuiltin::new());
+    let access = Box::new(security::AccessControlBuiltin::new());
+    let crypto = Box::new(security::CryptographicBuiltin::new());
+    self.security(auth, access, crypto, configs.into_property_policy());
     self
   }
 
@@ -301,7 +314,7 @@ impl DomainParticipant {
     #[cfg(feature = "security")]
     // Add security if so configured in security configs
     // This is meant to be included only in the development phase for convenience
-    let dp_builder = dp_builder.add_builtin_security();
+    let dp_builder = dp_builder.add_builtin_security_test_config();
 
     dp_builder.build()
   }

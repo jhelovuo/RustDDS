@@ -238,7 +238,8 @@ impl RtpsWriterProxy {
     }
   }
 
-  // Used to add range of irrelevant changes from GAP message
+  // Used to add range of irrelevant changes from GAP submessage or unavailable
+  // changes from HEARTBEAT submessage
   pub fn irrelevant_changes_range(
     &mut self,
     remove_from: SequenceNumber,
@@ -267,7 +268,14 @@ impl RtpsWriterProxy {
       // let removed = removed_and_after;
       self.changes.append(&mut after);
 
-      self.ack_base = max(remove_until_before, self.ack_base);
+      if remove_until_before > self.ack_base {
+        // Move the base to skip the irrelevant changes
+        self.ack_base = remove_until_before;
+        // The new base might be a sample that we already have, move the base forward
+        // until we hit a missing one
+        self.advance_ack_base();
+      }
+
       debug!(
         "ack_base increased to {:?} by irrelevant_changes_range {:?} to {:?}. writer={:?}",
         self.ack_base, remove_from, remove_until_before, self.remote_writer_guid

@@ -18,15 +18,21 @@ use futures::stream::{FusedStream, Stream};
 use mio_06::Evented;
 use mio_extras::channel as mio_channel;
 use mio_08::{self, event, Interest, Registry, Token};
+use chrono::Utc;
 
 use crate::{
   dds::{
     qos::QosPolicyId,
     result::{ReadError, ReadResult},
   },
+  messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
   mio_source::*,
   read_error_poisoned,
+  structure::guid::GuidPrefix,
+  Duration, QosPolicies, Topic, GUID,
 };
+#[cfg(feature = "security")]
+use crate::discovery::secure_discovery::AuthenticationStatus;
 
 /// This trait corresponds to set_listener() of the Entity class in DDS spec.
 /// Types implementing this trait can be registered to a poll and
@@ -225,23 +231,95 @@ impl<'a, T> FusedStream for StatusReceiverStream<'a, T> {
 // -------------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
-pub enum DomainParticipantStatus {
-  PublisherStatus(PublisherStatus),
-  SubscriberStatus(SubscriberStatus),
-  TopicStatus(TopicStatus),
+pub enum DomainParticipantStatusEvent {
+  ParticipantDiscovered {
+    dpd: ParticipantDescription,
+  },
+  ParticipantLost {
+    id: GuidPrefix,
+    reason: LostReason,
+  },
+  InconsistentTopic {
+    previous_specs: Topic, // What was our ide aof the Topic
+    discovered_as: Topic,  // What incoming Discovery data tells us about Topic
+    discovery_from: GUID,  // Who sent the Discovery data
+  },
+  /// Discovery detects a new topic
+  TopicDetected {},
+  /// New Reader detected (or created locally). Detection happens regardless of
+  /// the remote being matched or not by a local Endpoint.
+  ReaderDetected {
+    reader: EndpointDescription,
+  },
+  /// New Writer detected
+  WriterDetected {
+    writer: EndpointDescription,
+  },
+  ReaderLost {
+    guid: GUID,
+    reason: LostReason,
+  },
+  WriterLost {
+    guid: GUID,
+    reason: LostReason,
+  },
+
+  #[cfg(feature = "security")]
+  Authentication {
+    status: AuthenticationStatus,
+  },
+  /// The CA has revoked the identity of some Participant.
+  /// We may be currently communicating with the Participant, or it may be
+  /// unknown to us.
+  #[cfg(feature = "security")]
+  IdentityRevoked {
+    participant: GUID,
+  },
+  /// Domain access permissions of some Participant have been revoked / changed.
+  #[cfg(feature = "security")]
+  PermissionsRevoked {
+    participant: GUID,
+    // TODO: How to get more details on what was revoked, or was something added?
+  },
 }
 
+/// Why some remote entity is considered to be no longer with us.
 #[derive(Debug, Clone)]
-pub enum SubscriberStatus {
-  DataOnReaders,
-  DataReaderStatus(DataReaderStatus),
+pub enum LostReason {
+  /// Participant announced via Discovery that it is leaving
+  Disposed,
+  /// Lease time exceeded => timeout
+  Timeout {
+    lease: Duration,   // What was the discovered lease duration
+    elapsed: Duration, // How much time has actually elapsed from last contact
+  },
 }
 
-pub type PublisherStatus = DataWriterStatus;
-
+/// This is a rewrite/summary of SpdpDiscoveredParticipantData from discovery.
+/// The original is not used to avoid circular dependency between participant
+/// and discovery. Some of the more technical details have been left out
 #[derive(Debug, Clone)]
-pub enum TopicStatus {
-  InconsistentTopic { count: CountWithChange },
+pub struct ParticipantDescription {
+  pub updated_time: chrono::DateTime<Utc>,
+  pub protocol_version: ProtocolVersion,
+  pub vendor_id: VendorId,
+  pub guid: GUID,
+  pub lease_duration: Option<Duration>,
+  pub entity_name: Option<String>,
+  #[cfg(feature = "security")]
+  pub supports_security: bool,
+}
+
+/// This is a summary of SubscriptionBuiltinTopicData /
+/// PublicationBuiltinTopicData from discovery. The original is not used to
+/// avoid circular dependency between participant and discovery.
+#[derive(Debug, Clone)]
+pub struct EndpointDescription {
+  pub updated_time: chrono::DateTime<Utc>,
+  pub guid: GUID,
+  pub topic_name: String,
+  pub type_name: String,
+  pub qos: QosPolicies,
 }
 
 #[derive(Debug, Clone)]
