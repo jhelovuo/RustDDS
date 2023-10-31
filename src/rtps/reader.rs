@@ -857,8 +857,10 @@ impl Reader {
         }
         writer_proxy.received_heartbeat_count = heartbeat.count;
 
-        // remove fragmented changes until first_sn.
+        // remove changes until first_sn.
         writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
+        let mut tc = this.acquire_the_topic_cache_guard();
+        tc.mark_reliably_received_before(writer_guid, writer_proxy.all_ackable_before());
 
         // let received_before = writer_proxy.all_ackable_before();
         let reader_id = this.entity_id();
