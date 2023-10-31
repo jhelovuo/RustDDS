@@ -3,18 +3,20 @@ use std::{
   io::{Read, Write},
   sync::{Arc,Mutex},
 };
+
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 #[cfg(not(target_os = "windows"))]
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 #[cfg(target_os = "windows")]
 use std::{thread::sleep, time::Duration};
 
 #[cfg(target_os = "windows")]
-use mio_08::net::{TcpListener, TcpStream};
-#[allow(unused_imports)]
-use log::{debug, error, info, trace, warn};
+use mio_08::net::{TcpListener};
 #[cfg(not(target_os = "windows"))]
 use socketpair::*;
-use mio_08::{self, *};
+use mio_08::{self, *, net::TcpStream};
 
 // PollEventSource and PollEventSender are an event communication
 // channel. PollEventSource is a mio-0.8 event::Source for Poll,
@@ -47,20 +49,11 @@ pub fn make_poll_channel() -> io::Result<(PollEventSource, PollEventSender)> {
   let (rec_sps, send_sps) = socketpair_stream()?;
   let rec_sps = set_non_blocking(rec_sps)?;
   let send_sps = set_non_blocking(send_sps)?;
-  let rec_mio_socket = unsafe { mio_08::net::TcpStream::from_raw_fd(rec_sps.as_raw_fd()) };
-  let send_mio_socket = unsafe { mio_08::net::TcpStream::from_raw_fd(send_sps.as_raw_fd()) };
 
-  // Here we `forget()` the socketpair halves. They are really just OS file handles.
-  // Forgetting means we skip running the object destructor (`.drop()`) and just dispose of
-  // the memory. The `.drop()` would close the fiel descriptors, which we do not want yet.
-  // Forgetting to close is ok, because the OS file descriptors have been copied to
-  // mio_08::net::TcpStreams, who will close the sockets when they are done.
-  // Previous code stored `rec_sps` and `send_sps`, but that is not good, because then the same
-  // file handle would be in two Rust objects, both of whose `.drop()` would close the handle.
-  // Double closes on file (socket) handles are bad, because they lead to race conditions when
-  // multiple threads are opening and closing sockets.
-  std::mem::forget(rec_sps);
-  std::mem::forget(send_sps);
+  let rec_mio_socket = 
+    TcpStream::from_std( std::net::TcpStream::from( OwnedFd::from( rec_sps )));
+  let send_mio_socket = 
+    TcpStream::from_std( std::net::TcpStream::from( OwnedFd::from( send_sps )));
 
   Ok((
     PollEventSource {
