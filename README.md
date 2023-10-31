@@ -3,8 +3,10 @@
 ![continuous-integration](https://github.com/jhelovuo/RustDDS/actions/workflows/CI.yml/badge.svg)
 [![codecov](https://codecov.io/gh/jhelovuo/RustDDS/branch/master/graph/badge.svg)](https://codecov.io/gh/jhelovuo/RustDDS)
 
-[RustDDS][rustdds-url] is a pure Rust implementation of [Data Distribution Service](https://www.omg.org/spec/DDS/), developed by [Atostek Oy][atostek-url]. 
-Atostek provides support and software development services related to DDS, ROS2, and robotics software in general. As a part of our work, we have open-sourced the RustDDS implementation.
+[RustDDS][rustdds-url] is a pure Rust implementation of [Data Distribution Service](https://www.omg.org/spec/DDS/). The latest [released version](https://crates.io/crates/rustdds) 
+is available on [crates.io](https://crates.io/) and API documentation on [docs.rs](https://docs.rs/rustdds/latest/rustdds/). The [GitHub repository](https://github.com/jhelovuo/RustDDS) tracks development.
+
+RustDDS is developed by [Atostek Oy][atostek-url]. Atostek provides support and software development services related to DDS, ROS2, and robotics software in general. As a part of our work, we have open-sourced the RustDDS implementation.
 
 We have tried to translate the key ideas of the DDS application interface to Rust concepts, but also follow Rust conventions. Consequently, the API is not exactly as written in the DDS specification, but a functionally equivalent approximation using Rust concepts and conventions.
 
@@ -17,6 +19,14 @@ The Data Distribution Service for real-time systems (DDS) is an Object Managemen
 Currently, the implementation is complete enough to do data exchange with [ROS2][ros2-url] software. 
 
 The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talking to ROS components. The `ros2` module within RustDDS should not be used anymore.
+
+## Version 0.8.6
+
+* Feature `security` is nearing completion. RustDDS can securely talk to itself, but interoperability testing against other DDS implementaitons is still in progress.
+* Fix several bugs in SequenceNumber handling.
+* RTPS Writer data sending rewritten.
+* Fixed bug: Source timestamps were missing on retransmitted data.
+
 
 ## Version 0.8.5
 
