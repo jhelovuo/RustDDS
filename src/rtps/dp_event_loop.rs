@@ -10,7 +10,12 @@ use mio_06::{Event, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{qos::policy, typedesc::TypeDesc},
+  dds::{qos::policy, typedesc::TypeDesc,
+    statusevents::{
+        StatusChannelSender, 
+        DomainParticipantStatusEvent, LostReason, 
+    },
+  },
   discovery::{
     discovery::DiscoveryCommand,
     discovery_db::{discovery_db_read, DiscoveryDB},
@@ -80,6 +85,8 @@ pub struct DPEventLoop {
   writers: HashMap<EntityId, Writer>,
   udp_sender: Rc<UDPSender>,
 
+  participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
   #[cfg(feature = "security")]
   discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
@@ -102,6 +109,7 @@ impl DPEventLoop {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     _discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> Self {
     #[cfg(not(feature = "security"))]
@@ -213,6 +221,7 @@ impl DPEventLoop {
       writers: HashMap::new(),
       ack_nack_receiver: acknack_receiver,
       discovery_update_notification_receiver,
+      participant_status_sender,
       #[cfg(feature = "security")]
       discovery_command_sender: _discovery_command_sender,
     }

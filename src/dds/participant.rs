@@ -16,7 +16,11 @@ use log::{debug, error, info, trace, warn};
 
 use crate::{
   create_error_out_of_resources, create_error_poisoned,
-  dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
+  dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc,
+    statusevents::{
+        StatusChannelSender, StatusChannelReceiver, sync_status_channel,
+        DomainParticipantStatusEvent, LostReason, },
+  },
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
     discovery_db::DiscoveryDB,
@@ -219,6 +223,9 @@ impl DomainParticipantBuilder {
     let (discovery_command_sender, discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(64);
 
+    // Channel used to report noteworthy events to DomainParticipant
+    let (status_sender, status_receiver) = sync_status_channel(16)?;
+
     #[cfg(not(feature = "security"))]
     let security_plugins_handle = None;
     #[cfg(feature = "security")]
@@ -233,6 +240,7 @@ impl DomainParticipantBuilder {
       discovery_update_notification_receiver,
       discovery_command_sender,
       spdp_liveness_sender,
+      status_sender.clone(), status_receiver,
       security_plugins_handle.clone(),
     )?;
     let self_locators = dp.self_locators();
@@ -258,6 +266,7 @@ impl DomainParticipantBuilder {
           discovery_command_receiver,
           spdp_liveness_receiver,
           self_locators,
+          status_sender,
           security_plugins_handle,
         ) {
           discovery.discovery_event_loop(); // run the event loop
@@ -580,26 +589,6 @@ impl DomainParticipantWeak {
   //     .and_then(|dpi| dpi.lock().unwrap().find_topic(self, name, timeout))
   // }
 
-  // pub fn domain_id(&self) -> u16 {
-  //   self
-  //     .dpi
-  //     .upgrade()
-  //     .expect("Unable to get original domain participant.")
-  //     .lock()
-  //     .unwrap()
-  //     .domain_id()
-  // }
-
-  // pub fn participant_id(&self) -> u16 {
-  //   self
-  //     .dpi
-  //     .upgrade()
-  //     .expect("Unable to get original domain participant.")
-  //     .lock()
-  //     .unwrap()
-  //     .participant_id()
-  // }
-
   // pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
   //   self
   //     .dpi
@@ -640,8 +629,12 @@ impl DomainParticipantDisc {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+    status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> CreateResult<Self> {
+
+
     let dpi = DomainParticipantInner::new(
       domain_id,
       participant_guid,
@@ -649,6 +642,8 @@ impl DomainParticipantDisc {
       discovery_update_notification_receiver,
       discovery_command_sender.clone(),
       spdp_liveness_sender,
+      status_sender, 
+      status_receiver,
       security_plugins_handle,
     )?;
 
@@ -817,6 +812,9 @@ pub(crate) struct DomainParticipantInner {
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   discovery_db_event_receiver: mio_channel::Receiver<()>,
 
+  // status event receiver
+  status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
+
   // RTPS locators describing how to reach this DP
   self_locators: HashMap<Token, Vec<Locator>>,
 
@@ -855,6 +853,8 @@ impl DomainParticipantInner {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+    status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
   ) -> CreateResult<Self> {
     #[cfg(not(feature = "security"))]
@@ -1005,6 +1005,7 @@ impl DomainParticipantInner {
           discovery_update_notification_receiver,
           discovery_command_sender,
           spdp_liveness_sender,
+          status_sender,
           security_plugins_clone,
         );
         dp_event_loop.event_loop();
@@ -1033,6 +1034,7 @@ impl DomainParticipantInner {
       dds_cache,
       discovery_db,
       discovery_db_event_receiver,
+      status_receiver,
       self_locators,
       security_plugins_handle,
     })

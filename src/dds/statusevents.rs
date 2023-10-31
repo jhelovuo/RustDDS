@@ -119,6 +119,7 @@ pub(crate) fn sync_status_channel<T>(
 }
 
 // TODO: try to make this (and the Receiver) private types
+#[derive(Clone)]
 pub struct StatusChannelSender<T> {
   actual_sender: mio_channel::SyncSender<T>,
   signal_sender: PollEventSender,

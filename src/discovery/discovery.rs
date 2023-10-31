@@ -22,6 +22,10 @@ use crate::{
     },
     readcondition::ReadCondition,
     result::{CreateError, CreateResult},
+    statusevents::{
+        StatusChannelSender,  
+        DomainParticipantStatusEvent, LostReason, 
+    },
   },
   discovery::{
     discovery_db::{discovery_db_read, discovery_db_write, DiscoveredVia, DiscoveryDB},
@@ -180,6 +184,8 @@ pub(crate) struct Discovery {
 
   liveliness_state: LivelinessState,
 
+  participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+
   // TODO: Why is this a HashMap? Are there ever more than 2?
   self_locators: HashMap<Token, Vec<Locator>>,
 
@@ -282,6 +288,7 @@ impl Discovery {
     discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
     spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
     self_locators: HashMap<Token, Vec<Locator>>,
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> CreateResult<Self> {
     // helper macro to handle initialization failures.
@@ -628,6 +635,7 @@ impl Discovery {
       discovery_updated_sender,
       discovery_command_receiver,
       spdp_liveness_receiver,
+      participant_status_sender,
       self_locators,
 
       liveliness_state: LivelinessState::new(),
