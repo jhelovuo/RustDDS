@@ -9,3 +9,4 @@ src/.vscode/launch.json
 .idea/
 logging-config.yaml
 dev
+FastDDS_security_interoperability_test
