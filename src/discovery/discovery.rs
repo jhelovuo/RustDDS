@@ -978,6 +978,10 @@ impl Discovery {
     let guid_prefix = participant_data.participant_guid.prefix;
     self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated { guid_prefix });
     if was_new {
+      let dpd = participant_data.into();
+      self.participant_status_sender
+        .try_send(DomainParticipantStatusEvent::ParticipantDiscovered{ dpd })
+        .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
       // This may be a rediscovery of a previously seen participant that
       // was temporarily lost due to network outage. Check if we already know
       // what it has (readers, writers, topics).

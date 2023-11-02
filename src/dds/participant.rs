@@ -11,6 +11,7 @@ use std::{
 
 use mio_extras::channel as mio_channel;
 use mio_06::Token;
+use mio_06::Evented;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
@@ -33,6 +34,7 @@ use crate::{
     reader::*,
     writer::WriterIngredients,
   },
+  StatusEvented,
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::*, locator::Locator},
 };
 #[cfg(feature = "security")]
@@ -500,6 +502,31 @@ impl DomainParticipant {
   }
 } // end impl DomainParticipant
 
+// --------------------------------------------------------------------------
+// --------------------------------------------------------------------------
+
+pub struct DomainParticipantStatusListener {
+  dp_disc: Arc<Mutex<DomainParticipantDisc>>,
+}
+
+// impl StatusEvented<DomainParticipantStatusEvent> for DomainParticipantStatusListener {
+//   fn as_status_evented(&mut self) -> &dyn Evented {
+//     self
+//   }
+
+//   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+//     self
+//   }
+
+//   fn try_recv_status(&self) -> Option<DomainParticipantStatusEvent> {
+//     self.dp_disc.lock().unwrap().status_channel_receiver().try_recv_status()
+//   }
+
+// }
+
+// --------------------------------------------------------------------------
+// --------------------------------------------------------------------------
+
 impl PartialEq for DomainParticipant {
   fn eq(&self, other: &Self) -> bool {
     self.guid() == other.guid()
@@ -580,22 +607,6 @@ impl DomainParticipantWeak {
           .create_topic(self, name, type_desc, qos, topic_kind)
       })
   }
-
-  // pub fn find_topic(&self, name: &str, timeout: Duration) ->
-  // Result<Option<Topic>> {   self
-  //     .dpi
-  //     .upgrade()
-  //     .ok_or(Error::LockPoisoned)
-  //     .and_then(|dpi| dpi.lock().unwrap().find_topic(self, name, timeout))
-  // }
-
-  // pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-  //   self
-  //     .dpi
-  //     .upgrade()
-  //     .map(|dpi| dpi.lock().unwrap().discovered_topics())
-  //     .unwrap_or_default()
-  // }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
     self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
@@ -749,6 +760,12 @@ impl DomainParticipantDisc {
 
   pub(crate) fn self_locators(&self) -> HashMap<Token, Vec<Locator>> {
     self.dpi.lock().unwrap().self_locators.clone()
+  }
+
+  pub(crate) fn status_channel_receiver(&self) -> &StatusChannelReceiver<DomainParticipantStatusEvent>
+  {
+    todo!()
+    //self.dpi.lock().unwrap().status_channel_receiver()
   }
 }
 
@@ -1258,6 +1275,10 @@ impl DomainParticipantInner {
       .unwrap_or_else(|e| panic!("DiscoveryDB is poisoned. {e:?}"));
 
     db.all_user_topics().cloned().collect()
+  }
+  pub(crate) fn status_channel_receiver(&self) -> &StatusChannelReceiver<DomainParticipantStatusEvent> 
+  {
+    &self.status_receiver
   }
 } // impl
 

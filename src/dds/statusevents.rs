@@ -21,6 +21,7 @@ use mio_08::{self, event, Interest, Registry, Token};
 use chrono::Utc;
 
 use crate::{
+  discovery::SpdpDiscoveredParticipantData,
   dds::{
     qos::QosPolicyId,
     result::{ReadError, ReadResult},
@@ -41,8 +42,8 @@ use crate::discovery::secure_discovery::AuthenticationStatus;
 pub trait StatusEvented<E> {
   fn as_status_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source; // This is for polling with mio-0.8.x
-                                                                    // fn as_async_receiver(&self) -> dyn Stream<E>;
 
+  // fn as_async_receiver(&self) -> dyn Stream<E>;
   fn try_recv_status(&self) -> Option<E>;
 }
 
@@ -170,6 +171,20 @@ impl<T> StatusChannelReceiver<T> {
     StatusReceiverStream {
       sync_receiver: self,
     }
+  }
+}
+
+impl<E> StatusEvented<E> for StatusChannelReceiver<E> {
+  fn as_status_evented(&mut self) -> &dyn Evented {
+    &self.actual_receiver
+  }
+
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+    self
+  }
+
+  fn try_recv_status(&self) -> Option<E> {
+    self.try_recv().ok()
   }
 }
 
@@ -310,6 +325,21 @@ pub struct ParticipantDescription {
   pub entity_name: Option<String>,
   #[cfg(feature = "security")]
   pub supports_security: bool,
+}
+
+impl From<&SpdpDiscoveredParticipantData> for ParticipantDescription {
+  fn from(dpd: &SpdpDiscoveredParticipantData) -> Self {
+    ParticipantDescription {
+      updated_time: dpd.updated_time,
+      protocol_version: dpd.protocol_version,
+      vendor_id: dpd.vendor_id,
+      guid: dpd.participant_guid,
+      lease_duration: dpd.lease_duration,
+      entity_name: dpd.entity_name.clone(),
+      #[cfg(feature = "security")]
+      supports_security: dpd.supports_security(),
+    }
+  }
 }
 
 /// This is a summary of SubscriptionBuiltinTopicData / PublicationBuiltinTopicData from discovery.

@@ -8,7 +8,7 @@ use std::{
 use log::{debug, error, info, trace, warn};
 
 #[cfg(not(target_os = "windows"))]
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::fd::OwnedFd;
 #[cfg(target_os = "windows")]
 use std::{thread::sleep, time::Duration};
 
