@@ -6,7 +6,7 @@ use std::{
   net::Ipv4Addr,
   pin::Pin,
   sync::{atomic, Arc, Mutex, RwLock, Weak},
-  task::{Context, Poll, Waker},
+  task::{Context, Poll,},
   thread,
   thread::JoinHandle,
   time::{Duration, Instant},
@@ -14,7 +14,7 @@ use std::{
 
 use mio_extras::channel as mio_channel;
 use mio_06::{self, Evented};
-use mio_08::{self, event, Interest, Registry};
+use mio_08::{self, Interest, Registry};
 use futures::stream::{FusedStream, Stream};
 
 #[allow(unused_imports)]
@@ -33,7 +33,6 @@ use crate::{
     sedp_messages::DiscoveredTopicData,
   },
   network::{constant::*, udp_listener::UDPListener},
-  read_error_poisoned,
   rtps::{
     constant::*,
     dp_event_loop::{DPEventLoop, DomainInfo, EventLoopCommand},

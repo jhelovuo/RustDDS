@@ -57,6 +57,7 @@ fn main() {
     .cloned()
     .unwrap_or("BLUE".to_owned());
 
+  // Domain Participant 
   let domain_participant = DomainParticipant::new(*domain_id)
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {e:?}"));
 
@@ -131,9 +132,10 @@ fn main() {
   );
 
   // Set Ctrl-C handler
-  let (stop_sender, stop_receiver) = smol::channel::bounded(2);
+  let (stop_sender, stop_receiver) = smol::channel::bounded(3);
   ctrlc::set_handler(move || {
     // We will send two stop coammnds, one for reader, the other for writer.
+    stop_sender.send_blocking(()).unwrap_or(());
     stop_sender.send_blocking(()).unwrap_or(());
     stop_sender.send_blocking(()).unwrap_or(());
     // ignore errors, as we are quitting anyway
@@ -186,6 +188,22 @@ fn main() {
     random_gen.gen_range(1..5)
   } else {
     random_gen.gen_range(-5..-1)
+  };
+
+  let dp_event_loop = async {
+    let mut run = true;
+    let mut stop = stop_receiver.recv().fuse();
+    let dp_status_listener = domain_participant.status_listener();
+    let mut dp_status_stream = dp_status_listener.as_async_stream();
+
+    while run {
+      futures::select! {
+        _ = stop => run = false,
+        e = dp_status_stream.select_next_some() => {
+          println!("DP Status: {e:?}");
+        }
+      } // select!
+    } // while
   };
 
   let read_loop = async {
@@ -263,7 +281,7 @@ fn main() {
   };
 
   // Run both read and write concurrently, until both are done.
-  smol::block_on(async { futures::join!(read_loop, write_loop) });
+  smol::block_on(async { futures::join!(read_loop, write_loop, dp_event_loop) });
 }
 
 fn configure_logging() {
