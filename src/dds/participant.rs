@@ -307,7 +307,7 @@ impl DomainParticipantBuilder {
 /// `u16`. Domain identifier values are application-specific, but `0` is usually
 /// the default.
 #[derive(Clone)]
-// This is a smart pointer for DomainParticipantInner for easier manipulation.
+// This is a smart pointer for DomainParticipant for easier manipulation.
 pub struct DomainParticipant {
   dpi: Arc<Mutex<DomainParticipantDisc>>,
 }
@@ -487,8 +487,6 @@ impl DomainParticipant {
       .lock()
       .unwrap()
       .dpi
-      .lock()
-      .unwrap()
       .discovery_db
       .clone()
   }
@@ -622,7 +620,7 @@ impl RTPSEntity for DomainParticipantWeak {
 // This struct exists only to control and stop Discovery when DomainParticipant
 // should be dropped
 pub(crate) struct DomainParticipantDisc {
-  dpi: Arc<Mutex<DomainParticipantInner>>,
+  dpi: DomainParticipantInner,
   // Discovery control
   discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
   discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
@@ -659,7 +657,7 @@ impl DomainParticipantDisc {
     )?;
 
     Ok(Self {
-      dpi: Arc::new(Mutex::new(dpi)),
+      dpi,
       discovery_command_sender,
       discovery_join_handle,
       entity_id_generator: atomic::AtomicU32::new(0),
@@ -683,7 +681,6 @@ impl DomainParticipantDisc {
   ) -> CreateResult<Publisher> {
     self
       .dpi
-      .lock()?
       .create_publisher(dp, qos, self.discovery_command_sender.clone())
   }
 
@@ -694,7 +691,6 @@ impl DomainParticipantDisc {
   ) -> CreateResult<Subscriber> {
     self
       .dpi
-      .lock()?
       .create_subscriber(dp, qos, self.discovery_command_sender.clone())
   }
 
@@ -709,7 +705,6 @@ impl DomainParticipantDisc {
     // println!("Create topic disc");
     self
       .dpi
-      .lock()?
       .create_topic(dp, name, type_desc, qos, topic_kind)
   }
 
@@ -719,28 +714,28 @@ impl DomainParticipantDisc {
     name: &str,
     timeout: Duration,
   ) -> CreateResult<Option<Topic>> {
-    self.dpi.lock()?.find_topic(dp, name, timeout)
+    self.dpi.find_topic(dp, name, timeout)
   }
 
   pub fn domain_id(&self) -> u16 {
-    self.dpi.lock().unwrap().domain_id()
+    self.dpi.domain_id()
   }
 
   pub fn participant_id(&self) -> u16 {
-    self.dpi.lock().unwrap().participant_id()
+    self.dpi.participant_id()
   }
 
   pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    self.dpi.lock().unwrap().discovered_topics()
+    self.dpi.discovered_topics()
   }
 
   pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    self.dpi.lock().unwrap().dds_cache()
+    self.dpi.dds_cache()
   }
 
   #[cfg(feature = "security")] // just to avoid warning
   pub(crate) fn qos(&self) -> QosPolicies {
-    self.dpi.lock().unwrap().qos()
+    self.dpi.qos()
   }
 
   // pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
@@ -759,7 +754,7 @@ impl DomainParticipantDisc {
   }
 
   pub(crate) fn self_locators(&self) -> HashMap<Token, Vec<Locator>> {
-    self.dpi.lock().unwrap().self_locators.clone()
+    self.dpi.self_locators.clone()
   }
 
   pub(crate) fn status_channel_receiver(&self) -> &StatusChannelReceiver<DomainParticipantStatusEvent>
@@ -776,8 +771,6 @@ impl Drop for DomainParticipantDisc {
     debug!("Wan dp_event_loop about stop.");
     if self
       .dpi
-      .lock()
-      .unwrap()
       .stop_poll_sender
       .send(EventLoopCommand::PrepareStop)
       .is_err()
@@ -1290,7 +1283,7 @@ impl RTPSEntity for DomainParticipant {
 
 impl RTPSEntity for DomainParticipantDisc {
   fn guid(&self) -> GUID {
-    self.dpi.lock().unwrap().guid()
+    self.dpi.guid()
   }
 }
 
