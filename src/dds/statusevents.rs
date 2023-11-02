@@ -172,6 +172,9 @@ impl<T> StatusChannelReceiver<T> {
       sync_receiver: self,
     }
   }
+  pub(crate) fn get_waker_update_lock(&self) -> std::sync::MutexGuard<'_, Option<Waker>>{
+    self.waker.lock().unwrap()
+  }
 }
 
 impl<E> StatusEvented<E> for StatusChannelReceiver<E> {
@@ -221,7 +224,7 @@ impl<'a, T> Stream for StatusReceiverStream<'a, T> {
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     // debug!("poll_next");
-    let mut w = self.sync_receiver.waker.lock().unwrap();
+    let mut w = self.sync_receiver.get_waker_update_lock();
     // lock already at the beginning, before try_recv
     match self.sync_receiver.try_recv() {
       Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -232,7 +235,7 @@ impl<'a, T> Stream for StatusReceiverStream<'a, T> {
       Err(std::sync::mpsc::TryRecvError::Disconnected) => Poll::Ready(Some(read_error_poisoned!(
         "StatusReceiver channel disconnected"
       ))),
-      Ok(t) => Poll::Ready(Some(Ok(t))), // got date
+      Ok(t) => Poll::Ready(Some(Ok(t))), // got data
     }
   } // fn
 }
