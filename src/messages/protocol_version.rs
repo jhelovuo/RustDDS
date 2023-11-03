@@ -1,8 +1,10 @@
+use std::fmt;
+
 use speedy::{Readable, Writable};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace};
 
-#[derive(Debug, PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Clone, Copy)]
+#[derive(PartialOrd, PartialEq, Ord, Eq, Readable, Writable, Clone, Copy)]
 pub struct ProtocolVersion {
   pub major: u8,
   pub minor: u8,
@@ -29,6 +31,12 @@ impl ProtocolVersion {
 impl Default for ProtocolVersion {
   fn default() -> Self {
     Self::THIS_IMPLEMENTATION
+  }
+}
+
+impl fmt::Debug for ProtocolVersion {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f,"{}.{}", self.major, self.minor)
   }
 }
 

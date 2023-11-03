@@ -1,10 +1,9 @@
-use std::{convert::TryFrom, ops::Div};
+use std::{convert::TryFrom, ops::Div, fmt};
 
 use speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
 
 #[derive(
-  Debug,
   PartialEq,
   Eq,
   Hash,
@@ -145,6 +144,21 @@ impl std::ops::Mul<Duration> for f64 {
   type Output = Duration;
   fn mul(self, rhs: Duration) -> Duration {
     Duration::from_ticks((self * (rhs.to_ticks() as Self)) as i64)
+  }
+}
+
+impl fmt::Debug for Duration {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if *self == Self::DURATION_INFINITE {
+      write!(f,"infinite")
+    } else {
+      write!(f,"{}", self.seconds)?;
+      if self.fraction > 0 {
+        let frac = format!("{:09}", (1_000_000_000 * (self.fraction as u64)) >> 32);
+        write!(f,".{}", frac.trim_end_matches('0'))?;
+      }
+      write!(f," sec")
+    }
   }
 }
 
