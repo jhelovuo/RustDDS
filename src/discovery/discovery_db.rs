@@ -12,8 +12,8 @@ use crate::{
   dds::{
     participant::DomainParticipant,
     qos::HasQoSPolicy,
-    statusevents::{DomainParticipantStatusEvent, LostReason, StatusChannelSender},
     topic::{Topic, TopicDescription},
+    statusevents::{StatusChannelSender, DomainParticipantStatusEvent, LostReason,},
   },
   rtps::{
     reader::ReaderIngredients, rtps_reader_proxy::RtpsReaderProxy,
@@ -118,11 +118,9 @@ pub(crate) fn discovery_db_write(
 }
 
 impl DiscoveryDB {
-  pub fn new(
-    my_guid: GUID,
+  pub fn new(my_guid: GUID,
     topic_updated_sender: mio_extras::channel::SyncSender<()>,
-    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
-  ) -> Self {
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent> ) -> Self {
     Self {
       my_guid,
       participant_proxies: BTreeMap::new(),
@@ -142,8 +140,7 @@ impl DiscoveryDB {
   }
 
   fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
-    self
-      .participant_status_sender
+    self.participant_status_sender
       .try_send(event)
       .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
   }
@@ -329,13 +326,7 @@ impl DiscoveryDB {
                elapsed = {:?}",
               guid, lease_duration, elapsed
             );
-            to_remove.push((
-              guid,
-              LostReason::Timeout {
-                lease: lease_duration,
-                elapsed,
-              },
-            ));
+            to_remove.push( (guid, LostReason::Timeout{ lease: lease_duration, elapsed } ) );
           }
         }
         None => {
@@ -344,7 +335,7 @@ impl DiscoveryDB {
       } // match
     } // for
 
-    for (guid, _) in &to_remove {
+    for (guid , _ ) in &to_remove {
       self.remove_participant(*guid, false); // false = removed due to timeout
     }
 
@@ -579,6 +570,7 @@ impl DiscoveryDB {
             "Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
             updater, old_dtd.1.topic_data.type_name, dtd.topic_data.type_name,
           );
+
         }
       } else {
         // We have to topic, but not from this participant
@@ -795,8 +787,9 @@ mod tests {
   fn discdb_participant_operations() {
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
+    let (status_sender, _status_receiver) = sync_status_channel(16).unwrap();
 
-    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
+    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender, status_sender);
     let mut data = spdp_participant_data().unwrap();
     data.lease_duration = Some(Duration::from(StdDuration::from_secs(1)));
 
@@ -817,7 +810,8 @@ mod tests {
   fn discdb_writer_proxies() {
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
-    let _discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
+    let (status_sender, _status_receiver) = sync_status_channel(16).unwrap();
+    let _discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender, status_sender);
     let topic_name = String::from("some_topic");
     let type_name = String::from("RandomData");
     let _dreader = DiscoveredReaderData::default(topic_name, type_name);
@@ -829,9 +823,10 @@ mod tests {
   fn discdb_subscription_operations() {
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
+    let (status_sender, _status_receiver) = sync_status_channel(16).unwrap();
 
     let mut discovery_db =
-      DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
+      DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender, status_sender);
 
     let domain_participant = DomainParticipant::new(0).expect("Failed to create publisher");
     let topic = domain_participant
@@ -924,7 +919,8 @@ mod tests {
         TopicKind::WithKey,
       )
       .unwrap();
-    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
+    let (status_sender, _status_receiver) = sync_status_channel(16).unwrap();
+    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender, status_sender);
 
     // Create reader ingredients
     let (notification_sender1, _notification_receiver1) = mio_extras::channel::sync_channel(100);

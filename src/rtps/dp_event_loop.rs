@@ -1084,6 +1084,7 @@ mod tests {
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
       GUID::new_participant_guid(),
       discovery_db_event_sender,
+      participant_status_sender.clone(),
     )));
 
     let domain_info = DomainInfo {
