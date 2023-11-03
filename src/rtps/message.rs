@@ -13,9 +13,7 @@ use crate::{
     protocol_id::ProtocolId,
     protocol_version::ProtocolVersion,
     submessages::{
-      elements::{
-        parameter::Parameter, parameter_list::ParameterList, serialized_payload::SerializedPayload,
-      },
+      elements::{parameter::Parameter, parameter_list::ParameterList},
       submessage::WriterSubmessage,
       submessages::{SubmessageKind, *},
     },
@@ -25,12 +23,11 @@ use crate::{
   structure::{
     cache_change::CacheChange,
     entity::RTPSEntity,
-    guid::{EntityId, EntityKind, GuidPrefix, GUID},
+    guid::{EntityId, GuidPrefix, GUID},
     parameter_id::ParameterId,
     sequence_number::{FragmentNumber, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
-  RepresentationIdentifier,
 };
 #[cfg(feature = "security")]
 use crate::{
@@ -161,7 +158,7 @@ impl MessageBuilder {
       content_length,
     };
 
-    let submsg = Submessage {
+    let submessage = Submessage {
       header: submessage_header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(
         InfoTimestamp { timestamp },
@@ -170,7 +167,7 @@ impl MessageBuilder {
       original_bytes: None,
     };
 
-    self.submessages.push(submsg);
+    self.submessages.push(submessage);
     self
   }
 
@@ -180,8 +177,12 @@ impl MessageBuilder {
     reader_entity_id: EntityId, // The entity id to be included in the submessage
     writer_guid: GUID,
     endianness: Endianness,
-    _security_plugins: Option<&SecurityPluginsHandle>,
+    security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    // Parameter not used
+    let _ = security_plugins;
+
     let writer_entity_id = writer_guid.entity_id;
 
     let mut param_list = ParameterList::new(); // inline QoS goes here
@@ -221,22 +222,6 @@ impl MessageBuilder {
       DDSData::DisposeByKey { ref key, .. } => Some(key.clone()),
       DDSData::DisposeByKeyHash { .. } => None,
     };
-    // TODO: please explain this logic here:
-    //
-    // Current hypothesis:
-    // If we are writing to a built-in ( = Discovery) topic, then we mark the
-    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
-    // on a little-endian machine.
-    let serialized_payload = serialized_payload.map(|serialized_payload| {
-      if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
-        SerializedPayload {
-          representation_identifier: RepresentationIdentifier::PL_CDR_LE,
-          ..serialized_payload
-        }
-      } else {
-        serialized_payload
-      }
-    });
 
     #[cfg(not(feature = "security"))]
     let encoded_payload = serialized_payload;
@@ -250,22 +235,18 @@ impl MessageBuilder {
           .write_to_vec()
           .map_err(|e| security_error!("{e:?}"))
           .and_then(|serialized_payload| {
-            _security_plugins
-              .map(SecurityPluginsHandle::get_plugins)
-              .map_or(
-                // If there are no security plugins, use plaintext
-                Ok(serialized_payload.clone()),
-                // If security plugins exist, call them to encode payload
-                |security_plugins| {
-                  security_plugins
-                    .encode_serialized_payload(serialized_payload, &writer_guid)
-                    // Add the extra qos
-                    .map(|(encoded_payload, extra_inline_qos)| {
-                      param_list.concat(extra_inline_qos);
-                      encoded_payload
-                    })
-                },
-              )
+            match security_plugins.map(SecurityPluginsHandle::get_plugins) {
+              Some(security_plugins) => {
+                security_plugins
+                  .encode_serialized_payload(serialized_payload, &writer_guid)
+                  // Add the extra qos
+                  .map(|(encoded_payload, extra_inline_qos)| {
+                    param_list.concat(extra_inline_qos);
+                    encoded_payload
+                  })
+              }
+              None => Ok(serialized_payload),
+            }
           })
       })
       .transpose()
@@ -289,7 +270,7 @@ impl MessageBuilder {
       writer_id: writer_entity_id,
       writer_sn: cache_change.sequence_number,
       inline_qos,
-      encoded_payload: encoded_payload.map(Bytes::from),
+      serialized_payload: encoded_payload.map(Bytes::from),
     };
 
     let flags: BitFlags<DATA_Flags> = BitFlags::<DATA_Flags>::from_endianness(endianness)
@@ -330,8 +311,12 @@ impl MessageBuilder {
     fragment_size: u16,
     sample_size: u32, // all fragments together
     endianness: Endianness,
-    _security_plugins: Option<&SecurityPluginsHandle>,
+    security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    // Parameter not used
+    let _ = security_plugins;
+
     let writer_entity_id = writer_guid.entity_id;
 
     let mut param_list = ParameterList::new(); // inline QoS goes here
@@ -379,13 +364,9 @@ impl MessageBuilder {
     let encoded_payload = serialized_payload;
 
     #[cfg(feature = "security")]
-    let encoded_payload = match _security_plugins
-      .map(SecurityPluginsHandle::get_plugins)
-      .map_or(
-        // If there are no security plugins, use plaintext
-        Ok(serialized_payload.clone()),
-        // ..else, security plugins exist, call them to encode payload
-        |security_plugins| {
+    let encoded_payload = {
+      let encode_result = match security_plugins.map(SecurityPluginsHandle::get_plugins) {
+        Some(security_plugins) => {
           security_plugins
             .encode_serialized_payload(serialized_payload, &writer_guid)
             // Add the extra qos
@@ -393,12 +374,20 @@ impl MessageBuilder {
               param_list.concat(extra_inline_qos);
               encoded_payload
             })
-        },
-      ) {
-      Ok(encoded_payload) => encoded_payload,
-      Err(e) => {
-        error!("{e:?}");
-        return self;
+        }
+        None =>
+        // If there are no security plugins, use plaintext
+        {
+          Ok(serialized_payload)
+        }
+      };
+
+      match encode_result {
+        Ok(encoded_payload) => encoded_payload,
+        Err(e) => {
+          error!("{e:?}");
+          return self;
+        }
       }
     }; // end security encoding
 
@@ -415,23 +404,8 @@ impl MessageBuilder {
       } else {
         None
       },
-      encoded_payload: Bytes::from(encoded_payload),
+      serialized_payload: Bytes::from(encoded_payload),
     };
-
-    // TODO: please explain this logic here:
-    //
-    // Current hypothesis:
-    // If we are writing to a built-in ( = Discovery) topic, then we mark the
-    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
-    // on a little-endian machine.
-
-    // Is this ever necessary for fragmented data?
-
-    // if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
-    //   if let Some(sp) = data_message.serialized_payload.as_mut() {
-    //     sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE;
-    //   }
-    // }
 
     let flags: BitFlags<DATAFRAG_Flags> =
       // endianness flag
@@ -749,13 +723,7 @@ mod tests {
       wtf => panic!("Unexpected message structure {wtf:?}"),
     };
 
-    let serialized_payload = data_submessage
-      .no_crypto_decoded()
-      .serialized_payload
-      .as_ref()
-      .unwrap()
-      .value
-      .clone();
+    let serialized_payload = data_submessage.unwrap_serialized_payload_value().clone();
     info!("{:x?}", serialized_payload);
 
     let serialized = Bytes::from(

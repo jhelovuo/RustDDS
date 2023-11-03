@@ -9,10 +9,7 @@ use bytes::Bytes;
 use crate::{
   messages::{
     protocol_version::ProtocolVersion,
-    submessages::{
-      elements::serialized_payload::SerializedPayload,
-      submessages::{WriterSubmessage, *},
-    },
+    submessages::submessages::{WriterSubmessage, *},
     vendor_id::VendorId,
   },
   rtps::{reader::Reader, Message, Submessage, SubmessageBody},
@@ -511,7 +508,7 @@ impl MessageReceiver {
           }
           other => {
             warn!(
-              "Expected SecurePostfix submessage after SecurePrefix and payload submsg. \
+              "Expected SecurePostfix submessage after SecurePrefix and payload submessage. \
                Discarding."
             );
             debug!("Unexpected submessage instead: {other:?}");
@@ -635,16 +632,7 @@ impl MessageReceiver {
     reader: &mut Reader,
     mr_state: &MessageReceiverState,
   ) {
-    let encoded_payload = data.encoded_payload.clone();
-
-    let sp: Option<SerializedPayload> = encoded_payload
-      .map(|encoded_payload| SerializedPayload::from_bytes(&encoded_payload))
-      .transpose()
-      .map_err(|e| error!("{e:?}"))
-      .ok()
-      .flatten();
-
-    reader.handle_data_msg(data.decoded(sp), data_flags, mr_state);
+    reader.handle_data_msg(data, data_flags, mr_state);
   }
 
   #[cfg(feature = "security")]
@@ -658,43 +646,36 @@ impl MessageReceiver {
   ) {
     let Data {
       inline_qos,
-      encoded_payload,
+      serialized_payload,
       ..
     } = data.clone();
 
-    encoded_payload
+    serialized_payload
       // If there is an encoded_payload, decode it
-      .map(|encoded_payload| {
-        security_plugins
-          .map(SecurityPluginsHandle::get_plugins)
-          .map_or(
-            // If there are no security plugins, we expect a serialized SerializedPayload as
-            // Bytes
-            Ok(encoded_payload.clone()),
-            // If security plugins exist, use them to decode
-            |security_plugins| {
-              // Decode
-              security_plugins
-                .decode_serialized_payload(
-                  Vec::from(encoded_payload),
-                  inline_qos.unwrap_or_default(),
-                  source_guid,
-                  &reader.guid(),
-                )
-                // Convert to Bytes
-                .map(Bytes::from)
-            },
-          )
-          .map_err(|e| error!("{e:?}"))
-          // Deserialize
-          .and_then(|serialized_payload| {
-            SerializedPayload::from_bytes(&serialized_payload).map_err(|e| error!("{e:?}"))
-          })
-      })
+      .map(
+        |encoded_payload| match security_plugins.map(SecurityPluginsHandle::get_plugins) {
+          Some(security_plugins) => security_plugins
+            .decode_serialized_payload(
+              encoded_payload,
+              inline_qos.unwrap_or_default(),
+              source_guid,
+              &reader.guid(),
+            )
+            .map_err(|e| error!("{e:?}")),
+          None => Ok(encoded_payload),
+        },
+      )
       .transpose()
-      // If there were no errors, give DecodedData to the reader
+      // If there were no errors, give to the reader
       .map(|decoded_payload| {
-        reader.handle_data_msg(data.decoded(decoded_payload), data_flags, mr_state);
+        reader.handle_data_msg(
+          Data {
+            serialized_payload: decoded_payload,
+            ..data
+          },
+          data_flags,
+          mr_state,
+        );
       })
       // Errors have already been printed
       .ok();
@@ -710,8 +691,8 @@ impl MessageReceiver {
     reader: &mut Reader,
     mr_state: &MessageReceiverState,
   ) {
-    let serialized_payload = datafrag.encoded_payload.clone();
-    if serialized_payload.len()
+    let payload_buffer_length = datafrag.serialized_payload.len();
+    if payload_buffer_length
       > (datafrag.fragments_in_submessage as usize) * (datafrag.fragment_size as usize)
     {
       error!(
@@ -721,17 +702,16 @@ impl MessageReceiver {
           format!(
             "Invalid DataFrag. serializedData length={} should be less than or equal to \
              (fragments_in_submessage={}) x (fragment_size={})",
-            serialized_payload.len(),
-            datafrag.fragments_in_submessage,
-            datafrag.fragment_size
+            payload_buffer_length, datafrag.fragments_in_submessage, datafrag.fragment_size
           ),
         )
       );
       // and we're done
     } else {
-      let decoded_payload = serialized_payload;
-      reader.handle_datafrag_msg(&datafrag.decoded(decoded_payload), datafrag_flags, mr_state);
+      reader.handle_datafrag_msg(&datafrag, datafrag_flags, mr_state);
     }
+    // Consume to keep the same method signature as in the security case
+    drop(datafrag);
   }
 
   #[cfg(feature = "security")]
@@ -745,60 +725,60 @@ impl MessageReceiver {
   ) {
     let DataFrag {
       inline_qos,
-      encoded_payload,
+      serialized_payload: encoded_payload,
       ..
     } = datafrag.clone();
 
-    security_plugins
-      .map(SecurityPluginsHandle::get_plugins)
-      .map_or(
-        // If there are no security plugins, we expect a serialized SerializedPayload as
-        // Bytes
-        Ok(encoded_payload.clone()),
-        // If security plugins exist, use them to decode
-        |security_plugins| {
-          // Decode
-          security_plugins
-            .decode_serialized_payload(
-              Vec::from(encoded_payload),
-              inline_qos.unwrap_or_default(),
-              source_guid,
-              &reader.guid(),
-            )
-            // Convert to Bytes
-            .map(Bytes::from)
+    match security_plugins.map(SecurityPluginsHandle::get_plugins) {
+      Some(security_plugins) => {
+        // Decode
+        security_plugins
+          .decode_serialized_payload(
+            encoded_payload,
+            inline_qos.unwrap_or_default(),
+            source_guid,
+            &reader.guid(),
+          )
+          .map_err(|e| error!("{e:?}"))
+      }
+      None => Ok(encoded_payload),
+    }
+    .ok()
+    // Deserialize
+    .and_then(|serialized_payload| {
+      // The check that used to be in DataFrag deserialization
+      if serialized_payload.len()
+        > (datafrag.fragments_in_submessage as usize) * (datafrag.fragment_size as usize)
+      {
+        error!(
+          "{:?}",
+          std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+              "Invalid DataFrag. serializedData length={} should be less than or equal to \
+               (fragments_in_submessage={}) x (fragment_size={})",
+              serialized_payload.len(),
+              datafrag.fragments_in_submessage,
+              datafrag.fragment_size
+            ),
+          )
+        );
+        None
+      } else {
+        Some(serialized_payload)
+      }
+    })
+    // If there were no errors, give DecodedDataFrag to the reader
+    .map(|decoded_payload| {
+      reader.handle_datafrag_msg(
+        &DataFrag {
+          serialized_payload: decoded_payload,
+          ..datafrag
         },
-      )
-      .map_err(|e| error!("{e:?}"))
-      .ok()
-      // Deserialize
-      .and_then(|serialized_payload| {
-        // The check that used to be in DataFrag deserialization
-        if serialized_payload.len()
-          > (datafrag.fragments_in_submessage as usize) * (datafrag.fragment_size as usize)
-        {
-          error!(
-            "{:?}",
-            std::io::Error::new(
-              std::io::ErrorKind::Other,
-              format!(
-                "Invalid DataFrag. serializedData length={} should be less than or equal to \
-                 (fragments_in_submessage={}) x (fragment_size={})",
-                serialized_payload.len(),
-                datafrag.fragments_in_submessage,
-                datafrag.fragment_size
-              ),
-            )
-          );
-          None
-        } else {
-          Some(serialized_payload)
-        }
-      })
-      // If there were no errors, give DecodedDataFrag to the reader
-      .map(|decoded_payload| {
-        reader.handle_datafrag_msg(&datafrag.decoded(decoded_payload), datafrag_flags, mr_state);
-      });
+        datafrag_flags,
+        mr_state,
+      );
+    });
   }
 
   fn handle_reader_submessage(&self, submessage: ReaderSubmessage) {

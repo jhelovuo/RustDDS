@@ -1000,7 +1000,7 @@ mod tests {
       topic::{TopicDescription, TopicKind},
     },
     messages::submessages::{
-      elements::serialized_payload::SerializedPayload, submessage_flag::*, submessages::DecodedData,
+      elements::serialized_payload::SerializedPayload, submessage_flag::*, submessages::Data,
     },
     mio_source,
     network::udp_sender::UDPSender,
@@ -1110,28 +1110,34 @@ mod tests {
       a: 11,
       b: ":)))".to_string(),
     };
-    let data_msg = DecodedData {
+    let data_msg = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(1),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data).unwrap()),
-      }),
-      ..DecodedData::default()
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data).unwrap()),
+        }
+        .into(),
+      ),
+      ..Data::default()
     };
 
-    let data_msg2 = DecodedData {
+    let data_msg2 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(2),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap()),
-      }),
-      ..DecodedData::default()
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap()),
+        }
+        .into(),
+      ),
+      ..Data::default()
     };
 
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
@@ -1282,49 +1288,61 @@ mod tests {
 
     // Create data messages from the data items
     // Note that sequence numbering needs to continue as expected
-    let data_msg = DecodedData {
+    let data_msg = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(1),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
-      }),
-      ..DecodedData::default()
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
+        }
+        .into(),
+      ),
+      ..Data::default()
     };
-    let data_msg2 = DecodedData {
+    let data_msg2 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(2),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
-      }),
-      ..DecodedData::default()
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
+        }
+        .into(),
+      ),
+      ..Data::default()
     };
-    let data_msg3 = DecodedData {
+    let data_msg3 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(3),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
-      }),
-      ..DecodedData::default()
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
+        }
+        .into(),
+      ),
+      ..Data::default()
     };
-    let data_msg4 = DecodedData {
+    let data_msg4 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(4),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
-      }),
-      ..DecodedData::default()
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
+        }
+        .into(),
+      ),
+      ..Data::default()
     };
 
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;

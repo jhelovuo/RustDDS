@@ -14,9 +14,9 @@ Please see the [DDS Security Specification](https://www.omg.org/spec/DDS-SECURIT
 
 In order to use the security functionality, enable the Cargo feature `security` in RustDDS. By default, it is not enabled, because it adds a large body of code and some processing overhead.
 
-Security needs to be confgured in order to be used. There are several mandatory configuration files that need to be supplied to RustDDS. These configuration files and their format and semantics are not unique to RustDDS, but specified in the OMG DDS Security specification. The security configration files should also be interoperable between compliant DDS implementations.
+Security needs to be configured in order to be used. There are several mandatory configuration files that need to be supplied to RustDDS. These configuration files and their format and semantics are not unique to RustDDS, but specified in the OMG DDS Security specification. The security configuration files should also be interoperable between compliant DDS implementations.
 
-Configuring security for DomainParticipants needs two Certification Authority roles, or CAs. A CA is someone who has the ability to issue and sign the various configuration files. The two CAs are the Identity Certification Authority and the Permissions Certificate Authority. 
+Configuring security for DomainParticipants needs two Certificate Authority roles, or CAs. A CA is someone who has the ability to issue and sign the various configuration files. The two CAs are the Identity Certificate Authority and the Permissions Certificate Authority. 
 
 It is possible that a single CA performs both of these roles. This is a matter of security configuration.
 
@@ -35,8 +35,8 @@ The following security configuration files are needed:
 
 * X.509 Certificate `.pem` file
 * This file gives the Subject Name and corresponding public key for a DomainParticipant.
-* Signed by Identity CA.
-* Not secret. Sent as plaintext to other DomainParticiapnts during authentication.
+* Signed by the Identity CA.
+* Not secret. Sent as plaintext to other DomainParticipants during authentication.
 
 ## Participant Private Key
 
@@ -46,8 +46,8 @@ The following security configuration files are needed:
 
 ## Permissions CA Certificate
 
-* Used to verify the auhenticity of permisisons documents, both our own and those presented to us over the authentication protocol.
-* X.509 Certificate (`.pem`)
+* Used to verify the authenticity of permissions documents, both our own and those presented to us over the authentication protocol.
+* X.509 Certificate `.pem` file
 
 ## Participant Permissions
 

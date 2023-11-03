@@ -4,15 +4,13 @@ use std::{
   sync::{Arc, Mutex, MutexGuard},
 };
 
+use bytes::Bytes;
 use log::{debug, error};
-use speedy::Readable;
 
 use crate::{
   discovery::{DiscoveredReaderData, DiscoveredWriterData, TopicBuiltinTopicData},
   messages::submessages::{
-    elements::{
-      crypto_content::CryptoContent, crypto_header::CryptoHeader, parameter_list::ParameterList,
-    },
+    elements::{crypto_header::CryptoHeader, parameter_list::ParameterList},
     secure_postfix::SecurePostfix,
     secure_prefix::SecurePrefix,
     submessage::{HasEntityIds, SecuritySubmessage},
@@ -1329,11 +1327,11 @@ impl SecurityPlugins {
 
   pub fn decode_serialized_payload(
     &self,
-    encoded_payload: Vec<u8>,
+    encoded_payload: Bytes,
     inline_qos: ParameterList,
     source_guid: &GUID,
     destination_guid: &GUID,
-  ) -> SecurityResult<Vec<u8>> {
+  ) -> SecurityResult<Bytes> {
     // TODO remove after testing, skips decoding
     if self.test_disable_crypto_transform {
       return Ok(encoded_payload);
@@ -1342,12 +1340,15 @@ impl SecurityPlugins {
     if self.payload_not_protected(destination_guid) {
       Ok(encoded_payload)
     } else {
-      self.crypto.decode_serialized_payload(
-        CryptoContent::read_from_buffer_copying_data(&encoded_payload)?.data, //TODO needs changes for interoperability
-        inline_qos,
-        self.get_local_endpoint_crypto_handle(destination_guid)?,
-        self.get_remote_endpoint_crypto_handle((destination_guid, source_guid))?,
-      )
+      self
+        .crypto
+        .decode_serialized_payload(
+          Vec::from(encoded_payload),
+          inline_qos,
+          self.get_local_endpoint_crypto_handle(destination_guid)?,
+          self.get_remote_endpoint_crypto_handle((destination_guid, source_guid))?,
+        )
+        .map(Bytes::from)
     }
   }
 

@@ -28,7 +28,9 @@ use crate::{
     protocol_id::ProtocolId,
     protocol_version::ProtocolVersion,
     submessages::{
-      elements::{inline_qos::InlineQos, parameter_list::ParameterList},
+      elements::{
+        inline_qos::InlineQos, parameter_list::ParameterList, serialized_payload::SerializedPayload,
+      },
       submessages::*,
     },
     vendor_id::VendorId,
@@ -485,7 +487,7 @@ impl Reader {
   // handles regular data message and updates history cache
   pub fn handle_data_msg(
     &mut self,
-    data: DecodedData,
+    data: Data,
     data_flags: BitFlags<DATA_Flags>,
     mr_state: &MessageReceiverState,
   ) {
@@ -529,7 +531,7 @@ impl Reader {
 
   pub fn handle_datafrag_msg(
     &mut self,
-    datafrag: &DecodedDataFrag,
+    datafrag: &DataFrag,
     datafrag_flags: BitFlags<DATAFRAG_Flags>,
     mr_state: &MessageReceiverState,
   ) {
@@ -557,7 +559,7 @@ impl Reader {
     // parse write_options out of the message
     // TODO: This is almost duplicate code from DATA processing
     let mut write_options_b = WriteOptionsBuilder::new();
-    // Check if we have s source timestamp
+    // Check if we have a source timestamp
     if let Some(source_timestamp) = mr_state.source_timestamp {
       write_options_b = write_options_b.source_timestamp(source_timestamp);
     }
@@ -707,7 +709,7 @@ impl Reader {
 
   fn data_to_dds_data(
     &self,
-    data: DecodedData,
+    data: Data,
     data_flags: BitFlags<DATA_Flags>,
   ) -> Result<DDSData, String> {
     let representation_identifier = DATA_Flags::cdr_representation_identifier(data_flags);
@@ -717,16 +719,18 @@ impl Reader {
       data_flags.contains(DATA_Flags::Data),
       data_flags.contains(DATA_Flags::Key),
     ) {
-      (Some(sp), true, false) => {
+      (Some(serialized_payload), true, false) => {
         // data
-        Ok(DDSData::new(sp))
+        Ok(DDSData::new(
+          SerializedPayload::from_bytes(&serialized_payload).map_err(|e| format!("{e:?}"))?,
+        ))
       }
 
-      (Some(sp), false, true) => {
+      (Some(serialized_payload), false, true) => {
         // key
         Ok(DDSData::new_disposed_by_key(
           Self::deduce_change_kind(&data.inline_qos, false, representation_identifier),
-          sp,
+          SerializedPayload::from_bytes(&serialized_payload).map_err(|e| format!("{e:?}"))?,
         ))
       }
 
@@ -1467,7 +1471,7 @@ mod tests {
     let data_flags = BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
 
     // 4. Feed the data for the reader to handle
-    reader.handle_data_msg(data.no_crypto_decoded(), data_flags, &mr_state);
+    reader.handle_data_msg(data, data_flags, &mr_state);
 
     // 5. Verify that the reader sends a notification about the new data
     assert!(
@@ -1552,7 +1556,7 @@ mod tests {
     let sequence_num = data.writer_sn;
 
     // 4. Feed the data for the reader to handle
-    reader.handle_data_msg(data.no_crypto_decoded(), data_flags, &mr_state);
+    reader.handle_data_msg(data.clone(), data_flags, &mr_state);
 
     // 5. Verify that the reader sent the data to the topic cache
     let topic_cache = topic_cache_handle.lock().unwrap();
@@ -1563,7 +1567,7 @@ mod tests {
 
     // 6. Verify that the content of the cache change is as expected
     // Construct a cache change with the expected content
-    let dds_data = DDSData::new(data.no_crypto_decoded().serialized_payload.unwrap());
+    let dds_data = DDSData::new(data.unwrap_serialized_payload());
     let cc_locally_built = CacheChange::new(
       writer_guid,
       sequence_num,
@@ -1782,7 +1786,7 @@ mod tests {
     };
     let data_flags = BitFlags::<DATA_Flags>::from_flag(DATA_Flags::Data);
 
-    reader.handle_data_msg(data.no_crypto_decoded(), data_flags, &mr_state);
+    reader.handle_data_msg(data, data_flags, &mr_state);
 
     // 6. Verify that the writer proxy reports seqnums below 5 as ackable
     // This should be the case since reader received data with seqnum 3 and seqnum 4
