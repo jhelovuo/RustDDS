@@ -13,7 +13,7 @@ use crate::{
   dds::{qos::policy, typedesc::TypeDesc,
     statusevents::{
         StatusChannelSender, 
-        DomainParticipantStatusEvent, LostReason, 
+        DomainParticipantStatusEvent,
     },
   },
   discovery::{
@@ -419,6 +419,12 @@ impl DPEventLoop {
       } // if
     } // loop
   } // fn
+
+  fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
+    self.participant_status_sender
+      .try_send(event)
+      .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
+  }
 
   fn handle_reader_action(&mut self, event: &Event) {
     match event.token() {
@@ -930,6 +936,10 @@ impl DPEventLoop {
   #[cfg(feature = "security")]
   fn on_remote_participant_authentication_status_changed(&mut self, remote_guidp: GuidPrefix) {
     let auth_status = discovery_db_read(&self.discovery_db).get_authentication_status(remote_guidp);
+    
+    auth_status.map(|s| 
+      self.send_participant_status(DomainParticipantStatusEvent::Authentication{status: s.clone()})
+    );
 
     match auth_status {
       Some(AuthenticationStatus::Authenticated) => {
@@ -1057,6 +1067,7 @@ mod tests {
     let (discovery_command_sender, _discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(64);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
+    let (participant_status_sender, _participant_status_receiver) = sync_status_channel(16).unwrap();
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
@@ -1104,6 +1115,7 @@ mod tests {
         discovery_update_notification_receiver,
         discovery_command_sender,
         spdp_liveness_sender,
+        participant_status_sender,
         None,
       );
       dp_event_loop

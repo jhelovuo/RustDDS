@@ -221,4 +221,18 @@ mod tests {
       std::time::Duration::from_nanos(1_519_152_760 * NANOS_PER_SEC + 309_247_999)
     );
   }
+
+  fn fmt_check(d:Duration, s: &str) {
+    assert_eq!(format!("{:?}",d), s);
+  }
+
+  #[test]
+  fn duration_format() {
+    fmt_check(Duration::from_frac_seconds(0.0), "0 sec");
+    fmt_check(Duration::from_frac_seconds(0.5), "0.5 sec");
+    fmt_check(Duration::from_frac_seconds(1.5), "1.5 sec");
+    fmt_check(Duration::from_frac_seconds(20.0), "20 sec");
+    fmt_check(Duration::from_frac_seconds(2.25), "2.25 sec");
+    fmt_check(Duration::from_frac_seconds(10.0/3.0), "3.333333333 sec");
+  }
 }

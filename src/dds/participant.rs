@@ -25,7 +25,7 @@ use crate::{
   dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc,
     statusevents::{
         StatusChannelSender, StatusChannelReceiver, sync_status_channel,
-        DomainParticipantStatusEvent, LostReason, },
+        DomainParticipantStatusEvent, },
   },
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
