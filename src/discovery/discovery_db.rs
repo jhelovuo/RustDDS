@@ -13,6 +13,7 @@ use crate::{
     participant::DomainParticipant,
     qos::HasQoSPolicy,
     topic::{Topic, TopicDescription},
+    statusevents::LostReason,
   },
   rtps::{
     reader::ReaderIngredients, rtps_reader_proxy::RtpsReaderProxy,
@@ -291,7 +292,7 @@ impl DiscoveryDB {
 
   // Delete participant proxies, if we have not heard of them within
   // lease_duration
-  pub fn participant_cleanup(&mut self) -> Vec<GuidPrefix> {
+  pub fn participant_cleanup(&mut self) -> Vec<(GuidPrefix, LostReason)> {
     let inow = Instant::now();
 
     let mut to_remove = Vec::new();
@@ -314,7 +315,7 @@ impl DiscoveryDB {
                elapsed = {:?}",
               guid, lease_duration, elapsed
             );
-            to_remove.push(guid);
+            to_remove.push( (guid, LostReason::Timeout{ lease: lease_duration, elapsed } ) );
           }
         }
         None => {
@@ -322,9 +323,11 @@ impl DiscoveryDB {
         }
       } // match
     } // for
-    for guid in &to_remove {
+
+    for (guid , _ ) in &to_remove {
       self.remove_participant(*guid, false); // false = removed due to timeout
     }
+
     to_remove
   }
 

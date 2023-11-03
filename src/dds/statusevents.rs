@@ -309,7 +309,7 @@ pub enum LostReason {
   /// Participant announced via Discovery that it is leaving
   Disposed,
   /// Lease time exceeded => timeout
-  Timout { 
+  Timeout { 
     lease: Duration,  // What was the discovered lease duration
     elapsed: Duration, // How much time has actually elapsed from last contact
   }

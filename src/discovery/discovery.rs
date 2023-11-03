@@ -979,9 +979,7 @@ impl Discovery {
     self.send_discovery_notification(DiscoveryNotificationType::ParticipantUpdated { guid_prefix });
     if was_new {
       let dpd = participant_data.into();
-      self.participant_status_sender
-        .try_send(DomainParticipantStatusEvent::ParticipantDiscovered{ dpd })
-        .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
+      self.send_participant_status(DomainParticipantStatusEvent::ParticipantDiscovered{ dpd });
       // This may be a rediscovery of a previously seen participant that
       // was temporarily lost due to network outage. Check if we already know
       // what it has (readers, writers, topics).
@@ -997,6 +995,10 @@ impl Discovery {
     discovery_db_write(&self.discovery_db).remove_participant(participant_guidp, true); // true = actively removed
     self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost {
       guid_prefix: participant_guidp,
+    });
+    self.send_participant_status(DomainParticipantStatusEvent::ParticipantLost { 
+      id: participant_guidp,
+      reason: LostReason::Disposed,
     });
   }
 
@@ -1646,10 +1648,15 @@ impl Discovery {
   }
 
   pub fn participant_cleanup(&self) {
-    let removed_guid_prefixes = discovery_db_write(&self.discovery_db).participant_cleanup();
-    for guid_prefix in removed_guid_prefixes {
+    let removed = discovery_db_write(&self.discovery_db).participant_cleanup();
+    for (guid_prefix, reason) in removed {
       debug!("participant cleanup - timeout for {:?}", guid_prefix);
-      self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost { guid_prefix });
+      self.send_discovery_notification(DiscoveryNotificationType::ParticipantLost { 
+        guid_prefix
+      });
+      self.send_participant_status(DomainParticipantStatusEvent::ParticipantLost {
+        id: guid_prefix, reason,
+      })
     }
   }
 
@@ -1851,6 +1858,12 @@ impl Discovery {
       Ok(_) => (),
       Err(e) => error!("Failed to send DiscoveryNotification {e:?}"),
     }
+  }
+
+  fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
+    self.participant_status_sender
+      .try_send(event)
+      .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
   }
 }
 
