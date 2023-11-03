@@ -85,6 +85,8 @@ pub struct DPEventLoop {
   writers: HashMap<EntityId, Writer>,
   udp_sender: Rc<UDPSender>,
 
+  #[cfg(feature = "security")] // Currently used only with security.
+  // Just remove attribute if used also without.
   participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
 
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
@@ -94,7 +96,7 @@ pub struct DPEventLoop {
 
 impl DPEventLoop {
   // This pub(crate) , because it should be constructed only by DomainParticipant.
-  #[allow(clippy::too_many_arguments)]
+  #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
   pub(crate) fn new(
     domain_info: DomainInfo,
     udp_listeners: HashMap<Token, UDPListener>,
@@ -109,6 +111,7 @@ impl DPEventLoop {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     _discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    #[allow(unused_variables)]
     participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> Self {
@@ -221,6 +224,7 @@ impl DPEventLoop {
       writers: HashMap::new(),
       ack_nack_receiver: acknack_receiver,
       discovery_update_notification_receiver,
+      #[cfg(feature = "security")] 
       participant_status_sender,
       #[cfg(feature = "security")]
       discovery_command_sender: _discovery_command_sender,
@@ -420,6 +424,8 @@ impl DPEventLoop {
     } // loop
   } // fn
 
+  #[cfg(feature = "security")] // Currently used only with security.
+  // Just remove attribute if used also without.
   fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
     self.participant_status_sender
       .try_send(event)
@@ -937,8 +943,8 @@ impl DPEventLoop {
   fn on_remote_participant_authentication_status_changed(&mut self, remote_guidp: GuidPrefix) {
     let auth_status = discovery_db_read(&self.discovery_db).get_authentication_status(remote_guidp);
     
-    auth_status.map(|s| 
-      self.send_participant_status(DomainParticipantStatusEvent::Authentication{status: s.clone()})
+    auth_status.map(|status| 
+      self.send_participant_status(DomainParticipantStatusEvent::Authentication{status})
     );
 
     match auth_status {

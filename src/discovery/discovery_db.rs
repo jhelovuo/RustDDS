@@ -13,7 +13,7 @@ use crate::{
     participant::DomainParticipant,
     qos::HasQoSPolicy,
     topic::{Topic, TopicDescription},
-    statusevents::LostReason,
+    statusevents::{StatusChannelSender, DomainParticipantStatusEvent, LostReason,},
   },
   rtps::{
     reader::ReaderIngredients, rtps_reader_proxy::RtpsReaderProxy,
@@ -76,6 +76,8 @@ pub(crate) struct DiscoveryDB {
 
   // sender for notifying (potential) waiters in participant.find_topic() call
   topic_updated_sender: mio_extras::channel::SyncSender<()>,
+
+  participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
 }
 
 // How did we discover this topic
@@ -116,7 +118,9 @@ pub(crate) fn discovery_db_write(
 }
 
 impl DiscoveryDB {
-  pub fn new(my_guid: GUID, topic_updated_sender: mio_extras::channel::SyncSender<()>) -> Self {
+  pub fn new(my_guid: GUID,
+    topic_updated_sender: mio_extras::channel::SyncSender<()>,
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent> ) -> Self {
     Self {
       my_guid,
       participant_proxies: BTreeMap::new(),
@@ -131,7 +135,14 @@ impl DiscoveryDB {
       external_topic_writers_attic: BTreeMap::new(),
       topics: BTreeMap::new(),
       topic_updated_sender,
+      participant_status_sender,
     }
+  }
+
+  fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
+    self.participant_status_sender
+      .try_send(event)
+      .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
   }
 
   // Returns if participant was previously unknown
@@ -559,6 +570,7 @@ impl DiscoveryDB {
             "Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
             updater, old_dtd.1.topic_data.type_name, dtd.topic_data.type_name,
           );
+
         }
       } else {
         // We have to topic, but not from this participant
@@ -571,6 +583,10 @@ impl DiscoveryDB {
       let mut b = BTreeMap::new();
       b.insert(updater.prefix, (discovered_via, dtd.clone()));
       self.topics.insert(topic_name, b);
+      self.send_participant_status(DomainParticipantStatusEvent::TopicDetected {
+        name: dtd.topic_data.name.clone(),
+        type_name: dtd.topic_data.type_name.clone(),
+      });
     };
 
     if notify {

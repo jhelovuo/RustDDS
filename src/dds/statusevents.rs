@@ -266,6 +266,12 @@ pub enum DomainParticipantStatusEvent {
   },
   /// Discovery detects a new topic
   TopicDetected {
+    name: String,
+    type_name: String,
+  },
+  /// Topics are lost when there are no more known Readers or Writers in them.
+  TopicLost {
+    name: String,
   },
   /// New Reader detected (or created locally). Detection happens regardless of
   /// the remote being matched or not by a local Endpoint.

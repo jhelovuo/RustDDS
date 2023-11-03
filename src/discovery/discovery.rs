@@ -1656,7 +1656,7 @@ impl Discovery {
       });
       self.send_participant_status(DomainParticipantStatusEvent::ParticipantLost {
         id: guid_prefix, reason,
-      })
+      });
     }
   }
 

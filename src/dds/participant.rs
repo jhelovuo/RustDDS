@@ -964,6 +964,7 @@ impl Drop for DomainParticipantInner {
 }
 
 impl DomainParticipantInner {
+  #[allow(clippy::too_many_arguments)]
   fn new(
     domain_id: u16,
     participant_guid: GUID,
@@ -1083,9 +1084,12 @@ impl DomainParticipantInner {
 
     let (discovery_db_event_sender, discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(1);
+
+    // Discovert DB creation
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
       participant_guid,
       discovery_db_event_sender,
+      status_sender.clone(),
     )));
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
