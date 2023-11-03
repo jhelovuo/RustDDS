@@ -10,11 +10,10 @@ use mio_06::{Event, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{qos::policy, typedesc::TypeDesc,
-    statusevents::{
-        StatusChannelSender, 
-        DomainParticipantStatusEvent,
-    },
+  dds::{
+    qos::policy,
+    statusevents::{DomainParticipantStatusEvent, StatusChannelSender},
+    typedesc::TypeDesc,
   },
   discovery::{
     discovery::DiscoveryCommand,
@@ -111,8 +110,9 @@ impl DPEventLoop {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     _discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-    #[allow(unused_variables)]
-    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+    #[allow(unused_variables)] participant_status_sender: StatusChannelSender<
+      DomainParticipantStatusEvent,
+    >,
     security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> Self {
     #[cfg(not(feature = "security"))]
@@ -224,7 +224,7 @@ impl DPEventLoop {
       writers: HashMap::new(),
       ack_nack_receiver: acknack_receiver,
       discovery_update_notification_receiver,
-      #[cfg(feature = "security")] 
+      #[cfg(feature = "security")]
       participant_status_sender,
       #[cfg(feature = "security")]
       discovery_command_sender: _discovery_command_sender,
@@ -425,9 +425,10 @@ impl DPEventLoop {
   } // fn
 
   #[cfg(feature = "security")] // Currently used only with security.
-  // Just remove attribute if used also without.
+                               // Just remove attribute if used also without.
   fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
-    self.participant_status_sender
+    self
+      .participant_status_sender
       .try_send(event)
       .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
   }
@@ -942,10 +943,10 @@ impl DPEventLoop {
   #[cfg(feature = "security")]
   fn on_remote_participant_authentication_status_changed(&mut self, remote_guidp: GuidPrefix) {
     let auth_status = discovery_db_read(&self.discovery_db).get_authentication_status(remote_guidp);
-    
-    auth_status.map(|status| 
-      self.send_participant_status(DomainParticipantStatusEvent::Authentication{status})
-    );
+
+    auth_status.map(|status| {
+      self.send_participant_status(DomainParticipantStatusEvent::Authentication { status });
+    });
 
     match auth_status {
       Some(AuthenticationStatus::Authenticated) => {
@@ -1073,7 +1074,8 @@ mod tests {
     let (discovery_command_sender, _discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(64);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
-    let (participant_status_sender, _participant_status_receiver) = sync_status_channel(16).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let (discovery_db_event_sender, _discovery_db_event_receiver) =

@@ -12,8 +12,8 @@ use crate::{
   dds::{
     participant::DomainParticipant,
     qos::HasQoSPolicy,
+    statusevents::{DomainParticipantStatusEvent, LostReason, StatusChannelSender},
     topic::{Topic, TopicDescription},
-    statusevents::{StatusChannelSender, DomainParticipantStatusEvent, LostReason,},
   },
   rtps::{
     reader::ReaderIngredients, rtps_reader_proxy::RtpsReaderProxy,
@@ -118,9 +118,11 @@ pub(crate) fn discovery_db_write(
 }
 
 impl DiscoveryDB {
-  pub fn new(my_guid: GUID,
+  pub fn new(
+    my_guid: GUID,
     topic_updated_sender: mio_extras::channel::SyncSender<()>,
-    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent> ) -> Self {
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+  ) -> Self {
     Self {
       my_guid,
       participant_proxies: BTreeMap::new(),
@@ -140,7 +142,8 @@ impl DiscoveryDB {
   }
 
   fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
-    self.participant_status_sender
+    self
+      .participant_status_sender
       .try_send(event)
       .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
   }
@@ -326,7 +329,13 @@ impl DiscoveryDB {
                elapsed = {:?}",
               guid, lease_duration, elapsed
             );
-            to_remove.push( (guid, LostReason::Timeout{ lease: lease_duration, elapsed } ) );
+            to_remove.push((
+              guid,
+              LostReason::Timeout {
+                lease: lease_duration,
+                elapsed,
+              },
+            ));
           }
         }
         None => {
@@ -335,7 +344,7 @@ impl DiscoveryDB {
       } // match
     } // for
 
-    for (guid , _ ) in &to_remove {
+    for (guid, _) in &to_remove {
       self.remove_participant(*guid, false); // false = removed due to timeout
     }
 
@@ -570,7 +579,6 @@ impl DiscoveryDB {
             "Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
             updater, old_dtd.1.topic_data.type_name, dtd.topic_data.type_name,
           );
-
         }
       } else {
         // We have to topic, but not from this participant

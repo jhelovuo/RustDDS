@@ -63,7 +63,7 @@ impl fmt::Debug for GuidPrefix {
   // This is so common that we skip all the introductions and just print the data.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     for b in self.bytes.iter() {
-      write!(f,"{:02x}",b)?;
+      write!(f, "{:02x}", b)?;
     }
     Ok(())
   }

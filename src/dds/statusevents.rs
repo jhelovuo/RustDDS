@@ -21,18 +21,17 @@ use mio_08::{self, event, Interest, Registry, Token};
 use chrono::Utc;
 
 use crate::{
-  discovery::SpdpDiscoveredParticipantData,
   dds::{
     qos::QosPolicyId,
     result::{ReadError, ReadResult},
   },
-  Duration, GUID, Topic, QosPolicies,
-  messages::{protocol_version::ProtocolVersion, vendor_id::VendorId,},
+  discovery::SpdpDiscoveredParticipantData,
+  messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
   mio_source::*,
   read_error_poisoned,
   structure::guid::GuidPrefix,
+  Duration, QosPolicies, Topic, GUID,
 };
-
 #[cfg(feature = "security")]
 use crate::discovery::secure_discovery::AuthenticationStatus;
 
@@ -172,7 +171,7 @@ impl<T> StatusChannelReceiver<T> {
       sync_receiver: self,
     }
   }
-  pub(crate) fn get_waker_update_lock(&self) -> std::sync::MutexGuard<'_, Option<Waker>>{
+  pub(crate) fn get_waker_update_lock(&self) -> std::sync::MutexGuard<'_, Option<Waker>> {
     self.waker.lock().unwrap()
   }
 }
@@ -252,17 +251,17 @@ impl<'a, T> FusedStream for StatusReceiverStream<'a, T> {
 
 #[derive(Debug, Clone)]
 pub enum DomainParticipantStatusEvent {
-  ParticipantDiscovered { 
-    dpd: ParticipantDescription, 
+  ParticipantDiscovered {
+    dpd: ParticipantDescription,
   },
-  ParticipantLost{ 
-    id: GuidPrefix, 
+  ParticipantLost {
+    id: GuidPrefix,
     reason: LostReason,
   },
-  InconsistentTopic { 
+  InconsistentTopic {
     previous_specs: Topic, // What was our ide aof the Topic
-    discovered_as: Topic, // What incoming Discovery data tells us about Topic
-    discovery_from: GUID, // Who sent the Disocvery data
+    discovered_as: Topic,  // What incoming Discovery data tells us about Topic
+    discovery_from: GUID,  // Who sent the Disocvery data
   },
   /// Discovery detects a new topic
   TopicDetected {
@@ -288,7 +287,7 @@ pub enum DomainParticipantStatusEvent {
   },
   WriterLost {
     guid: GUID,
-    reason: LostReason,    
+    reason: LostReason,
   },
 
   #[cfg(feature = "security")]
@@ -296,11 +295,12 @@ pub enum DomainParticipantStatusEvent {
     status: AuthenticationStatus,
   },
   /// The CA has revoked the identity of some Participant.
-  /// We may be currently communicating with the Participant, or it may be unknown to us.
+  /// We may be currently communicating with the Participant, or it may be
+  /// unknown to us.
   #[cfg(feature = "security")]
   IdentityRevoked {
     participant: GUID,
-  }, 
+  },
   /// Domain access permissions of some Participant have been revoked / changed.
   #[cfg(feature = "security")]
   PermissionsRevoked {
@@ -315,15 +315,15 @@ pub enum LostReason {
   /// Participant announced via Discovery that it is leaving
   Disposed,
   /// Lease time exceeded => timeout
-  Timeout { 
-    lease: Duration,  // What was the discovered lease duration
+  Timeout {
+    lease: Duration,   // What was the discovered lease duration
     elapsed: Duration, // How much time has actually elapsed from last contact
-  }
+  },
 }
 
 /// This is a rewrite/summary of SpdpDiscoveredParticipantData from discovery.
-/// The original is not used to avoid circular dependency between participant and discovery.
-/// Some of the more technical details have been left out
+/// The original is not used to avoid circular dependency between participant
+/// and discovery. Some of the more technical details have been left out
 #[derive(Debug, Clone)]
 pub struct ParticipantDescription {
   pub updated_time: chrono::DateTime<Utc>,
@@ -351,8 +351,9 @@ impl From<&SpdpDiscoveredParticipantData> for ParticipantDescription {
   }
 }
 
-/// This is a summary of SubscriptionBuiltinTopicData / PublicationBuiltinTopicData from discovery.
-/// The original is not used to avoid circular dependency between participant and discovery.
+/// This is a summary of SubscriptionBuiltinTopicData /
+/// PublicationBuiltinTopicData from discovery. The original is not used to
+/// avoid circular dependency between participant and discovery.
 #[derive(Debug, Clone)]
 pub struct EndpointDescription {
   pub updated_time: chrono::DateTime<Utc>,
@@ -361,7 +362,6 @@ pub struct EndpointDescription {
   pub type_name: String,
   pub qos: QosPolicies,
 }
-
 
 #[derive(Debug, Clone)]
 pub enum DataReaderStatus {

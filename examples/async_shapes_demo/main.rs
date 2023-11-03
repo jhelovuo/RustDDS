@@ -57,7 +57,7 @@ fn main() {
     .cloned()
     .unwrap_or("BLUE".to_owned());
 
-  // Domain Participant 
+  // Domain Participant
   let domain_participant = DomainParticipant::new(*domain_id)
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {e:?}"));
 

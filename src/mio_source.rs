@@ -1,22 +1,20 @@
 use std::{
   io,
   io::{Read, Write},
-  sync::{Arc,Mutex},
+  sync::{Arc, Mutex},
 };
-
-#[allow(unused_imports)]
-use log::{debug, error, info, trace, warn};
-
 #[cfg(not(target_os = "windows"))]
 use std::os::fd::OwnedFd;
 #[cfg(target_os = "windows")]
 use std::{thread::sleep, time::Duration};
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 #[cfg(target_os = "windows")]
-use mio_08::net::{TcpListener};
+use mio_08::net::TcpListener;
 #[cfg(not(target_os = "windows"))]
 use socketpair::*;
-use mio_08::{self, *, net::TcpStream};
+use mio_08::{self, net::TcpStream, *};
 
 // PollEventSource and PollEventSender are an event communication
 // channel. PollEventSource is a mio-0.8 event::Source for Poll,
@@ -34,7 +32,6 @@ pub struct PollEventSender {
   // Sender has Arc to support Clone, whereas Receiver has not.
 }
 
-
 #[cfg(not(target_os = "windows"))]
 fn set_non_blocking(s: SocketpairStream) -> io::Result<SocketpairStream> {
   let owned_fd = OwnedFd::from(s);
@@ -50,10 +47,8 @@ pub fn make_poll_channel() -> io::Result<(PollEventSource, PollEventSender)> {
   let rec_sps = set_non_blocking(rec_sps)?;
   let send_sps = set_non_blocking(send_sps)?;
 
-  let rec_mio_socket = 
-    TcpStream::from_std( std::net::TcpStream::from( OwnedFd::from( rec_sps )));
-  let send_mio_socket = 
-    TcpStream::from_std( std::net::TcpStream::from( OwnedFd::from( send_sps )));
+  let rec_mio_socket = TcpStream::from_std(std::net::TcpStream::from(OwnedFd::from(rec_sps)));
+  let send_mio_socket = TcpStream::from_std(std::net::TcpStream::from(OwnedFd::from(send_sps)));
 
   Ok((
     PollEventSource {

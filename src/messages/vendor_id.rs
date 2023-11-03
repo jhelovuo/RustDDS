@@ -23,30 +23,36 @@ impl VendorId {
     self.vendor_id
   }
 
-  fn known_vendor_id_string(self) -> Option<(&'static str,&'static str)> {
+  fn known_vendor_id_string(self) -> Option<(&'static str, &'static str)> {
     match self.vendor_id {
       // from https://www.dds-foundation.org/dds-rtps-vendor-and-product-ids/
       // on 2023-11-03
-      [0x01, 0x01] => Some(("RTI Connext DDS","Real-Time Innovations, Inc. (RTI)")),
-      [0x01, 0x02] => Some(("OpenSplice DDS","ADLink Ltd.")),
-      [0x01, 0x03] => Some(("OpenDDS","Object Computing Inc. (OCI)")),
-      [0x01, 0x04] => Some(("Mil-DDS","MilSoft")),
-      [0x01, 0x05] => Some(("InterCOM","DDS  Kongsberg")),
-      [0x01, 0x06] => Some(("CoreDX DDS","Twin Oaks Computing")),
-      [0x01, 0x07] => Some(("Not Activ","Lakota Technical Solutions, Inc.")),
-      [0x01, 0x08] => Some(("Not Active","ICOUP Consulting")),
-      [0x01, 0x09] => Some(("Diamond DDS","Electronics and Telecommunication Research Institute (ETRI)")),
-      [0x01, 0x0A] => Some(("RTI Connext","DDS Micro Real-Time Innovations, Inc. (RTI)")),
-      [0x01, 0x0B] => Some(("Vortex Cafe","ADLink Ltd.")),
-      [0x01, 0x0C] => Some(("Not Active","PrismTech Ltd.")),
-      [0x01, 0x0D] => Some(("Vortex Lite","ADLink Ltd.")),
-      [0x01, 0x0E] => Some(("Qeo (Not active)","Technicolor")),
-      [0x01, 0x0F] => Some(("FastRTPS, FastDDS","eProsima")),
-      [0x01, 0x10] => Some(("Eclipse Cyclone DDS","Eclipse Foundation")),
-      [0x01, 0x11] => Some(("GurumDDS","Gurum Networks, Inc.")),
-      [0x01, 0x12] => Some(("RustDDS","Atostek")),
-      [0x01, 0x13] => Some(("Zhenrong Data Distribution Service (ZRDDS)","Nanjing Zhenrong Software Technology Co.")),
-      [0x01, 0x14] => Some(("Dust DDS","S2E Software Systems B.V.")),
+      [0x01, 0x01] => Some(("RTI Connext DDS", "Real-Time Innovations, Inc. (RTI)")),
+      [0x01, 0x02] => Some(("OpenSplice DDS", "ADLink Ltd.")),
+      [0x01, 0x03] => Some(("OpenDDS", "Object Computing Inc. (OCI)")),
+      [0x01, 0x04] => Some(("Mil-DDS", "MilSoft")),
+      [0x01, 0x05] => Some(("InterCOM", "DDS  Kongsberg")),
+      [0x01, 0x06] => Some(("CoreDX DDS", "Twin Oaks Computing")),
+      [0x01, 0x07] => Some(("Not Activ", "Lakota Technical Solutions, Inc.")),
+      [0x01, 0x08] => Some(("Not Active", "ICOUP Consulting")),
+      [0x01, 0x09] => Some((
+        "Diamond DDS",
+        "Electronics and Telecommunication Research Institute (ETRI)",
+      )),
+      [0x01, 0x0A] => Some(("RTI Connext", "DDS Micro Real-Time Innovations, Inc. (RTI)")),
+      [0x01, 0x0B] => Some(("Vortex Cafe", "ADLink Ltd.")),
+      [0x01, 0x0C] => Some(("Not Active", "PrismTech Ltd.")),
+      [0x01, 0x0D] => Some(("Vortex Lite", "ADLink Ltd.")),
+      [0x01, 0x0E] => Some(("Qeo (Not active)", "Technicolor")),
+      [0x01, 0x0F] => Some(("FastRTPS, FastDDS", "eProsima")),
+      [0x01, 0x10] => Some(("Eclipse Cyclone DDS", "Eclipse Foundation")),
+      [0x01, 0x11] => Some(("GurumDDS", "Gurum Networks, Inc.")),
+      [0x01, 0x12] => Some(("RustDDS", "Atostek")),
+      [0x01, 0x13] => Some((
+        "Zhenrong Data Distribution Service (ZRDDS)",
+        "Nanjing Zhenrong Software Technology Co.",
+      )),
+      [0x01, 0x14] => Some(("Dust DDS", "S2E Software Systems B.V.")),
       _ => None,
     }
   }
@@ -58,16 +64,14 @@ impl Default for VendorId {
   }
 }
 
- 
-
 impl fmt::Debug for VendorId {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match *self {
-      Self::VENDOR_UNKNOWN => write!(f,"VENDOR_UNKNOWN"),
+      Self::VENDOR_UNKNOWN => write!(f, "VENDOR_UNKNOWN"),
       other => match other.known_vendor_id_string() {
-        Some((product,vendor)) => write!(f,"{product} / {vendor}"),
-        None => write!(f,"{:x?}", other.vendor_id),
-      }
+        Some((product, vendor)) => write!(f, "{product} / {vendor}"),
+        None => write!(f, "{:x?}", other.vendor_id),
+      },
     }
   }
 }
