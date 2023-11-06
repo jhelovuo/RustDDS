@@ -608,6 +608,7 @@ pub(crate) mod xml {
 
 #[cfg(test)]
 mod tests {
+  use chrono::TimeZone;
   use serde_xml_rs::from_str;
 
   use super::*;
