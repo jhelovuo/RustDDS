@@ -1113,6 +1113,10 @@ impl Discovery {
             self.send_discovery_notification(DiscoveryNotificationType::ReaderLost {
               reader_guid: reader_key,
             });
+            self.send_participant_status(DomainParticipantStatusEvent::ReaderLost {
+              guid: reader_key,
+              reason: LostReason::Disposed,
+            });
           }
         }
       }
@@ -1173,6 +1177,11 @@ impl Discovery {
             self.send_discovery_notification(DiscoveryNotificationType::WriterLost {
               writer_guid: writer_key,
             });
+            self.send_participant_status(DomainParticipantStatusEvent::WriterLost{
+              guid: writer_key,
+              reason: LostReason::Disposed,
+            });
+
             debug!("Disposed Writer {:?}", writer_key);
           }
         }
@@ -1565,6 +1574,10 @@ impl Discovery {
             info!("Secure Dispose Reader {:?}", reader_guid);
             discovery_db_write(&self.discovery_db).remove_topic_reader(reader_guid);
             self.send_discovery_notification(DiscoveryNotificationType::ReaderLost { reader_guid });
+            self.send_participant_status(DomainParticipantStatusEvent::ReaderLost{
+              guid: reader_guid,
+              reason: LostReason::Disposed,
+            });
           }
         }
       }
@@ -1621,6 +1634,10 @@ impl Discovery {
             info!("Secure Dispose Writer {:?}", writer_guid);
             discovery_db_write(&self.discovery_db).remove_topic_writer(writer_guid);
             self.send_discovery_notification(DiscoveryNotificationType::WriterLost { writer_guid });
+            self.send_participant_status(DomainParticipantStatusEvent::WriterLost{
+              guid: writer_guid,
+              reason: LostReason::Disposed,
+            });
           }
         }
       }

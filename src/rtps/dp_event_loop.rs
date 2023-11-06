@@ -84,8 +84,6 @@ pub struct DPEventLoop {
   writers: HashMap<EntityId, Writer>,
   udp_sender: Rc<UDPSender>,
 
-  #[cfg(feature = "security")] // Currently used only with security.
-  // Just remove attribute if used also without.
   participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
 
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
@@ -110,9 +108,7 @@ impl DPEventLoop {
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     _discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-    #[allow(unused_variables)] participant_status_sender: StatusChannelSender<
-      DomainParticipantStatusEvent,
-    >,
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> Self {
     #[cfg(not(feature = "security"))]
@@ -224,7 +220,6 @@ impl DPEventLoop {
       writers: HashMap::new(),
       ack_nack_receiver: acknack_receiver,
       discovery_update_notification_receiver,
-      #[cfg(feature = "security")]
       participant_status_sender,
       #[cfg(feature = "security")]
       discovery_command_sender: _discovery_command_sender,
@@ -843,7 +838,8 @@ impl DPEventLoop {
       )
       .expect("Reader timer channel registration failed!");
 
-    let mut new_reader = Reader::new(reader_ing, self.udp_sender.clone(), timer);
+    let mut new_reader = Reader::new(reader_ing, self.udp_sender.clone(), timer, 
+      self.participant_status_sender.clone());
 
     // Non-timed action polling
     self
@@ -901,7 +897,8 @@ impl DPEventLoop {
       )
       .expect("Writer heartbeat timer channel registration failed!!");
 
-    let new_writer = Writer::new(writer_ing, self.udp_sender.clone(), timer);
+    let new_writer = Writer::new(writer_ing, self.udp_sender.clone(), timer, 
+      self.participant_status_sender.clone());
 
     self
       .poll

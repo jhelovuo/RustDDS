@@ -289,7 +289,26 @@ pub enum DomainParticipantStatusEvent {
     guid: GUID,
     reason: LostReason,
   },
-
+  RemoteReaderMatched {
+    local_writer: GUID,
+    remote_reader: GUID,
+  },
+  RemoteWriterMatched {
+    local_reader: GUID,
+    remote_writer: GUID,
+  },
+  RemoteReaderQosIncompatible {
+    local_writer: GUID,
+    remote_reader: GUID,
+    requested_qos: Box<QosPolicies>,
+    offered_qos: Box<QosPolicies>,
+  },
+  RemoteWriterQosIncompatible {
+    local_reader: GUID,
+    remote_writer: GUID,
+    requested_qos: Box<QosPolicies>,
+    offered_qos: Box<QosPolicies>,
+  },
   #[cfg(feature = "security")]
   Authentication {
     status: AuthenticationStatus,
@@ -388,8 +407,8 @@ pub enum DataReaderStatus {
     count: CountWithChange,
     last_policy_id: QosPolicyId,
     writer: GUID,
-    requested_qos: QosPolicies,
-    offered_qos: QosPolicies,
+    requested_qos: Box<QosPolicies>,
+    offered_qos: Box<QosPolicies>,
     //policies: Vec<QosPolicyCount>, // Not implemented
   },
 
@@ -430,8 +449,8 @@ pub enum DataWriterStatus {
     count: CountWithChange,
     last_policy_id: QosPolicyId,
     reader: GUID,
-    requested_qos: QosPolicies,
-    offered_qos: QosPolicies,
+    requested_qos: Box<QosPolicies>,
+    offered_qos: Box<QosPolicies>,
     //policies: Vec<QosPolicyCount>,  // Not implemented
   },
   PublicationMatched {

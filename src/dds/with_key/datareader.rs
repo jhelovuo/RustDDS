@@ -1049,6 +1049,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1074,6 +1076,7 @@ mod tests {
       reader_ing,
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // Create the corresponding matching DataReader
@@ -1211,6 +1214,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1236,6 +1241,7 @@ mod tests {
       reader_ing,
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // Create the corresponding matching DataReader
