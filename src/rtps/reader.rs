@@ -371,30 +371,34 @@ impl Reader {
     }
 
     debug!("update_writer_proxy topic={:?}", self.topic_name);
+    let writer = proxy.remote_writer_guid;
+
     match offered_qos.compliance_failure_wrt(&self.qos_policy) {
       None => {
         // success, update or insert
-        let writer_id = proxy.remote_writer_guid;
         let count_change = self.matched_writer_update(proxy);
         if count_change > 0 {
           self.writer_match_count_total += count_change;
           self.send_status_change(DataReaderStatus::SubscriptionMatched {
             total: CountWithChange::new(self.writer_match_count_total, count_change),
             current: CountWithChange::new(self.matched_writers.len() as i32, count_change),
+            writer,
           });
           info!(
-            "Matched new remote writer on topic={:?} writer= {:?}",
-            self.topic_name, writer_id
+            "Matched new remote writer on topic={:?} writer={:?}",
+            self.topic_name, writer
           );
         }
       }
       Some(bad_policy_id) => {
-        // no QoS match
+        // no QoS match.
         self.offered_incompatible_qos_count += 1;
         self.send_status_change(DataReaderStatus::RequestedIncompatibleQos {
           count: CountWithChange::new(self.offered_incompatible_qos_count, 1),
           last_policy_id: bad_policy_id,
-          policies: Vec::new(), // TODO. implementation missing
+          writer,
+          requested_qos: self.qos_policy.clone(),
+          offered_qos: offered_qos.clone(),
         });
         warn!("update_writer_proxy - QoS mismatch {:?}", bad_policy_id);
         info!(
@@ -429,6 +433,7 @@ impl Reader {
       self.send_status_change(DataReaderStatus::SubscriptionMatched {
         total: CountWithChange::new(self.writer_match_count_total, 0),
         current: CountWithChange::new(self.matched_writers.len() as i32, -1),
+        writer: writer_guid,
       });
     }
   }

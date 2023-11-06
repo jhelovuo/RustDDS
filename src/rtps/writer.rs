@@ -1451,6 +1451,7 @@ impl Writer {
           self.send_status(DataWriterStatus::PublicationMatched {
             total: CountWithChange::new(self.matched_readers_count_total, change),
             current: CountWithChange::new(self.readers.len() as i32, change),
+            reader: reader_proxy.remote_reader_guid,
           });
           // If we're reliable, should we send out a heartbeat so that new reader can
           // catch up?
@@ -1478,7 +1479,9 @@ impl Writer {
         self.send_status(DataWriterStatus::OfferedIncompatibleQos {
           count: CountWithChange::new(self.requested_incompatible_qos_count, 1),
           last_policy_id: bad_policy_id,
-          policies: Vec::new(), // TODO: implement this
+          reader: reader_proxy.remote_reader_guid,
+          requested_qos: requested_qos.clone(),
+          offered_qos: self.qos_policies.clone(),
         });
       }
     } // match
@@ -1540,6 +1543,7 @@ impl Writer {
       self.send_status(DataWriterStatus::PublicationMatched {
         total: CountWithChange::new(self.matched_readers_count_total, 0),
         current: CountWithChange::new(self.readers.len() as i32, -1),
+        reader: guid,
       });
     }
     // also remember to remove reader from ack_waiter

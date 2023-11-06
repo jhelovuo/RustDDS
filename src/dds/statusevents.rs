@@ -387,7 +387,10 @@ pub enum DataReaderStatus {
   RequestedIncompatibleQos {
     count: CountWithChange,
     last_policy_id: QosPolicyId,
-    policies: Vec<QosPolicyCount>,
+    writer: GUID,
+    requested_qos: QosPolicies,
+    offered_qos: QosPolicies,
+    //policies: Vec<QosPolicyCount>, // Not implemented
   },
 
   // DataAvailable variant is not implemented, as it seems to bring little additional value,
@@ -409,6 +412,7 @@ pub enum DataReaderStatus {
   SubscriptionMatched {
     total: CountWithChange,
     current: CountWithChange,
+    writer: GUID,
     // last_publication_key:
   },
 }
@@ -425,11 +429,15 @@ pub enum DataWriterStatus {
   OfferedIncompatibleQos {
     count: CountWithChange,
     last_policy_id: QosPolicyId,
-    policies: Vec<QosPolicyCount>,
+    reader: GUID,
+    requested_qos: QosPolicies,
+    offered_qos: QosPolicies,
+    //policies: Vec<QosPolicyCount>,  // Not implemented
   },
   PublicationMatched {
     total: CountWithChange,
     current: CountWithChange,
+    reader: GUID,
     // last_subscription_key:
   },
 }
