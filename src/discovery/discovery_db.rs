@@ -87,6 +87,7 @@ pub(crate) enum DiscoveredVia {
   Topic,        // explicitly, via the topic topic (does this actually occur?)
   Publication,  // we discovered there is a writer on this topic
   Subscription, // we discovered a reader on this topic
+  SelfDefined,  // not discovered, but defined by the local DomainParticipant
 }
 
 fn move_by_guid_prefix<D>(
@@ -541,10 +542,7 @@ impl DiscoveryDB {
         &topic.qos(),
       ),
     );
-    // TODO: DiscoveredVia::Topic is likely wrong here. Topic is not
-    // discovered at all, but defined locally. Maybe we need new variant to
-    // DiscoverdVia?
-    self.update_topic_data(&topic_data, self.my_guid, DiscoveredVia::Topic);
+    self.update_topic_data(&topic_data, self.my_guid, DiscoveredVia::SelfDefined);
   }
 
   // Topic update sends notifications, in case someone was waiting to find a
