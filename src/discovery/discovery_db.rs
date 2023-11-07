@@ -555,6 +555,7 @@ impl DiscoveryDB {
     trace!("Update topic data: {:?}", &dtd);
     let topic_name = dtd.topic_data.name.clone();
     let mut notify = false;
+    let mut inconsistency_event_to_send = None;
 
     if let Some(t) = self.topics.get_mut(&dtd.topic_data.name) {
       if let Some(old_dtd) = t.get_mut(&updater.prefix) {
@@ -579,6 +580,11 @@ impl DiscoveryDB {
             "Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
             updater, old_dtd.1.topic_data.type_name, dtd.topic_data.type_name,
           );
+          inconsistency_event_to_send = Some(DomainParticipantStatusEvent::InconsistentTopic {
+            previous_specs: Box::new((&old_dtd.1.topic_data).into()),
+            discovered_as: Box::new((&dtd.topic_data).into()),
+            discovery_from: updater,
+          });
         }
       } else {
         // We have to topic, but not from this participant
@@ -596,7 +602,9 @@ impl DiscoveryDB {
         type_name: dtd.topic_data.type_name.clone(),
       });
     };
-
+    if let Some(ev) = inconsistency_event_to_send {
+      self.send_participant_status(ev);
+    }
     if notify {
       self
         .topic_updated_sender

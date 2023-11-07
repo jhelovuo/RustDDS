@@ -24,8 +24,8 @@ pub trait TopicDescription {
 /// > Topic objects conceptually fit between publications and subscriptions.
 /// > Publications must be known in such a way that
 /// > subscriptions can refer to them unambiguously. A Topic is meant to fulfill
-/// that purpose: it associates a name (unique in the > domain), a data-type,
-/// and QoS related to the data itself.
+/// > that purpose: it associates a name (unique in the domain), a data-type,
+/// > and QoS related to the data itself.
 ///
 /// Topics can be created (or found) using a [`DomainParticipant`].
 ///
