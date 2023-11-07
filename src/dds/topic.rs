@@ -6,6 +6,7 @@ use crate::dds::{
   qos::{HasQoSPolicy, QosPolicies},
   typedesc::TypeDesc,
 };
+use crate::discovery::sedp_messages::{TopicBuiltinTopicData};
 pub use crate::structure::topic_kind::TopicKind;
 
 /// Trait approximation of DDS 2.2.2.3.1 TopicDescription Class
@@ -17,6 +18,28 @@ pub trait TopicDescription {
   fn get_type(&self) -> TypeDesc; // This replaces type_name() from spec
   fn name(&self) -> String;
 }
+
+/// This is a more usable version of TopicBuiltinTopicData from Discovery.
+///
+/// It is used for describing discovered topics.
+///
+#[derive(Debug, Clone)]
+pub struct TopicData {
+  pub name: String,
+  pub type_name: String,
+  pub qos: QosPolicies,
+}
+
+impl From<&TopicBuiltinTopicData> for TopicData {
+  fn from(tbtd: &TopicBuiltinTopicData) -> Self {
+    TopicData {
+      name: tbtd.name.clone(),
+      type_name: tbtd.type_name.clone(),
+      qos: tbtd.qos(),
+    }
+  }
+}
+
 
 /// DDS Topic
 ///

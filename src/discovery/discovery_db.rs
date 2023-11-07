@@ -29,6 +29,7 @@ use super::{
   sedp_messages::{
     DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
     ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
+    topics_inconsistent,
   },
   spdp_participant_data::SpdpDiscoveredParticipantData,
 };
@@ -72,7 +73,7 @@ pub(crate) struct DiscoveryDB {
   // Database of topic updates:
   // Outer level key is topic name
   // Inner key is topic data sender.
-  topics: BTreeMap<String, BTreeMap<GuidPrefix, (DiscoveredVia, DiscoveredTopicData)>>,
+  topics: BTreeMap<String, BTreeMap<GUID, (DiscoveredVia, DiscoveredTopicData)>>,
 
   // sender for notifying (potential) waiters in participant.find_topic() call
   topic_updated_sender: mio_extras::channel::SyncSender<()>,
@@ -540,6 +541,9 @@ impl DiscoveryDB {
         &topic.qos(),
       ),
     );
+    // TODO: DiscoveredVia::Topic is likely wrong here. Topic is not
+    // discovered at all, but defined locally. Maybe we need new variant to
+    // DiscoverdVia?
     self.update_topic_data(&topic_data, self.my_guid, DiscoveredVia::Topic);
   }
 
@@ -558,12 +562,13 @@ impl DiscoveryDB {
     let mut inconsistency_event_to_send = None;
 
     if let Some(t) = self.topics.get_mut(&dtd.topic_data.name) {
-      if let Some(old_dtd) = t.get_mut(&updater.prefix) {
+      if let Some(old_dtd) = t.get_mut(&updater) {
         // already have it from the same source, do some checking(?) and merging
-        if dtd.topic_data.type_name == old_dtd.1.topic_data.type_name
-        // TODO: Check also for QoS changes, esp. policies that are immutable
+        if ! topics_inconsistent(&dtd.topic_data, &old_dtd.1.topic_data)
         {
           // If this discovery was from Topic topic and the old was not, then update
+          // TODO: Why do we have this logic? Where is the spec? Or ant reason for it?
+          // Is it even triggered ever?
           if discovered_via == DiscoveredVia::Topic {
             *old_dtd = (discovered_via, dtd.clone()); // update QoS
             notify = true;
@@ -573,29 +578,46 @@ impl DiscoveryDB {
               &topic_name, &updater
             );
             // TODO: Here we could warn about QoS changes.
+            //
+            // It is normal to have different (but compatible) QoS policies
+            // for Reader and Writer. We end up here if the same Participant has both
+            // Reader and Writer with different QoS. Also different Readers could have different QoS,
+            // as could Writers.
           }
         } else {
-          // someone changed their mind about the type name?!?
           error!(
             "Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
             updater, old_dtd.1.topic_data.type_name, dtd.topic_data.type_name,
           );
           inconsistency_event_to_send = Some(DomainParticipantStatusEvent::InconsistentTopic {
-            previous_specs: Box::new((&old_dtd.1.topic_data).into()),
-            discovered_as: Box::new((&dtd.topic_data).into()),
-            discovery_from: updater,
+            previous_topic_data: Box::new((&old_dtd.1.topic_data).into()),
+            previous_source: updater,
+            discovered_topic_data: Box::new((&dtd.topic_data).into()),
+            discovery_source: updater,
           });
         }
       } else {
+        for (source_guid, (_via, existing_dtd)) in t.iter() {
+          if topics_inconsistent(&existing_dtd.topic_data, &dtd.topic_data) {
+            inconsistency_event_to_send = Some(DomainParticipantStatusEvent::InconsistentTopic {
+              previous_topic_data: Box::new((&existing_dtd.topic_data).into()),
+              previous_source: *source_guid,
+              discovered_topic_data: Box::new((&dtd.topic_data).into()),
+              discovery_source: updater,
+            });
+            // Note: There are potentially several sources of inconsistency (loop),
+            // but we will report only one of them.
+          }
+        } 
         // We have to topic, but not from this participant
         // TODO: Check that there is agreement about topic type name (at least)
-        t.insert(updater.prefix, (discovered_via, dtd.clone())); // this should return None
+        t.insert(updater, (discovered_via, dtd.clone())); // this should return None
         notify = true;
       }
     } else {
       // new topic to us
       let mut b = BTreeMap::new();
-      b.insert(updater.prefix, (discovered_via, dtd.clone()));
+      b.insert(updater, (discovered_via, dtd.clone()));
       self.topics.insert(topic_name, b);
       self.send_participant_status(DomainParticipantStatusEvent::TopicDetected {
         name: dtd.topic_data.name.clone(),
@@ -683,7 +705,7 @@ impl DiscoveryDB {
       .filter(|(s, _)| !s.starts_with("DCPS"))
       .flat_map(move |(_, gm)| {
         gm.iter()
-          .filter(move |(guid, _)| **guid == me)
+          .filter(move |(guid, _)| guid.prefix == me)
           .map(|(_, dtd)| &dtd.1)
       })
   }

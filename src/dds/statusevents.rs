@@ -22,10 +22,11 @@ use chrono::Utc;
 
 use crate::{
   dds::{
-    qos::{QosPolicyId,HasQoSPolicy},
+    qos::{QosPolicyId,},
     result::{ReadError, ReadResult},
+    topic::TopicData,
   },
-  discovery::{SpdpDiscoveredParticipantData,TopicBuiltinTopicData,},
+  discovery::{SpdpDiscoveredParticipantData,},
   messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
   mio_source::*,
   read_error_poisoned,
@@ -260,9 +261,10 @@ pub enum DomainParticipantStatusEvent {
     reason: LostReason,
   },
   InconsistentTopic {
-    previous_specs: Box<TopicDescription>, // What was our ide aof the Topic
-    discovered_as: Box<TopicDescription>,  // What incoming Discovery data tells us about Topic
-    discovery_from: GUID,  // Who sent the Discovery data
+    previous_topic_data: Box<TopicData>, // What was our ide aof the Topic
+    previous_source: GUID,
+    discovered_topic_data: Box<TopicData>,  // What incoming Discovery data tells us about Topic
+    discovery_source: GUID,  // Who sent the Discovery data
   },
   /// Discovery detects a new topic
   TopicDetected {
@@ -371,24 +373,6 @@ impl From<&SpdpDiscoveredParticipantData> for ParticipantDescription {
       entity_name: dpd.entity_name.clone(),
       #[cfg(feature = "security")]
       supports_security: dpd.supports_security(),
-    }
-  }
-}
-
-/// This is a more usable version of TopicBuiltinTopicData from discovery.
-#[derive(Debug, Clone)]
-pub struct TopicDescription {
-  pub name: String,
-  pub type_name: String,
-  pub qos: QosPolicies,
-}
-
-impl From<&TopicBuiltinTopicData> for TopicDescription {
-  fn from(tbtd: &TopicBuiltinTopicData) -> Self {
-    TopicDescription {
-      name: tbtd.name.clone(),
-      type_name: tbtd.type_name.clone(),
-      qos: tbtd.qos(),
     }
   }
 }
