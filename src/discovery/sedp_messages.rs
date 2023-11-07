@@ -1073,10 +1073,11 @@ pub fn topics_inconsistent(t1: &TopicBuiltinTopicData, t2: &TopicBuiltinTopicDat
   t1.type_name != t2.type_name
 
   // Check for QoS inconsistencies:
-  
-  // TODO: Is there any combination of Topic QoS settings that would make the two definitions
-  // of the Topic definetely incompatible (inconsistent). There are several QoS policies
-  // that must match between Reader and Writer, but the spec seems to say nothing about Topics.
+
+  // TODO: Is there any combination of Topic QoS settings that would make the
+  // two definitions of the Topic definetely incompatible (inconsistent).
+  // There are several QoS policies that must match between Reader and Writer,
+  // but the spec seems to say nothing about Topics.
 }
 
 // =======================================================================

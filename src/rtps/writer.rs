@@ -24,7 +24,9 @@ use crate::{
       policy::{History, Reliability},
       HasQoSPolicy, QosPolicies,
     },
-    statusevents::{CountWithChange, DataWriterStatus, StatusChannelSender, DomainParticipantStatusEvent},
+    statusevents::{
+      CountWithChange, DataWriterStatus, DomainParticipantStatusEvent, StatusChannelSender,
+    },
     with_key::datawriter::WriteOptions,
   },
   messages::submessages::submessages::AckSubmessage,

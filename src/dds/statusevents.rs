@@ -22,11 +22,11 @@ use chrono::Utc;
 
 use crate::{
   dds::{
-    qos::{QosPolicyId,},
+    qos::QosPolicyId,
     result::{ReadError, ReadResult},
     topic::TopicData,
   },
-  discovery::{SpdpDiscoveredParticipantData,},
+  discovery::SpdpDiscoveredParticipantData,
   messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
   mio_source::*,
   read_error_poisoned,
@@ -263,8 +263,8 @@ pub enum DomainParticipantStatusEvent {
   InconsistentTopic {
     previous_topic_data: Box<TopicData>, // What was our ide aof the Topic
     previous_source: GUID,
-    discovered_topic_data: Box<TopicData>,  // What incoming Discovery data tells us about Topic
-    discovery_source: GUID,  // Who sent the Discovery data
+    discovered_topic_data: Box<TopicData>, // What incoming Discovery data tells us about Topic
+    discovery_source: GUID,                // Who sent the Discovery data
   },
   /// Discovery detects a new topic
   TopicDetected {
@@ -319,15 +319,17 @@ pub enum DomainParticipantStatusEvent {
   /// The CA has revoked the identity of some Participant.
   /// We may be currently communicating with the Participant, or it may be
   /// unknown to us.
-  // TODO: 
-  /// Not implemented, as we do not implement any identity revocation mechanism yet.
+  // TODO:
+  /// Not implemented, as we do not implement any identity revocation mechanism
+  /// yet.
   #[cfg(feature = "security")]
   IdentityRevoked {
     participant: GUID,
   },
   /// Domain access permissions of some Participant have been revoked / changed.
-  // TODO: 
-  /// Not implemented, as we do not implement any permissions revocation mechanism yet.
+  // TODO:
+  /// Not implemented, as we do not implement any permissions revocation
+  /// mechanism yet.
   #[cfg(feature = "security")]
   PermissionsRevoked {
     participant: GUID,
@@ -376,7 +378,6 @@ impl From<&SpdpDiscoveredParticipantData> for ParticipantDescription {
     }
   }
 }
-
 
 /// This is a summary of SubscriptionBuiltinTopicData /
 /// PublicationBuiltinTopicData from discovery. The original is not used to

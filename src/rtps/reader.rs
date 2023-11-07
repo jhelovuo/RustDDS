@@ -17,7 +17,9 @@ use crate::{
   dds::{
     ddsdata::DDSData,
     qos::{policy, HasQoSPolicy, QosPolicies},
-    statusevents::{CountWithChange, DataReaderStatus, StatusChannelSender, DomainParticipantStatusEvent,},
+    statusevents::{
+      CountWithChange, DataReaderStatus, DomainParticipantStatusEvent, StatusChannelSender,
+    },
     with_key::{
       datawriter::{WriteOptions, WriteOptionsBuilder},
       simpledatareader::ReaderCommand,
@@ -1378,7 +1380,6 @@ impl Reader {
       )
     })
   }
-
 } // impl Reader
 
 impl HasQoSPolicy for Reader {

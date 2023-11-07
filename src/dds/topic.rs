@@ -1,12 +1,14 @@
 use std::{fmt::Debug, sync::Arc};
 
-use crate::dds::{
-  dds_entity::DDSEntity,
-  participant::{DomainParticipant, DomainParticipantWeak},
-  qos::{HasQoSPolicy, QosPolicies},
-  typedesc::TypeDesc,
+use crate::{
+  dds::{
+    dds_entity::DDSEntity,
+    participant::{DomainParticipant, DomainParticipantWeak},
+    qos::{HasQoSPolicy, QosPolicies},
+    typedesc::TypeDesc,
+  },
+  discovery::sedp_messages::TopicBuiltinTopicData,
 };
-use crate::discovery::sedp_messages::{TopicBuiltinTopicData};
 pub use crate::structure::topic_kind::TopicKind;
 
 /// Trait approximation of DDS 2.2.2.3.1 TopicDescription Class
@@ -22,7 +24,6 @@ pub trait TopicDescription {
 /// This is a more usable version of TopicBuiltinTopicData from Discovery.
 ///
 /// It is used for describing discovered topics.
-///
 #[derive(Debug, Clone)]
 pub struct TopicData {
   pub name: String,
@@ -39,7 +40,6 @@ impl From<&TopicBuiltinTopicData> for TopicData {
     }
   }
 }
-
 
 /// DDS Topic
 ///

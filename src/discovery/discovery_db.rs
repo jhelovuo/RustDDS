@@ -27,9 +27,9 @@ use crate::{
 };
 use super::{
   sedp_messages::{
-    DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
-    ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
-    topics_inconsistent,
+    topics_inconsistent, DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData,
+    ParticipantMessageData, ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
+    WriterProxy,
   },
   spdp_participant_data::SpdpDiscoveredParticipantData,
 };
@@ -562,8 +562,7 @@ impl DiscoveryDB {
     if let Some(t) = self.topics.get_mut(&dtd.topic_data.name) {
       if let Some(old_dtd) = t.get_mut(&updater) {
         // already have it from the same source, do some checking(?) and merging
-        if ! topics_inconsistent(&dtd.topic_data, &old_dtd.1.topic_data)
-        {
+        if !topics_inconsistent(&dtd.topic_data, &old_dtd.1.topic_data) {
           // If this discovery was from Topic topic and the old was not, then update
           // TODO: Why do we have this logic? Where is the spec? Or ant reason for it?
           // Is it even triggered ever?
@@ -578,8 +577,9 @@ impl DiscoveryDB {
             // TODO: Here we could warn about QoS changes.
             //
             // It is normal to have different (but compatible) QoS policies
-            // for Reader and Writer. We end up here if the same Participant has both
-            // Reader and Writer with different QoS. Also different Readers could have different QoS,
+            // for Reader and Writer. We end up here if the same Participant has
+            // both Reader and Writer with different QoS. Also
+            // different Readers could have different QoS,
             // as could Writers.
           }
         } else {
@@ -603,10 +603,10 @@ impl DiscoveryDB {
               discovered_topic_data: Box::new((&dtd.topic_data).into()),
               discovery_source: updater,
             });
-            // Note: There are potentially several sources of inconsistency (loop),
-            // but we will report only one of them.
+            // Note: There are potentially several sources of inconsistency
+            // (loop), but we will report only one of them.
           }
-        } 
+        }
         // We have to topic, but not from this participant
         // TODO: Check that there is agreement about topic type name (at least)
         t.insert(updater, (discovered_via, dtd.clone())); // this should return None

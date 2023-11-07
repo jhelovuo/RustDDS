@@ -838,8 +838,12 @@ impl DPEventLoop {
       )
       .expect("Reader timer channel registration failed!");
 
-    let mut new_reader = Reader::new(reader_ing, self.udp_sender.clone(), timer, 
-      self.participant_status_sender.clone());
+    let mut new_reader = Reader::new(
+      reader_ing,
+      self.udp_sender.clone(),
+      timer,
+      self.participant_status_sender.clone(),
+    );
 
     // Non-timed action polling
     self
@@ -897,8 +901,12 @@ impl DPEventLoop {
       )
       .expect("Writer heartbeat timer channel registration failed!!");
 
-    let new_writer = Writer::new(writer_ing, self.udp_sender.clone(), timer, 
-      self.participant_status_sender.clone());
+    let new_writer = Writer::new(
+      writer_ing,
+      self.udp_sender.clone(),
+      timer,
+      self.participant_status_sender.clone(),
+    );
 
     self
       .poll
