@@ -855,16 +855,16 @@ impl SecureDiscovery {
     }
   }
 
-  pub fn write_readers_info(
+  pub fn write_single_reader_info(
     &self,
     nonsecure_sub_writer: &DataWriterPlCdr<DiscoveredReaderData>,
     secure_sub_writer: &DataWriterPlCdr<SubscriptionBuiltinTopicDataSecure>,
-    local_user_readers: &Vec<&DiscoveredReaderData>,
+    local_user_reader: &DiscoveredReaderData,
   ) {
-    for data in local_user_readers {
-      // See if this subscription needs to be written to DCPSSubscriptionsSecure or
-      // the normal one
-      let do_secure_write = if let Some(sec_info) = data.subscription_topic_data.security_info() {
+    // See if this subscription needs to be written to DCPSSubscriptionsSecure or
+    // the normal one
+    let do_secure_write =
+      if let Some(sec_info) = local_user_reader.subscription_topic_data.security_info() {
         let sec_attributes = EndpointSecurityAttributes::from(sec_info.clone());
         sec_attributes
           .topic_security_attributes
@@ -873,33 +873,44 @@ impl SecureDiscovery {
         false
       };
 
-      if do_secure_write {
-        let sec_sub_data = SubscriptionBuiltinTopicDataSecure::from((*data).clone());
-        if let Err(e) = secure_sub_writer.write(sec_sub_data, None) {
-          error!(
-            "Failed to write subscription to DCPSSubscriptionsSecure: {}",
-            e
-          );
-        }
+    if do_secure_write {
+      let sec_sub_data = SubscriptionBuiltinTopicDataSecure::from((*local_user_reader).clone());
+      if let Err(e) = secure_sub_writer.write(sec_sub_data, None) {
+        error!(
+          "Failed to write subscription to DCPSSubscriptionsSecure: {}",
+          e
+        );
       } else {
-        // Do a non-secure write
-        if let Err(e) = nonsecure_sub_writer.write((*data).clone(), None) {
-          error!("Failed to write subscription to DCPSSubscriptions: {}", e);
-        }
+        security_info!(
+          "Published DCPSSubscriptionsSecure data on topic {}, reader guid {:?}",
+          local_user_reader.subscription_topic_data.topic_name(),
+          local_user_reader.reader_proxy.remote_reader_guid
+        );
+      }
+    } else {
+      // Do a non-secure write
+      if let Err(e) = nonsecure_sub_writer.write((*local_user_reader).clone(), None) {
+        error!("Failed to write subscription to DCPSSubscriptions: {}", e);
+      } else {
+        debug!(
+          "Published DCPSSubscriptions data on topic {}, reader guid {:?}",
+          local_user_reader.subscription_topic_data.topic_name(),
+          local_user_reader.reader_proxy.remote_reader_guid
+        );
       }
     }
   }
 
-  pub fn write_writers_info(
+  pub fn write_single_writer_info(
     &self,
     nonsecure_pub_writer: &DataWriterPlCdr<DiscoveredWriterData>,
     secure_pub_writer: &DataWriterPlCdr<PublicationBuiltinTopicDataSecure>,
-    local_user_writers: &Vec<&DiscoveredWriterData>,
+    local_user_writer: &DiscoveredWriterData,
   ) {
-    for data in local_user_writers {
-      // See if this publication needs to be written to DCPSPublicationsSecure or the
-      // normal one
-      let do_secure_write = if let Some(sec_info) = data.publication_topic_data.security_info() {
+    // See if this publication needs to be written to DCPSPublicationsSecure or the
+    // normal one
+    let do_secure_write =
+      if let Some(sec_info) = local_user_writer.publication_topic_data.security_info() {
         let sec_attributes = EndpointSecurityAttributes::from(sec_info.clone());
         sec_attributes
           .topic_security_attributes
@@ -908,19 +919,30 @@ impl SecureDiscovery {
         false
       };
 
-      if do_secure_write {
-        let sec_pub_data = PublicationBuiltinTopicDataSecure::from((*data).clone());
-        if let Err(e) = secure_pub_writer.write(sec_pub_data, None) {
-          error!(
-            "Failed to write publication to DCPSPublicationsSecure: {}",
-            e
-          );
-        }
+    if do_secure_write {
+      let sec_pub_data = PublicationBuiltinTopicDataSecure::from((*local_user_writer).clone());
+      if let Err(e) = secure_pub_writer.write(sec_pub_data, None) {
+        error!(
+          "Failed to write publication to DCPSPublicationsSecure: {}",
+          e
+        );
       } else {
-        // Do a non-secure write
-        if let Err(e) = nonsecure_pub_writer.write((*data).clone(), None) {
-          error!("Failed to write publication to DCPSPublications: {}", e);
-        }
+        security_info!(
+          "Published DCPSPublicationsSecure data on topic {}, writer guid {:?}",
+          local_user_writer.publication_topic_data.topic_name(),
+          local_user_writer.writer_proxy.remote_writer_guid
+        );
+      }
+    } else {
+      // Do a non-secure write
+      if let Err(e) = nonsecure_pub_writer.write((*local_user_writer).clone(), None) {
+        error!("Failed to write publication to DCPSPublications: {}", e);
+      } else {
+        debug!(
+          "Published DCPSPublication data on topic {}, writer guid {:?}",
+          local_user_writer.publication_topic_data.topic_name(),
+          local_user_writer.writer_proxy.remote_writer_guid
+        );
       }
     }
   }

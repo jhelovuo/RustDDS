@@ -55,9 +55,18 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::*;
 
-#[derive(Clone, Copy, Eq, PartialEq, Ord, PartialOrd, Hash)]
+#[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum DiscoveryCommand {
   StopDiscovery,
+  AddLocalWriter {
+    guid: GUID,
+  },
+  AddLocalReader {
+    guid: GUID,
+  },
+  AddTopic {
+    topic_name: String,
+  },
   RemoveLocalWriter {
     guid: GUID,
   },
@@ -153,6 +162,7 @@ mod no_key {
     pub topic: Topic,
     pub reader: crate::no_key::DataReader<D, crate::CDRDeserializerAdapter<D>>,
     pub writer: crate::no_key::DataWriter<D, crate::CDRSerializerAdapter<D>>,
+    #[allow(dead_code)] // Timers currently not used for no_key discovery topics
     pub timer: Timer<()>,
   }
 }
@@ -244,15 +254,15 @@ pub(crate) struct Discovery {
   #[cfg(feature = "security")]
   dcps_participant_volatile_message_secure:
     no_key::DiscoveryTopicCDR<ParticipantVolatileMessageSecure>, // CDR?
+
+  #[cfg(feature = "security")]
+  cached_secure_discovery_messages_resend_timer: Timer<()>,
 }
 
 impl Discovery {
   const PARTICIPANT_CLEANUP_PERIOD: StdDuration = StdDuration::from_secs(2);
   const TOPIC_CLEANUP_PERIOD: StdDuration = StdDuration::from_secs(60); // timer for cleaning up inactive topics
   const SEND_PARTICIPANT_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
-  const SEND_READERS_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
-  const SEND_WRITERS_INFO_PERIOD: StdDuration = StdDuration::from_secs(2);
-  const SEND_TOPIC_INFO_PERIOD: StdDuration = StdDuration::from_secs(10);
   const CHECK_PARTICIPANT_MESSAGES: StdDuration = StdDuration::from_secs(1);
   #[cfg(feature = "security")]
   const CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD: StdDuration = StdDuration::from_secs(1);
@@ -333,7 +343,7 @@ impl Discovery {
         $stateless_RTPS:expr,
         $reader_entity_id:expr, $reader_token:expr,
         $writer_entity_id:expr,
-        $timeout:expr, $timer_token:expr, ) => {{
+        $timeout_and_timer_token_opt:expr, ) => {{
         let topic = domain_participant
           .create_topic(
             $topic_name.to_string(),
@@ -367,11 +377,12 @@ impl Discovery {
           .expect("Failed to register a discovery reader to poll.");
 
         let mut timer: Timer<()> = Timer::default();
-        timer.set_timeout($timeout, ());
-        poll
-          .register(&timer, $timer_token, Ready::readable(), PollOpt::edge())
-          .expect("Unable to register timer token. ");
-
+        if let Some((timeout_value, timer_token)) = $timeout_and_timer_token_opt {
+          timer.set_timeout(timeout_value, ());
+          poll
+            .register(&timer, timer_token, Ready::readable(), PollOpt::edge())
+            .expect("Unable to register timer token. ");
+        }
         paste! { $has_key ::[<DiscoveryTopic $repr>] { topic, reader, writer, timer } }
       }}; // macro
     }
@@ -408,8 +419,10 @@ impl Discovery {
       EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
       DISCOVERY_PARTICIPANT_DATA_TOKEN,
       EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
-      Self::SEND_PARTICIPANT_INFO_PERIOD,
-      DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN,
+      Some((
+        Self::SEND_PARTICIPANT_INFO_PERIOD,
+        DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN,
+      )),
     );
 
     // create lease duration check timer
@@ -438,8 +451,7 @@ impl Discovery {
       EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
       DISCOVERY_READER_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
-      Self::SEND_READERS_INFO_PERIOD,
-      DISCOVERY_SEND_READERS_INFO_TOKEN,
+      None, // No timer
     );
 
     // Publication : Who are the Writers here and elsewhere
@@ -454,8 +466,7 @@ impl Discovery {
       EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
       DISCOVERY_WRITER_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
-      Self::SEND_WRITERS_INFO_PERIOD,
-      DISCOVERY_SEND_WRITERS_INFO_TOKEN,
+      None, // No timer
     );
 
     // Topic topic (not a typo)
@@ -470,8 +481,7 @@ impl Discovery {
       EntityId::SEDP_BUILTIN_TOPIC_READER,
       DISCOVERY_TOPIC_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_TOPIC_WRITER,
-      Self::SEND_TOPIC_INFO_PERIOD,
-      DISCOVERY_SEND_TOPIC_INFO_TOKEN,
+      None, // No timer
     );
 
     // create lease duration check timer
@@ -499,8 +509,10 @@ impl Discovery {
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
       DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-      Self::CHECK_PARTICIPANT_MESSAGES,
-      DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
+      Some((
+        Self::CHECK_PARTICIPANT_MESSAGES,
+        DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
+      )),
     );
 
     // DDS Security
@@ -518,8 +530,7 @@ impl Discovery {
       EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_READER,
       SECURE_DISCOVERY_PARTICIPANT_DATA_TOKEN,
       EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER,
-      Self::SEND_PARTICIPANT_INFO_PERIOD,
-      SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN,
+      None, // No timer. Periodic sending is done simultaneously with the non-secure topic
     );
 
     // Subscriptions: What are the Readers on the network and what are they
@@ -536,8 +547,7 @@ impl Discovery {
       EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_READER,
       SECURE_DISCOVERY_READER_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_WRITER,
-      Self::SEND_READERS_INFO_PERIOD,
-      SECURE_DISCOVERY_SEND_READERS_INFO_TOKEN,
+      None, // No timer
     );
 
     // Publication : Who are the Writers here and elsewhere
@@ -553,8 +563,7 @@ impl Discovery {
       EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_READER,
       SECURE_DISCOVERY_WRITER_DATA_TOKEN,
       EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_WRITER,
-      Self::SEND_WRITERS_INFO_PERIOD,
-      SECURE_DISCOVERY_SEND_WRITERS_INFO_TOKEN,
+      None, // No timer
     );
 
     // p2p Participant message secure
@@ -570,8 +579,7 @@ impl Discovery {
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_READER,
       P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_WRITER,
-      Self::CHECK_PARTICIPANT_MESSAGES,
-      P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN,
+      None, // No timer. Periodic sending is done simultaneously with the non-secure topic
     );
     // p2p Participant stateless message, used for authentication and Diffie-Hellman
     // key exchange
@@ -587,8 +595,7 @@ impl Discovery {
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
       P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
-      Self::CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD,
-      CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_TIMER_TOKEN,
+      None, // No timer
     );
 
     // p2p Participant volatile message secure, used for key exchange
@@ -605,9 +612,27 @@ impl Discovery {
       EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
       P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN,
       EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
-      Self::CHECK_PARTICIPANT_MESSAGES,
-      P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN,
+      None, // No timer.
     );
+
+    // Create a timer to periodically check whether to resend any cached security
+    // (authentication, key exchange) messages
+    #[cfg(feature = "security")]
+    let secure_message_resend_timer = {
+      let mut secure_message_resend_timer: Timer<()> = Timer::default();
+      secure_message_resend_timer
+        .set_timeout(Self::CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD, ());
+      try_construct!(
+        poll.register(
+          &secure_message_resend_timer,
+          CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_TIMER_TOKEN,
+          Ready::readable(),
+          PollOpt::edge(),
+        ),
+        "Unable to create secure message resend timer. {:?}"
+      );
+      secure_message_resend_timer
+    };
 
     #[cfg(not(feature = "security"))]
     let security_opt = security_plugins_opt.and(None); // = None, but avoid warning.
@@ -660,6 +685,8 @@ impl Discovery {
       dcps_participant_stateless_message,
       #[cfg(feature = "security")]
       dcps_participant_volatile_message_secure,
+      #[cfg(feature = "security")]
+      cached_secure_discovery_messages_resend_timer: secure_message_resend_timer,
     })
   }
 
@@ -701,6 +728,15 @@ impl Discovery {
                   self.on_participant_shutting_down();
                   info!("Stopped Discovery");
                   return; // terminate event loop
+                }
+                DiscoveryCommand::AddLocalWriter { guid } => {
+                  self.write_single_writer_info(guid);
+                }
+                DiscoveryCommand::AddLocalReader { guid } => {
+                  self.write_single_reader_info(guid);
+                }
+                DiscoveryCommand::AddTopic { topic_name } => {
+                  self.write_topic_info(&topic_name);
                 }
                 DiscoveryCommand::RemoveLocalWriter { guid } => {
                   if guid == self.dcps_publication.writer.guid() {
@@ -791,23 +827,8 @@ impl Discovery {
           DISCOVERY_READER_DATA_TOKEN => {
             self.handle_subscription_reader(None);
           }
-          DISCOVERY_SEND_READERS_INFO_TOKEN => {
-            self.write_readers_info();
-            self
-              .dcps_subscription
-              .timer
-              .set_timeout(Self::SEND_READERS_INFO_PERIOD, ());
-          }
           DISCOVERY_WRITER_DATA_TOKEN => {
             self.handle_publication_reader(None);
-          }
-          DISCOVERY_SEND_WRITERS_INFO_TOKEN => {
-            self.write_writers_info();
-            self
-              .dcps_publication
-              .timer
-              //              .writers_send_info_timer
-              .set_timeout(Self::SEND_WRITERS_INFO_PERIOD, ());
           }
           DISCOVERY_TOPIC_DATA_TOKEN => {
             self.handle_topic_reader(None);
@@ -818,14 +839,6 @@ impl Discovery {
             self
               .topic_cleanup_timer
               .set_timeout(Self::TOPIC_CLEANUP_PERIOD, ());
-          }
-          DISCOVERY_SEND_TOPIC_INFO_TOKEN => {
-            self.write_topic_info();
-            self
-              .dcps_topic
-              .timer
-              //.topic_info_send_timer
-              .set_timeout(Self::SEND_TOPIC_INFO_PERIOD, ());
           }
           DISCOVERY_PARTICIPANT_MESSAGE_TOKEN | P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TOKEN => {
             self.handle_participant_message_reader();
@@ -865,13 +878,6 @@ impl Discovery {
           SECURE_DISCOVERY_WRITER_DATA_TOKEN => {
             #[cfg(feature = "security")]
             self.handle_secure_publication_reader(None);
-          }
-          SECURE_DISCOVERY_SEND_PARTICIPANT_INFO_TOKEN
-          | SECURE_DISCOVERY_SEND_READERS_INFO_TOKEN
-          | SECURE_DISCOVERY_SEND_WRITERS_INFO_TOKEN
-          | P2P_SECURE_DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN
-          | P2P_BUILTIN_PARTICIPANT_VOLATILE_TIMER_TOKEN => {
-            debug!("Handler not implemented for {:?}", event.token());
           }
 
           other_token => {
@@ -1653,10 +1659,9 @@ impl Discovery {
         &self.dcps_participant_volatile_message_secure.writer,
       );
 
-      // Reset timer for resending authentication messages
+      // Reset timer for resending security messages
       self
-        .dcps_participant_stateless_message
-        .timer
+        .cached_secure_discovery_messages_resend_timer
         .set_timeout(Self::CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD, ());
     }
   }
@@ -1677,9 +1682,66 @@ impl Discovery {
     discovery_db_write(&self.discovery_db).topic_cleanup();
   }
 
+  pub fn write_single_reader_info(&self, guid: GUID) {
+    let db = discovery_db_read(&self.discovery_db);
+    if let Some(reader_data) = db.get_local_topic_reader(guid) {
+      if !reader_data
+        .reader_proxy
+        .remote_reader_guid
+        .entity_id
+        .kind()
+        .is_user_defined()
+      {
+        // Only readers of user-defined topics are published to discovery
+        return;
+      }
+
+      #[cfg(not(feature = "security"))]
+      let do_nonsecure_write = true;
+
+      #[cfg(feature = "security")]
+      let do_nonsecure_write = if let Some(security) = self.security_opt.as_ref() {
+        security.write_single_reader_info(
+          &self.dcps_subscription.writer,
+          &self.dcps_subscriptions_secure.writer,
+          reader_data,
+        );
+        false
+      } else {
+        true // No security configured
+      };
+
+      if do_nonsecure_write {
+        match self
+          .dcps_subscription
+          .writer
+          .write(reader_data.clone(), None)
+        {
+          Ok(()) => {
+            debug!(
+              "Published DCPSSubscription data on topic {}, reader guid {:?}",
+              reader_data.subscription_topic_data.topic_name(),
+              guid
+            );
+          }
+          Err(e) => {
+            error!(
+              "Failed to publish DCPSSubscription data on topic {}, reader guid {:?}. Error: {e}",
+              reader_data.subscription_topic_data.topic_name(),
+              guid
+            );
+            // TODO: try again later?
+          }
+        }
+      }
+    } else {
+      warn!("Did not find a local reader with guid {guid:?}");
+    }
+  }
+
   pub fn write_readers_info(&self) {
     let db = discovery_db_read(&self.discovery_db);
-    let local_user_readers: Vec<&DiscoveredReaderData> = db
+    let local_user_reader_guids = db
       .get_all_local_topic_readers()
       .filter(|p| {
         p.reader_proxy
@@ -1688,41 +1750,73 @@ impl Discovery {
           .kind()
           .is_user_defined()
       })
-      .collect();
+      .map(|drd| drd.reader_proxy.remote_reader_guid);
 
-    #[cfg(not(feature = "security"))]
-    let do_nonsecure_write = true;
+    for guid in local_user_reader_guids {
+      self.write_single_reader_info(guid);
+    }
+  }
 
-    #[cfg(feature = "security")]
-    let do_nonsecure_write = if let Some(security) = self.security_opt.as_ref() {
-      // Write subscriptions in Secure discovery
-      security.write_readers_info(
-        &self.dcps_subscription.writer,
-        &self.dcps_subscriptions_secure.writer,
-        &local_user_readers,
-      );
-      false
-    } else {
-      true // No security configured
-    };
+  pub fn write_single_writer_info(&self, guid: GUID) {
+    let db = discovery_db_read(&self.discovery_db);
+    if let Some(writer_data) = db.get_local_topic_writer(guid) {
+      if !writer_data
+        .writer_proxy
+        .remote_writer_guid
+        .entity_id
+        .kind()
+        .is_user_defined()
+      {
+        // Only writers of user-defined topics are published to discovery
+        return;
+      }
 
-    if do_nonsecure_write {
-      let mut count = 0;
-      for data in local_user_readers {
-        match self.dcps_subscription.writer.write(data.clone(), None) {
-          Ok(_) => {
-            count += 1;
+      #[cfg(not(feature = "security"))]
+      let do_nonsecure_write = true;
+
+      #[cfg(feature = "security")]
+      let do_nonsecure_write = if let Some(security) = self.security_opt.as_ref() {
+        security.write_single_writer_info(
+          &self.dcps_publication.writer,
+          &self.dcps_publications_secure.writer,
+          writer_data,
+        );
+        false
+      } else {
+        true // No security configured
+      };
+
+      if do_nonsecure_write {
+        match self
+          .dcps_publication
+          .writer
+          .write(writer_data.clone(), None)
+        {
+          Ok(()) => {
+            debug!(
+              "Published DCPSPublication data on topic {}, writer guid {:?}",
+              writer_data.publication_topic_data.topic_name(),
+              guid
+            );
           }
-          Err(e) => error!("Unable to write new readers info. {e:?}"),
+          Err(e) => {
+            error!(
+              "Failed to publish DCPSPublication data on topic {}, writer guid {:?}. Error: {e}",
+              writer_data.publication_topic_data.topic_name(),
+              guid
+            );
+            // TODO: try again later?
+          }
         }
       }
-      debug!("Announced {} readers", count);
+    } else {
+      warn!("Did not find a local writer with guid {guid:?}");
     }
   }
 
   pub fn write_writers_info(&self) {
     let db: std::sync::RwLockReadGuard<'_, DiscoveryDB> = discovery_db_read(&self.discovery_db);
-    let local_user_writers: Vec<&DiscoveredWriterData> = db
+    let local_user_writer_guids = db
       .get_all_local_topic_writers()
       .filter(|p| {
         p.writer_proxy
@@ -1731,48 +1825,39 @@ impl Discovery {
           .kind()
           .is_user_defined()
       })
-      .collect();
+      .map(|drd| drd.writer_proxy.remote_writer_guid);
 
-    #[cfg(not(feature = "security"))]
-    let do_nonsecure_write = true;
-
-    #[cfg(feature = "security")]
-    let do_nonsecure_write = if let Some(security) = self.security_opt.as_ref() {
-      // Write publications in Secure discovery
-      security.write_writers_info(
-        &self.dcps_publication.writer,
-        &self.dcps_publications_secure.writer,
-        &local_user_writers,
-      );
-      false
-    } else {
-      true // No security configured
-    };
-
-    if do_nonsecure_write {
-      let mut count = 0;
-      for data in local_user_writers {
-        if self
-          .dcps_publication
-          .writer
-          .write(data.clone(), None)
-          .is_err()
-        {
-          error!("Unable to write new writers info.");
-        } else {
-          count += 1;
-        }
-      }
-      debug!("Announced {} writers", count);
+    for guid in local_user_writer_guids {
+      self.write_single_writer_info(guid);
     }
   }
 
-  pub fn write_topic_info(&self) {
+  pub fn write_topic_info(&self, topic_name: &str) {
     let db = discovery_db_read(&self.discovery_db);
-    let datas = db.local_user_topics();
-    for data in datas {
-      if let Err(e) = self.dcps_topic.writer.write(data.clone(), None) {
-        error!("Unable to write new topic info: {e:?}");
+    // We might have multiple topics with the same name (but different Qos etc..),
+    // and the following call gets just one of them. Should we publish all of
+    // them or is this enough?
+    let topic_data = match db.get_topic(topic_name) {
+      Some(data) => data,
+      None => {
+        warn!("Did not find topic data with topic name {topic_name}");
+        return;
+      }
+    };
+
+    // Only user-defined topics are published to discovery
+    let is_user_defined = !topic_data.topic_name().starts_with("DCPS");
+    if !is_user_defined {
+      return;
+    }
+
+    match self.dcps_topic.writer.write(topic_data.clone(), None) {
+      Ok(()) => {
+        debug!("Published topic {topic_name} to DCPSTopic");
+      }
+      Err(e) => {
+        error!("Failed to publish topic {topic_name} to DCPSTopic: {e}");
+        // TODO: try again later?
       }
     }
   }

@@ -674,6 +674,14 @@ impl DiscoveryDB {
     self.local_topic_readers.remove(&guid);
   }
 
+  pub fn get_local_topic_reader(&self, guid: GUID) -> Option<&DiscoveredReaderData> {
+    self.local_topic_readers.get(&guid)
+  }
+
+  pub fn get_local_topic_writer(&self, guid: GUID) -> Option<&DiscoveredWriterData> {
+    self.local_topic_writers.get(&guid)
+  }
+
   pub fn get_all_local_topic_readers(&self) -> impl Iterator<Item = &DiscoveredReaderData> {
     self.local_topic_readers.values()
   }
@@ -692,20 +700,6 @@ impl DiscoveryDB {
       .iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
       .flat_map(|(_, gm)| gm.iter().map(|(_, dtd)| &dtd.1))
-  }
-
-  // as above, but only from my GUID
-  pub fn local_user_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
-    let me = self.my_guid.prefix;
-    self
-      .topics
-      .iter()
-      .filter(|(s, _)| !s.starts_with("DCPS"))
-      .flat_map(move |(_, gm)| {
-        gm.iter()
-          .filter(move |(guid, _)| guid.prefix == me)
-          .map(|(_, dtd)| &dtd.1)
-      })
   }
 
   // a Topic may have multiple definitions, because there may be multiple
