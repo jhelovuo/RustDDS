@@ -1,21 +1,10 @@
-use std::{convert::TryFrom, ops::Div};
+use std::{convert::TryFrom, fmt, ops::Div};
 
 use speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
 
 #[derive(
-  Debug,
-  PartialEq,
-  Eq,
-  Hash,
-  PartialOrd,
-  Ord,
-  Readable,
-  Writable,
-  Serialize,
-  Deserialize,
-  Copy,
-  Clone,
+  PartialEq, Eq, Hash, PartialOrd, Ord, Readable, Writable, Serialize, Deserialize, Copy, Clone,
 )]
 /// Duration is the DDS/RTPS representation for lengths of time, such as
 /// timeouts. It is very similar to [`std::time::Duration`]. See also
@@ -148,6 +137,21 @@ impl std::ops::Mul<Duration> for f64 {
   }
 }
 
+impl fmt::Debug for Duration {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if *self == Self::DURATION_INFINITE {
+      write!(f, "infinite")
+    } else {
+      write!(f, "{}", self.seconds)?;
+      if self.fraction > 0 {
+        let frac = format!("{:09}", (1_000_000_000 * (self.fraction as u64)) >> 32);
+        write!(f, ".{}", frac.trim_end_matches('0'))?;
+      }
+      write!(f, " sec")
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -206,5 +210,19 @@ mod tests {
       duration,
       std::time::Duration::from_nanos(1_519_152_760 * NANOS_PER_SEC + 309_247_999)
     );
+  }
+
+  fn fmt_check(d: Duration, s: &str) {
+    assert_eq!(format!("{:?}", d), s);
+  }
+
+  #[test]
+  fn duration_format() {
+    fmt_check(Duration::from_frac_seconds(0.0), "0 sec");
+    fmt_check(Duration::from_frac_seconds(0.5), "0.5 sec");
+    fmt_check(Duration::from_frac_seconds(1.5), "1.5 sec");
+    fmt_check(Duration::from_frac_seconds(20.0), "20 sec");
+    fmt_check(Duration::from_frac_seconds(2.25), "2.25 sec");
+    fmt_check(Duration::from_frac_seconds(10.0 / 3.0), "3.333333333 sec");
   }
 }

@@ -743,12 +743,9 @@ impl Authentication for AuthenticationBuiltin {
         // TODO: Algorithm is hardwired. Should follow "c.kagree_algo" from above.
         let dh1_public = dh1.compute_public_key()?;
         let dh2 = agreement::UnparsedPublicKey::new(&agreement::ECDH_P256, reply.dh2.as_ref());
-        let shared_secret = agreement::agree_ephemeral(
-          dh1,
-          &dh2,
-          security_error("Shared secret forming failed"), // in case it fails
-          |raw_shared_secret| Ok(SharedSecret::from(Sha256::hash(raw_shared_secret))),
-        )?;
+        let shared_secret = agreement::agree_ephemeral(dh1, &dh2, |raw_shared_secret| {
+          SharedSecret::from(Sha256::hash(raw_shared_secret))
+        })?;
 
         // Create signature for final message:
         // Sign( Hash(C1) | Challenge1 | DH1 | Challenge2 | DH2 | Hash(C2) ), see Table
@@ -914,12 +911,9 @@ impl Authentication for AuthenticationBuiltin {
         // Compute the shared secret
         // TODO: Algorithm is hardwired. Should follow "c.kagree_algo" from above.
         let dh1 = agreement::UnparsedPublicKey::new(&agreement::ECDH_P256, dh1.as_ref());
-        let shared_secret = agreement::agree_ephemeral(
-          dh2,
-          &dh1,
-          security_error("Shared secret forming failed"), // in case it fails
-          |raw_shared_secret| Ok(SharedSecret::from(Sha256::hash(raw_shared_secret))),
-        )?;
+        let shared_secret = agreement::agree_ephemeral(dh2, &dh1, |raw_shared_secret| {
+          SharedSecret::from(Sha256::hash(raw_shared_secret))
+        })?;
 
         // Change handshake state to Completed
         let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;

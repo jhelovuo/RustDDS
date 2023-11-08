@@ -12,7 +12,7 @@ Please see the [DDS Security Specification](https://www.omg.org/spec/DDS-SECURIT
 
 # Using security in RustDDS
 
-In order to use the security functionality, use enable the Cargo feature `security` in RustDDS. By default, it is not enabled, because it adds a large body of code and some processing overhead.
+In order to use the security functionality, enable the Cargo feature `security` in RustDDS. By default, it is not enabled, because it adds a large body of code and some processing overhead.
 
 Security needs to be configured in order to be used. There are several mandatory configuration files that need to be supplied to RustDDS. These configuration files and their format and semantics are not unique to RustDDS, but specified in the OMG DDS Security specification. The security configuration files should also be interoperable between compliant DDS implementations.
 
@@ -20,16 +20,15 @@ Configuring security for DomainParticipants needs two Certificate Authority role
 
 It is possible that a single CA performs both of these roles. This is a matter of security configuration.
 
-
 The job of the Identity CA is to issue and sign certificates that prove the identity of DomainParticipants. Each DomainParticipant must have their own identity.
 
-The job of the Permissions CA is to sign governance and permissions documents for the DomainParticipants. These documents contain access rules and grants.
+The job of the Permissions CA is to sign permissions documents for the DomainParticipants. A permissions document defines which topics a DomainParticipant has read and/or write access.
 
 The following security configuration files are needed:
 
 ## Identity CA Certificate
 
-* Most important content is the CA's public key. It is used to verify signatures given by the CA. 
+* Most important content is the CA's public key. It is used to verify whether Identity Certificates are actually signed by the CA.
 * This is an X.509 Certificate `.pem` file.
 
 ## Participant Identity Certificate

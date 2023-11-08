@@ -24,12 +24,14 @@ use crate::{
   dds::{
     qos::QosPolicyId,
     result::{ReadError, ReadResult},
+    topic::TopicData,
   },
+  discovery::SpdpDiscoveredParticipantData,
   messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
   mio_source::*,
   read_error_poisoned,
   structure::guid::GuidPrefix,
-  Duration, QosPolicies, Topic, GUID,
+  Duration, QosPolicies, GUID,
 };
 #[cfg(feature = "security")]
 use crate::discovery::secure_discovery::AuthenticationStatus;
@@ -40,8 +42,8 @@ use crate::discovery::secure_discovery::AuthenticationStatus;
 pub trait StatusEvented<E> {
   fn as_status_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source; // This is for polling with mio-0.8.x
-                                                                    // fn as_async_receiver(&self) -> dyn Stream<E>;
 
+  // fn as_async_receiver(&self) -> dyn Stream<E>;
   fn try_recv_status(&self) -> Option<E>;
 }
 
@@ -118,6 +120,7 @@ pub(crate) fn sync_status_channel<T>(
 }
 
 // TODO: try to make this (and the Receiver) private types
+#[derive(Clone)]
 pub struct StatusChannelSender<T> {
   actual_sender: mio_channel::SyncSender<T>,
   signal_sender: PollEventSender,
@@ -169,6 +172,23 @@ impl<T> StatusChannelReceiver<T> {
       sync_receiver: self,
     }
   }
+  pub(crate) fn get_waker_update_lock(&self) -> std::sync::MutexGuard<'_, Option<Waker>> {
+    self.waker.lock().unwrap()
+  }
+}
+
+impl<E> StatusEvented<E> for StatusChannelReceiver<E> {
+  fn as_status_evented(&mut self) -> &dyn Evented {
+    &self.actual_receiver
+  }
+
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+    self
+  }
+
+  fn try_recv_status(&self) -> Option<E> {
+    self.try_recv().ok()
+  }
 }
 
 impl<T> event::Source for StatusChannelReceiver<T> {
@@ -204,7 +224,7 @@ impl<'a, T> Stream for StatusReceiverStream<'a, T> {
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     // debug!("poll_next");
-    let mut w = self.sync_receiver.waker.lock().unwrap();
+    let mut w = self.sync_receiver.get_waker_update_lock();
     // lock already at the beginning, before try_recv
     match self.sync_receiver.try_recv() {
       Err(std::sync::mpsc::TryRecvError::Empty) => {
@@ -215,7 +235,7 @@ impl<'a, T> Stream for StatusReceiverStream<'a, T> {
       Err(std::sync::mpsc::TryRecvError::Disconnected) => Poll::Ready(Some(read_error_poisoned!(
         "StatusReceiver channel disconnected"
       ))),
-      Ok(t) => Poll::Ready(Some(Ok(t))), // got date
+      Ok(t) => Poll::Ready(Some(Ok(t))), // got data
     }
   } // fn
 }
@@ -231,6 +251,7 @@ impl<'a, T> FusedStream for StatusReceiverStream<'a, T> {
 // -------------------------------------------------------------------------------
 
 #[derive(Debug, Clone)]
+#[non_exhaustive]
 pub enum DomainParticipantStatusEvent {
   ParticipantDiscovered {
     dpd: ParticipantDescription,
@@ -240,12 +261,20 @@ pub enum DomainParticipantStatusEvent {
     reason: LostReason,
   },
   InconsistentTopic {
-    previous_specs: Topic, // What was our ide aof the Topic
-    discovered_as: Topic,  // What incoming Discovery data tells us about Topic
-    discovery_from: GUID,  // Who sent the Discovery data
+    previous_topic_data: Box<TopicData>, // What was our ide aof the Topic
+    previous_source: GUID,
+    discovered_topic_data: Box<TopicData>, // What incoming Discovery data tells us about Topic
+    discovery_source: GUID,                // Who sent the Discovery data
   },
   /// Discovery detects a new topic
-  TopicDetected {},
+  TopicDetected {
+    name: String,
+    type_name: String,
+  },
+  /// Topics are lost when there are no more known Readers or Writers in them.
+  TopicLost {
+    name: String,
+  },
   /// New Reader detected (or created locally). Detection happens regardless of
   /// the remote being matched or not by a local Endpoint.
   ReaderDetected {
@@ -263,7 +292,26 @@ pub enum DomainParticipantStatusEvent {
     guid: GUID,
     reason: LostReason,
   },
-
+  RemoteReaderMatched {
+    local_writer: GUID,
+    remote_reader: GUID,
+  },
+  RemoteWriterMatched {
+    local_reader: GUID,
+    remote_writer: GUID,
+  },
+  RemoteReaderQosIncompatible {
+    local_writer: GUID,
+    remote_reader: GUID,
+    requested_qos: Box<QosPolicies>,
+    offered_qos: Box<QosPolicies>,
+  },
+  RemoteWriterQosIncompatible {
+    local_reader: GUID,
+    remote_writer: GUID,
+    requested_qos: Box<QosPolicies>,
+    offered_qos: Box<QosPolicies>,
+  },
   #[cfg(feature = "security")]
   Authentication {
     status: AuthenticationStatus,
@@ -271,11 +319,17 @@ pub enum DomainParticipantStatusEvent {
   /// The CA has revoked the identity of some Participant.
   /// We may be currently communicating with the Participant, or it may be
   /// unknown to us.
+  // TODO:
+  /// Not implemented, as we do not implement any identity revocation mechanism
+  /// yet.
   #[cfg(feature = "security")]
   IdentityRevoked {
     participant: GUID,
   },
   /// Domain access permissions of some Participant have been revoked / changed.
+  // TODO:
+  /// Not implemented, as we do not implement any permissions revocation
+  /// mechanism yet.
   #[cfg(feature = "security")]
   PermissionsRevoked {
     participant: GUID,
@@ -308,6 +362,21 @@ pub struct ParticipantDescription {
   pub entity_name: Option<String>,
   #[cfg(feature = "security")]
   pub supports_security: bool,
+}
+
+impl From<&SpdpDiscoveredParticipantData> for ParticipantDescription {
+  fn from(dpd: &SpdpDiscoveredParticipantData) -> Self {
+    ParticipantDescription {
+      updated_time: dpd.updated_time,
+      protocol_version: dpd.protocol_version,
+      vendor_id: dpd.vendor_id,
+      guid: dpd.participant_guid,
+      lease_duration: dpd.lease_duration,
+      entity_name: dpd.entity_name.clone(),
+      #[cfg(feature = "security")]
+      supports_security: dpd.supports_security(),
+    }
+  }
 }
 
 /// This is a summary of SubscriptionBuiltinTopicData /
@@ -346,7 +415,10 @@ pub enum DataReaderStatus {
   RequestedIncompatibleQos {
     count: CountWithChange,
     last_policy_id: QosPolicyId,
-    policies: Vec<QosPolicyCount>,
+    writer: GUID,
+    requested_qos: Box<QosPolicies>,
+    offered_qos: Box<QosPolicies>,
+    //policies: Vec<QosPolicyCount>, // Not implemented
   },
 
   // DataAvailable variant is not implemented, as it seems to bring little additional value,
@@ -368,6 +440,7 @@ pub enum DataReaderStatus {
   SubscriptionMatched {
     total: CountWithChange,
     current: CountWithChange,
+    writer: GUID,
     // last_publication_key:
   },
 }
@@ -384,11 +457,15 @@ pub enum DataWriterStatus {
   OfferedIncompatibleQos {
     count: CountWithChange,
     last_policy_id: QosPolicyId,
-    policies: Vec<QosPolicyCount>,
+    reader: GUID,
+    requested_qos: Box<QosPolicies>,
+    offered_qos: Box<QosPolicies>,
+    //policies: Vec<QosPolicyCount>,  // Not implemented
   },
   PublicationMatched {
     total: CountWithChange,
     current: CountWithChange,
+    reader: GUID,
     // last_subscription_key:
   },
 }

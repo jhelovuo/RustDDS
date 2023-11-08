@@ -12,6 +12,7 @@ use crate::{
   dds::{
     participant::DomainParticipant,
     qos::HasQoSPolicy,
+    statusevents::{DomainParticipantStatusEvent, LostReason, StatusChannelSender},
     topic::{Topic, TopicDescription},
   },
   rtps::{
@@ -26,8 +27,9 @@ use crate::{
 };
 use super::{
   sedp_messages::{
-    DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData, ParticipantMessageData,
-    ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData, WriterProxy,
+    topics_inconsistent, DiscoveredReaderData, DiscoveredTopicData, DiscoveredWriterData,
+    ParticipantMessageData, ReaderProxy, SubscriptionBuiltinTopicData, TopicBuiltinTopicData,
+    WriterProxy,
   },
   spdp_participant_data::SpdpDiscoveredParticipantData,
 };
@@ -71,10 +73,12 @@ pub(crate) struct DiscoveryDB {
   // Database of topic updates:
   // Outer level key is topic name
   // Inner key is topic data sender.
-  topics: BTreeMap<String, BTreeMap<GuidPrefix, (DiscoveredVia, DiscoveredTopicData)>>,
+  topics: BTreeMap<String, BTreeMap<GUID, (DiscoveredVia, DiscoveredTopicData)>>,
 
   // sender for notifying (potential) waiters in participant.find_topic() call
   topic_updated_sender: mio_extras::channel::SyncSender<()>,
+
+  participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
 }
 
 // How did we discover this topic
@@ -83,6 +87,7 @@ pub(crate) enum DiscoveredVia {
   Topic,        // explicitly, via the topic topic (does this actually occur?)
   Publication,  // we discovered there is a writer on this topic
   Subscription, // we discovered a reader on this topic
+  SelfDefined,  // not discovered, but defined by the local DomainParticipant
 }
 
 fn move_by_guid_prefix<D>(
@@ -115,7 +120,11 @@ pub(crate) fn discovery_db_write(
 }
 
 impl DiscoveryDB {
-  pub fn new(my_guid: GUID, topic_updated_sender: mio_extras::channel::SyncSender<()>) -> Self {
+  pub fn new(
+    my_guid: GUID,
+    topic_updated_sender: mio_extras::channel::SyncSender<()>,
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+  ) -> Self {
     Self {
       my_guid,
       participant_proxies: BTreeMap::new(),
@@ -130,7 +139,15 @@ impl DiscoveryDB {
       external_topic_writers_attic: BTreeMap::new(),
       topics: BTreeMap::new(),
       topic_updated_sender,
+      participant_status_sender,
     }
+  }
+
+  fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
+    self
+      .participant_status_sender
+      .try_send(event)
+      .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
   }
 
   // Returns if participant was previously unknown
@@ -291,7 +308,7 @@ impl DiscoveryDB {
 
   // Delete participant proxies, if we have not heard of them within
   // lease_duration
-  pub fn participant_cleanup(&mut self) -> Vec<GuidPrefix> {
+  pub fn participant_cleanup(&mut self) -> Vec<(GuidPrefix, LostReason)> {
     let inow = Instant::now();
 
     let mut to_remove = Vec::new();
@@ -314,7 +331,13 @@ impl DiscoveryDB {
                elapsed = {:?}",
               guid, lease_duration, elapsed
             );
-            to_remove.push(guid);
+            to_remove.push((
+              guid,
+              LostReason::Timeout {
+                lease: lease_duration,
+                elapsed,
+              },
+            ));
           }
         }
         None => {
@@ -322,9 +345,11 @@ impl DiscoveryDB {
         }
       } // match
     } // for
-    for guid in &to_remove {
+
+    for (guid, _) in &to_remove {
       self.remove_participant(*guid, false); // false = removed due to timeout
     }
+
     to_remove
   }
 
@@ -517,7 +542,7 @@ impl DiscoveryDB {
         &topic.qos(),
       ),
     );
-    self.update_topic_data(&topic_data, self.my_guid, DiscoveredVia::Topic);
+    self.update_topic_data(&topic_data, self.my_guid, DiscoveredVia::SelfDefined);
   }
 
   // Topic update sends notifications, in case someone was waiting to find a
@@ -532,14 +557,15 @@ impl DiscoveryDB {
     trace!("Update topic data: {:?}", &dtd);
     let topic_name = dtd.topic_data.name.clone();
     let mut notify = false;
+    let mut inconsistency_event_to_send = None;
 
     if let Some(t) = self.topics.get_mut(&dtd.topic_data.name) {
-      if let Some(old_dtd) = t.get_mut(&updater.prefix) {
+      if let Some(old_dtd) = t.get_mut(&updater) {
         // already have it from the same source, do some checking(?) and merging
-        if dtd.topic_data.type_name == old_dtd.1.topic_data.type_name
-        // TODO: Check also for QoS changes, esp. policies that are immutable
-        {
+        if !topics_inconsistent(&dtd.topic_data, &old_dtd.1.topic_data) {
           // If this discovery was from Topic topic and the old was not, then update
+          // TODO: Why do we have this logic? Where is the spec? Or ant reason for it?
+          // Is it even triggered ever?
           if discovered_via == DiscoveredVia::Topic {
             *old_dtd = (discovered_via, dtd.clone()); // update QoS
             notify = true;
@@ -549,27 +575,56 @@ impl DiscoveryDB {
               &topic_name, &updater
             );
             // TODO: Here we could warn about QoS changes.
+            //
+            // It is normal to have different (but compatible) QoS policies
+            // for Reader and Writer. We end up here if the same Participant has
+            // both Reader and Writer with different QoS. Also
+            // different Readers could have different QoS,
+            // as could Writers.
           }
         } else {
-          // someone changed their mind about the type name?!?
           error!(
             "Inconsistent topic update from {:?}: type was: {:?} new type: {:?}",
             updater, old_dtd.1.topic_data.type_name, dtd.topic_data.type_name,
           );
+          inconsistency_event_to_send = Some(DomainParticipantStatusEvent::InconsistentTopic {
+            previous_topic_data: Box::new((&old_dtd.1.topic_data).into()),
+            previous_source: updater,
+            discovered_topic_data: Box::new((&dtd.topic_data).into()),
+            discovery_source: updater,
+          });
         }
       } else {
+        for (source_guid, (_via, existing_dtd)) in t.iter() {
+          if topics_inconsistent(&existing_dtd.topic_data, &dtd.topic_data) {
+            inconsistency_event_to_send = Some(DomainParticipantStatusEvent::InconsistentTopic {
+              previous_topic_data: Box::new((&existing_dtd.topic_data).into()),
+              previous_source: *source_guid,
+              discovered_topic_data: Box::new((&dtd.topic_data).into()),
+              discovery_source: updater,
+            });
+            // Note: There are potentially several sources of inconsistency
+            // (loop), but we will report only one of them.
+          }
+        }
         // We have to topic, but not from this participant
         // TODO: Check that there is agreement about topic type name (at least)
-        t.insert(updater.prefix, (discovered_via, dtd.clone())); // this should return None
+        t.insert(updater, (discovered_via, dtd.clone())); // this should return None
         notify = true;
       }
     } else {
       // new topic to us
       let mut b = BTreeMap::new();
-      b.insert(updater.prefix, (discovered_via, dtd.clone()));
+      b.insert(updater, (discovered_via, dtd.clone()));
       self.topics.insert(topic_name, b);
+      self.send_participant_status(DomainParticipantStatusEvent::TopicDetected {
+        name: dtd.topic_data.name.clone(),
+        type_name: dtd.topic_data.type_name.clone(),
+      });
     };
-
+    if let Some(ev) = inconsistency_event_to_send {
+      self.send_participant_status(ev);
+    }
     if notify {
       self
         .topic_updated_sender
@@ -619,6 +674,14 @@ impl DiscoveryDB {
     self.local_topic_readers.remove(&guid);
   }
 
+  pub fn get_local_topic_reader(&self, guid: GUID) -> Option<&DiscoveredReaderData> {
+    self.local_topic_readers.get(&guid)
+  }
+
+  pub fn get_local_topic_writer(&self, guid: GUID) -> Option<&DiscoveredWriterData> {
+    self.local_topic_writers.get(&guid)
+  }
+
   pub fn get_all_local_topic_readers(&self) -> impl Iterator<Item = &DiscoveredReaderData> {
     self.local_topic_readers.values()
   }
@@ -637,20 +700,6 @@ impl DiscoveryDB {
       .iter()
       .filter(|(s, _)| !s.starts_with("DCPS"))
       .flat_map(|(_, gm)| gm.iter().map(|(_, dtd)| &dtd.1))
-  }
-
-  // as above, but only from my GUID
-  pub fn local_user_topics(&self) -> impl Iterator<Item = &DiscoveredTopicData> {
-    let me = self.my_guid.prefix;
-    self
-      .topics
-      .iter()
-      .filter(|(s, _)| !s.starts_with("DCPS"))
-      .flat_map(move |(_, gm)| {
-        gm.iter()
-          .filter(move |(guid, _)| **guid == me)
-          .map(|(_, dtd)| &dtd.1)
-      })
   }
 
   // a Topic may have multiple definitions, because there may be multiple
@@ -768,8 +817,13 @@ mod tests {
   fn discdb_participant_operations() {
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
+    let (status_sender, _status_receiver) = sync_status_channel(16).unwrap();
 
-    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
+    let mut discoverydb = DiscoveryDB::new(
+      GUID::new_participant_guid(),
+      discovery_db_event_sender,
+      status_sender,
+    );
     let mut data = spdp_participant_data().unwrap();
     data.lease_duration = Some(Duration::from(StdDuration::from_secs(1)));
 
@@ -790,7 +844,12 @@ mod tests {
   fn discdb_writer_proxies() {
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
-    let _discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
+    let (status_sender, _status_receiver) = sync_status_channel(16).unwrap();
+    let _discoverydb = DiscoveryDB::new(
+      GUID::new_participant_guid(),
+      discovery_db_event_sender,
+      status_sender,
+    );
     let topic_name = String::from("some_topic");
     let type_name = String::from("RandomData");
     let _dreader = DiscoveredReaderData::default(topic_name, type_name);
@@ -802,9 +861,13 @@ mod tests {
   fn discdb_subscription_operations() {
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
+    let (status_sender, _status_receiver) = sync_status_channel(16).unwrap();
 
-    let mut discovery_db =
-      DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
+    let mut discovery_db = DiscoveryDB::new(
+      GUID::new_participant_guid(),
+      discovery_db_event_sender,
+      status_sender,
+    );
 
     let domain_participant = DomainParticipant::new(0).expect("Failed to create publisher");
     let topic = domain_participant
@@ -897,7 +960,12 @@ mod tests {
         TopicKind::WithKey,
       )
       .unwrap();
-    let mut discoverydb = DiscoveryDB::new(GUID::new_participant_guid(), discovery_db_event_sender);
+    let (status_sender, _status_receiver) = sync_status_channel(16).unwrap();
+    let mut discoverydb = DiscoveryDB::new(
+      GUID::new_participant_guid(),
+      discovery_db_event_sender,
+      status_sender,
+    );
 
     // Create reader ingredients
     let (notification_sender1, _notification_receiver1) = mio_extras::channel::sync_channel(100);

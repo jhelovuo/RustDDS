@@ -80,6 +80,16 @@ pub struct SpdpDiscoveredParticipantData {
 }
 
 impl SpdpDiscoveredParticipantData {
+  #[cfg(feature = "security")]
+  pub(crate) fn supports_security(&self) -> bool {
+    // TODO: Is this logic correct? Or maybe we could come up with a more accurate
+    // version?
+    self.identity_token.is_some()
+      && self.permissions_token.is_some()
+      && self.property.is_some()
+      && self.security_info.is_some()
+  }
+
   pub(crate) fn as_reader_proxy(
     &self,
     is_metatraffic: bool,

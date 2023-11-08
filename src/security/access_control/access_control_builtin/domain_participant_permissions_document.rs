@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 use log::warn;
-use chrono::{DateTime, FixedOffset, TimeZone, Utc};
+use chrono::{DateTime, FixedOffset, NaiveDateTime, Utc};
 use glob::Pattern;
 
 use crate::security::{
@@ -167,7 +167,9 @@ impl Grant {
       .map(DateTime::<Utc>::from)
       // ...but time zone spec is optional, so try parsing again without timezone specifier,
       // which implies UTC by the spec.
-      .or_else(|_e| Utc.datetime_from_str(time_str, "%FT%H:%M:%S"))
+      .or_else(|_e| {
+        NaiveDateTime::parse_from_str(time_str, "%FT%H:%M:%S").map(|naive| naive.and_utc())
+      })
       .map_err(|e| {
         parse_config_error(format!(
           "DateTime parse error: {:?} . Input was \"{}\". Expected \
@@ -606,6 +608,7 @@ pub(crate) mod xml {
 
 #[cfg(test)]
 mod tests {
+  use chrono::TimeZone;
   use serde_xml_rs::from_str;
 
   use super::*;

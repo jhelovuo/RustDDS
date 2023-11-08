@@ -1063,6 +1063,23 @@ impl HasQoSPolicy for TopicBuiltinTopicData {
   }
 }
 
+pub fn topics_inconsistent(t1: &TopicBuiltinTopicData, t2: &TopicBuiltinTopicData) -> bool {
+  // We are not comparing Topic names, because consistency should only ever be
+  // compared between descriptions of the same Topic.
+  //
+  // We are not comparing the key, becaues we have no idea what that even means.
+
+  // Check for type name
+  t1.type_name != t2.type_name
+
+  // Check for QoS inconsistencies:
+
+  // TODO: Is there any combination of Topic QoS settings that would make the
+  // two definitions of the Topic definetely incompatible (inconsistent).
+  // There are several QoS policies that must match between Reader and Writer,
+  // but the spec seems to say nothing about Topics.
+}
+
 // =======================================================================
 // =======================================================================
 // =======================================================================

@@ -24,7 +24,9 @@ use crate::{
       policy::{History, Reliability},
       HasQoSPolicy, QosPolicies,
     },
-    statusevents::{CountWithChange, DataWriterStatus, StatusChannelSender},
+    statusevents::{
+      CountWithChange, DataWriterStatus, DomainParticipantStatusEvent, StatusChannelSender,
+    },
     with_key::datawriter::WriteOptions,
   },
   messages::submessages::submessages::AckSubmessage,
@@ -234,6 +236,7 @@ pub(crate) struct Writer {
   status_sender: StatusChannelSender<DataWriterStatus>,
   // offered_deadline_status: OfferedDeadlineMissedStatus,
   ack_waiter: Option<AckWaiter>,
+  participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
 
   security_plugins: Option<SecurityPluginsHandle>,
 }
@@ -256,6 +259,7 @@ impl Writer {
     i: WriterIngredients,
     udp_sender: Rc<UDPSender>,
     mut timed_event_timer: Timer<TimedEvent>,
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
   ) -> Self {
     // Verify that the topic cache corresponds to the topic of the Reader
     let topic_cache_name = i.topic_cache_handle.lock().unwrap().topic_name();
@@ -339,7 +343,7 @@ impl Writer {
       like_stateless: i.like_stateless,
       qos_policies: i.qos_policies,
       status_sender: i.status_sender,
-      // offered_deadline_status: OfferedDeadlineMissedStatus::new(),
+      participant_status_sender,
       ack_waiter: None,
 
       security_plugins: i.security_plugins,
@@ -1451,6 +1455,11 @@ impl Writer {
           self.send_status(DataWriterStatus::PublicationMatched {
             total: CountWithChange::new(self.matched_readers_count_total, change),
             current: CountWithChange::new(self.readers.len() as i32, change),
+            reader: reader_proxy.remote_reader_guid,
+          });
+          self.send_participant_status(DomainParticipantStatusEvent::RemoteReaderMatched {
+            local_writer: self.my_guid,
+            remote_reader: reader_proxy.remote_reader_guid,
           });
           // If we're reliable, should we send out a heartbeat so that new reader can
           // catch up?
@@ -1478,7 +1487,15 @@ impl Writer {
         self.send_status(DataWriterStatus::OfferedIncompatibleQos {
           count: CountWithChange::new(self.requested_incompatible_qos_count, 1),
           last_policy_id: bad_policy_id,
-          policies: Vec::new(), // TODO: implement this
+          reader: reader_proxy.remote_reader_guid,
+          requested_qos: Box::new(requested_qos.clone()),
+          offered_qos: Box::new(self.qos_policies.clone()),
+        });
+        self.send_participant_status(DomainParticipantStatusEvent::RemoteReaderQosIncompatible {
+          local_writer: self.my_guid,
+          remote_reader: reader_proxy.remote_reader_guid,
+          requested_qos: Box::new(requested_qos.clone()),
+          offered_qos: Box::new(self.qos_policies.clone()),
         });
       }
     } // match
@@ -1540,6 +1557,7 @@ impl Writer {
       self.send_status(DataWriterStatus::PublicationMatched {
         total: CountWithChange::new(self.matched_readers_count_total, 0),
         current: CountWithChange::new(self.readers.len() as i32, -1),
+        reader: guid,
       });
     }
     // also remember to remove reader from ack_waiter
@@ -1581,6 +1599,13 @@ impl Writer {
         &self.my_topic_name, e
       )
     })
+  }
+
+  fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
+    self
+      .participant_status_sender
+      .try_send(event)
+      .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
   }
 
   // TODO

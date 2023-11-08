@@ -17,7 +17,9 @@ use crate::{
   dds::{
     ddsdata::DDSData,
     qos::{policy, HasQoSPolicy, QosPolicies},
-    statusevents::{CountWithChange, DataReaderStatus, StatusChannelSender},
+    statusevents::{
+      CountWithChange, DataReaderStatus, DomainParticipantStatusEvent, StatusChannelSender,
+    },
     with_key::{
       datawriter::{WriteOptions, WriteOptionsBuilder},
       simpledatareader::ReaderCommand,
@@ -143,15 +145,18 @@ pub(crate) struct Reader {
   data_reader_waker: Arc<Mutex<Option<Waker>>>,
   poll_event_sender: mio_source::PollEventSender,
 
+  participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+
   #[allow(dead_code)] // to avoid warning if no security feature
   security_plugins: Option<SecurityPluginsHandle>,
 }
 
 impl Reader {
-  pub fn new(
+  pub(crate) fn new(
     i: ReaderIngredients,
     udp_sender: Rc<UDPSender>,
     timed_event_timer: Timer<TimedEvent>,
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
   ) -> Self {
     // Verify that the topic cache corresponds to the topic of the Reader
     let topic_cache_name = i.topic_cache_handle.lock().unwrap().topic_name();
@@ -196,6 +201,7 @@ impl Reader {
       data_reader_command_receiver: i.data_reader_command_receiver,
       data_reader_waker: i.data_reader_waker,
       poll_event_sender: i.poll_event_sender,
+      participant_status_sender,
 
       security_plugins: i.security_plugins,
     }
@@ -246,6 +252,13 @@ impl Reader {
         error!("send_status_change - cannot send status: {e:?}");
       }
     }
+  }
+
+  fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
+    self
+      .participant_status_sender
+      .try_send(event)
+      .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
   }
 
   // The deadline that the DataReader was expecting through its QosPolicy
@@ -371,31 +384,47 @@ impl Reader {
     }
 
     debug!("update_writer_proxy topic={:?}", self.topic_name);
+    let writer = proxy.remote_writer_guid;
+
     match offered_qos.compliance_failure_wrt(&self.qos_policy) {
       None => {
         // success, update or insert
-        let writer_id = proxy.remote_writer_guid;
         let count_change = self.matched_writer_update(proxy);
         if count_change > 0 {
           self.writer_match_count_total += count_change;
           self.send_status_change(DataReaderStatus::SubscriptionMatched {
             total: CountWithChange::new(self.writer_match_count_total, count_change),
             current: CountWithChange::new(self.matched_writers.len() as i32, count_change),
+            writer,
           });
+          self.send_participant_status(DomainParticipantStatusEvent::RemoteWriterMatched {
+            local_reader: self.my_guid,
+            remote_writer: writer,
+          });
+
           info!(
-            "Matched new remote writer on topic={:?} writer= {:?}",
-            self.topic_name, writer_id
+            "Matched new remote writer on topic={:?} writer={:?}",
+            self.topic_name, writer
           );
         }
       }
       Some(bad_policy_id) => {
-        // no QoS match
+        // no QoS match.
         self.offered_incompatible_qos_count += 1;
         self.send_status_change(DataReaderStatus::RequestedIncompatibleQos {
           count: CountWithChange::new(self.offered_incompatible_qos_count, 1),
           last_policy_id: bad_policy_id,
-          policies: Vec::new(), // TODO. implementation missing
+          writer,
+          requested_qos: Box::new(self.qos_policy.clone()),
+          offered_qos: Box::new(offered_qos.clone()),
         });
+        self.send_participant_status(DomainParticipantStatusEvent::RemoteWriterQosIncompatible {
+          local_reader: self.my_guid,
+          remote_writer: writer,
+          requested_qos: Box::new(self.qos_policy.clone()),
+          offered_qos: Box::new(offered_qos.clone()),
+        });
+
         warn!("update_writer_proxy - QoS mismatch {:?}", bad_policy_id);
         info!(
           "update_writer_proxy - QoS mismatch: topic={:?} requested={:?}  offered={:?}",
@@ -429,6 +458,7 @@ impl Reader {
       self.send_status_change(DataReaderStatus::SubscriptionMatched {
         total: CountWithChange::new(self.writer_match_count_total, 0),
         current: CountWithChange::new(self.matched_writers.len() as i32, -1),
+        writer: writer_guid,
       });
     }
   }
@@ -1350,7 +1380,7 @@ impl Reader {
       )
     })
   }
-} // impl
+} // impl Reader
 
 impl HasQoSPolicy for Reader {
   fn qos(&self) -> QosPolicies {
@@ -1420,6 +1450,8 @@ mod tests {
 
     // Create status channel
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     // Create reader command channel
     let (_reader_command_sender, reader_command_receiver) =
@@ -1444,6 +1476,7 @@ mod tests {
       reader_ing,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // 2. Add info of a matched writer to the reader
@@ -1503,6 +1536,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1526,6 +1561,7 @@ mod tests {
       reader_ing,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // 2. Add info of a matched writer to the reader
@@ -1606,6 +1642,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1629,6 +1667,7 @@ mod tests {
       reader_ing,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // 2. Add info of a matched writer to the reader
@@ -1712,6 +1751,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1735,6 +1776,7 @@ mod tests {
       reader_ing,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // 2. Add info of a matched writer to the reader
@@ -1847,6 +1889,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1870,6 +1914,7 @@ mod tests {
       reader_ing,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // 2. Attempt to add info of a matched writer to the reader

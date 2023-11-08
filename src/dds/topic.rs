@@ -1,10 +1,13 @@
 use std::{fmt::Debug, sync::Arc};
 
-use crate::dds::{
-  dds_entity::DDSEntity,
-  participant::{DomainParticipant, DomainParticipantWeak},
-  qos::{HasQoSPolicy, QosPolicies},
-  typedesc::TypeDesc,
+use crate::{
+  dds::{
+    dds_entity::DDSEntity,
+    participant::{DomainParticipant, DomainParticipantWeak},
+    qos::{HasQoSPolicy, QosPolicies},
+    typedesc::TypeDesc,
+  },
+  discovery::sedp_messages::TopicBuiltinTopicData,
 };
 pub use crate::structure::topic_kind::TopicKind;
 
@@ -18,14 +21,34 @@ pub trait TopicDescription {
   fn name(&self) -> String;
 }
 
+/// This is a more usable version of TopicBuiltinTopicData from Discovery.
+///
+/// It is used for describing discovered topics.
+#[derive(Debug, Clone)]
+pub struct TopicData {
+  pub name: String,
+  pub type_name: String,
+  pub qos: QosPolicies,
+}
+
+impl From<&TopicBuiltinTopicData> for TopicData {
+  fn from(tbtd: &TopicBuiltinTopicData) -> Self {
+    TopicData {
+      name: tbtd.name.clone(),
+      type_name: tbtd.type_name.clone(),
+      qos: tbtd.qos(),
+    }
+  }
+}
+
 /// DDS Topic
 ///
 /// DDS Specification, Section 2.2.1.2 Conceptual outline:
 /// > Topic objects conceptually fit between publications and subscriptions.
 /// > Publications must be known in such a way that
 /// > subscriptions can refer to them unambiguously. A Topic is meant to fulfill
-/// that purpose: it associates a name (unique in the > domain), a data-type,
-/// and QoS related to the data itself.
+/// > that purpose: it associates a name (unique in the domain), a data-type,
+/// > and QoS related to the data itself.
 ///
 /// Topics can be created (or found) using a [`DomainParticipant`].
 ///
