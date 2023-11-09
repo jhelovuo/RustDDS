@@ -486,51 +486,6 @@ where
   }
 
   /*
-  /// Gets mio Receiver for all status changes
-  ///
-  /// # Examples
-  ///
-  /// ```
-  /// # use serde::{Serialize, Deserialize};
-  /// # use rustdds::*;
-  /// # use rustdds::with_key::DataWriter;
-  /// # use rustdds::serialization::CDRSerializerAdapter;
-  /// #
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// let qos = QosPolicyBuilder::new().build();
-  /// let publisher = domain_participant.create_publisher(&qos).unwrap();
-  ///
-  /// #[derive(Serialize, Deserialize, Debug)]
-  /// struct SomeType { a: i32 }
-  /// impl Keyed for SomeType {
-  ///   type K = i32;
-  ///
-  ///   fn key(&self) -> Self::K {
-  ///     self.a
-  ///   }
-  /// }
-  ///
-  /// // WithKey is important
-  /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
-  /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(topic, None).unwrap();
-  ///
-  /// // Some status has changed
-  ///
-  /// while let Ok(sc) = data_writer.get_status_listener().try_recv() {
-  ///   // do something
-  /// }
-  /// ```
-  pub fn get_status_listener(&self) -> &Receiver<StatusChange> {
-    match self
-      .cc_upload
-      .try_send(WriterCommand::ResetOfferedDeadlineMissedStatus {
-        writer_guid: self.guid(),
-      }) {
-      Ok(_) => (),
-      Err(e) => error!("Unable to send ResetOfferedDeadlineMissedStatus. {e:?}"),
-    };
-    &self.status_receiver
-  }
 
   /// Unimplemented. <b>Do not use</b>.
   ///
