@@ -98,7 +98,7 @@ pub fn make_poll_channel() -> io::Result<(PollEventSource, PollEventSender)> {
       rec_mio_socket: Mutex::new(rec_mio_socket),
     },
     PollEventSender {
-      send_mio_socket: Mutex::new(send_mio_socket),
+      send_mio_socket: Arc::new(Mutex::new(send_mio_socket)),
     },
   ))
 }
