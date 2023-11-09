@@ -17,7 +17,7 @@ mkdir Fast-CDR/build
 echo Clone Fast-DDS
 if [ $1="m" ]; then
     echo "Using the modified version."
-    git clone https://github.com/SelimV/Fast-DDS-with-security-interoperability-modifications.git
+    git clone https://github.com/ohuopio/Fast-DDS-with-security-interoperability-modifications.git
     mkdir Fast-DDS-with-security-interoperability-modifications/build
 elif [ $1="u" ]; then
     echo "Using the unmodified version."
