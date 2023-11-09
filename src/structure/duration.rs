@@ -18,10 +18,21 @@ pub struct Duration {
 }
 
 impl Duration {
-  pub const DURATION_ZERO: Self = Self {
+  pub const ZERO: Self = Self {
     seconds: 0,
     fraction: 0,
   };
+
+  pub const INFINITE: Self = Self {
+    seconds: 0x7FFFFFFF,
+    fraction: 0xFFFFFFFF,
+  };
+
+  #[deprecated(since = "0.8.7", note = "Renamed to Duration::ZERO")]
+  pub const DURATION_ZERO: Self = Self::ZERO;
+
+  #[deprecated(since = "0.8.7", note = "Renamed to Duration::INFINITE")]
+  pub const DURATION_INFINITE: Self = Self::INFINITE;
 
   pub const fn from_secs(secs: i32) -> Self {
     Self {
@@ -66,17 +77,6 @@ impl Duration {
     }
   }
 
-  /* DURATION_INVALID is not part of the spec. And it is also dangerous, as it is plausible someone could
-  legitimately measure such an interval, and others would interpret it as "invalid".
-  pub const DURATION_INVALID: Self = Self {
-    seconds: -1,
-    fraction: 0xFFFFFFFF,
-  };*/
-
-  pub const DURATION_INFINITE: Self = Self {
-    seconds: 0x7FFFFFFF,
-    fraction: 0xFFFFFFFF,
-  };
 
   pub fn to_nanoseconds(&self) -> i64 {
     ((i128::from(self.to_ticks()) * 1_000_000_000) >> 32) as i64
@@ -139,7 +139,7 @@ impl std::ops::Mul<Duration> for f64 {
 
 impl fmt::Debug for Duration {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    if *self == Self::DURATION_INFINITE {
+    if *self == Self::INFINITE {
       write!(f, "infinite")
     } else {
       write!(f, "{}", self.seconds)?;
@@ -158,14 +158,14 @@ mod tests {
 
   serialization_test!( type = Duration,
   {
-      duration_zero,
-      Duration::DURATION_ZERO,
+      ZERO,
+      Duration::ZERO,
       le = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   },
   {
-      duration_infinite,
-      Duration::DURATION_INFINITE,
+      INFINITE,
+      Duration::INFINITE,
       le = [0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF],
       be = [0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
   },

@@ -120,7 +120,7 @@ fn ros2_loop(
     QosPolicyBuilder::new()
       .durability(Durability::Volatile)
       .liveliness(Liveliness::Automatic {
-        lease_duration: rustdds::Duration::DURATION_INFINITE,
+        lease_duration: rustdds::Duration::INFINITE,
       })
       .reliability(Reliability::Reliable {
         max_blocking_time: rustdds::Duration::from_millis(100),

@@ -64,7 +64,7 @@ fn main() {
   let mut qos_b = QosPolicyBuilder::new()
     .reliability(if matches.get_flag("reliable") {
       Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::DURATION_ZERO,
+        max_blocking_time: rustdds::Duration::ZERO,
       }
     } else {
       Reliability::BestEffort
