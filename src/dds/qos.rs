@@ -143,7 +143,7 @@ impl QosPolicyBuilder {
 
   #[must_use]
   pub const fn reliable(mut self, max_blocking_time: Duration) -> Self {
-    self.reliability = Some(policy::Reliability::Reliable{ max_blocking_time });
+    self.reliability = Some(policy::Reliability::Reliable { max_blocking_time });
     self
   }
 

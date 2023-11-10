@@ -77,7 +77,6 @@ impl Duration {
     }
   }
 
-
   pub fn to_nanoseconds(&self) -> i64 {
     ((i128::from(self.to_ticks()) * 1_000_000_000) >> 32) as i64
   }
