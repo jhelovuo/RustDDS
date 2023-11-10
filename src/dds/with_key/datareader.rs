@@ -81,7 +81,7 @@ where
   DA: DeserializerAdapter<D>,
 {
   pub(crate) fn from_simple_data_reader(simple_data_reader: SimpleDataReader<D, DA>) -> Self {
-    let dsc = DataSampleCache::new(simple_data_reader.topic().qos());
+    let dsc = DataSampleCache::new(simple_data_reader.qos().clone());
 
     Self {
       simple_data_reader,
