@@ -4,7 +4,7 @@ use byteorder::BigEndian;
 use bytes::Bytes;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use ring::{agreement, signature};
+use ring::signature;
 
 //use x509_certificate::{
 //algorithm::{EcdsaCurve, KeyAlgorithm},
@@ -37,8 +37,12 @@ use crate::{
   QosPolicies, GUID,
 };
 use super::{
-  types::{BuiltinAuthenticatedPeerCredentialToken, BuiltinIdentityToken},
-  AuthenticationBuiltin, BuiltinHandshakeState, LocalParticipantInfo, RemoteParticipantInfo,
+  types::{
+    BuiltinAuthenticatedPeerCredentialToken, BuiltinIdentityToken, DH_MODP_KAGREE_ALGO_NAME,
+    ECDH_KAGREE_ALGO_NAME,
+  },
+  AuthenticationBuiltin, BuiltinHandshakeState, DHKeys, LocalParticipantInfo,
+  RemoteParticipantInfo,
 };
 
 // DDS Security spec v1.1
@@ -388,10 +392,15 @@ impl Authentication for AuthenticationBuiltin {
       ));
     }
 
+    // We send the request so we get to decide the key agreement algorithm.
+    // We choose to use the elliptic curve Diffie-Hellman
+    let dh_keys = DHKeys::new_ec_keys(&self.secure_random_generator)?;
+
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
     let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
-    let kagree_algo = Bytes::from_static(b"ECDH+prime256v1-CEUM"); // TODO: do not hardcode this, get from id cert
+
+    let kagree_algo = Bytes::from(dh_keys.kagree_algo_name_str());
 
     // temp structure just to produce hash(C1)
     let c_properties: Vec<BinaryProperty> = vec![
@@ -407,12 +416,6 @@ impl Authentication for AuthenticationBuiltin {
       })?,
     );
 
-    // Generate new, random Diffie-Hellman key pair "dh1"
-    let dh1 = agreement::EphemeralPrivateKey::generate(
-      &agreement::ECDH_P256,
-      &self.secure_random_generator,
-    )?;
-
     // This is an initiator-generated 256-bit nonce
     let random_bytes = self.generate_random_32_bytes()?;
     let challenge1 = Challenge::from(random_bytes);
@@ -426,7 +429,7 @@ impl Authentication for AuthenticationBuiltin {
       c_kagree_algo: Some(kagree_algo),
       ocsp_status: None, // Not implemented
       hash_c1: Some(Bytes::copy_from_slice(hash_c1.as_ref())),
-      dh1: Some(Bytes::copy_from_slice(dh1.compute_public_key()?.as_ref())),
+      dh1: Some(dh_keys.public_key_bytes()?),
       hash_c2: None, // not used in request
       dh2: None,     // not used in request
       challenge1: Some(Bytes::copy_from_slice(challenge1.as_ref())),
@@ -441,7 +444,7 @@ impl Authentication for AuthenticationBuiltin {
 
     // Change handshake state to pending reply message & save the request token
     remote_info.handshake.state = BuiltinHandshakeState::PendingReplyMessage {
-      dh1,
+      dh1: dh_keys,
       challenge1,
       hash_c1,
     };
@@ -501,7 +504,20 @@ impl Authentication for AuthenticationBuiltin {
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
     let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
-    let kagree_algo = Bytes::from_static(b"ECDH+prime256v1-CEUM"); // TODO: do not hardcode this, get from id cert
+
+    // Check which key agreement algorithm the remote has chosen & generate our own
+    // key pair
+    let dh2_keys = if request.c_kagree_algo == *DH_MODP_KAGREE_ALGO_NAME {
+      DHKeys::new_modp_keys()?
+    } else if request.c_kagree_algo == *ECDH_KAGREE_ALGO_NAME {
+      DHKeys::new_ec_keys(&self.secure_random_generator)?
+    } else {
+      return Err(security_error!(
+        "Unexpected c_kagree_algo in handshake request: {:?}",
+        request.c_kagree_algo
+      ));
+    };
+    let kagree_algo = Bytes::from(dh2_keys.kagree_algo_name_str());
 
     // temp structure just to reproduce hash(c1)
     let c_properties: Vec<BinaryProperty> = vec![
@@ -532,12 +548,8 @@ impl Authentication for AuthenticationBuiltin {
     let random_bytes = self.generate_random_32_bytes()?;
     let challenge2 = Challenge::from(random_bytes);
 
-    // Generate new, random Diffie-Hellman key pair "dh2"
-    let dh2 = agreement::EphemeralPrivateKey::generate(
-      &agreement::ECDH_P256,
-      &self.secure_random_generator,
-    )?;
-    let dh2_public_key = Bytes::copy_from_slice(dh2.compute_public_key()?.as_ref());
+    // Compute the DH2 public key that we'll send to the remote
+    let dh2_public_key = dh2_keys.public_key_bytes()?;
 
     // Compute hash(c2)
     let c2_properties: Vec<BinaryProperty> = vec![
@@ -598,9 +610,9 @@ impl Authentication for AuthenticationBuiltin {
     remote_info.handshake.state = BuiltinHandshakeState::PendingFinalMessage {
       hash_c1: computed_c1_hash,
       hash_c2: c2_hash,
-      dh1: request.dh1,
+      dh1_public: request.dh1,
       challenge1: request.challenge1,
-      dh2,
+      dh2: dh2_keys,
       challenge2,
       remote_id_certificate: cert1.clone(),
     };
@@ -739,13 +751,20 @@ impl Authentication for AuthenticationBuiltin {
           &signature::ECDSA_P256_SHA256_ASN1,
         )?; // verify ok or exit here
 
+        // Verify that the key agreement algo in the reply is as we expect
+        let kagree_algo_in_reply = reply.c_kagree_algo;
+        let expected_kagree_algo = dh1.kagree_algo_name_str();
+        if kagree_algo_in_reply != expected_kagree_algo {
+          return Err(security_error!(
+            "Unexpected key agreement algorithm: {kagree_algo_in_reply:?} in \
+             HandshakeReplyMessageToken. Expected {expected_kagree_algo}"
+          ));
+        }
+
+        let dh1_public_key = dh1.public_key_bytes()?;
+
         // Compute the shared secret
-        // TODO: Algorithm is hardwired. Should follow "c.kagree_algo" from above.
-        let dh1_public = dh1.compute_public_key()?;
-        let dh2 = agreement::UnparsedPublicKey::new(&agreement::ECDH_P256, reply.dh2.as_ref());
-        let shared_secret = agreement::agree_ephemeral(dh1, &dh2, |raw_shared_secret| {
-          SharedSecret::from(Sha256::hash(raw_shared_secret))
-        })?;
+        let shared_secret = dh1.compute_shared_secret(reply.dh2.clone())?;
 
         // Create signature for final message:
         // Sign( Hash(C1) | Challenge1 | DH1 | Challenge2 | DH2 | Hash(C2) ), see Table
@@ -753,7 +772,7 @@ impl Authentication for AuthenticationBuiltin {
         let cc_final_properties: Vec<BinaryProperty> = vec![
           BinaryProperty::with_propagate("hash_c1", Bytes::copy_from_slice(hash_c1.as_ref())),
           BinaryProperty::with_propagate("challenge1", Bytes::copy_from_slice(challenge1.as_ref())),
-          BinaryProperty::with_propagate("dh1", Bytes::copy_from_slice(dh1_public.as_ref())),
+          BinaryProperty::with_propagate("dh1", Bytes::copy_from_slice(dh1_public_key.as_ref())),
           BinaryProperty::with_propagate(
             "challenge2",
             Bytes::copy_from_slice(reply.challenge2.as_ref()),
@@ -785,7 +804,7 @@ impl Authentication for AuthenticationBuiltin {
           c_kagree_algo: None,
           ocsp_status: None, // Not implemented
           hash_c1: Some(Bytes::copy_from_slice(hash_c1.as_ref())), // spec says this is optional
-          dh1: Some(Bytes::copy_from_slice(dh1_public.as_ref())), // spec says this is optional
+          dh1: Some(dh1_public_key), // spec says this is optional
           hash_c2: Some(Bytes::copy_from_slice(c2_hash_recomputed.as_ref())), // also optional
           dh2: Some(reply.dh2), // also optional
 
@@ -816,7 +835,7 @@ impl Authentication for AuthenticationBuiltin {
       BuiltinHandshakeState::PendingFinalMessage {
         hash_c1,
         hash_c2,
-        dh1,
+        dh1_public,
         dh2,
         challenge1,
         challenge2,
@@ -847,14 +866,15 @@ impl Authentication for AuthenticationBuiltin {
         }
 
         // sanity check
-        if dh1 != final_token.dh1 {
+        if dh1_public != final_token.dh1 {
           return Err(security_error!(
             "Diffie-Hellman parameter DH1 mismatch on authentication final receive"
           ));
         }
 
         // sanity check
-        if dh2.compute_public_key()?.as_ref() != final_token.dh2.as_ref() {
+        let dh2_public_key = dh2.public_key_bytes()?;
+        if dh2_public_key.as_ref() != final_token.dh2.as_ref() {
           return Err(security_error!(
             "Diffie-Hellman parameter DH2 mismatch on authentication final receive"
           ));
@@ -880,14 +900,13 @@ impl Authentication for AuthenticationBuiltin {
         // signature for final message:
         // Sign( Hash(C1) | Challenge1 | DH1 | Challenge2 | DH2 | Hash(C2) )
         // see Table 51
-        let dh2_public = dh2.compute_public_key()?;
 
         let cc_final_properties: Vec<BinaryProperty> = vec![
           BinaryProperty::with_propagate("hash_c1", Bytes::copy_from_slice(hash_c1.as_ref())),
           BinaryProperty::with_propagate("challenge1", Bytes::copy_from_slice(challenge1.as_ref())),
-          BinaryProperty::with_propagate("dh1", Bytes::copy_from_slice(dh1.as_ref())),
+          BinaryProperty::with_propagate("dh1", Bytes::copy_from_slice(dh1_public.as_ref())),
           BinaryProperty::with_propagate("challenge2", Bytes::copy_from_slice(challenge2.as_ref())),
-          BinaryProperty::with_propagate("dh2", Bytes::copy_from_slice(dh2_public.as_ref())),
+          BinaryProperty::with_propagate("dh2", Bytes::copy_from_slice(dh2_public_key.as_ref())),
           BinaryProperty::with_propagate("hash_c2", Bytes::copy_from_slice(hash_c2.as_ref())),
         ];
 
@@ -909,11 +928,7 @@ impl Authentication for AuthenticationBuiltin {
           })?;
 
         // Compute the shared secret
-        // TODO: Algorithm is hardwired. Should follow "c.kagree_algo" from above.
-        let dh1 = agreement::UnparsedPublicKey::new(&agreement::ECDH_P256, dh1.as_ref());
-        let shared_secret = agreement::agree_ephemeral(dh2, &dh1, |raw_shared_secret| {
-          SharedSecret::from(Sha256::hash(raw_shared_secret))
-        })?;
+        let shared_secret = dh2.compute_shared_secret(dh1_public)?;
 
         // Change handshake state to Completed
         let remote_info = self.get_remote_participant_info_mutable(&remote_identity_handle)?;

@@ -264,6 +264,11 @@ pub const HANDSHAKE_REQUEST_CLASS_ID: &[u8] = b"DDS:Auth:PKI-DH:1.0+Req";
 pub const HANDSHAKE_REPLY_CLASS_ID: &[u8] = b"DDS:Auth:PKI-DH:1.0+Reply";
 pub const HANDSHAKE_FINAL_CLASS_ID: &[u8] = b"DDS:Auth:PKI-DH:1.0+Final";
 
+// Accepted values for the name of the key agreement algorithm in handshake
+// messages
+pub const DH_MODP_KAGREE_ALGO_NAME: &str = "DH+MODP-2048-256";
+pub const ECDH_KAGREE_ALGO_NAME: &str = "ECDH+prime256v1-CEUM";
+
 /// DDS:Auth:PKI-DH HandshakeMessageToken type from section 9.3.2.5 of the
 /// Security specification (v. 1.1)
 /// Works as all three token formats: HandshakeRequestMessageToken,
