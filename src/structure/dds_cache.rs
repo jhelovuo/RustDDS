@@ -318,13 +318,9 @@ impl TopicCache {
         .wrapping_sub(self.max_keep_samples as usize),
     );
 
-    let max_remove_count = match self.min_keep_samples {
-      History::KeepLast { depth } => max(
-        min_remove_count,
-        self.changes.len().wrapping_sub(depth as usize),
-      ),
-      History::KeepAll => min_remove_count,
-    };
+    let max_remove_count = min_remove_count;
+    // Only observe max cache size
+    // TODO: Can we do better without being able to distinguish between instances?
 
     // Find the first key that is to be retained, i.e. enumerate
     // one past the items to be removed.
