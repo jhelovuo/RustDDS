@@ -53,9 +53,6 @@ pub(crate) struct SecurityPlugins {
   rtps_not_protected: HashSet<GuidPrefix>,
   submessage_not_protected: HashSet<GUID>,
   payload_not_protected: HashSet<GUID>,
-
-  test_disable_crypto_transform: bool, /* TODO: Disables the crypto transform interface, remove
-                                        * after testing */
 }
 
 impl SecurityPlugins {
@@ -79,8 +76,6 @@ impl SecurityPlugins {
       rtps_not_protected: HashSet::new(),
       submessage_not_protected: HashSet::new(),
       payload_not_protected: HashSet::new(),
-
-      test_disable_crypto_transform: false, // TODO Remove after testing
     }
   }
 
@@ -1071,11 +1066,6 @@ impl SecurityPlugins {
     serialized_payload: Vec<u8>,
     sending_datawriter_guid: &GUID,
   ) -> SecurityResult<(Vec<u8>, ParameterList)> {
-    // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform {
-      return Ok((serialized_payload, ParameterList::new()));
-    }
-
     if self.payload_not_protected(sending_datawriter_guid) {
       return Ok((serialized_payload, ParameterList::new()));
     }
@@ -1096,11 +1086,6 @@ impl SecurityPlugins {
     // Enforce that the submessage is a writer submessage.
     match plain_submessage.body {
       SubmessageBody::Writer(_) => {
-        // TODO remove after testing, skips encoding
-        if self.test_disable_crypto_transform {
-          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
-        }
-
         if self.submessage_not_protected(source_guid) {
           return Ok(EncodedSubmessage::Unencoded(plain_submessage));
         }
@@ -1140,11 +1125,6 @@ impl SecurityPlugins {
     // Enforce that the submessage is a reader submessage.
     match plain_submessage.body {
       SubmessageBody::Reader(_) => {
-        // TODO remove after testing, skips encoding
-        if self.test_disable_crypto_transform {
-          return Ok(EncodedSubmessage::Unencoded(plain_submessage));
-        }
-
         if self.submessage_not_protected(source_guid) {
           return Ok(EncodedSubmessage::Unencoded(plain_submessage));
         }
@@ -1246,11 +1226,6 @@ impl SecurityPlugins {
     source_guid_prefix: &GuidPrefix,
     destination_guid_prefix_list: &[GuidPrefix],
   ) -> SecurityResult<Message> {
-    // TODO remove after testing, skips encoding
-    if self.test_disable_crypto_transform {
-      return Ok(plain_message);
-    }
-
     if self.rtps_not_protected(source_guid_prefix)
       || Self::is_rtps_protection_special_case(&plain_message)?
     {
@@ -1332,11 +1307,6 @@ impl SecurityPlugins {
     source_guid: &GUID,
     destination_guid: &GUID,
   ) -> SecurityResult<Bytes> {
-    // TODO remove after testing, skips decoding
-    if self.test_disable_crypto_transform {
-      return Ok(encoded_payload);
-    }
-
     if self.payload_not_protected(destination_guid) {
       Ok(encoded_payload)
     } else {

@@ -100,7 +100,7 @@
 //! let domain_participant = DomainParticipant::new(0).unwrap();
 //!
 //! let qos = QosPolicyBuilder::new()
-//!   .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::DURATION_ZERO })
+//!   .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::ZERO })
 //!   .build();
 //!
 //! // DDS Subscriber, only one is necessary for each thread (slight difference to

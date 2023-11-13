@@ -136,6 +136,18 @@ impl QosPolicyBuilder {
   }
 
   #[must_use]
+  pub const fn best_effort(mut self) -> Self {
+    self.reliability = Some(policy::Reliability::BestEffort);
+    self
+  }
+
+  #[must_use]
+  pub const fn reliable(mut self, max_blocking_time: Duration) -> Self {
+    self.reliability = Some(policy::Reliability::Reliable { max_blocking_time });
+    self
+  }
+
+  #[must_use]
   pub const fn destination_order(mut self, destination_order: policy::DestinationOrder) -> Self {
     self.destination_order = Some(destination_order);
     self
@@ -487,7 +499,7 @@ impl QosPolicies {
       let reliability_ser = match rel {
         Reliability::BestEffort => ReliabilitySerialization {
           reliability_kind: ReliabilityKind::BestEffort,
-          max_blocking_time: Duration::DURATION_ZERO, // dummy value for serialization
+          max_blocking_time: Duration::ZERO, // dummy value for serialization
         },
         Reliability::Reliable { max_blocking_time } => ReliabilitySerialization {
           reliability_kind: ReliabilityKind::Reliable,

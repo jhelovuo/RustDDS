@@ -276,7 +276,7 @@ impl Discovery {
     liveliness: None,
     time_based_filter: None,
     reliability: Some(Reliability::Reliable {
-      max_blocking_time: Duration::DURATION_ZERO,
+      max_blocking_time: Duration::ZERO,
     }),
     destination_order: None,
     history: Some(History::KeepLast { depth: 1 }),
@@ -906,7 +906,7 @@ impl Discovery {
       &dp,
       &self.self_locators,
       &self.security_opt,
-      Duration::DURATION_INFINITE,
+      Duration::INFINITE,
     );
 
     // Initialize our own participant data into the Discovery DB, so we can talk to
@@ -1870,19 +1870,19 @@ impl Discovery {
         coherent_access: false,
         ordered_access: false,
       })
-      .deadline(Deadline(Duration::DURATION_INFINITE))
+      .deadline(Deadline(Duration::INFINITE))
       .ownership(Ownership::Shared)
       .liveliness(Liveliness::Automatic {
-        lease_duration: Duration::DURATION_INFINITE,
+        lease_duration: Duration::INFINITE,
       })
       .time_based_filter(TimeBasedFilter {
-        minimum_separation: Duration::DURATION_ZERO,
+        minimum_separation: Duration::ZERO,
       })
       .reliability(Reliability::Reliable {
         max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
       })
       .destination_order(DestinationOrder::ByReceptionTimestamp)
-      .history(History::KeepLast { depth: 1 })
+      .history(History::KeepLast { depth: 10 })
       // .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
       //   max_instances: std::i32::MAX,
       //   max_samples: std::i32::MAX,
@@ -1900,19 +1900,19 @@ impl Discovery {
         coherent_access: false,
         ordered_access: false,
       })
-      .deadline(Deadline(Duration::DURATION_INFINITE))
+      .deadline(Deadline(Duration::INFINITE))
       .ownership(Ownership::Shared)
       .liveliness(Liveliness::Automatic {
-        lease_duration: Duration::DURATION_INFINITE,
+        lease_duration: Duration::INFINITE,
       })
       .time_based_filter(TimeBasedFilter {
-        minimum_separation: Duration::DURATION_ZERO,
+        minimum_separation: Duration::ZERO,
       })
       .reliability(Reliability::Reliable {
         max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
       })
       .destination_order(DestinationOrder::ByReceptionTimestamp)
-      .history(History::KeepLast { depth: 1 })
+      .history(History::KeepLast { depth: 10 })
       // .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
       //   max_instances: std::i32::MAX,
       //   max_samples: std::i32::MAX,

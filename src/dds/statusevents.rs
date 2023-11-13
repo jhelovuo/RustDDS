@@ -134,6 +134,7 @@ pub struct StatusChannelReceiver<T> {
 }
 
 impl<T> StatusChannelSender<T> {
+  /// Best-effort send. If there is no receiver, this will fail silently.
   pub fn try_send(&self, t: T) -> Result<(), mio_channel::TrySendError<T>> {
     let mut w = self.waker.lock().unwrap(); // lock already at the beginning
     match self.actual_sender.try_send(t) {
@@ -143,14 +144,16 @@ impl<T> StatusChannelSender<T> {
         *w = None;
         Ok(())
       }
-      Err(mio_channel::TrySendError::Full(tt)) => {
+      Err(mio_channel::TrySendError::Full(_tt)) => {
         trace!("StatusChannelSender cannot send new status changes, channel is full.");
         // It is perfectly normal to fail due to full channel, because
         // no-one is required to be listening to these.
         self.signal_sender.send(); // kick the receiver anyway
         w.as_ref().map(|w| w.wake_by_ref());
         *w = None;
-        Err(mio_channel::TrySendError::Full(tt))
+        // We convert the Err to Ok, bause we do not consider this to be an error.
+        // The caller loses the payload object (tt), even though it is not sent.
+        Ok(())
       }
       Err(other_fail) => Err(other_fail),
     }

@@ -1,6 +1,10 @@
-use std::collections::HashMap;
+use std::{
+  collections::HashMap,
+  fmt::{self, Formatter},
+};
 
 use bytes::Bytes;
+use openssl::{bn::BigNum, pkey::Private};
 use ring::agreement;
 
 use crate::{
@@ -11,6 +15,7 @@ use crate::{
   //structure::guid::GuidPrefix,
   GUID,
 };
+use self::types::{DH_MODP_KAGREE_ALGO_NAME, ECDH_KAGREE_ALGO_NAME};
 use super::{
   authentication_builtin::types::BuiltinIdentityToken, Challenge, HandshakeHandle, IdentityHandle,
   /* IdentityToken, */ Sha256, SharedSecret,
@@ -29,9 +34,9 @@ pub(crate) enum BuiltinHandshakeState {
   PendingRequestMessage, // We are waiting for a handshake request from remote participant
   PendingReplyMessage {
     // We have sent a handshake request and are waiting for a reply
-    dh1: agreement::EphemeralPrivateKey, // both public and private keys for dh1
-    challenge1: Challenge,               // 256-bit nonce
-    hash_c1: Sha256,                     // To avoid recomputing this on receiving reply
+    dh1: DHKeys,           // both public and private keys for dh1
+    challenge1: Challenge, // 256-bit nonce
+    hash_c1: Sha256,       // To avoid recomputing this on receiving reply
   },
 
   // We have sent a handshake reply message and are waiting for the
@@ -39,10 +44,10 @@ pub(crate) enum BuiltinHandshakeState {
   PendingFinalMessage {
     hash_c1: Sha256,
     hash_c2: Sha256,
-    dh1: Bytes,                          // only public part of dh1
-    challenge1: Challenge,               // 256-bit nonce
-    dh2: agreement::EphemeralPrivateKey, // both public and private keys for dh2
-    challenge2: Challenge,               // 256-bit nonce
+    dh1_public: Bytes,     // only public part of dh1
+    challenge1: Challenge, // 256-bit nonce
+    dh2: DHKeys,           // both public and private keys for dh2
+    challenge2: Challenge, // 256-bit nonce
     remote_id_certificate: certificate::Certificate,
   },
 
@@ -108,6 +113,73 @@ struct RemoteParticipantInfo {
 // BuiltinHandshakeState
 struct HandshakeInfo {
   state: BuiltinHandshakeState,
+}
+
+pub enum DHKeys {
+  Modp(openssl::dh::Dh<Private>), // Modular Exponential keys from OpenSSL
+  EC(ring::agreement::EphemeralPrivateKey), // Elliptic Curves keys from ring
+}
+
+impl DHKeys {
+  fn new_modp_keys() -> SecurityResult<Self> {
+    let dh_params = openssl::dh::Dh::get_2048_256()?;
+    let modp_keys = dh_params.generate_key()?;
+    Ok(Self::Modp(modp_keys))
+  }
+
+  fn new_ec_keys(secure_rng: &ring::rand::SystemRandom) -> SecurityResult<Self> {
+    let ec_keys = agreement::EphemeralPrivateKey::generate(&agreement::ECDH_P256, secure_rng)?;
+    Ok(Self::EC(ec_keys))
+  }
+
+  fn public_key_bytes(&self) -> SecurityResult<Bytes> {
+    let vec = match self {
+      DHKeys::Modp(openssl_dh) => openssl_dh.public_key().to_vec(),
+      DHKeys::EC(ring_dh) => {
+        let ring_pub_key = ring_dh.compute_public_key()?;
+        Vec::from(ring_pub_key.as_ref())
+      }
+    };
+    Ok(Bytes::from(vec))
+  }
+
+  fn compute_shared_secret(self, remote_dh_public_key: Bytes) -> SecurityResult<SharedSecret> {
+    let shared_secret = match self {
+      DHKeys::Modp(openssl_dh) => {
+        let remote_public = BigNum::from_slice(&remote_dh_public_key)?;
+        let secret_key = openssl_dh.compute_key(&remote_public)?;
+        SharedSecret::from(Sha256::hash(&secret_key))
+      }
+      DHKeys::EC(ring_dh) => {
+        let unparsed_remote_dh_public_key =
+          agreement::UnparsedPublicKey::new(&agreement::ECDH_P256, remote_dh_public_key);
+        agreement::agree_ephemeral(
+          ring_dh,
+          &unparsed_remote_dh_public_key,
+          |raw_shared_secret| SharedSecret::from(Sha256::hash(raw_shared_secret)),
+        )?
+      }
+    };
+    Ok(shared_secret)
+  }
+
+  fn kagree_algo_name_str(&self) -> &'static str {
+    match self {
+      DHKeys::Modp(_) => DH_MODP_KAGREE_ALGO_NAME,
+      DHKeys::EC(_) => ECDH_KAGREE_ALGO_NAME,
+    }
+  }
+}
+
+// Implement Debug manually because openssl::dh::Dh<Private> does not implement
+// it
+impl std::fmt::Debug for DHKeys {
+  fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    match self {
+      DHKeys::Modp(_dh) => f.debug_struct("Dh<Private>: TODO Debug print").finish(),
+      DHKeys::EC(dh) => dh.fmt(f),
+    }
+  }
 }
 
 // A struct implementing the builtin Authentication plugin

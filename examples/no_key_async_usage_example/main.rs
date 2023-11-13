@@ -13,7 +13,7 @@ fn main() {
 
   let qos = QosPolicyBuilder::new()
     .reliability(policy::Reliability::Reliable {
-      max_blocking_time: rustdds::Duration::DURATION_ZERO,
+      max_blocking_time: rustdds::Duration::ZERO,
     })
     .build();
 

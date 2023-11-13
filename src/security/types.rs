@@ -5,6 +5,7 @@ use enumflags2::{bitflags, BitFlags};
 use log::error;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Deserialize, Serialize};
+use openssl;
 
 use crate::{
   dds::qos,
@@ -87,6 +88,14 @@ impl From<X509CertificateError> for SecurityError {
   fn from(e: X509CertificateError) -> Self {
     SecurityError {
       msg: format!("X509CertificateError {e:?}"),
+    }
+  }
+}
+
+impl From<openssl::error::ErrorStack> for SecurityError {
+  fn from(e: openssl::error::ErrorStack) -> Self {
+    SecurityError {
+      msg: format!("openssl Error: {e:?}"),
     }
   }
 }
