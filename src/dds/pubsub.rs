@@ -481,10 +481,15 @@ impl InnerPublisher {
       .ok_or("upgrade fail")
       .or_else(|e| create_error_dropped!("Where is my DomainParticipant? {}", e))?;
 
-    // Create a new topic to DDScache if it doesn't exist and get a handle to it
-    let topic_cache_handle = match dp.dds_cache().write() {
-      Ok(mut dds_cache) => dds_cache.add_new_topic(topic.name(), topic.get_type(), &writer_qos),
+    // Get a handle to the topic cache
+    let topic_cache_handle = match dp.dds_cache().read() {
+      Ok(dds_cache) => dds_cache.get_existing_topic_cache(&topic.name())?,
       Err(e) => return create_error_poisoned!("Cannot lock DDScache. Error: {}", e),
+    };
+    // Update topic cache with DataWriter's Qos
+    match topic_cache_handle.lock() {
+      Ok(mut tc) => tc.update_keep_limits(&writer_qos),
+      Err(e) => return create_error_poisoned!("Cannot lock topic cache. Error: {}", e),
     };
 
     let guid = GUID::new_with_prefix_and_id(dp.guid().prefix, entity_id);
@@ -1052,10 +1057,15 @@ impl InnerSubscriber {
       None => return create_error_dropped!("DomainParticipant doesn't exist anymore."),
     };
 
-    // Create a new topic to DDScache if it doesn't exist and get a handle to it
-    let topic_cache_handle = match dp.dds_cache().write() {
-      Ok(mut dds_cache) => dds_cache.add_new_topic(topic.name(), topic.get_type(), &qos),
+    // Get a handle to the topic cache
+    let topic_cache_handle = match dp.dds_cache().read() {
+      Ok(dds_cache) => dds_cache.get_existing_topic_cache(&topic.name())?,
       Err(e) => return create_error_poisoned!("Cannot lock DDScache. Error: {}", e),
+    };
+    // Update topic cache with DataReader's Qos
+    match topic_cache_handle.lock() {
+      Ok(mut tc) => tc.update_keep_limits(&qos),
+      Err(e) => return create_error_poisoned!("Cannot lock topic cache. Error: {}", e),
     };
 
     let reader_guid = GUID::new_with_prefix_and_id(dp.guid_prefix(), entity_id);

@@ -1129,7 +1129,6 @@ impl DomainParticipantInner {
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
 
     // Launch the background thread for DomainParticipant
-    let dds_cache_clone = dds_cache.clone();
     let disc_db_clone = discovery_db.clone();
     let security_plugins_clone = security_plugins_handle.clone();
     let ev_loop_handle = thread::Builder::new()
@@ -1138,7 +1137,6 @@ impl DomainParticipantInner {
         let dp_event_loop = DPEventLoop::new(
           domain_info,
           listeners,
-          dds_cache_clone,
           disc_db_clone,
           participant_guid.prefix,
           TokenReceiverPair {
@@ -1288,16 +1286,20 @@ impl DomainParticipantInner {
       };
     }
 
+    let topic_type_desc = TypeDesc::new(type_desc);
     let topic = Topic::new(
       domain_participant_weak,
-      name,
-      TypeDesc::new(type_desc),
+      name.clone(),
+      topic_type_desc.clone(),
       qos,
       topic_kind,
     );
-    Ok(topic)
 
-    // TODO: refine
+    // Create the topic cache entry
+    let mut dds_cache_guard = self.dds_cache.write()?;
+    dds_cache_guard.add_new_topic(name, topic_type_desc, qos);
+
+    Ok(topic)
   }
 
   // Do not implement content filtered topics or multi-topics (yet)
