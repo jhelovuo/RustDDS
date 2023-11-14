@@ -1918,8 +1918,6 @@ impl SecureDiscovery {
           .stored_authentication_messages
           .remove(&remote_guid_prefix);
 
-        info!("Authenticated successfully Participant {remote_guid_prefix:?}");
-
         self.on_remote_participant_authenticated(
           remote_guid_prefix,
           discovery_db,
@@ -2079,10 +2077,7 @@ impl SecureDiscovery {
     discovery_db: &Arc<RwLock<DiscoveryDB>>,
     discovery_updated_sender: &mio_channel::SyncSender<DiscoveryNotificationType>,
   ) {
-    security_info!(
-      "Authenticated participant with GUID prefix {:?}",
-      remote_guid_prefix
-    );
+    security_info!("Authenticated successfully Participant {remote_guid_prefix:?}");
 
     // Call the required access control methods
     // (see Security spec. section "8.8.6 AccessControl behavior with remote
@@ -2239,6 +2234,8 @@ impl SecureDiscovery {
              again later."
           );
           self.cached_key_exchange_messages_for_resend.insert(message);
+        } else {
+          debug!("Sent participant crypto tokens to {remote_guid_prefix:?}.");
         }
       }
     }
@@ -2278,6 +2275,11 @@ impl SecureDiscovery {
                  {remote_reader_guid:?}: {e}. Trying again later."
               );
               self.cached_key_exchange_messages_for_resend.insert(message);
+            } else {
+              debug!(
+                "Sent built-in writer {local_writer_guid:?} crypto tokens to remote \
+                 {remote_guid_prefix:?}."
+              );
             }
           }
         }
@@ -2319,12 +2321,16 @@ impl SecureDiscovery {
                  {remote_writer_guid:?}: {e}. Trying again later."
               );
               self.cached_key_exchange_messages_for_resend.insert(message);
+            } else {
+              debug!(
+                "Sent built-in reader {local_reader_guid:?} crypto tokens to remote \
+                 {remote_guid_prefix:?}."
+              );
             }
           }
         }
       }
     }
-    debug!("Finished starting key exchange with remote participant {remote_guid_prefix:?}");
   }
 
   pub fn start_key_exchange_with_remote_endpoint(
@@ -2550,6 +2556,12 @@ impl SecureDiscovery {
           remote_endpoint_guid
         );
         self.cached_key_exchange_messages_for_resend.insert(vol_msg);
+      } else {
+        security_info!(
+          "Sent local endpoint {:?} crypto tokens to {:?}.",
+          local_endpoint_guid.entity_id,
+          remote_endpoint_guid
+        );
       }
     }
 
@@ -2557,8 +2569,6 @@ impl SecureDiscovery {
     self
       .user_data_endpoints_with_keys_already_sent_to
       .insert(remote_endpoint_guid);
-
-    debug!("Finished starting key exchange with remote endpoint {remote_endpoint_guid:?}");
   }
 
   fn validate_remote_participant_permissions(
