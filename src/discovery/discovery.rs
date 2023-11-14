@@ -339,16 +339,23 @@ impl Discovery {
     macro_rules! construct_topic_and_poll {
       ( $repr:ident, $has_key:ident,
         $topic_name:expr, $topic_type_name:expr, $message_type:ty,
-        $qos:expr,
+        $endpoint_qos_opt:expr,
         $stateless_RTPS:expr,
         $reader_entity_id:expr, $reader_token:expr,
         $writer_entity_id:expr,
         $timeout_and_timer_token_opt:expr, ) => {{
+        let endpoint_qos_opt_bind = $endpoint_qos_opt;
+        let topic_qos_ref = if let Some(qos) = endpoint_qos_opt_bind.as_ref() {
+          qos
+        } else {
+          &discovery_subscriber_qos
+        };
+
         let topic = domain_participant
           .create_topic(
             $topic_name.to_string(),
             $topic_type_name.to_string(),
-            &discovery_subscriber_qos,
+            topic_qos_ref,
             $has_key::TOPIC_KIND,
           )
           .expect("Unable to create topic. ");
@@ -359,7 +366,7 @@ impl Discovery {
               ::<$message_type, [<$repr DeserializerAdapter>] <$message_type>>(
               &topic,
               $reader_entity_id,
-              $qos,
+              $endpoint_qos_opt,
               $stateless_RTPS,
             ).expect("Unable to create DataReader. ");
 
@@ -368,7 +375,7 @@ impl Discovery {
                 ::<$message_type, [<$repr SerializerAdapter>] <$message_type>>(
                 $writer_entity_id,
                 &topic,
-                $qos,
+                $endpoint_qos_opt,
                 $stateless_RTPS,
               ).expect("Unable to create DataWriter .");
         }
@@ -606,7 +613,7 @@ impl Discovery {
       no_key,
       builtin_topic_names::DCPS_PARTICIPANT_VOLATILE_MESSAGE_SECURE,
       builtin_topic_type_names::DCPS_PARTICIPANT_VOLATILE_MESSAGE_SECURE,
-      ParticipantVolatileMessageSecure, // actually reuse the non-secure data type
+      ParticipantVolatileMessageSecure,
       Some(Self::create_participant_volatile_message_secure_qos()),
       false, // Regular stateful RTPS Reader & Writer
       EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
