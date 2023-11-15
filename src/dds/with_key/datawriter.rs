@@ -899,13 +899,10 @@ where
     self.refresh_manual_liveliness();
     Ok(())
   }
-
-  pub fn as_async_event_stream(&self) -> StatusReceiverStream<DataWriterStatus> {
-    self.status_receiver.as_async_stream()
-  }
 }
 
-impl<D, SA> StatusEvented<DataWriterStatus> for DataWriter<D, SA>
+impl<'a, D, SA> StatusEvented<'a, DataWriterStatus, StatusReceiverStream<'a, DataWriterStatus>>
+  for DataWriter<D, SA>
 where
   D: Keyed,
   SA: SerializerAdapter<D>,
@@ -916,6 +913,10 @@ where
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self.status_receiver.as_status_source()
+  }
+
+  fn as_async_status_stream(&'a self) -> StatusReceiverStream<'a, DataWriterStatus> {
+    self.status_receiver.as_async_status_stream()
   }
 
   fn try_recv_status(&self) -> Option<DataWriterStatus> {
@@ -1077,18 +1078,17 @@ where
       AsyncWaitForAcknowledgments::Waiting {
         ref ack_wait_receiver,
       } => {
-        match Pin::new(&mut ack_wait_receiver.as_async_stream()).poll_next(cx) {
+        match Pin::new(&mut ack_wait_receiver.as_async_status_stream()).poll_next(cx) {
           Poll::Pending => Poll::Pending,
 
           // this should not really happen, but let's judge that as a "no"
           Poll::Ready(None) => Poll::Ready(Ok(false)),
 
-          Poll::Ready(Some(Err(_read_error)))
-            // RecvError means the sending side has disconnected.
-            // We assume this would only be because the event loop thread is dead.
-            => Poll::Ready(Err(WriteError::Poisoned{ reason: "RecvError".to_string(), data:()})),
-
-          Poll::Ready(Some(Ok(()))) => Poll::Ready(Ok(true)),
+          // Poll::Ready(Some(Err(_read_error)))
+          //   // RecvError means the sending side has disconnected.
+          //   // We assume this would only be because the event loop thread is dead.
+          //   => Poll::Ready(Err(WriteError::Poisoned{ reason: "RecvError".to_string(), data:()})),
+          Poll::Ready(Some(())) => Poll::Ready(Ok(true)),
           // There is no timeout support here, so we never really
           // return Ok(false)
         }

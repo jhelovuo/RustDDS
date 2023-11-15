@@ -94,7 +94,7 @@ fn main() {
     smol::block_on(async {
       let mut tick_stream = futures::StreamExt::fuse(Timer::interval(SECOND / 10));
 
-      let mut datawriter_event_stream = writer.as_async_event_stream();
+      let mut datawriter_event_stream = writer.as_async_status_stream();
 
       let mut i = 0;
 

@@ -89,13 +89,11 @@ where
       })
   }
 
-  pub fn as_simple_data_reader_event_stream(
-    &self,
-  ) -> impl Stream<Item = ReadResult<DataReaderStatus>> + '_ {
-    self
-      .keyed_simpledatareader
-      .as_simple_data_reader_event_stream()
-  }
+  // pub fn as_simple_data_reader_event_stream(
+  //   &self,
+  // ) -> impl Stream<Item = ReadResult<DataReaderStatus>> + '_ { self
+  //   .keyed_simpledatareader .as_simple_data_reader_event_stream()
+  // }
 }
 
 // This is  not part of DDS spec. We implement mio Eventd so that the
@@ -165,8 +163,16 @@ where
   }
 }
 
-impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
+use crate::with_key::SimpleDataReaderEventStream;
+
+impl<'a, D, DA>
+  StatusEvented<
+    'a,
+    DataReaderStatus,
+    SimpleDataReaderEventStream<'a, NoKeyWrapper<D>, DAWrapper<DA>>,
+  > for SimpleDataReader<D, DA>
 where
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -175,6 +181,12 @@ where
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self.keyed_simpledatareader.as_status_source()
+  }
+
+  fn as_async_status_stream(
+    &'a self,
+  ) -> SimpleDataReaderEventStream<'a, NoKeyWrapper<D>, DAWrapper<DA>> {
+    self.keyed_simpledatareader.as_async_status_stream()
   }
 
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
