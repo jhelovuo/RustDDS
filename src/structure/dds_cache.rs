@@ -9,12 +9,14 @@ use std::{
 use log::{debug, error, info, trace};
 
 use crate::{
+  create_error_internal,
   dds::{
     qos::{
       policy::{History, ResourceLimits},
       QosPolicies,
     },
     typedesc::TypeDesc,
+    CreateError, CreateResult,
   },
   structure::{sequence_number::SequenceNumber, time::Timestamp},
   GUID,
@@ -65,21 +67,15 @@ impl DDSCache {
     topic_cache_handle.clone()
   }
 
-  // This function is currently not used
-  #[allow(dead_code)]
-  pub(crate) fn get_existing_topic_cache(&self, topic_name: &str) -> Arc<Mutex<TopicCache>> {
+  pub(crate) fn get_existing_topic_cache(
+    &self,
+    topic_name: &str,
+  ) -> CreateResult<Arc<Mutex<TopicCache>>> {
     // Return a clone of the pointer to the mutex on an existing topic cache
-    // The program panics if the topic cache does not exist
-    self
-      .topic_caches
-      .get(topic_name)
-      .unwrap_or_else(|| {
-        panic!(
-          "Topic cache for topic {} does not exist in DDS cache",
-          topic_name
-        )
-      })
-      .clone()
+    match self.topic_caches.get(topic_name) {
+      Some(tc) => Ok(tc.clone()),
+      None => create_error_internal!("Topic cache for topic {topic_name} not found in DDS cache"),
+    }
   }
 
   // TODO: Investigate why this is not used.
@@ -138,7 +134,7 @@ impl TopicCache {
     new_self
   }
 
-  fn update_keep_limits(&mut self, qos: &QosPolicies) {
+  pub fn update_keep_limits(&mut self, qos: &QosPolicies) {
     let min_keep_samples = qos
       .history()
       // default history setting from DDS spec v1.4 Section 2.2.3 "Supported QoS",
@@ -318,13 +314,9 @@ impl TopicCache {
         .wrapping_sub(self.max_keep_samples as usize),
     );
 
-    let max_remove_count = match self.min_keep_samples {
-      History::KeepLast { depth } => max(
-        min_remove_count,
-        self.changes.len().wrapping_sub(depth as usize),
-      ),
-      History::KeepAll => min_remove_count,
-    };
+    let max_remove_count = min_remove_count;
+    // Only observe max cache size
+    // TODO: Can we do better without being able to distinguish between instances?
 
     // Find the first key that is to be retained, i.e. enumerate
     // one past the items to be removed.

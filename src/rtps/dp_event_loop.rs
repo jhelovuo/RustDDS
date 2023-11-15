@@ -13,7 +13,6 @@ use crate::{
   dds::{
     qos::policy,
     statusevents::{DomainParticipantStatusEvent, StatusChannelSender},
-    typedesc::TypeDesc,
   },
   discovery::{
     discovery::DiscoveryCommand,
@@ -32,7 +31,6 @@ use crate::{
     writer::{Writer, WriterIngredients},
   },
   structure::{
-    dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
   },
@@ -60,7 +58,6 @@ pub(crate) enum EventLoopCommand {
 pub struct DPEventLoop {
   domain_info: DomainInfo,
   poll: Poll,
-  dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   udp_listeners: HashMap<Token, UDPListener>,
   message_receiver: MessageReceiver, // This contains our Readers
@@ -97,7 +94,6 @@ impl DPEventLoop {
   pub(crate) fn new(
     domain_info: DomainInfo,
     udp_listeners: HashMap<Token, UDPListener>,
-    dds_cache: Arc<RwLock<DDSCache>>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     participant_guid_prefix: GuidPrefix,
     add_reader_receiver: TokenReceiverPair<ReaderIngredients>,
@@ -200,7 +196,6 @@ impl DPEventLoop {
     Self {
       domain_info,
       poll,
-      dds_cache,
       discovery_db,
       udp_listeners,
       udp_sender: Rc::new(udp_sender),
@@ -805,19 +800,6 @@ impl DPEventLoop {
         }
       }
     }
-    // notify DDSCache to create topic if it does not exist yet
-    match self.dds_cache.write() {
-      Ok(mut dds_cache) => {
-        let ptd = &remote_writer.publication_topic_data;
-        dds_cache.add_new_topic(
-          ptd.topic_name.clone(),
-          TypeDesc::new(ptd.type_name.clone()),
-          &ptd.qos(),
-        );
-      }
-
-      _ => panic!("DDSCache is poisoned"),
-    }
   }
 
   fn remote_writer_lost(&mut self, writer_guid: GUID) {
@@ -1100,13 +1082,11 @@ mod tests {
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
 
-    let dds_cache_clone = dds_cache.clone();
     // Start event loop
     let child = thread::spawn(move || {
       let dp_event_loop = DPEventLoop::new(
         domain_info,
         HashMap::new(),
-        dds_cache_clone,
         discovery_db,
         GuidPrefix::default(),
         TokenReceiverPair {

@@ -27,29 +27,25 @@ fn timestamp() -> Result<()> {
     })
     .durability(Durability::TransientLocal)
     .build();
+  let p1_topic = participant.create_topic(
+    "test".to_string(),
+    "TestType".to_string(),
+    &qos,
+    TopicKind::NoKey,
+  )?;
   let writer = participant
     .create_publisher(&qos)?
-    .create_datawriter_no_key_cdr::<TestType>(
-      &participant.create_topic(
-        "test".to_string(),
-        "TestType".to_string(),
-        &qos,
-        TopicKind::NoKey,
-      )?,
-      None,
-    )?;
+    .create_datawriter_no_key_cdr::<TestType>(&p1_topic, None)?;
   let participant2 = DomainParticipant::new(0)?;
+  let p2_topic = participant2.create_topic(
+    "test".to_string(),
+    "TestType".to_string(),
+    &qos,
+    TopicKind::NoKey,
+  )?;
   let mut reader = participant2
     .create_subscriber(&qos)?
-    .create_datareader_no_key_cdr::<TestType>(
-      &participant.create_topic(
-        "test".to_string(),
-        "TestType".to_string(),
-        &qos,
-        TopicKind::NoKey,
-      )?,
-      None,
-    )?;
+    .create_datareader_no_key_cdr::<TestType>(&p2_topic, None)?;
   let timestamp = Timestamp::now();
   writer.write(TestType, Some(timestamp))?;
   thread::sleep(Duration::from_secs(3));
