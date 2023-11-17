@@ -1889,7 +1889,7 @@ impl Discovery {
         max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
       })
       .destination_order(DestinationOrder::ByReceptionTimestamp)
-      .history(History::KeepLast { depth: 10 })
+      .history(History::KeepLast { depth: 1 })
       // .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
       //   max_instances: std::i32::MAX,
       //   max_samples: std::i32::MAX,
@@ -1919,7 +1919,7 @@ impl Discovery {
         max_blocking_time: Duration::from_std(StdDuration::from_millis(100)),
       })
       .destination_order(DestinationOrder::ByReceptionTimestamp)
-      .history(History::KeepLast { depth: 10 })
+      .history(History::KeepLast { depth: 1 })
       // .resource_limits(ResourceLimits { // TODO: Maybe lower limits would suffice?
       //   max_instances: std::i32::MAX,
       //   max_samples: std::i32::MAX,
