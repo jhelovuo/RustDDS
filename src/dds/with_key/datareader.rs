@@ -81,7 +81,7 @@ where
   DA: DeserializerAdapter<D>,
 {
   pub(crate) fn from_simple_data_reader(simple_data_reader: SimpleDataReader<D, DA>) -> Self {
-    let dsc = DataSampleCache::new(simple_data_reader.topic().qos());
+    let dsc = DataSampleCache::new(simple_data_reader.qos().clone());
 
     Self {
       simple_data_reader,
@@ -815,9 +815,10 @@ where
   }
 }
 
-impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
+impl<'a, D, DA> StatusEvented<'a, DataReaderStatus, SimpleDataReaderEventStream<'a, D, DA>>
+  for DataReader<D, DA>
 where
-  D: Keyed,
+  D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -826,6 +827,10 @@ where
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self.simple_data_reader.as_status_source()
+  }
+
+  fn as_async_status_stream(&'a self) -> SimpleDataReaderEventStream<'a, D, DA> {
+    self.simple_data_reader.as_async_status_stream()
   }
 
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
@@ -954,16 +959,11 @@ where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
 {
-  type Item = ReadResult<DataReaderStatus>;
+  type Item = DataReaderStatus;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     let datareader = self.datareader.lock().unwrap();
-    Pin::new(
-      &mut datareader
-        .simple_data_reader
-        .as_simple_data_reader_event_stream(),
-    )
-    .poll_next(cx)
+    Pin::new(&mut datareader.simple_data_reader.as_async_status_stream()).poll_next(cx)
   }
 }
 

@@ -508,8 +508,16 @@ where
 
 /// WARNING! UNTESTED
 //  TODO: test
-impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
+use crate::with_key::SimpleDataReaderEventStream;
+
+impl<'a, D, DA>
+  StatusEvented<
+    'a,
+    DataReaderStatus,
+    SimpleDataReaderEventStream<'a, NoKeyWrapper<D>, DAWrapper<DA>>,
+  > for DataReader<D, DA>
 where
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -518,6 +526,12 @@ where
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self.keyed_datareader.as_status_source()
+  }
+
+  fn as_async_status_stream(
+    &'a self,
+  ) -> SimpleDataReaderEventStream<'a, NoKeyWrapper<D>, DAWrapper<DA>> {
+    self.keyed_datareader.as_async_status_stream()
   }
 
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
@@ -625,7 +639,7 @@ where
   D: 'static,
   DA: DeserializerAdapter<D>,
 {
-  type Item = ReadResult<DataReaderStatus>;
+  type Item = DataReaderStatus;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx)

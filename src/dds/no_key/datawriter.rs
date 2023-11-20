@@ -391,15 +391,12 @@ where
   pub fn get_status_listener(&self) -> &Receiver<DataWriterStatus> {
     self.keyed_datawriter.get_status_listener()
   } */
-
-  pub fn as_async_event_stream(&self) -> StatusReceiverStream<DataWriterStatus> {
-    self.keyed_datawriter.as_async_event_stream()
-  }
 }
 
 /// WARNING! UNTESTED
 //  TODO: test
-impl<D, SA> StatusEvented<DataWriterStatus> for DataWriter<D, SA>
+impl<'a, D, SA> StatusEvented<'a, DataWriterStatus, StatusReceiverStream<'a, DataWriterStatus>>
+  for DataWriter<D, SA>
 where
   SA: SerializerAdapter<D>,
 {
@@ -409,6 +406,10 @@ where
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self.keyed_datawriter.as_status_source()
+  }
+
+  fn as_async_status_stream(&'a self) -> StatusReceiverStream<'a, DataWriterStatus> {
+    self.keyed_datawriter.as_async_status_stream()
   }
 
   fn try_recv_status(&self) -> Option<DataWriterStatus> {

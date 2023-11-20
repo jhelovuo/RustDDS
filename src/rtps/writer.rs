@@ -770,40 +770,33 @@ impl Writer {
     &mut self,
     data: DDSData,
     write_options: WriteOptions,
-    sequence_number: SequenceNumber,
+    new_sequence_number: SequenceNumber,
   ) -> Timestamp {
-    // first increasing last SequenceNumber
-    let new_sequence_number = sequence_number;
-    self.last_change_sequence_number = new_sequence_number;
+    assert!(new_sequence_number > SequenceNumber::zero());
 
-    // setting first change sequence number according to our qos (not offering more
-    // than our QOS says)
-    self.first_change_sequence_number = match self.qos().history {
-      None => self.last_change_sequence_number, // default: depth = 1
-
-      Some(History::KeepAll) =>
-      // Now that we have a change, is must be at least one
-      {
-        max(self.first_change_sequence_number, SequenceNumber::from(1))
-      }
-
-      Some(History::KeepLast { depth }) => max(
-        self.last_change_sequence_number - SequenceNumber::from(i64::from(depth - 1)),
-        SequenceNumber::from(1),
-      ),
-    };
-    assert!(self.first_change_sequence_number > SequenceNumber::zero());
-    assert!(self.last_change_sequence_number > SequenceNumber::zero());
-
-    // create new CacheChange from DDSData
+    // Create a new CacheChange from DDSData & insert to topic cache
+    // The timestamp taken here is used as a unique(!) key in the cache.
     let new_cache_change = CacheChange::new(self.guid(), new_sequence_number, write_options, data);
-
-    // Insert to topic cache
-    // timestamp taken here is used as a unique(!) key in the DDSCache.
     let timestamp = Timestamp::now();
-    self
-      .acquire_the_topic_cache_guard()
-      .add_change(&timestamp, new_cache_change);
+
+    let mut topic_cache = self.acquire_the_topic_cache_guard();
+    topic_cache.add_change(&timestamp, new_cache_change);
+
+    // Set our sequence numbering state right
+    let first_available_sn = match topic_cache.writers_smallest_sn_in_cache(self.my_guid) {
+      Some(sn) => sn,
+      None => {
+        warn!(
+          "Could not get the smallest available sequence number from topic cache. Something's not \
+           right."
+        );
+        new_sequence_number
+      }
+    };
+    drop(topic_cache);
+
+    self.first_change_sequence_number = first_available_sn;
+    self.last_change_sequence_number = new_sequence_number;
 
     // keeping table of instant sequence number pairs
     self

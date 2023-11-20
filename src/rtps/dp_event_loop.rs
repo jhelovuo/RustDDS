@@ -932,7 +932,10 @@ impl DPEventLoop {
     let auth_status = discovery_db_read(&self.discovery_db).get_authentication_status(remote_guidp);
 
     auth_status.map(|status| {
-      self.send_participant_status(DomainParticipantStatusEvent::Authentication { status });
+      self.send_participant_status(DomainParticipantStatusEvent::Authentication {
+        participant: remote_guidp,
+        status,
+      });
     });
 
     match auth_status {

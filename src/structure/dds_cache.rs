@@ -280,6 +280,15 @@ impl TopicCache {
     )
   }
 
+  pub fn writers_smallest_sn_in_cache(&self, writer_guid: GUID) -> Option<SequenceNumber> {
+    self
+      .sequence_numbers
+      .get(&writer_guid)
+      .and_then(|sn_to_ts| sn_to_ts.first_key_value())
+      .map(|(sn, _ts)| sn)
+      .copied()
+  }
+
   fn reliable_before(&self, writer: GUID) -> SequenceNumber {
     self
       .received_reliably_before

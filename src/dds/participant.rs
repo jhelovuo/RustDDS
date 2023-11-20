@@ -519,21 +519,23 @@ pub struct DomainParticipantStatusListener {
   dp_disc: Arc<Mutex<DomainParticipantDisc>>,
 }
 
-impl DomainParticipantStatusListener {
-  pub fn as_async_stream(&self) -> DomainParticipantStatusStream {
-    DomainParticipantStatusStream {
-      status_listener: self,
-    }
-  }
-}
+impl DomainParticipantStatusListener {}
 
-impl StatusEvented<DomainParticipantStatusEvent> for DomainParticipantStatusListener {
+impl<'a> StatusEvented<'a, DomainParticipantStatusEvent, DomainParticipantStatusStream<'a>>
+  for DomainParticipantStatusListener
+{
   fn as_status_evented(&mut self) -> &dyn Evented {
     self
   }
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self
+  }
+
+  fn as_async_status_stream(&'a self) -> DomainParticipantStatusStream<'a> {
+    DomainParticipantStatusStream {
+      status_listener: self,
+    }
   }
 
   fn try_recv_status(&self) -> Option<DomainParticipantStatusEvent> {

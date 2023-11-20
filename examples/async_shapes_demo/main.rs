@@ -13,7 +13,8 @@ use log4rs::{
   Config,
 };
 use rustdds::{
-  with_key::Sample, DomainParticipant, Keyed, QosPolicyBuilder, TopicDescription, TopicKind,
+  with_key::Sample, DomainParticipant, Keyed, QosPolicyBuilder, StatusEvented, TopicDescription,
+  TopicKind,
 };
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
@@ -194,7 +195,7 @@ fn main() {
     let mut run = true;
     let mut stop = stop_receiver.recv().fuse();
     let dp_status_listener = domain_participant.status_listener();
-    let mut dp_status_stream = dp_status_listener.as_async_stream();
+    let mut dp_status_stream = dp_status_listener.as_async_status_stream();
 
     while run {
       futures::select! {
@@ -255,7 +256,7 @@ fn main() {
         let mut stop = stop_receiver.recv().fuse();
         let mut tick_stream = futures::StreamExt::fuse(Timer::interval(write_interval));
 
-        let mut datawriter_event_stream = datawriter.as_async_event_stream();
+        let mut datawriter_event_stream = datawriter.as_async_status_stream();
 
         while run {
           futures::select! {

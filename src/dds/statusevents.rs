@@ -21,15 +21,10 @@ use mio_08::{self, event, Interest, Registry, Token};
 use chrono::Utc;
 
 use crate::{
-  dds::{
-    qos::QosPolicyId,
-    result::{ReadError, ReadResult},
-    topic::TopicData,
-  },
+  dds::{qos::QosPolicyId, topic::TopicData},
   discovery::SpdpDiscoveredParticipantData,
   messages::{protocol_version::ProtocolVersion, vendor_id::VendorId},
   mio_source::*,
-  read_error_poisoned,
   structure::guid::GuidPrefix,
   Duration, QosPolicies, GUID,
 };
@@ -39,11 +34,17 @@ use crate::discovery::secure_discovery::AuthenticationStatus;
 /// This trait corresponds to set_listener() of the Entity class in DDS spec.
 /// Types implementing this trait can be registered to a poll and
 /// polled for status events.
-pub trait StatusEvented<E> {
+pub trait StatusEvented<'a, E, S>
+where
+  S: Stream<Item = E>,
+  S: FusedStream,
+{
+  // The lifetime variable 'a marks the lifetime of the async stream object, if
+  // such is requested. The stream object typically contains a reference to
+  // self, so it is to ensure correct lifetimes.
   fn as_status_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source; // This is for polling with mio-0.8.x
-
-  // fn as_async_receiver(&self) -> dyn Stream<E>;
+  fn as_async_status_stream(&'a self) -> S;
   fn try_recv_status(&self) -> Option<E>;
 }
 
@@ -64,13 +65,9 @@ impl<E> StatusReceiver<E> {
       enabled: false,
     }
   }
-
-  pub fn as_async_stream(&self) -> StatusReceiverStream<E> {
-    self.channel_receiver.as_async_stream()
-  }
 }
 
-impl<E> StatusEvented<E> for StatusReceiver<E> {
+impl<'a, E> StatusEvented<'a, E, StatusReceiverStream<'a, E>> for StatusReceiver<E> {
   fn as_status_evented(&mut self) -> &dyn Evented {
     self.enabled = true;
     &self.channel_receiver.actual_receiver
@@ -79,6 +76,10 @@ impl<E> StatusEvented<E> for StatusReceiver<E> {
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self.enabled = true;
     &mut self.channel_receiver
+  }
+
+  fn as_async_status_stream(&'a self) -> StatusReceiverStream<'a, E> {
+    self.channel_receiver.as_async_status_stream()
   }
 
   fn try_recv_status(&self) -> Option<E> {
@@ -167,26 +168,30 @@ impl<T> StatusChannelReceiver<T> {
     self.signal_receiver.drain();
     self.actual_receiver.try_recv()
   }
+
   pub fn as_evented(&self) -> &dyn Evented {
     &self.actual_receiver
   }
-  pub fn as_async_stream(&self) -> StatusReceiverStream<T> {
-    StatusReceiverStream {
-      sync_receiver: self,
-    }
-  }
+
   pub(crate) fn get_waker_update_lock(&self) -> std::sync::MutexGuard<'_, Option<Waker>> {
     self.waker.lock().unwrap()
   }
 }
 
-impl<E> StatusEvented<E> for StatusChannelReceiver<E> {
+impl<'a, E> StatusEvented<'a, E, StatusReceiverStream<'a, E>> for StatusChannelReceiver<E> {
   fn as_status_evented(&mut self) -> &dyn Evented {
     &self.actual_receiver
   }
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self
+  }
+
+  fn as_async_status_stream(&'a self) -> StatusReceiverStream<'a, E> {
+    StatusReceiverStream {
+      sync_receiver: self,
+      terminated: AtomicBool::new(false),
+    }
   }
 
   fn try_recv_status(&self) -> Option<E> {
@@ -217,13 +222,16 @@ impl<T> event::Source for StatusChannelReceiver<T> {
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 // TODO: try to make private
 pub struct StatusReceiverStream<'a, T> {
   sync_receiver: &'a StatusChannelReceiver<T>,
+  terminated: AtomicBool,
 }
 
 impl<'a, T> Stream for StatusReceiverStream<'a, T> {
-  type Item = ReadResult<T>;
+  type Item = T;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     // debug!("poll_next");
@@ -235,17 +243,19 @@ impl<'a, T> Stream for StatusReceiverStream<'a, T> {
         *w = Some(cx.waker().clone());
         Poll::Pending
       }
-      Err(std::sync::mpsc::TryRecvError::Disconnected) => Poll::Ready(Some(read_error_poisoned!(
-        "StatusReceiver channel disconnected"
-      ))),
-      Ok(t) => Poll::Ready(Some(Ok(t))), // got data
+      Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+        self.terminated.store(true, Ordering::SeqCst);
+        warn!("StatusReceiver channel disconnected");
+        Poll::Ready(None)
+      }
+      Ok(t) => Poll::Ready(Some(t)), // got data
     }
   } // fn
 }
 
 impl<'a, T> FusedStream for StatusReceiverStream<'a, T> {
   fn is_terminated(&self) -> bool {
-    false
+    self.terminated.load(Ordering::SeqCst)
   }
 }
 
@@ -317,6 +327,7 @@ pub enum DomainParticipantStatusEvent {
   },
   #[cfg(feature = "security")]
   Authentication {
+    participant: GuidPrefix,
     status: AuthenticationStatus,
   },
   /// The CA has revoked the identity of some Participant.
@@ -327,7 +338,7 @@ pub enum DomainParticipantStatusEvent {
   /// yet.
   #[cfg(feature = "security")]
   IdentityRevoked {
-    participant: GUID,
+    participant: GuidPrefix,
   },
   /// Domain access permissions of some Participant have been revoked / changed.
   // TODO:
@@ -335,7 +346,7 @@ pub enum DomainParticipantStatusEvent {
   /// mechanism yet.
   #[cfg(feature = "security")]
   PermissionsRevoked {
-    participant: GUID,
+    participant: GuidPrefix,
     // TODO: How to get more details on what was revoked, or was something added?
   },
 }
