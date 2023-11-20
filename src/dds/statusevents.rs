@@ -38,9 +38,10 @@ pub trait StatusEvented<'a, E, S>
 where
   S: Stream<Item = E>,
   S: FusedStream,
-  // The lifetime variable 'a marks the lifetime of the async stream object, if such is requested.
-  // The stream object typically contains a reference to self, so it is to ensure correct lifetimes.
 {
+  // The lifetime variable 'a marks the lifetime of the async stream object, if
+  // such is requested. The stream object typically contains a reference to
+  // self, so it is to ensure correct lifetimes.
   fn as_status_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source; // This is for polling with mio-0.8.x
   fn as_async_status_stream(&'a self) -> S;
@@ -64,7 +65,6 @@ impl<E> StatusReceiver<E> {
       enabled: false,
     }
   }
-
 }
 
 impl<'a, E> StatusEvented<'a, E, StatusReceiverStream<'a, E>> for StatusReceiver<E> {
