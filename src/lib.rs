@@ -205,7 +205,10 @@ pub use dds::{
   qos::{policy, QosPolicies, QosPolicyBuilder},
   readcondition::ReadCondition,
   sampleinfo::{InstanceState, NotAliveGenerationCounts, SampleInfo, SampleState, ViewState},
-  statusevents::StatusEvented,
+  statusevents::{
+    DataReaderStatus, DataWriterStatus, DomainParticipantStatusEvent, EndpointDescription,
+    LostReason, ParticipantDescription, StatusEvented,
+  },
   topic::{Topic, TopicDescription, TopicKind},
   typedesc::TypeDesc,
   with_key::{datareader::SelectByKey, WriteOptions, WriteOptionsBuilder},

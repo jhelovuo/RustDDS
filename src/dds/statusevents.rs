@@ -297,10 +297,12 @@ pub enum DomainParticipantStatusEvent {
   WriterDetected {
     writer: EndpointDescription,
   },
+  /// Remote Reader was lost (disconnected)
   ReaderLost {
     guid: GUID,
     reason: LostReason,
   },
+  /// Remote Writer was lost (disconnected)
   WriterLost {
     guid: GUID,
     reason: LostReason,
