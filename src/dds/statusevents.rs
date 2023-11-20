@@ -327,6 +327,7 @@ pub enum DomainParticipantStatusEvent {
   },
   #[cfg(feature = "security")]
   Authentication {
+    participant: GuidPrefix,
     status: AuthenticationStatus,
   },
   /// The CA has revoked the identity of some Participant.
@@ -337,7 +338,7 @@ pub enum DomainParticipantStatusEvent {
   /// yet.
   #[cfg(feature = "security")]
   IdentityRevoked {
-    participant: GUID,
+    participant: GuidPrefix,
   },
   /// Domain access permissions of some Participant have been revoked / changed.
   // TODO:
@@ -345,7 +346,7 @@ pub enum DomainParticipantStatusEvent {
   /// mechanism yet.
   #[cfg(feature = "security")]
   PermissionsRevoked {
-    participant: GUID,
+    participant: GuidPrefix,
     // TODO: How to get more details on what was revoked, or was something added?
   },
 }
