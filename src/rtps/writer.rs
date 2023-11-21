@@ -311,8 +311,6 @@ impl Writer {
       TimedEvent::CacheCleaning,
     );
 
-    // TODO: call register_local_datawriter
-
     Self {
       endianness: Endianness::LittleEndian,
       heartbeat_message_counter: 1,

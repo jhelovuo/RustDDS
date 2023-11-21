@@ -435,8 +435,6 @@ impl MessageBuilder {
     self
   }
 
-  // TODO: We should optimize this entire thing to allow long contiguous
-  // irrelevant set to be represented as start_sn +
   pub fn gap_msg(
     mut self,
     irrelevant_sns: &BTreeSet<SequenceNumber>,
@@ -444,16 +442,27 @@ impl MessageBuilder {
     writer_endianness: Endianness,
     reader_guid: GUID,
   ) -> Self {
-    match (
-      irrelevant_sns.iter().next(),
-      irrelevant_sns.iter().next_back(),
-    ) {
-      (Some(&base), Some(&_top)) => {
-        let gap_list = SequenceNumberSet::from_base_and_set(base, irrelevant_sns);
+    match (irrelevant_sns.first(), irrelevant_sns.last()) {
+      (Some(&gap_start), Some(&_last_sn)) => {
+        // Determine the contiguous range (starting from gap_start) of irrelevant
+        // seqnums
+        let mut range_end = gap_start;
+        while irrelevant_sns.contains(&range_end.plus_1()) {
+          range_end = range_end.plus_1();
+        }
+        // range_end is now the last seqnum in the contiguous range.
+        // Note that when receiving a GAP, the interpreted range is
+        // (gap_start .. gapList.base -1). But since gapList.base is included in the
+        // gapList, gapList.base is also always interpred as irrelevant, hence
+        // completing the range
+        let list_base = range_end;
+        let list_set = irrelevant_sns.clone().split_off(&list_base);
+        let gap_list = SequenceNumberSet::from_base_and_set(list_base, &list_set);
+
         let gap = Gap {
           reader_id: reader_guid.entity_id,
           writer_id: writer_entity_id,
-          gap_start: base,
+          gap_start,
           gap_list,
         };
         let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer_endianness);
