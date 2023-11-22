@@ -17,6 +17,6 @@ else
     echo "Provide argument m or u to choose the modified or unmodified FastDDS repository."
     exit 1
 fi
-cmake -DSECURITY:BOOL=ON ..  -DCMAKE_INSTALL_PREFIX=/usr/local/ -DBUILD_SHARED_LIBS=ON
+cmake -DSECURITY:BOOL=ON ..  -DCMAKE_INSTALL_PREFIX=/usr/local/ -DBUILD_SHARED_LIBS=ON -DSHM_TRANSPORT_DEFAULT=OFF
 cmake --build . --target install
 
