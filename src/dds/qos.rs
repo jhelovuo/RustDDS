@@ -65,7 +65,7 @@ pub enum QosPolicyId {
 }
 
 /// Utility for building [QosPolicies]
-#[derive(Default)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QosPolicyBuilder {
   durability: Option<policy::Durability>,
   presentation: Option<policy::Presentation>,
