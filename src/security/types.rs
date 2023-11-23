@@ -853,7 +853,8 @@ impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
 // specification
 pub struct PublicationBuiltinTopicDataSecure {
   pub discovered_writer_data: discovery::sedp_messages::DiscoveredWriterData,
-  pub data_tags: qos::policy::DataTag,
+  // data_tags in optional, since some DDS implementations do not send it
+  pub data_tags: Option<qos::policy::DataTag>,
 }
 
 impl Keyed for PublicationBuiltinTopicDataSecure {
@@ -867,7 +868,7 @@ impl From<discovery::sedp_messages::DiscoveredWriterData> for PublicationBuiltin
   fn from(dwd: discovery::sedp_messages::DiscoveredWriterData) -> Self {
     Self {
       discovered_writer_data: dwd,
-      data_tags: qos::policy::DataTag::default(),
+      data_tags: Some(qos::policy::DataTag::default()),
     }
   }
 }
@@ -881,7 +882,7 @@ impl PlCdrDeserialize for PublicationBuiltinTopicDataSecure {
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
-    let data_tags = get_first_from_pl_map(&pl_map, ctx, ParameterId::PID_DATA_TAGS, "Data tags")?;
+    let data_tags = get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_DATA_TAGS, "Data tags")?;
 
     let discovered_writer_data =
       discovery::sedp_messages::DiscoveredWriterData::from_pl_cdr_bytes(input_bytes, encoding)?;
@@ -908,7 +909,9 @@ impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
         }))
       };
     }
-    emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
+    if let Some(data_tags) = &self.data_tags {
+      emit!(PID_DATA_TAGS, data_tags, qos::policy::DataTag);
+    }
 
     let mut pl = self.discovered_writer_data.to_parameter_list(encoding)?;
     pl.concat(data_tag_pl);
@@ -922,7 +925,8 @@ impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
 // specification
 pub struct SubscriptionBuiltinTopicDataSecure {
   pub discovered_reader_data: discovery::sedp_messages::DiscoveredReaderData,
-  pub data_tags: qos::policy::DataTag,
+  // data_tags in optional, since some DDS implementations do not send it
+  pub data_tags: Option<qos::policy::DataTag>,
 }
 impl Keyed for SubscriptionBuiltinTopicDataSecure {
   type K = Endpoint_GUID;
@@ -934,7 +938,7 @@ impl From<discovery::sedp_messages::DiscoveredReaderData> for SubscriptionBuilti
   fn from(drd: discovery::sedp_messages::DiscoveredReaderData) -> Self {
     Self {
       discovered_reader_data: drd,
-      data_tags: qos::policy::DataTag::default(),
+      data_tags: Some(qos::policy::DataTag::default()),
     }
   }
 }
@@ -948,7 +952,7 @@ impl PlCdrDeserialize for SubscriptionBuiltinTopicDataSecure {
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
-    let data_tags = get_first_from_pl_map(&pl_map, ctx, ParameterId::PID_DATA_TAGS, "Data tags")?;
+    let data_tags = get_option_from_pl_map(&pl_map, ctx, ParameterId::PID_DATA_TAGS, "Data tags")?;
 
     let discovered_reader_data =
       discovery::sedp_messages::DiscoveredReaderData::from_pl_cdr_bytes(input_bytes, encoding)?;
@@ -975,7 +979,9 @@ impl PlCdrSerialize for SubscriptionBuiltinTopicDataSecure {
         }))
       };
     }
-    emit!(PID_DATA_TAGS, &self.data_tags, qos::policy::DataTag);
+    if let Some(data_tags) = &self.data_tags {
+      emit!(PID_DATA_TAGS, data_tags, qos::policy::DataTag);
+    }
 
     let mut pl = self.discovered_reader_data.to_parameter_list(encoding)?;
     pl.concat(data_tag_pl);
