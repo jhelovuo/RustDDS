@@ -16,9 +16,10 @@ int main(int number_of_arguments, char **argument_values)
 
     std::cout << "Start ";
 
-    // Enable warning logging (Info does not seem to work)
-    Log::SetVerbosity(Log::Kind::Warning);
-    std::unique_ptr<FileConsumer> file_consumer(new FileConsumer("archive.log"));
+    Log::SetVerbosity(Log::Kind::Info);
+    Log::ClearConsumers();  // No default logging to console
+
+    std::unique_ptr<FileConsumer> file_consumer(new FileConsumer("fastdds.log"));
     Log::ReportFilenames(true);
     Log::RegisterConsumer(std::move(file_consumer));
 
