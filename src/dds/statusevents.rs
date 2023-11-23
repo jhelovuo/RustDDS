@@ -15,7 +15,7 @@ use std::{
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use futures::stream::{FusedStream, Stream};
-use mio_06::{self,Evented};
+use mio_06::{self, Evented};
 use mio_extras::channel as mio_channel;
 use mio_08::{self, event, Interest, Registry, Token};
 use chrono::Utc;
@@ -195,8 +195,7 @@ impl<'a, E> StatusEvented<'a, E, StatusReceiverStream<'a, E>> for StatusChannelR
   }
 }
 
-impl<E> Evented for StatusChannelReceiver<E>
-{
+impl<E> Evented for StatusChannelReceiver<E> {
   // We just delegate all the operations to notification_receiver, since it
   // already implements Evented
   fn register(
@@ -207,7 +206,9 @@ impl<E> Evented for StatusChannelReceiver<E>
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
-      .actual_receiver.lock().unwrap()
+      .actual_receiver
+      .lock()
+      .unwrap()
       .register(poll, token, interest, opts)
   }
 
@@ -219,7 +220,9 @@ impl<E> Evented for StatusChannelReceiver<E>
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
-      .actual_receiver.lock().unwrap()
+      .actual_receiver
+      .lock()
+      .unwrap()
       .reregister(poll, token, interest, opts)
   }
 
@@ -227,7 +230,6 @@ impl<E> Evented for StatusChannelReceiver<E>
     self.actual_receiver.lock().unwrap().deregister(poll)
   }
 }
-
 
 impl<T> event::Source for StatusChannelReceiver<T> {
   fn register(&mut self, registry: &Registry, token: Token, interests: Interest) -> io::Result<()> {

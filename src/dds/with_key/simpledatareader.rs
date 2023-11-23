@@ -94,7 +94,7 @@ pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializ
   my_topic: Topic,
   qos_policy: QosPolicies,
   my_guid: GUID,
-  
+
   // mio_channel::Receiver is not thread-safe, so Mutex protects it.
   pub(crate) notification_receiver: Mutex<mio_channel::Receiver<()>>,
 
@@ -397,7 +397,9 @@ where
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
-      .notification_receiver.lock().unwrap()
+      .notification_receiver
+      .lock()
+      .unwrap()
       .register(poll, token, interest, opts)
   }
 
@@ -409,7 +411,9 @@ where
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
-      .notification_receiver.lock().unwrap()
+      .notification_receiver
+      .lock()
+      .unwrap()
       .reregister(poll, token, interest, opts)
   }
 
@@ -504,7 +508,6 @@ where
   DA: DeserializerAdapter<D>,
 {
 }
-
 
 impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
