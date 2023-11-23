@@ -1329,8 +1329,8 @@ impl SecureDiscovery {
       Err(e) => {
         // Validation failed
         security_info!(
-          "Failed to validate the identity of a remote participant with guid: {:?}. Info: {}",
-          remote_guid,
+          "Failed to validate the identity of the remote participant {:?}. Info: {}",
+          remote_guid.prefix,
           e.msg
         );
         // See if we can treat the participant as Unauthenticated or should we reject it
@@ -1339,9 +1339,9 @@ impl SecureDiscovery {
           .allow_unauthenticated_participants
         {
           security_info!(
-            "Treating the participant with guid {:?} as Unauthenticated, since configuration \
-             allows this.",
-            remote_guid,
+            "Treating the remote participant {:?} as Unauthenticated, since configuration allows \
+             this.",
+            remote_guid.prefix,
           );
           return AuthenticationStatus::Unauthenticated;
         } else {
@@ -1352,8 +1352,8 @@ impl SecureDiscovery {
     };
 
     info!(
-      "Validated identity of remote participant with guid: {:?}",
-      remote_guid
+      "Validated identity of remote participant {:?}",
+      remote_guid.prefix
     );
 
     // Add remote participant to DiscoveryDB with status 'Authenticating' and notify
@@ -1390,8 +1390,8 @@ impl SecureDiscovery {
         );
 
         debug!(
-          "Waiting for a handshake request from remote with guid {:?}",
-          remote_guid
+          "Waiting for a handshake request from remote participant {:?}",
+          remote_guid.prefix
         );
 
         AuthenticationStatus::Authenticating // return value
@@ -1469,7 +1469,7 @@ impl SecureDiscovery {
     auth_msg_writer: &no_key::DataWriter<ParticipantStatelessMessage>,
   ) {
     debug!(
-      "Send a handshake request message to remote with guid prefix: {:?}",
+      "Sending a handshake request message to remote participant {:?}",
       remote_guid_prefix
     );
 
@@ -1523,15 +1523,15 @@ impl SecureDiscovery {
           Ok(()) => {
             stored_message.remaining_resend_counter -= 1;
             debug!(
-              "Resent an unanswered authentication message to remote with guid prefix {:?}. \
-               Resending at most {} more times.",
+              "Resent an unanswered authentication message to remote participant {:?}. Resending \
+               at most {} more times.",
               guid_prefix, stored_message.remaining_resend_counter,
             );
           }
           Err(err) => {
             debug!(
-              "Failed to resend an unanswered authentication message to remote with guid prefix \
-               {:?}. Error: {}. Retrying later.",
+              "Failed to resend an unanswered authentication message to remote participant {:?}. \
+               Error: {}. Retrying later.",
               guid_prefix, err
             );
           }
@@ -1575,7 +1575,7 @@ impl SecureDiscovery {
       msg.remaining_resend_counter = STORED_AUTH_MESSAGE_MAX_RESEND_COUNT;
     } else {
       debug!(
-        "Did not find a stored message for remote with guid prefix {:?}",
+        "Did not find a stored authentication message for remote participant {:?}",
         remote_guid_prefix
       );
     }
@@ -1607,7 +1607,7 @@ impl SecureDiscovery {
     match self.get_handshake_state(&remote_guid_prefix) {
       None => {
         trace!(
-          "Received a handshake message from remote with guid prefix {:?}. Ignoring, since no \
+          "Received a handshake message from remote participant {:?}. Ignoring, since no \
            handshake going on.",
           remote_guid_prefix
         );
@@ -1639,14 +1639,14 @@ impl SecureDiscovery {
         // message. Send the message again in case the remote hasn't
         // received it
         debug!(
-          "Resending a final handshake message to remote with guid prefix {:?}",
+          "Resending a final handshake message to remote participant {:?}",
           remote_guid_prefix
         );
         self.resend_final_handshake_message(remote_guid_prefix, auth_msg_writer);
       }
       Some(DiscHandshakeState::CompletedWithFinalMessageReceived) => {
-        trace!(
-          "Received a handshake message from remote with guid prefix {:?}. Handshake with this \
+        debug!(
+          "Received a handshake message from remote participant {:?}. Handshake with this \
            participant has already been completed by receiving the final message. Nothing for us \
            to do anymore.",
           remote_guid_prefix
@@ -1663,8 +1663,8 @@ impl SecureDiscovery {
   ) {
     let remote_guid_prefix = received_message.generic.source_guid_prefix();
     debug!(
-      "Received a handshake message from remote with guid prefix {:?}. Expecting a handshake \
-       request message.",
+      "Received a handshake message from remote participant {:?}. Expecting a handshake request \
+       message.",
       remote_guid_prefix
     );
     let local_guid_prefix = self.local_participant_guid.prefix;
@@ -1710,7 +1710,7 @@ impl SecureDiscovery {
         );
 
         debug!(
-          "Send a handshake reply message to participant with guid prefix {:?}",
+          "Sending a handshake reply message to remote participant {:?}",
           remote_guid_prefix
         );
 
@@ -1761,8 +1761,8 @@ impl SecureDiscovery {
   ) {
     let remote_guid_prefix = received_message.generic.source_guid_prefix();
     debug!(
-      "Received a handshake message from remote with guid prefix {:?}. Expecting a handshake \
-       reply message.",
+      "Received a handshake message from remote participant {:?}. Expecting a handshake reply \
+       message.",
       remote_guid_prefix
     );
 
@@ -1807,7 +1807,7 @@ impl SecureDiscovery {
         );
 
         debug!(
-          "Send a final handshake message to participant with guid prefix {:?}",
+          "Sending a final handshake message to remote participant {:?}",
           remote_guid_prefix
         );
 
@@ -1869,8 +1869,8 @@ impl SecureDiscovery {
   ) {
     let remote_guid_prefix = received_message.generic.source_guid_prefix();
     debug!(
-      "Received a handshake message from remote with guid prefix {:?}. Expecting a final \
-       handshake message",
+      "Received a handshake message from remote participant {:?}. Expecting a final handshake \
+       message",
       remote_guid_prefix
     );
 
@@ -2085,7 +2085,7 @@ impl SecureDiscovery {
     match self.validate_remote_participant_permissions(remote_guid_prefix, discovery_db) {
       Ok(()) => {
         debug!(
-          "Validated permissions for remote with guid prefix {:?}",
+          "Validated permissions for remote participant {:?}",
           remote_guid_prefix
         );
       }

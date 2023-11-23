@@ -1742,7 +1742,7 @@ impl Discovery {
         }
       }
     } else {
-      warn!("Did not find a local reader with guid {guid:?}");
+      warn!("Did not find a local reader {guid:?}");
     }
   }
 
@@ -1817,7 +1817,7 @@ impl Discovery {
         }
       }
     } else {
-      warn!("Did not find a local writer with guid {guid:?}");
+      warn!("Did not find a local writer {guid:?}");
     }
   }
 
