@@ -2449,12 +2449,17 @@ impl SecureDiscovery {
     // Inspect if we need to send crypto tokens at all
     // See '8.8.9.2 Key Exchange with remote DataReader' and
     // '8.8.9.3 Key Exchange with remote DataWriter' in the spec
+    #[allow(clippy::if_same_then_else)] // Keep this format for clarity
     let need_to_send_keys = if remote_is_writer {
-      // Our local endpoint is a reader, so only is_submessage_protected matters
-      sec_attr.is_submessage_protected
+      // Our local endpoint is a reader
+      // According the spec section 8.8.9.3, only is_submessage_protected should
+      // matter when we're the reader. However, at least FastDDS expects to receive
+      // DataReader keys also when only payload is protected. So we'll send keys
+      // also on this case.
+      sec_attr.is_payload_protected || sec_attr.is_submessage_protected
     } else {
-      // Our local endpoint is a writer, so both is_payload_protected and
-      // is_submessage_protected matter
+      // Our local endpoint is a writer
+      // both is_payload_protected and is_submessage_protected matter
       sec_attr.is_payload_protected || sec_attr.is_submessage_protected
     };
 
