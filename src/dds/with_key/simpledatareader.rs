@@ -94,7 +94,9 @@ pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializ
   my_topic: Topic,
   qos_policy: QosPolicies,
   my_guid: GUID,
-  pub(crate) notification_receiver: mio_channel::Receiver<()>,
+  
+  // mio_channel::Receiver is not thread-safe, so Mutex protects it.
+  pub(crate) notification_receiver: Mutex<mio_channel::Receiver<()>>,
 
   // SimpleDataReader stores a pointer to a mutex on the topic cache
   topic_cache: Arc<Mutex<TopicCache>>,
@@ -187,7 +189,7 @@ where
       my_subscriber: subscriber,
       qos_policy,
       my_guid,
-      notification_receiver,
+      notification_receiver: Mutex::new(notification_receiver),
       topic_cache,
       read_state: Mutex::new(ReadState::new()),
       my_topic: topic,
@@ -199,12 +201,13 @@ where
       event_source,
     })
   }
-  pub fn set_waker(&self, w: Option<Waker>) {
+  pub(crate) fn set_waker(&self, w: Option<Waker>) {
     *self.data_reader_waker.lock().unwrap() = w;
   }
 
   pub(crate) fn drain_read_notifications(&self) {
-    while self.notification_receiver.try_recv().is_ok() {}
+    let rec = self.notification_receiver.lock().unwrap();
+    while rec.try_recv().is_ok() {}
     self.event_source.drain();
   }
 
@@ -394,7 +397,7 @@ where
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
-      .notification_receiver
+      .notification_receiver.lock().unwrap()
       .register(poll, token, interest, opts)
   }
 
@@ -406,12 +409,12 @@ where
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
     self
-      .notification_receiver
+      .notification_receiver.lock().unwrap()
       .reregister(poll, token, interest, opts)
   }
 
   fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
-    self.notification_receiver.deregister(poll)
+    self.notification_receiver.lock().unwrap().deregister(poll)
   }
 }
 
@@ -501,6 +504,7 @@ where
   DA: DeserializerAdapter<D>,
 {
 }
+
 
 impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where

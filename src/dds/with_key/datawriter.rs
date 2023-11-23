@@ -450,10 +450,10 @@ where
     match &self.qos_policy.reliability {
       None | Some(Reliability::BestEffort) => Ok(true),
       Some(Reliability::Reliable { .. }) => {
-        let (acked_sender, acked_receiver) = sync_status_channel::<()>(1)?;
+        let (acked_sender, mut acked_receiver) = sync_status_channel::<()>(1)?;
         let poll = mio_06::Poll::new()?;
         poll.register(
-          acked_receiver.as_evented(),
+          acked_receiver.as_status_evented(),
           Token(0),
           Ready::readable(),
           PollOpt::edge(),
