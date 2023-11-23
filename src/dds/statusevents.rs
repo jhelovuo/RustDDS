@@ -48,49 +48,6 @@ where
   fn try_recv_status(&self) -> Option<E>;
 }
 
-// Helper object for various DDS Entities
-// This is now a wrapper around StatusChannelReceiver with enabled-flag
-// TODO: Do we really need this or should we replace this with
-// StatusChannelReceiver
-pub(crate) struct StatusReceiver<E> {
-  channel_receiver: StatusChannelReceiver<E>,
-  enabled: bool, /* if not enabled, we should forward status to parent Entity
-                  * TODO: enabling not implemented */
-}
-
-impl<E> StatusReceiver<E> {
-  pub fn new(channel_receiver: StatusChannelReceiver<E>) -> Self {
-    Self {
-      channel_receiver,
-      enabled: false,
-    }
-  }
-}
-
-impl<'a, E> StatusEvented<'a, E, StatusReceiverStream<'a, E>> for StatusReceiver<E> {
-  fn as_status_evented(&mut self) -> &dyn Evented {
-    self.enabled = true;
-    &self.channel_receiver
-  }
-
-  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
-    self.enabled = true;
-    &mut self.channel_receiver
-  }
-
-  fn as_async_status_stream(&'a self) -> StatusReceiverStream<'a, E> {
-    self.channel_receiver.as_async_status_stream()
-  }
-
-  fn try_recv_status(&self) -> Option<E> {
-    if self.enabled {
-      self.channel_receiver.try_recv().ok()
-    } else {
-      None
-    }
-  }
-}
-
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------

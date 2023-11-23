@@ -106,7 +106,7 @@ pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializ
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  status_receiver: StatusReceiver<DataReaderStatus>,
+  status_receiver: StatusChannelReceiver<DataReaderStatus>,
 
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
   // resetting deadline missed status. Remove attribute when it is supported.
@@ -157,7 +157,7 @@ where
     notification_receiver: mio_channel::Receiver<()>,
     topic_cache: Arc<Mutex<TopicCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
+    status_receiver: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
     data_reader_waker: Arc<Mutex<Option<Waker>>>,
     event_source: PollEventSource,
@@ -195,7 +195,7 @@ where
       my_topic: topic,
       deserializer_type: PhantomData,
       discovery_command,
-      status_receiver: StatusReceiver::new(status_channel_rec),
+      status_receiver,
       reader_command,
       data_reader_waker,
       event_source,

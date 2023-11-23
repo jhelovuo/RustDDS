@@ -916,7 +916,7 @@ impl Reader {
           // report of what we have.
           // We claim to have received all SNs before "base" and produce a set of missing
           // sequence numbers that are >= base.
-          let reader_sn_state = match missing_seqnums.get(0) {
+          let reader_sn_state = match missing_seqnums.first() {
             Some(&first_missing) => {
               // Here we assume missing_seqnums are returned in order.
               // Limit the set to maximum that can be sent in acknack submessage.

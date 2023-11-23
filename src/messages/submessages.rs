@@ -36,7 +36,7 @@ pub mod submessage_kind;
 pub mod submessages {
   pub use super::{
     ack_nack::*, data::*, data_frag::*, elements::RepresentationIdentifier, gap::*, heartbeat::*,
-    heartbeat_frag::*, info_destination::*, info_reply::*, info_source::*, info_timestamp::*,
-    nack_frag::*, submessage::*, submessage_flag::*, submessage_header::*, submessage_kind::*,
+    heartbeat_frag::*, info_destination::*, info_reply::*, info_timestamp::*, nack_frag::*,
+    submessage::*, submessage_flag::*, submessage_header::*, submessage_kind::*,
   };
 }
