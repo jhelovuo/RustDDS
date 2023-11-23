@@ -202,7 +202,7 @@ impl QosPolicyBuilder {
 /// Describes a set of RTPS/DDS QoS policies
 ///
 /// QosPolicies are constructed using a [`QosPolicyBuilder`]
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct QosPolicies {
   // pub(crate) because as we want to have some builtin QoS Policies as constant.
   pub(crate) durability: Option<policy::Durability>,
