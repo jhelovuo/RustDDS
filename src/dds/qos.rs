@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -659,7 +659,7 @@ pub mod policy {
   use std::cmp::Ordering;
 
   use speedy::{Readable, Writable};
-  use serde::{Serialize, Deserialize};
+  use serde::{Deserialize, Serialize};
   #[allow(unused_imports)]
   use log::{debug, error, info, trace, warn};
   #[cfg(feature = "security")]

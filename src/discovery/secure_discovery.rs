@@ -2771,7 +2771,7 @@ fn get_handshake_token_from_stateless_message(
     );
   }
   message_data
-    .get(0)
+    .first()
     .map(|data_holder| HandshakeMessageToken::from(data_holder.clone()))
 }
 
