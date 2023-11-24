@@ -1,5 +1,5 @@
 use std::net::{SocketAddrV4, SocketAddrV6};
-pub use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+pub use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
 use speedy::{Context, Readable, Reader, Writable, Writer};
 

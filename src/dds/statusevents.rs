@@ -15,7 +15,7 @@ use std::{
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use futures::stream::{FusedStream, Stream};
-use mio_06::Evented;
+use mio_06::{self, Evented};
 use mio_extras::channel as mio_channel;
 use mio_08::{self, event, Interest, Registry, Token};
 use chrono::Utc;
@@ -48,49 +48,6 @@ where
   fn try_recv_status(&self) -> Option<E>;
 }
 
-// Helper object for various DDS Entities
-// This is now a wrapper around StatusChannelReceiver with enabled-flag
-// TODO: Do we really need this or should we replace this with
-// StatusChannelReceiver
-pub(crate) struct StatusReceiver<E> {
-  channel_receiver: StatusChannelReceiver<E>,
-  enabled: bool, /* if not enabled, we should forward status to parent Entity
-                  * TODO: enabling not implemented */
-}
-
-impl<E> StatusReceiver<E> {
-  pub fn new(channel_receiver: StatusChannelReceiver<E>) -> Self {
-    Self {
-      channel_receiver,
-      enabled: false,
-    }
-  }
-}
-
-impl<'a, E> StatusEvented<'a, E, StatusReceiverStream<'a, E>> for StatusReceiver<E> {
-  fn as_status_evented(&mut self) -> &dyn Evented {
-    self.enabled = true;
-    &self.channel_receiver.actual_receiver
-  }
-
-  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
-    self.enabled = true;
-    &mut self.channel_receiver
-  }
-
-  fn as_async_status_stream(&'a self) -> StatusReceiverStream<'a, E> {
-    self.channel_receiver.as_async_status_stream()
-  }
-
-  fn try_recv_status(&self) -> Option<E> {
-    if self.enabled {
-      self.channel_receiver.try_recv().ok()
-    } else {
-      None
-    }
-  }
-}
-
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
 // -------------------------------------------------------------------------------
@@ -113,7 +70,7 @@ pub(crate) fn sync_status_channel<T>(
       waker: Arc::clone(&waker),
     },
     StatusChannelReceiver {
-      actual_receiver,
+      actual_receiver: Mutex::new(actual_receiver),
       signal_receiver,
       waker,
     },
@@ -129,7 +86,7 @@ pub struct StatusChannelSender<T> {
 }
 
 pub struct StatusChannelReceiver<T> {
-  actual_receiver: mio_channel::Receiver<T>,
+  actual_receiver: Mutex<mio_channel::Receiver<T>>,
   signal_receiver: PollEventSource,
   waker: Arc<Mutex<Option<Waker>>>,
 }
@@ -166,11 +123,7 @@ impl<T> StatusChannelReceiver<T> {
     // We do not manipulate waker here, because the
     // synchronous and asynchronous receiving are not supposed to be mixed.
     self.signal_receiver.drain();
-    self.actual_receiver.try_recv()
-  }
-
-  pub fn as_evented(&self) -> &dyn Evented {
-    &self.actual_receiver
+    self.actual_receiver.lock().unwrap().try_recv()
   }
 
   pub(crate) fn get_waker_update_lock(&self) -> std::sync::MutexGuard<'_, Option<Waker>> {
@@ -180,7 +133,7 @@ impl<T> StatusChannelReceiver<T> {
 
 impl<'a, E> StatusEvented<'a, E, StatusReceiverStream<'a, E>> for StatusChannelReceiver<E> {
   fn as_status_evented(&mut self) -> &dyn Evented {
-    &self.actual_receiver
+    self
   }
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
@@ -196,6 +149,42 @@ impl<'a, E> StatusEvented<'a, E, StatusReceiverStream<'a, E>> for StatusChannelR
 
   fn try_recv_status(&self) -> Option<E> {
     self.try_recv().ok()
+  }
+}
+
+impl<E> Evented for StatusChannelReceiver<E> {
+  // We just delegate all the operations to notification_receiver, since it
+  // already implements Evented
+  fn register(
+    &self,
+    poll: &mio_06::Poll,
+    token: mio_06::Token,
+    interest: mio_06::Ready,
+    opts: mio_06::PollOpt,
+  ) -> io::Result<()> {
+    self
+      .actual_receiver
+      .lock()
+      .unwrap()
+      .register(poll, token, interest, opts)
+  }
+
+  fn reregister(
+    &self,
+    poll: &mio_06::Poll,
+    token: mio_06::Token,
+    interest: mio_06::Ready,
+    opts: mio_06::PollOpt,
+  ) -> io::Result<()> {
+    self
+      .actual_receiver
+      .lock()
+      .unwrap()
+      .reregister(poll, token, interest, opts)
+  }
+
+  fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
+    self.actual_receiver.lock().unwrap().deregister(poll)
   }
 }
 

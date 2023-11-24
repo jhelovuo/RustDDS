@@ -94,7 +94,9 @@ pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializ
   my_topic: Topic,
   qos_policy: QosPolicies,
   my_guid: GUID,
-  pub(crate) notification_receiver: mio_channel::Receiver<()>,
+
+  // mio_channel::Receiver is not thread-safe, so Mutex protects it.
+  pub(crate) notification_receiver: Mutex<mio_channel::Receiver<()>>,
 
   // SimpleDataReader stores a pointer to a mutex on the topic cache
   topic_cache: Arc<Mutex<TopicCache>>,
@@ -104,7 +106,7 @@ pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializ
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  status_receiver: StatusReceiver<DataReaderStatus>,
+  status_receiver: StatusChannelReceiver<DataReaderStatus>,
 
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
   // resetting deadline missed status. Remove attribute when it is supported.
@@ -155,7 +157,7 @@ where
     notification_receiver: mio_channel::Receiver<()>,
     topic_cache: Arc<Mutex<TopicCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
+    status_receiver: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
     data_reader_waker: Arc<Mutex<Option<Waker>>>,
     event_source: PollEventSource,
@@ -187,24 +189,25 @@ where
       my_subscriber: subscriber,
       qos_policy,
       my_guid,
-      notification_receiver,
+      notification_receiver: Mutex::new(notification_receiver),
       topic_cache,
       read_state: Mutex::new(ReadState::new()),
       my_topic: topic,
       deserializer_type: PhantomData,
       discovery_command,
-      status_receiver: StatusReceiver::new(status_channel_rec),
+      status_receiver,
       reader_command,
       data_reader_waker,
       event_source,
     })
   }
-  pub fn set_waker(&self, w: Option<Waker>) {
+  pub(crate) fn set_waker(&self, w: Option<Waker>) {
     *self.data_reader_waker.lock().unwrap() = w;
   }
 
   pub(crate) fn drain_read_notifications(&self) {
-    while self.notification_receiver.try_recv().is_ok() {}
+    let rec = self.notification_receiver.lock().unwrap();
+    while rec.try_recv().is_ok() {}
     self.event_source.drain();
   }
 
@@ -395,6 +398,8 @@ where
   ) -> io::Result<()> {
     self
       .notification_receiver
+      .lock()
+      .unwrap()
       .register(poll, token, interest, opts)
   }
 
@@ -407,11 +412,13 @@ where
   ) -> io::Result<()> {
     self
       .notification_receiver
+      .lock()
+      .unwrap()
       .reregister(poll, token, interest, opts)
   }
 
   fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
-    self.notification_receiver.deregister(poll)
+    self.notification_receiver.lock().unwrap().deregister(poll)
   }
 }
 

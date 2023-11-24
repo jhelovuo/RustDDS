@@ -166,7 +166,7 @@ pub struct DataWriter<D: Keyed, SA: SerializerAdapter<D> = CDRSerializerAdapter<
   cc_upload: mio_channel::SyncSender<WriterCommand>,
   cc_upload_waker: Arc<Mutex<Option<Waker>>>,
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  status_receiver: StatusReceiver<DataWriterStatus>,
+  status_receiver: StatusChannelReceiver<DataWriterStatus>,
   available_sequence_number: AtomicI64,
 }
 
@@ -213,7 +213,7 @@ where
     cc_upload: mio_channel::SyncSender<WriterCommand>,
     cc_upload_waker: Arc<Mutex<Option<Waker>>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_receiver_rec: StatusChannelReceiver<DataWriterStatus>,
+    status_receiver: StatusChannelReceiver<DataWriterStatus>,
   ) -> CreateResult<Self> {
     if let Some(lv) = qos.liveliness {
       match lv {
@@ -235,7 +235,7 @@ where
       cc_upload,
       cc_upload_waker,
       discovery_command,
-      status_receiver: StatusReceiver::new(status_receiver_rec),
+      status_receiver,
       available_sequence_number: AtomicI64::new(1), // valid numbering starts from 1
     })
   }
@@ -450,10 +450,10 @@ where
     match &self.qos_policy.reliability {
       None | Some(Reliability::BestEffort) => Ok(true),
       Some(Reliability::Reliable { .. }) => {
-        let (acked_sender, acked_receiver) = sync_status_channel::<()>(1)?;
+        let (acked_sender, mut acked_receiver) = sync_status_channel::<()>(1)?;
         let poll = mio_06::Poll::new()?;
         poll.register(
-          acked_receiver.as_evented(),
+          acked_receiver.as_status_evented(),
           Token(0),
           Ready::readable(),
           PollOpt::edge(),
