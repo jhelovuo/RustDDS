@@ -20,6 +20,15 @@ Currently, the implementation is complete enough to do data exchange with [ROS2]
 
 The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talking to ROS components. The `ros2` module within RustDDS should not be used anymore.
 
+## Version 0.9
+* New release to enable new features in `ros2-client`
+* DDS Security is under interoperability testing.
+* Support for DomainParticipnnt status events, mostly Discovery-related.
+* Small API changes
+ * Simplify naming
+ * QoS objects are now serializable
+* Protocol bug fixes with Realible connections.
+
 ## Version 0.8.6
 
 * Feature `security` is nearing completion. RustDDS can securely talk to itself, but interoperability testing against other DDS implementaitons is still in progress.
