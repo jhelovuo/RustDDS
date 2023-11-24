@@ -10,12 +10,13 @@ use crate::{
   },
   structure::guid::EntityId,
 };
+#[cfg(feature = "security")]
 use super::{
   secure_body::SecureBody, secure_postfix::SecurePostfix, secure_prefix::SecurePrefix,
   secure_rtps_postfix::SecureRTPSPostfix, secure_rtps_prefix::SecureRTPSPrefix,
 };
 
-//TODO: These messages are structured a bit oddly. Why is flags separate from
+// TODO: These messages are structured a bit oddly. Why is flags separate from
 // the submessage proper?
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -24,7 +25,7 @@ pub enum WriterSubmessage {
   DataFrag(DataFrag, BitFlags<DATAFRAG_Flags>),
   Gap(Gap, BitFlags<GAP_Flags>),
   Heartbeat(Heartbeat, BitFlags<HEARTBEAT_Flags>),
-  #[allow(dead_code)] // Functinality not yet implemented
+  #[allow(dead_code)] // Functionality not yet implemented
   HeartbeatFrag(HeartbeatFrag, BitFlags<HEARTBEATFRAG_Flags>),
 }
 
@@ -64,6 +65,7 @@ impl<C: Context> Writable<C> for ReaderSubmessage {
 }
 
 /// New submessage types: section 7.3.6 of the Security specification (v. 1.1)
+#[cfg(feature = "security")]
 #[derive(Debug, PartialEq, Eq, Clone)]
 #[allow(clippy::enum_variant_names)] // We are using variant names from the spec
 pub enum SecuritySubmessage {
@@ -78,6 +80,7 @@ pub enum SecuritySubmessage {
 // 1) we cannot implement Writable for *Flags defined using enumflags2, as they
 // are foreign types (coherence rules) 2) Writer should not use any enum variant
 // tag in this type, as we have SubmessageHeader already.
+#[cfg(feature = "security")]
 impl<C: Context> Writable<C> for SecuritySubmessage {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
     match self {
@@ -97,7 +100,7 @@ pub enum InterpreterSubmessage {
   InfoDestination(InfoDestination, BitFlags<INFODESTINATION_Flags>),
   InfoReply(InfoReply, BitFlags<INFOREPLY_Flags>),
   InfoTimestamp(InfoTimestamp, BitFlags<INFOTIMESTAMP_Flags>),
-  //Pad(Pad), // Pad message does not need to be processed above serialization layer
+  // Pad(Pad), // Pad message does not need to be processed above serialization layer
 }
 
 // See notes on impl Writer for EntitySubmessage
@@ -120,7 +123,7 @@ impl<C: Context> Writable<C> for InterpreterSubmessage {
 #[derive(Debug)]
 pub enum AckSubmessage {
   AckNack(AckNack),
-  #[allow(dead_code)] // Functinality not yet implemented
+  #[allow(dead_code)] // Functionality not yet implemented
   NackFrag(NackFrag),
 }
 
@@ -129,6 +132,47 @@ impl AckSubmessage {
     match self {
       AckSubmessage::AckNack(a) => a.writer_id,
       AckSubmessage::NackFrag(a) => a.writer_id,
+    }
+  }
+}
+
+pub trait HasEntityIds {
+  fn receiver_entity_id(&self) -> EntityId;
+  fn sender_entity_id(&self) -> EntityId;
+}
+
+impl HasEntityIds for WriterSubmessage {
+  fn receiver_entity_id(&self) -> EntityId {
+    match self {
+      WriterSubmessage::Data(s, _f) => s.receiver_entity_id(),
+      WriterSubmessage::DataFrag(s, _f) => s.receiver_entity_id(),
+      WriterSubmessage::Gap(s, _f) => s.receiver_entity_id(),
+      WriterSubmessage::Heartbeat(s, _f) => s.receiver_entity_id(),
+      WriterSubmessage::HeartbeatFrag(s, _f) => s.receiver_entity_id(),
+    }
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    match self {
+      WriterSubmessage::Data(s, _f) => s.sender_entity_id(),
+      WriterSubmessage::DataFrag(s, _f) => s.sender_entity_id(),
+      WriterSubmessage::Gap(s, _f) => s.sender_entity_id(),
+      WriterSubmessage::Heartbeat(s, _f) => s.sender_entity_id(),
+      WriterSubmessage::HeartbeatFrag(s, _f) => s.sender_entity_id(),
+    }
+  }
+}
+
+impl HasEntityIds for ReaderSubmessage {
+  fn receiver_entity_id(&self) -> EntityId {
+    match self {
+      ReaderSubmessage::AckNack(s, _f) => s.receiver_entity_id(),
+      ReaderSubmessage::NackFrag(s, _f) => s.receiver_entity_id(),
+    }
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    match self {
+      ReaderSubmessage::AckNack(s, _f) => s.sender_entity_id(),
+      ReaderSubmessage::NackFrag(s, _f) => s.sender_entity_id(),
     }
   }
 }

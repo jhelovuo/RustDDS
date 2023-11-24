@@ -115,7 +115,7 @@ impl<D> DeserializedCacheChange<D> {
   }
 
   pub fn source_timestamp(&self) -> Option<Timestamp> {
-    self.write_options.source_timestamp
+    self.write_options.source_timestamp()
   }
 
   pub fn writer_guid(&self) -> GUID {
@@ -123,6 +123,6 @@ impl<D> DeserializedCacheChange<D> {
   }
 
   pub fn related_sample_identity(&self) -> Option<SampleIdentity> {
-    self.write_options.related_sample_identity
+    self.write_options.related_sample_identity()
   }
 }

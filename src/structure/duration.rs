@@ -1,23 +1,12 @@
-use std::{convert::TryFrom, ops::Div};
+use std::{convert::TryFrom, fmt, ops::Div};
 
 use speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
 
 #[derive(
-  Debug,
-  PartialEq,
-  Eq,
-  Hash,
-  PartialOrd,
-  Ord,
-  Readable,
-  Writable,
-  Serialize,
-  Deserialize,
-  Copy,
-  Clone,
+  PartialEq, Eq, Hash, PartialOrd, Ord, Readable, Writable, Serialize, Deserialize, Copy, Clone,
 )]
-/// Duration is the DDS/RTPS representation for legths of time, such as
+/// Duration is the DDS/RTPS representation for lengths of time, such as
 /// timeouts. It is very similar to [`std::time::Duration`]. See also
 /// [`Timestamp`](crate::Timestamp).
 ///
@@ -29,10 +18,21 @@ pub struct Duration {
 }
 
 impl Duration {
-  pub const DURATION_ZERO: Self = Self {
+  pub const ZERO: Self = Self {
     seconds: 0,
     fraction: 0,
   };
+
+  pub const INFINITE: Self = Self {
+    seconds: 0x7FFFFFFF,
+    fraction: 0xFFFFFFFF,
+  };
+
+  #[deprecated(since = "0.8.7", note = "Renamed to Duration::ZERO")]
+  pub const DURATION_ZERO: Self = Self::ZERO;
+
+  #[deprecated(since = "0.8.7", note = "Renamed to Duration::INFINITE")]
+  pub const DURATION_INFINITE: Self = Self::INFINITE;
 
   pub const fn from_secs(secs: i32) -> Self {
     Self {
@@ -77,18 +77,6 @@ impl Duration {
     }
   }
 
-  /* DURATION_INVALID is not part of the spec. And it is also dangerous, as it is plausible someone could
-  legitimately measure such an interval, and others would interpret it as "invalid".
-  pub const DURATION_INVALID: Self = Self {
-    seconds: -1,
-    fraction: 0xFFFFFFFF,
-  };*/
-
-  pub const DURATION_INFINITE: Self = Self {
-    seconds: 0x7FFFFFFF,
-    fraction: 0xFFFFFFFF,
-  };
-
   pub fn to_nanoseconds(&self) -> i64 {
     ((i128::from(self.to_ticks()) * 1_000_000_000) >> 32) as i64
   }
@@ -120,8 +108,8 @@ impl From<std::time::Duration> for Duration {
 impl From<Duration> for std::time::Duration {
   fn from(d: Duration) -> Self {
     Self::from_nanos(
-      u64::try_from(d.to_nanoseconds()).unwrap_or(0), /* saturate to zero, becaues
-                                                       * std::time::Duraiton is unsigned */
+      u64::try_from(d.to_nanoseconds()).unwrap_or(0), /* saturate to zero, because
+                                                       * std::time::Duration is unsigned */
     )
   }
 }
@@ -148,20 +136,35 @@ impl std::ops::Mul<Duration> for f64 {
   }
 }
 
+impl fmt::Debug for Duration {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    if *self == Self::INFINITE {
+      write!(f, "infinite")
+    } else {
+      write!(f, "{}", self.seconds)?;
+      if self.fraction > 0 {
+        let frac = format!("{:09}", (1_000_000_000 * (self.fraction as u64)) >> 32);
+        write!(f, ".{}", frac.trim_end_matches('0'))?;
+      }
+      write!(f, " sec")
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
 
   serialization_test!( type = Duration,
   {
-      duration_zero,
-      Duration::DURATION_ZERO,
+     duration_zero,
+      Duration::ZERO,
       le = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00],
       be = [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
   },
   {
       duration_infinite,
-      Duration::DURATION_INFINITE,
+      Duration::INFINITE,
       le = [0xFF, 0xFF, 0xFF, 0x7F, 0xFF, 0xFF, 0xFF, 0xFF],
       be = [0x7F, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
   },
@@ -206,5 +209,19 @@ mod tests {
       duration,
       std::time::Duration::from_nanos(1_519_152_760 * NANOS_PER_SEC + 309_247_999)
     );
+  }
+
+  fn fmt_check(d: Duration, s: &str) {
+    assert_eq!(format!("{:?}", d), s);
+  }
+
+  #[test]
+  fn duration_format() {
+    fmt_check(Duration::from_frac_seconds(0.0), "0 sec");
+    fmt_check(Duration::from_frac_seconds(0.5), "0.5 sec");
+    fmt_check(Duration::from_frac_seconds(1.5), "1.5 sec");
+    fmt_check(Duration::from_frac_seconds(20.0), "20 sec");
+    fmt_check(Duration::from_frac_seconds(2.25), "2.25 sec");
+    fmt_check(Duration::from_frac_seconds(10.0 / 3.0), "3.333333333 sec");
   }
 }

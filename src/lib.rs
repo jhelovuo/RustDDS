@@ -60,7 +60,7 @@
 //!   is the DDS default, then use [`CDRSerializerAdapter`] and
 //!   [`CDRDeserializerAdapter`]
 //!   when such adapters are required. If you need to use another serialization format, then you should find or write
-//!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdaper.
+//!   a [Serde data format](https://serde.rs/data-format.html) implementation and wrap it as a (De)SerializerAdapter.
 //!
 //! # Polling multiple DataReaders
 //!
@@ -100,7 +100,7 @@
 //! let domain_participant = DomainParticipant::new(0).unwrap();
 //!
 //! let qos = QosPolicyBuilder::new()
-//!   .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::DURATION_ZERO })
+//!   .reliability(policy::Reliability::Reliable { max_blocking_time: rustdds::Duration::ZERO })
 //!   .build();
 //!
 //! // DDS Subscriber, only one is necessary for each thread (slight difference to
@@ -116,7 +116,7 @@
 //! let some_topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
 //!
 //! // Used type needs Serialize for writers and Deserialize for readers
-//! #[derive(Serialize, Deserialize)]
+//! #[derive(Serialize, Deserialize, Debug)]
 //! struct SomeType {
 //!   a: i32
 //! }
@@ -155,7 +155,6 @@
 //! // Getting reference to actual data from the data sample
 //! let actual_data = data_sample.value();
 //! ```
-#![deny(clippy::all)]
 #![warn(clippy::needless_pass_by_value, clippy::semicolon_if_nothing_returned)]
 #![allow(
   // option_map_unit_fn suggests changing option.map( ) with () return value to if let -construct,
@@ -172,7 +171,15 @@ pub mod discovery; // to access some Discovered data in e.g. ros2-client crate
 mod messages;
 mod network;
 mod rtps;
+
+#[cfg(feature = "security")]
 mod security;
+#[cfg(feature = "security")]
+pub use security::config::DomainParticipantSecurityConfigFiles;
+
+#[cfg(not(feature = "security"))]
+mod no_security;
+
 pub(crate) mod structure;
 
 #[cfg(test)]
@@ -182,6 +189,8 @@ mod mio_source;
 
 // Public modules
 pub mod dds; // this is public, but not advertised
+
+#[deprecated(since = "0.8.5", note = "Use crate ros2-client instead.")]
 pub mod ros2;
 /// Helpers for (De)serialization and definitions of (De)serializer adapters
 pub mod serialization;
@@ -190,13 +199,16 @@ pub mod serialization;
 #[doc(inline)]
 pub use dds::{
   key::{Key, Keyed},
-  participant::DomainParticipant,
+  participant::{DomainParticipant, DomainParticipantBuilder},
   pubsub::{Publisher, Subscriber},
   qos,
   qos::{policy, QosPolicies, QosPolicyBuilder},
   readcondition::ReadCondition,
   sampleinfo::{InstanceState, NotAliveGenerationCounts, SampleInfo, SampleState, ViewState},
-  statusevents::StatusEvented,
+  statusevents::{
+    DataReaderStatus, DataWriterStatus, DomainParticipantStatusEvent, EndpointDescription,
+    LostReason, ParticipantDescription, StatusEvented,
+  },
   topic::{Topic, TopicDescription, TopicKind},
   typedesc::TypeDesc,
   with_key::{datareader::SelectByKey, WriteOptions, WriteOptionsBuilder},

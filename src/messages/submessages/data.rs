@@ -5,13 +5,12 @@ use speedy::{Context, Error, Readable, Writable, Writer};
 use enumflags2::BitFlags;
 
 use crate::{
-  messages::submessages::{
-    elements::{parameter_list::ParameterList, serialized_payload::SerializedPayload},
-    submessages::*,
-  },
+  messages::submessages::{elements::parameter_list::ParameterList, submessages::*},
   structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
-//use log::debug;
+// use log::debug;
+#[cfg(test)]
+use super::elements::serialized_payload::SerializedPayload;
 
 /// This Submessage is sent from an RTPS Writer (NO_KEY or WITH_KEY)
 /// to an RTPS Reader (NO_KEY or WITH_KEY)
@@ -40,17 +39,20 @@ pub struct Data {
   /// Present only if the InlineQosFlag is set in the header.
   pub inline_qos: Option<ParameterList>,
 
-  /// If the DataFlag is set, then it contains the encapsulation of
-  /// the new value of the data-object after the change.
+  /// If the DataFlag is set, then serialized_payload contains the encapsulation
+  /// of the new value of the data-object after the change.
   /// If the KeyFlag is set, then it contains the encapsulation of
   /// the key of the data-object the message refers to.
-  pub serialized_payload: Option<SerializedPayload>,
+  ///
+  /// In case of submessage protection, this payload contains the
+  /// encoded version of the original payload
+  pub serialized_payload: Option<Bytes>,
 }
 
 impl Data {
   /// DATA submessage cannot be speedy Readable because deserializing this
   /// requires info from submessage header. Required information is  expect_qos
-  /// and expect_payload, which are told on submessage headerflags.
+  /// and expect_payload, which are told on submessage header flags.
 
   pub fn deserialize_data(buffer: &Bytes, flags: BitFlags<DATA_Flags>) -> io::Result<Self> {
     let mut cursor = io::Cursor::new(&buffer);
@@ -123,9 +125,8 @@ impl Data {
       None
     };
 
-    let payload = if expect_data {
-      let p = SerializedPayload::from_bytes(&buffer.clone().split_off(cursor.position() as usize))?;
-      Some(p)
+    let serialized_payload = if expect_data {
+      Some(buffer.clone().split_off(cursor.position() as usize))
     } else {
       None
     };
@@ -135,7 +136,7 @@ impl Data {
       writer_id,
       writer_sn: sequence_number,
       inline_qos: parameter_list,
-      serialized_payload: payload,
+      serialized_payload,
     })
   }
 
@@ -149,14 +150,36 @@ impl Data {
     4 + // readerId
     4 + // writerId
     8 + // writerSN
-    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParamterList
-    self.serialized_payload.as_ref().map(|q| q.len_serialized()).unwrap_or(0)
+    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParameterList
+    self.serialized_payload.as_ref().map(|q| q.len()).unwrap_or(0)
+  }
+
+  #[cfg(test)]
+  pub(crate) fn unwrap_serialized_payload(&self) -> SerializedPayload {
+    self
+      .serialized_payload
+      .as_ref()
+      .map(SerializedPayload::from_bytes)
+      .unwrap()
+      .unwrap()
+  }
+
+  #[cfg(test)]
+  pub(crate) fn unwrap_serialized_payload_value(&self) -> Bytes {
+    self.unwrap_serialized_payload().value
+  }
+
+  #[cfg(test)]
+  pub(crate) fn update_serialized_payload_value(&mut self, new_value: Bytes) {
+    let mut payload = self.unwrap_serialized_payload();
+    payload.value = new_value;
+    self.serialized_payload = Some(payload.into());
   }
 }
 
 impl<C: Context> Writable<C> for Data {
   fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-    //This version of the protocol (2.3) should set all the bits in the extraFlags
+    // This version of the protocol (2.3) should set all the bits in the extraFlags
     // to zero
     writer.write_u16(0)?;
     // The octetsToInlineQos field contains the number of octets starting from the
@@ -174,9 +197,18 @@ impl<C: Context> Writable<C> for Data {
     }
 
     if let Some(serialized_payload) = self.serialized_payload.as_ref() {
-      writer.write_value(serialized_payload)?;
+      writer.write_bytes(serialized_payload)?;
     }
 
     Ok(())
+  }
+}
+
+impl HasEntityIds for Data {
+  fn receiver_entity_id(&self) -> EntityId {
+    self.reader_id
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    self.writer_id
   }
 }

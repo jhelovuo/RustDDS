@@ -1,66 +1,104 @@
 use std::{
   io,
   io::{Read, Write},
-  os::fd::{AsRawFd, FromRawFd, OwnedFd},
-  sync::Mutex,
+  sync::{Arc, Mutex},
 };
+#[cfg(not(target_os = "windows"))]
+use std::os::fd::OwnedFd;
+#[cfg(target_os = "windows")]
+use std::{thread::sleep, time::Duration};
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
+#[cfg(target_os = "windows")]
+use mio_08::net::TcpListener;
+#[cfg(not(target_os = "windows"))]
 use socketpair::*;
-use mio_08::{self, *};
+use mio_08::{self, net::TcpStream, *};
 
-// PollEventSource and PollEventSender are an event communcaion
+// PollEventSource and PollEventSender are an event communication
 // channel. PollEventSource is a mio-0.8 event::Source for Poll,
 // so it can be Registered in mio-0.8.
 // These Events carry no data.
 
 // This is the event receiver end. It is a "Source" in the terminology of mio.
 pub struct PollEventSource {
-  #[allow(dead_code)]
-  rec_sps: SocketpairStream, // we are storing this just to keep the socket alive
   rec_mio_socket: Mutex<mio_08::net::TcpStream>,
 }
 
-// TODO: How to store the socket so that it is correctly tracked and dropped
-// when these PolEventSource /-Sender are dropped. Can we do that without
-// unsafe?
-
+#[derive(Clone)]
 pub struct PollEventSender {
-  #[allow(dead_code)]
-  send_sps: SocketpairStream,
-  send_mio_socket: Mutex<mio_08::net::TcpStream>,
+  send_mio_socket: Arc<Mutex<mio_08::net::TcpStream>>,
+  // Sender has Arc to support Clone, whereas Receiver has not.
 }
 
+#[cfg(not(target_os = "windows"))]
 fn set_non_blocking(s: SocketpairStream) -> io::Result<SocketpairStream> {
   let owned_fd = OwnedFd::from(s);
   let std_socket = std::net::TcpStream::from(owned_fd);
   std_socket.set_nonblocking(true)?;
+
   Ok(SocketpairStream::from(OwnedFd::from(std_socket)))
 }
 
+#[cfg(not(target_os = "windows"))]
 pub fn make_poll_channel() -> io::Result<(PollEventSource, PollEventSender)> {
-  // This could be also a pipe or any other OS construct that can be poll()'ed in
-  // mio-0.8 And can be triggered (sent to) from the application.
-  // Socketpair is symmetric, but we decide to call one end receive and the other
-  // send. We use stream sockets, because the documentation says datagram
-  // sockets are not available on MacOS.
   let (rec_sps, send_sps) = socketpair_stream()?;
-
   let rec_sps = set_non_blocking(rec_sps)?;
   let send_sps = set_non_blocking(send_sps)?;
 
-  let rec_mio_socket = unsafe { mio_08::net::TcpStream::from_raw_fd(rec_sps.as_raw_fd()) };
-  let send_mio_socket = unsafe { mio_08::net::TcpStream::from_raw_fd(send_sps.as_raw_fd()) };
+  let rec_mio_socket = TcpStream::from_std(std::net::TcpStream::from(OwnedFd::from(rec_sps)));
+  let send_mio_socket = TcpStream::from_std(std::net::TcpStream::from(OwnedFd::from(send_sps)));
 
   Ok((
     PollEventSource {
-      rec_sps,
       rec_mio_socket: Mutex::new(rec_mio_socket),
     },
     PollEventSender {
-      send_sps,
-      send_mio_socket: Mutex::new(send_mio_socket),
+      send_mio_socket: Arc::new(Mutex::new(send_mio_socket)),
+    },
+  ))
+}
+
+#[cfg(target_os = "windows")]
+pub fn make_poll_channel() -> io::Result<(PollEventSource, PollEventSender)> {
+  let listener = match TcpListener::bind("127.0.0.1:0".parse().unwrap()) {
+    Ok(listener) => listener,
+    Err(err) => {
+      error!("Failed to make listener!: {err}");
+      return Err(err);
+    }
+  };
+
+  let addr = match listener.local_addr() {
+    Ok(listener) => listener,
+    Err(err) => {
+      error!("Failed to retrieve local address: {err}");
+      return Err(err);
+    }
+  };
+
+  let rec_mio_socket = match TcpStream::connect(addr) {
+    Ok(tcp_stream) => tcp_stream,
+    Err(err) => {
+      error!("Failed to connect tcp stream: {err}");
+      return Err(err);
+    }
+  };
+
+  let mut send_mio_socket = listener.accept();
+  while send_mio_socket.is_err() {
+    sleep(Duration::from_millis(100));
+    send_mio_socket = listener.accept();
+  }
+  let (send_mio_socket, _addr_send) = send_mio_socket?;
+  debug!("IPC socket: {addr:#?} <-> {_addr_send:#?}");
+  Ok((
+    PollEventSource {
+      rec_mio_socket: Mutex::new(rec_mio_socket),
+    },
+    PollEventSender {
+      send_mio_socket: Arc::new(Mutex::new(send_mio_socket)),
     },
   ))
 }

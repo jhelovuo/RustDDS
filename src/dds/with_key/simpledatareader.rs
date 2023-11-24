@@ -29,7 +29,6 @@ use crate::{
     with_key::datasample::{DeserializedCacheChange, Sample},
   },
   discovery::discovery::DiscoveryCommand,
-  log_and_err_internal, log_and_err_precondition_not_met,
   mio_source::PollEventSource,
   serialization::CDRDeserializerAdapter,
   structure::{
@@ -89,19 +88,15 @@ impl<K: Key> ReadState<K> {
 
 /// SimpleDataReaders can only do "take" semantics and does not have
 /// any deduplication or other DataSampleCache functionality.
-pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>>
-where
-  <D as Keyed>::K: Key,
-{
-  #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
-  // any subscriber-wide QoS policies, such as ordered or coherent access.
-  // Remove this attribute when/if such things are implemented.
+pub struct SimpleDataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
   my_subscriber: Subscriber,
 
   my_topic: Topic,
   qos_policy: QosPolicies,
   my_guid: GUID,
-  pub(crate) notification_receiver: mio_channel::Receiver<()>,
+
+  // mio_channel::Receiver is not thread-safe, so Mutex protects it.
+  pub(crate) notification_receiver: Mutex<mio_channel::Receiver<()>>,
 
   // SimpleDataReader stores a pointer to a mutex on the topic cache
   topic_cache: Arc<Mutex<TopicCache>>,
@@ -111,7 +106,7 @@ where
   deserializer_type: PhantomData<DA>, // This is to provide use for DA
 
   discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  status_receiver: StatusReceiver<DataReaderStatus>,
+  status_receiver: StatusChannelReceiver<DataReaderStatus>,
 
   #[allow(dead_code)] // TODO: This is currently unused, because we do not implement
   // resetting deadline missed status. Remove attribute when it is supported.
@@ -124,7 +119,6 @@ where
 impl<D, DA> Drop for SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn drop(&mut self) {
@@ -151,7 +145,6 @@ where
 impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   #[allow(clippy::too_many_arguments)]
@@ -164,17 +157,17 @@ where
     notification_receiver: mio_channel::Receiver<()>,
     topic_cache: Arc<Mutex<TopicCache>>,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-    status_channel_rec: StatusChannelReceiver<DataReaderStatus>,
+    status_receiver: StatusChannelReceiver<DataReaderStatus>,
     reader_command: mio_channel::SyncSender<ReaderCommand>,
     data_reader_waker: Arc<Mutex<Option<Waker>>>,
     event_source: PollEventSource,
-  ) -> Result<Self> {
+  ) -> CreateResult<Self> {
     let dp = match subscriber.participant() {
       Some(dp) => dp,
       None => {
-        return log_and_err_precondition_not_met!(
-          "Cannot create new DataReader, DomainParticipant doesn't exist."
-        )
+        return Err(CreateError::ResourceDropped {
+          reason: "Cannot create new DataReader, DomainParticipant doesn't exist.".to_string(),
+        })
       }
     };
 
@@ -183,35 +176,38 @@ where
     // Verify that the topic cache corresponds to the topic of the Reader
     let topic_cache_name = topic_cache.lock().unwrap().topic_name();
     if topic.name() != topic_cache_name {
-      return log_and_err_internal!(
-        "Topic name = {} and topic cache name = {} not equal when creating a SimpleDataReader",
-        topic.name(),
-        topic_cache_name
-      );
+      return Err(CreateError::Internal {
+        reason: format!(
+          "Topic name = {} and topic cache name = {} not equal when creating a SimpleDataReader",
+          topic.name(),
+          topic_cache_name
+        ),
+      });
     }
 
     Ok(Self {
       my_subscriber: subscriber,
       qos_policy,
       my_guid,
-      notification_receiver,
+      notification_receiver: Mutex::new(notification_receiver),
       topic_cache,
       read_state: Mutex::new(ReadState::new()),
       my_topic: topic,
       deserializer_type: PhantomData,
       discovery_command,
-      status_receiver: StatusReceiver::new(status_channel_rec),
+      status_receiver,
       reader_command,
       data_reader_waker,
       event_source,
     })
   }
-  pub fn set_waker(&self, w: Option<Waker>) {
+  pub(crate) fn set_waker(&self, w: Option<Waker>) {
     *self.data_reader_waker.lock().unwrap() = w;
   }
 
   pub(crate) fn drain_read_notifications(&self) {
-    while self.notification_receiver.try_recv().is_ok() {}
+    let rec = self.notification_receiver.lock().unwrap();
+    while rec.try_recv().is_ok() {}
     self.event_source.drain();
   }
 
@@ -236,14 +232,14 @@ where
       Sample::Value(d) => d.key(),
       Sample::Dispose(k) => k.clone(),
     };
-    hash_to_key_map.insert(instance_key.hash_key(), instance_key);
+    hash_to_key_map.insert(instance_key.hash_key(false), instance_key);
   }
 
   fn deserialize(
     timestamp: Timestamp,
     cc: &CacheChange,
     hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
-  ) -> std::result::Result<DeserializedCacheChange<D>, String> {
+  ) -> ReadResult<DeserializedCacheChange<D>> {
     match cc.data_value {
       DDSData::Data {
         ref serialized_payload,
@@ -260,13 +256,17 @@ where
               Self::update_hash_to_key_map(hash_to_key_map, &p);
               Ok(DeserializedCacheChange::new(timestamp, cc, p))
             }
-            Err(e) => Err(format!("Failed to deserialize sample bytes: {e}, ")),
+            Err(e) => Err(ReadError::Deserialization {
+              reason: format!("Failed to deserialize sample bytes: {e}, "),
+            }),
           }
         } else {
-          Err(format!(
-            "Unknown representation id {:?}.",
-            serialized_payload.representation_identifier
-          ))
+          Err(ReadError::Deserialization {
+            reason: format!(
+              "Unknown representation id {:?}.",
+              serialized_payload.representation_identifier
+            ),
+          })
         }
       }
 
@@ -283,7 +283,9 @@ where
             Self::update_hash_to_key_map(hash_to_key_map, &k);
             Ok(DeserializedCacheChange::new(timestamp, cc, k))
           }
-          Err(e) => Err(format!("Failed to deserialize key {}", e)),
+          Err(e) => Err(ReadError::Deserialization {
+            reason: format!("Failed to deserialize key {}", e),
+          }),
         }
       }
 
@@ -297,10 +299,9 @@ where
             Sample::Dispose(key.clone()),
           ))
         } else {
-          Err(format!(
-            "Tried to dispose with unknown key hash: {:x?}",
-            key_hash
-          ))
+          Err(ReadError::Deserialization {
+            reason: format!("Tried to dispose with unknown key hash: {:x?}", key_hash),
+          })
         }
       }
     } // match
@@ -308,7 +309,7 @@ where
 
   /// Note: Always remember to call .drain_read_notifications() just before
   /// calling this one. Otherwise, new notifications may not appear.
-  pub fn try_take_one(&self) -> Result<Option<DeserializedCacheChange<D>>> {
+  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>> {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
       Some(policy::Reliability::Reliable { .. })
@@ -339,12 +340,14 @@ where
           .insert(dcc.writer_guid, dcc.sequence_number);
         Ok(Some(dcc))
       }
-      Err(string) => Error::serialization_error(format!(
-        "{} Topic = {}, Type = {:?}",
-        string,
-        self.my_topic.name(),
-        self.my_topic.get_type()
-      )),
+      Err(ser_err) => Err(ReadError::Deserialization {
+        reason: format!(
+          "{}, Topic = {}, Type = {:?}",
+          ser_err,
+          self.my_topic.name(),
+          self.my_topic.get_type()
+        ),
+      }),
     }
   }
 
@@ -366,12 +369,6 @@ where
     }
   }
 
-  pub fn as_simple_data_reader_event_stream(&self) -> SimpleDataReaderEventStream<D, DA> {
-    SimpleDataReaderEventStream {
-      simple_datareader: self,
-    }
-  }
-
   fn acquire_the_topic_cache_guard(&self) -> MutexGuard<TopicCache> {
     self.topic_cache.lock().unwrap_or_else(|e| {
       panic!(
@@ -383,12 +380,11 @@ where
   }
 }
 
-// This is  not part of DDS spec. We implement mio Eventd so that the
+// This is  not part of DDS spec. We implement mio Evented so that the
 // application can asynchronously poll DataReader(s).
 impl<D, DA> Evented for SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it
@@ -402,6 +398,8 @@ where
   ) -> io::Result<()> {
     self
       .notification_receiver
+      .lock()
+      .unwrap()
       .register(poll, token, interest, opts)
   }
 
@@ -414,18 +412,19 @@ where
   ) -> io::Result<()> {
     self
       .notification_receiver
+      .lock()
+      .unwrap()
       .reregister(poll, token, interest, opts)
   }
 
   fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
-    self.notification_receiver.deregister(poll)
+    self.notification_receiver.lock().unwrap().deregister(poll)
   }
 }
 
 impl<D, DA> mio_08::event::Source for SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn register(
@@ -451,10 +450,10 @@ where
   }
 }
 
-impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
+impl<'a, D, DA> StatusEvented<'a, DataReaderStatus, SimpleDataReaderEventStream<'a, D, DA>>
+  for SimpleDataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -465,6 +464,12 @@ where
     self.status_receiver.as_status_source()
   }
 
+  fn as_async_status_stream(&'a self) -> SimpleDataReaderEventStream<'a, D, DA> {
+    SimpleDataReaderEventStream {
+      simple_datareader: self,
+    }
+  }
+
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
     self.status_receiver.try_recv_status()
   }
@@ -473,7 +478,6 @@ where
 impl<D, DA> RTPSEntity for SimpleDataReader<D, DA>
 where
   D: Keyed + DeserializeOwned,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
@@ -490,9 +494,7 @@ pub struct SimpleDataReaderStream<
   'a,
   D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where
-  <D as Keyed>::K: Key,
-{
+> {
   simple_datareader: &'a SimpleDataReader<D, DA>,
 }
 
@@ -503,7 +505,6 @@ pub struct SimpleDataReaderStream<
 impl<'a, D, DA> Unpin for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
 }
@@ -511,10 +512,9 @@ where
 impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = Result<DeserializedCacheChange<D>>;
+  type Item = ReadResult<DeserializedCacheChange<D>>;
 
   // The full return type is now
   // Poll<Option<Result<DeserializedCacheChange<D>>>
@@ -556,7 +556,6 @@ where
 impl<'a, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {
@@ -571,21 +570,38 @@ pub struct SimpleDataReaderEventStream<
   'a,
   D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where
-  <D as Keyed>::K: Key,
-{
+> {
   simple_datareader: &'a SimpleDataReader<D, DA>,
 }
 
 impl<'a, D, DA> Stream for SimpleDataReaderEventStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>;
+  type Item = DataReaderStatus;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    Pin::new(&mut self.simple_datareader.status_receiver.as_async_stream()).poll_next(cx)
+    Pin::new(
+      &mut self
+        .simple_datareader
+        .status_receiver
+        .as_async_status_stream(),
+    )
+    .poll_next(cx)
   } // fn
 } // impl
+
+impl<'a, D, DA> FusedStream for SimpleDataReaderEventStream<'a, D, DA>
+where
+  D: Keyed + 'static,
+  DA: DeserializerAdapter<D>,
+{
+  fn is_terminated(&self) -> bool {
+    self
+      .simple_datareader
+      .status_receiver
+      .as_async_status_stream()
+      .is_terminated()
+  }
+}

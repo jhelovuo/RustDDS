@@ -3,8 +3,10 @@
 ![continuous-integration](https://github.com/jhelovuo/RustDDS/actions/workflows/CI.yml/badge.svg)
 [![codecov](https://codecov.io/gh/jhelovuo/RustDDS/branch/master/graph/badge.svg)](https://codecov.io/gh/jhelovuo/RustDDS)
 
-[RustDDS][rustdds-url] is a pure Rust implementation of [Data Distribution Service](https://www.omg.org/spec/DDS/), developed by [Atostek Oy][atostek-url]. 
-Atostek provides support and software development services related to DDS, ROS2, and robotics software in general. As a part of our work, we have open-sourced the RustDDS implementation.
+[RustDDS][rustdds-url] is a pure Rust implementation of [Data Distribution Service](https://www.omg.org/spec/DDS/). The latest [released version](https://crates.io/crates/rustdds) 
+is available on [crates.io](https://crates.io/) and API documentation on [docs.rs](https://docs.rs/rustdds/latest/rustdds/). The [GitHub repository](https://github.com/jhelovuo/RustDDS) tracks development.
+
+RustDDS is developed by [Atostek Oy][atostek-url]. Atostek provides support and software development services related to DDS, ROS2, and robotics software in general. As a part of our work, we have open-sourced the RustDDS implementation.
 
 We have tried to translate the key ideas of the DDS application interface to Rust concepts, but also follow Rust conventions. Consequently, the API is not exactly as written in the DDS specification, but a functionally equivalent approximation using Rust concepts and conventions.
 
@@ -18,6 +20,21 @@ Currently, the implementation is complete enough to do data exchange with [ROS2]
 
 The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talking to ROS components. The `ros2` module within RustDDS should not be used anymore.
 
+## Version 0.8.6
+
+* Feature `security` is nearing completion. RustDDS can securely talk to itself, but interoperability testing against other DDS implementaitons is still in progress.
+* Fix several bugs in SequenceNumber handling.
+* RTPS Writer data sending rewritten.
+* Fixed bug: Source timestamps were missing on retransmitted data.
+
+
+## Version 0.8.5
+
+* Feature `security` merged to master, but it is still work-in-progress, so does not work yet.
+* Should work on Windows again
+* Less strict lifetime bound in deserialization
+* Simplify Key trait usage
+
 ## Version 0.8
 
 New features:
@@ -26,7 +43,7 @@ New features:
 * Polling using either mio-0.6 or mio-0.8.
 * Simplified DataReader `SimpleDataReader` is available. It supports only `.take()` calls, but
 should be lighter and faster than regular DataReader. It is designed to have just enough
-functionality to implement a ROS2 Subscrber.
+functionality to implement a ROS2 Subscriber.
 
 This release breaks compatibility:
 
@@ -70,8 +87,8 @@ This release breaks compatibility with 0.4.0. Differences are
 * Deadline and Latency budget QoS
 * Sample fragmentation (large object exchange) ✅
 * `wait_for_acknowledgments` ✅
-* Listener (or equivalent) for DomainParticiapnts
-* Listerer (or equivalent) for Topics
+* Listener (or equivalent) for DomainParticipants
+* Listener (or equivalent) for Topics
 * Alternative API using Rust `async` tasks ✅
 * Shared-memory transport for local connections
 

@@ -1,18 +1,21 @@
 use std::collections::BTreeMap;
 
+use serde::{Serialize, Deserialize};
 use speedy::{Readable, Writable};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::result::Result,
+  dds::result::QosError,
   messages::submessages::elements::parameter::Parameter,
-  serialization,
-  serialization::speedy_pl_cdr_helpers::*,
+  serialization::{
+    pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializeError},
+    speedy_pl_cdr_helpers::*,
+  },
   structure::{duration::Duration, endpoint::ReliabilityKind, parameter_id::ParameterId},
 };
 
-// This is to be implemented by all DomanParticipant, Publisher, Subscriber,
+// This is to be implemented by all DomainParticipant, Publisher, Subscriber,
 // DataWriter, DataReader, Topic
 /// Trait that is implemented by all necessary DDS Entities that are required to
 /// provide QosPolicies.
@@ -23,7 +26,7 @@ pub trait HasQoSPolicy {
 /// Trait that is implemented by all necessary DDS Entities that are required to
 /// have a mutable QosPolicies.
 pub trait MutQosPolicy {
-  fn set_qos(&mut self, new_qos: &QosPolicies) -> Result<()>;
+  fn set_qos(&mut self, new_qos: &QosPolicies) -> Result<(), QosError>;
 }
 
 /// DDS spec 2.3.3 defines this as "long" with named constants from 0 to 22.
@@ -31,33 +34,38 @@ pub trait MutQosPolicy {
 /// application interface
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum QosPolicyId {
-  //Invalid  // We should represent this using Option<QosPolicyId> where needed
-  //UserData,  // 1
+  // Invalid  // We should represent this using Option<QosPolicyId> where needed
+  // UserData,  // 1
   Durability,   // 2
   Presentation, // 3
   Deadline,
   LatencyBudget, // 5
   Ownership,
-  //OwnershipStrength, // 7
+  // OwnershipStrength, // 7
   Liveliness,
   TimeBasedFilter, // 9
-  //Partition,
+  // Partition,
+
+  // Note: If "Partition" is ever implemented, observe also DDS Security spec v1.1
+  // Section "7.3.5 Immutability of Publisher Partition Qos in combination with non-volatile
+  // Durability kind" when implementing.
   Reliability, // 11
   DestinationOrder,
   History, // 13
   ResourceLimits,
-  //EntityFactory, // 15
-  //WriterDataLifeCycle,
-  //ReaderDataLifeCycle, // 17
-  //TopicData, // 18
-  //GroupData,
-  //TransportPriority, // 20
+  // EntityFactory, // 15
+  // WriterDataLifeCycle,
+  // ReaderDataLifeCycle, // 17
+  // TopicData, // 18
+  // GroupData,
+  // TransportPriority, // 20
   Lifespan,
-  //DurabilityService, // 22
+  // DurabilityService, // 22
+  Property, // No Id in the security spec (But this is from older DDS/RTPs spec.)
 }
 
 /// Utility for building [QosPolicies]
-#[derive(Default)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QosPolicyBuilder {
   durability: Option<policy::Durability>,
   presentation: Option<policy::Presentation>,
@@ -71,6 +79,8 @@ pub struct QosPolicyBuilder {
   history: Option<policy::History>,
   resource_limits: Option<policy::ResourceLimits>,
   lifespan: Option<policy::Lifespan>,
+  #[cfg(feature = "security")]
+  property: Option<policy::Property>,
 }
 
 impl QosPolicyBuilder {
@@ -127,6 +137,18 @@ impl QosPolicyBuilder {
   }
 
   #[must_use]
+  pub const fn best_effort(mut self) -> Self {
+    self.reliability = Some(policy::Reliability::BestEffort);
+    self
+  }
+
+  #[must_use]
+  pub const fn reliable(mut self, max_blocking_time: Duration) -> Self {
+    self.reliability = Some(policy::Reliability::Reliable { max_blocking_time });
+    self
+  }
+
+  #[must_use]
   pub const fn destination_order(mut self, destination_order: policy::DestinationOrder) -> Self {
     self.destination_order = Some(destination_order);
     self
@@ -150,7 +172,14 @@ impl QosPolicyBuilder {
     self
   }
 
-  pub const fn build(self) -> QosPolicies {
+  #[cfg(feature = "security")]
+  #[must_use]
+  pub fn property(mut self, property: policy::Property) -> Self {
+    self.property = Some(property);
+    self
+  }
+
+  pub fn build(self) -> QosPolicies {
     QosPolicies {
       durability: self.durability,
       presentation: self.presentation,
@@ -164,6 +193,8 @@ impl QosPolicyBuilder {
       history: self.history,
       resource_limits: self.resource_limits,
       lifespan: self.lifespan,
+      #[cfg(feature = "security")]
+      property: self.property,
     }
   }
 }
@@ -171,9 +202,9 @@ impl QosPolicyBuilder {
 /// Describes a set of RTPS/DDS QoS policies
 ///
 /// QosPolicies are constructed using a [`QosPolicyBuilder`]
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct QosPolicies {
-  // pub(crate) beacuse as we want to have some builtin QoS Policies as constant.
+  // pub(crate) because as we want to have some builtin QoS Policies as constant.
   pub(crate) durability: Option<policy::Durability>,
   pub(crate) presentation: Option<policy::Presentation>,
   pub(crate) deadline: Option<policy::Deadline>,
@@ -186,10 +217,13 @@ pub struct QosPolicies {
   pub(crate) history: Option<policy::History>,
   pub(crate) resource_limits: Option<policy::ResourceLimits>,
   pub(crate) lifespan: Option<policy::Lifespan>,
+  #[cfg(feature = "security")]
+  pub(crate) property: Option<policy::Property>,
 }
 
 impl QosPolicies {
-  // #[cfg(test)]
+  // TODO: rename this to "none", as this is already member of QosPolicies, so
+  // context in implied
   pub fn qos_none() -> Self {
     Self::default()
   }
@@ -200,6 +234,10 @@ impl QosPolicies {
 
   pub const fn durability(&self) -> Option<policy::Durability> {
     self.durability
+  }
+
+  pub fn is_volatile(&self) -> bool {
+    matches!(self.durability, Some(policy::Durability::Volatile))
   }
 
   pub const fn presentation(&self) -> Option<policy::Presentation> {
@@ -230,6 +268,10 @@ impl QosPolicies {
     self.reliability
   }
 
+  pub fn is_reliable(&self) -> bool {
+    matches!(self.reliability, Some(policy::Reliability::Reliable { .. }))
+  }
+
   pub const fn reliable_max_blocking_time(&self) -> Option<Duration> {
     if let Some(policy::Reliability::Reliable { max_blocking_time }) = self.reliability {
       Some(max_blocking_time)
@@ -254,10 +296,15 @@ impl QosPolicies {
     self.lifespan
   }
 
+  #[cfg(feature = "security")]
+  pub fn property(&self) -> Option<policy::Property> {
+    self.property.clone()
+  }
+
   /// Merge two QosPolicies
   ///
   /// Constructs a QosPolicy, where each policy is taken from `self`,
-  /// and overwritten with those policies from `other` that are defined.  
+  /// and overwritten with those policies from `other` that are defined.
   #[must_use]
   pub fn modify_by(&self, other: &Self) -> Self {
     Self {
@@ -273,10 +320,12 @@ impl QosPolicies {
       history: other.history.or(self.history),
       resource_limits: other.resource_limits.or(self.resource_limits),
       lifespan: other.lifespan.or(self.lifespan),
+      #[cfg(feature = "security")]
+      property: other.property.clone().or(self.property.clone()),
     }
   }
 
-  /// Check if policy commplies to another policy.
+  /// Check if policy complies to another policy.
   ///
   /// `self` is the "offered" (publisher) QoS
   /// `other` is the "requested" (subscriber) QoS
@@ -311,7 +360,7 @@ impl QosPolicies {
     }
 
     // check Presentation:
-    // * If coherent_access is requsted, it must be offered also. AND
+    // * If coherent_access is requested, it must be offered also. AND
     // * Same for ordered_access. AND
     // * Offered access scope is broader than requested.
     if let (Some(off), Some(req)) = (self.presentation, other.presentation) {
@@ -384,7 +433,7 @@ impl QosPolicies {
   pub fn to_parameter_list(
     &self,
     ctx: speedy::Endianness,
-  ) -> std::result::Result<Vec<Parameter>, speedy::Error> {
+  ) -> Result<Vec<Parameter>, PlCdrSerializeError> {
     let mut pl = Vec::with_capacity(8);
 
     let QosPolicies {
@@ -401,6 +450,8 @@ impl QosPolicies {
       history,
       resource_limits,
       lifespan,
+      #[cfg(feature = "security")]
+        property: _, // TODO: properties to parameter list?
     } = self;
 
     macro_rules! emit {
@@ -449,7 +500,7 @@ impl QosPolicies {
       let reliability_ser = match rel {
         Reliability::BestEffort => ReliabilitySerialization {
           reliability_kind: ReliabilityKind::BestEffort,
-          max_blocking_time: Duration::DURATION_ZERO, // dummy value for serialization
+          max_blocking_time: Duration::ZERO, // dummy value for serialization
         },
         Reliability::Reliable { max_blocking_time } => ReliabilitySerialization {
           reliability_kind: ReliabilityKind::Reliable,
@@ -487,7 +538,7 @@ impl QosPolicies {
   pub fn from_parameter_list(
     ctx: speedy::Endianness,
     pl_map: &BTreeMap<ParameterId, Vec<&Parameter>>,
-  ) -> std::result::Result<QosPolicies, serialization::error::Error> {
+  ) -> Result<QosPolicies, PlCdrDeserializeError> {
     macro_rules! get_option {
       ($pid:ident) => {
         get_option_from_pl_map(pl_map, ctx, ParameterId::$pid, "<not_used>")?
@@ -512,7 +563,7 @@ impl QosPolicies {
         Some(policy::Ownership::Exclusive { strength })
       }
       (Some(OwnershipKind::Exclusive), None) => {
-        warn!("QosPolicies deserializer: Received OwnershipKind::Exclusive but no stregth value.");
+        warn!("QosPolicies deserializer: Received OwnershipKind::Exclusive but no strength value.");
         None
       }
       (None, Some(_strength)) => {
@@ -545,6 +596,9 @@ impl QosPolicies {
     let resource_limits: Option<policy::ResourceLimits> = get_option!(PID_RESOURCE_LIMITS);
     let lifespan: Option<policy::Lifespan> = get_option!(PID_LIFESPAN);
 
+    #[cfg(feature = "security")]
+    let property: Option<policy::Property> = None; // TODO: Should also properties be read?
+
     // We construct using the struct syntax directly rather than the builder,
     // so we cannot forget any field.
     Ok(QosPolicies {
@@ -560,6 +614,8 @@ impl QosPolicies {
       history,
       resource_limits,
       lifespan,
+      #[cfg(feature = "security")]
+      property,
     })
   }
 }
@@ -602,11 +658,16 @@ pub const LENGTH_UNLIMITED: i32 = -1;
 pub mod policy {
   use std::cmp::Ordering;
 
-  use speedy::{Context, IsEof, Readable, Reader, Writable, Writer};
+  use speedy::{Readable, Writable};
+  use serde::{Serialize, Deserialize};
   #[allow(unused_imports)]
   use log::{debug, error, info, trace, warn};
+  #[cfg(feature = "security")]
+  use speedy::{Context, IsEof, Reader, Writer};
 
-  use crate::{serialization::speedy_pl_cdr_helpers::*, structure::duration::Duration};
+  use crate::structure::duration::Duration;
+  #[cfg(feature = "security")]
+  use crate::serialization::speedy_pl_cdr_helpers::*;
 
   /*
   pub struct UserData {
@@ -617,7 +678,7 @@ pub mod policy {
     pub value: Vec<u8>,
   }
 
-  pub struct GropupData {
+  pub struct GroupData {
     pub value: Vec<u8>,
   }
 
@@ -627,13 +688,26 @@ pub mod policy {
   */
 
   /// DDS 2.2.3.16 LIFESPAN
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub struct Lifespan {
     pub duration: Duration,
   }
 
   /// DDS 2.2.3.4 DURABILITY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Readable, Writable)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Readable,
+    Writable,
+    Serialize,
+    Deserialize,
+  )]
   pub enum Durability {
     Volatile,
     TransientLocal,
@@ -642,7 +716,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.6 PRESENTATION
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub struct Presentation {
     pub access_scope: PresentationAccessScope,
     pub coherent_access: bool,
@@ -650,7 +724,20 @@ pub mod policy {
   }
 
   /// Access scope that is part of DDS 2.2.3.6 PRESENTATION
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Readable, Writable)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Readable,
+    Writable,
+    Serialize,
+    Deserialize,
+  )]
   pub enum PresentationAccessScope {
     Instance,
     Topic,
@@ -658,24 +745,37 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.7 DEADLINE
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Readable, Writable)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Readable,
+    Writable,
+    Serialize,
+    Deserialize,
+  )]
   pub struct Deadline(pub Duration);
 
   /// DDS 2.2.3.8 LATENCY_BUDGET
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub struct LatencyBudget {
     pub duration: Duration,
   }
 
   /// DDS 2.2.3.9 OWNERSHIP
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum Ownership {
     Shared,
     Exclusive { strength: i32 }, // This also implements OwnershipStrength
   }
 
   /// DDS 2.2.3.11 LIVELINESS
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub enum Liveliness {
     Automatic { lease_duration: Duration },
     ManualByParticipant { lease_duration: Duration },
@@ -718,7 +818,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.12 TIME_BASED_FILTER
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub struct TimeBasedFilter {
     pub minimum_separation: Duration,
   }
@@ -730,7 +830,7 @@ pub mod policy {
   */
 
   /// DDS 2.2.3.14 RELIABILITY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum Reliability {
     BestEffort,
     Reliable { max_blocking_time: Duration },
@@ -760,14 +860,27 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.17 DESTINATION_ORDER
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Readable, Writable)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Readable,
+    Writable,
+    Serialize,
+    Deserialize,
+  )]
   pub enum DestinationOrder {
     ByReceptionTimestamp,
     BySourceTimeStamp,
   }
 
   /// DDS 2.2.3.18 HISTORY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
   pub enum History {
     // Variants must be in this order ot derive Ord correctly.
     KeepLast { depth: i32 },
@@ -785,23 +898,26 @@ pub mod policy {
   ///
   /// Negative values are needed, because DDS spec defines the special value
   /// const long LENGTH_UNLIMITED = -1;
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Writable, Readable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Writable, Readable, Serialize, Deserialize)]
   pub struct ResourceLimits {
     pub max_samples: i32,
     pub max_instances: i32,
     pub max_samples_per_instance: i32,
   }
 
+  #[cfg(feature = "security")]
   use crate::security;
   // DDS Security spec v1.1
   // Section 7.2.5 PropertyQosPolicy, DomainParticipantQos, DataWriterQos, and
   // DataReaderQos
-  #[derive(Clone, Debug, PartialEq, Eq)]
+  #[cfg(feature = "security")]
+  #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
   pub struct Property {
     pub value: Vec<security::types::Property>,
     pub binary_value: Vec<security::types::BinaryProperty>,
   }
 
+  #[cfg(feature = "security")]
   impl<'a, C: Context> Readable<'a, C> for Property {
     fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
       let count = reader.read_u32()?;
@@ -851,29 +967,88 @@ pub mod policy {
   // we have to keep track of alignment.
   // Again, alignment comes BEFORE string length, or vector item count, not after
   // string.
+  #[cfg(feature = "security")]
   impl<C: Context> Writable<C> for Property {
     fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
-      // value vector length
-      writer.write_u32(self.value.len() as u32)?;
+      // First self.value
+      // Only those properties with propagate=true are written
+      let propagate_value: Vec<&security::Property> =
+        self.value.iter().filter(|p| p.propagate).collect();
+
+      // propagate_value vector length
+      writer.write_u32(propagate_value.len() as u32)?;
 
       let mut prev_len = 0;
-      for prop in &self.value {
+      for prop in propagate_value {
         write_pad(writer, prev_len, 4)?;
         writer.write_value(prop)?;
         prev_len = prop.serialized_len();
       }
 
-      // now the length of "binary.value"
+      // Then self.bin_value
+      // Only those binary properties with propagate=true are written
+      let propagate_bin_value: Vec<&security::BinaryProperty> =
+        self.binary_value.iter().filter(|p| p.propagate).collect();
+
+      // propagate_bin_value vector length
       write_pad(writer, prev_len, 4)?;
-      writer.write_u32(self.binary_value.len() as u32)?;
+      writer.write_u32(propagate_bin_value.len() as u32)?;
       // and the elements
       let mut prev_len = 0;
-      for prop in &self.binary_value {
+      for prop in propagate_bin_value {
         write_pad(writer, prev_len, 4)?;
         writer.write_value(prop)?;
         prev_len = prop.serialized_len();
       }
 
+      Ok(())
+    }
+  }
+
+  // DDS Security spec v1.1
+  // Section 7.2.5 PropertyQosPolicy, DomainParticipantQos, DataWriterQos, and
+  // DataReaderQos
+  //
+  // so this is DataTagQosPolicy, which is an alias for "DataTags"
+  // We call it qos::policy::DataTag
+  #[derive(Clone, Debug, PartialEq, Eq, Default)]
+  #[cfg(feature = "security")]
+  pub struct DataTag {
+    pub tags: Vec<security::types::Tag>,
+  }
+
+  #[cfg(feature = "security")]
+  impl<'a, C: Context> Readable<'a, C> for DataTag {
+    fn read_from<R: Reader<'a, C>>(reader: &mut R) -> Result<Self, C::Error> {
+      let count = reader.read_u32()?;
+      let mut tags = Vec::new();
+
+      let mut prev_len = 0;
+      for _ in 0..count {
+        read_pad(reader, prev_len, 4)?;
+        let s: security::types::Tag = reader.read_value()?;
+        prev_len = s.serialized_len();
+        tags.push(s);
+      }
+      Ok(DataTag { tags })
+    }
+  }
+
+  // Writing several strings is a bit complicated, because
+  // we have to keep track of alignment.
+  // Again, alignment comes BEFORE string length, or vector item count, not after
+  // string.
+  #[cfg(feature = "security")]
+  impl<C: Context> Writable<C> for DataTag {
+    fn write_to<T: ?Sized + Writer<C>>(&self, writer: &mut T) -> Result<(), C::Error> {
+      writer.write_u32(self.tags.len() as u32)?;
+
+      let mut prev_len = 0;
+      for tag in &self.tags {
+        write_pad(writer, prev_len, 4)?;
+        writer.write_value(tag)?;
+        prev_len = tag.serialized_len();
+      }
       Ok(())
     }
   }

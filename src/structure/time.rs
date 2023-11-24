@@ -2,6 +2,8 @@ use std::ops::{Add, Sub};
 
 use speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 
 use super::duration::Duration;
 
@@ -37,7 +39,8 @@ pub struct Timestamp {
 }
 
 impl Timestamp {
-  // Special contants reserved by the RTPS protocol, from RTPS spec section 9.3.2.
+  // Special constants reserved by the RTPS protocol, from RTPS spec section
+  // 9.3.2.
   pub const ZERO: Self = Self {
     seconds: 0,
     fraction: 0,
@@ -52,7 +55,17 @@ impl Timestamp {
   };
 
   pub fn now() -> Self {
-    Self::from_nanos(chrono::Utc::now().timestamp_nanos() as u64)
+    match chrono::Utc::now().timestamp_nanos_opt() {
+      None => {
+        error!("Timestamp out of range.");
+        Timestamp::INVALID
+      }
+      Some(negative) if negative < 0 => {
+        error!("Timestamp out of range (negative).");
+        Timestamp::INVALID
+      }
+      Some(non_negative) => Self::from_nanos(non_negative as u64),
+    }
   }
 
   fn to_ticks(self) -> u64 {

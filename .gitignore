@@ -5,6 +5,8 @@ src/.vscode/launch.json
 *.code-workspace
 *.bin
 /log/
-.vscode/launch.json
+.vscode/*
 .idea/
 logging-config.yaml
+dev
+FastDDS_security_interoperability_test

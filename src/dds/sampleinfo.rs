@@ -5,7 +5,7 @@ use crate::{
   structure::{guid::GUID, rpc::SampleIdentity, sequence_number::SequenceNumber, time::Timestamp},
 };
 
-//use std::num::Zero; // unstable
+// use std::num::Zero; // unstable
 
 /// indicates whether or not the corresponding data sample has already
 /// been read by this `DataReader`.
@@ -214,7 +214,7 @@ pub struct SampleInfo {
 
   /// The absolute_generation_rank indicates the difference in "generations"
   /// between sample S and the Most Recent Sample of the instance that the
-  /// middlware has received (MRS). It counts the number of times the instance
+  /// middleware has received (MRS). It counts the number of times the instance
   /// transitioned from not-alive to alive in the time from the reception of the
   /// S to the time when the read or take was called. absolute_generation_rank =
   /// (MRS.disposed_generation_count + MRS.no_writers_generation_count)
@@ -229,12 +229,11 @@ pub struct SampleInfo {
   pub(crate) sequence_number: SequenceNumber,
 }
 
-#[allow(clippy::new_without_default)]
 impl SampleInfo {
   /// Source timestamp is the timestamp that was supplied by the DataWriter
   /// that sent this sample. It is optional to timestamp samples when writing.
   pub fn source_timestamp(&self) -> Option<Timestamp> {
-    self.write_options.source_timestamp
+    self.write_options.source_timestamp()
   }
 
   pub fn sample_state(&self) -> SampleState {
@@ -292,7 +291,7 @@ impl SampleInfo {
   }
 
   pub fn related_sample_identity(&self) -> Option<SampleIdentity> {
-    self.write_options.related_sample_identity
+    self.write_options.related_sample_identity()
   }
 
   pub fn sample_identity(&self) -> SampleIdentity {

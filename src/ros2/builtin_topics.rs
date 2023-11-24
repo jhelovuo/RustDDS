@@ -15,24 +15,26 @@ impl ROSDiscoveryTopic {
   const QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
     presentation: None,
-    deadline: Some(Deadline(Duration::DURATION_INFINITE)),
+    deadline: Some(Deadline(Duration::INFINITE)),
     latency_budget: Some(LatencyBudget {
-      duration: Duration::DURATION_ZERO,
+      duration: Duration::ZERO,
     }),
     ownership: Some(Ownership::Shared),
     liveliness: Some(Liveliness::Automatic {
-      lease_duration: Duration::DURATION_INFINITE,
+      lease_duration: Duration::INFINITE,
     }),
     time_based_filter: None,
     reliability: Some(Reliability::Reliable {
-      max_blocking_time: Duration::DURATION_ZERO,
+      max_blocking_time: Duration::ZERO,
     }),
     destination_order: Some(DestinationOrder::ByReceptionTimestamp),
     history: Some(History::KeepLast { depth: 1 }),
     resource_limits: None,
     lifespan: Some(Lifespan {
-      duration: Duration::DURATION_INFINITE,
+      duration: Duration::INFINITE,
     }),
+    #[cfg(feature = "security")]
+    property: None,
   };
 
   const TOPIC_NAME: &'static str = "ros_discovery_info";
@@ -63,12 +65,14 @@ impl ParameterEventsTopic {
     liveliness: None,
     time_based_filter: None,
     reliability: Some(Reliability::Reliable {
-      max_blocking_time: Duration::DURATION_ZERO,
+      max_blocking_time: Duration::ZERO,
     }),
     destination_order: None,
     history: Some(History::KeepLast { depth: 1 }),
     resource_limits: None,
     lifespan: None,
+    #[cfg(feature = "security")]
+    property: None,
   };
 
   const TOPIC_NAME: &'static str = "rt/parameter_events";
@@ -93,17 +97,17 @@ impl RosOutTopic {
   const QOS: QosPolicies = QosPolicies {
     durability: Some(Durability::TransientLocal),
     presentation: None,
-    deadline: Some(Deadline(Duration::DURATION_INFINITE)),
+    deadline: Some(Deadline(Duration::INFINITE)),
     latency_budget: Some(LatencyBudget {
-      duration: Duration::DURATION_ZERO,
+      duration: Duration::ZERO,
     }),
     ownership: Some(Ownership::Shared),
     liveliness: Some(Liveliness::Automatic {
-      lease_duration: Duration::DURATION_INFINITE,
+      lease_duration: Duration::INFINITE,
     }),
     time_based_filter: None,
     reliability: Some(Reliability::Reliable {
-      max_blocking_time: Duration::DURATION_ZERO,
+      max_blocking_time: Duration::ZERO,
     }),
     destination_order: Some(DestinationOrder::ByReceptionTimestamp),
     history: Some(History::KeepLast { depth: 1 }),
@@ -111,6 +115,8 @@ impl RosOutTopic {
     lifespan: Some(Lifespan {
       duration: Duration::from_secs(10),
     }),
+    #[cfg(feature = "security")]
+    property: None,
   };
 
   const TOPIC_NAME: &'static str = "rt/rosout";

@@ -9,12 +9,14 @@ use std::{
 use log::{debug, error, info, trace};
 
 use crate::{
+  create_error_internal,
   dds::{
     qos::{
       policy::{History, ResourceLimits},
       QosPolicies,
     },
     typedesc::TypeDesc,
+    CreateError, CreateResult,
   },
   structure::{sequence_number::SequenceNumber, time::Timestamp},
   GUID,
@@ -24,7 +26,7 @@ use super::cache_change::CacheChange;
 /// DDSCache contains all cacheChanges that are produced by participant or
 /// received by participant. Each topic that has been published or subscribed to
 /// is contained in a separate TopicCache. One TopicCache contains
-/// only DDSCacheChanges of one serialized IDL datatype. -> all cachechanges in
+/// only DDSCacheChanges of one serialized IDL datatype. -> all cache changes in
 /// same TopicCache can be serialized/deserialized same way. Topic/TopicCache is
 /// identified by its name, which must be unique in the whole Domain.
 ///
@@ -65,21 +67,15 @@ impl DDSCache {
     topic_cache_handle.clone()
   }
 
-  // This function is currently not used
-  #[allow(dead_code)]
-  pub(crate) fn get_existing_topic_cache(&self, topic_name: &str) -> Arc<Mutex<TopicCache>> {
+  pub(crate) fn get_existing_topic_cache(
+    &self,
+    topic_name: &str,
+  ) -> CreateResult<Arc<Mutex<TopicCache>>> {
     // Return a clone of the pointer to the mutex on an existing topic cache
-    // The program panics if the topic cache does not exist
-    self
-      .topic_caches
-      .get(topic_name)
-      .unwrap_or_else(|| {
-        panic!(
-          "Topic cache for topic {} does not exist in DDS cache",
-          topic_name
-        )
-      })
-      .clone()
+    match self.topic_caches.get(topic_name) {
+      Some(tc) => Ok(tc.clone()),
+      None => create_error_internal!("Topic cache for topic {topic_name} not found in DDS cache"),
+    }
   }
 
   // TODO: Investigate why this is not used.
@@ -102,10 +98,10 @@ pub(crate) struct TopicCache {
   topic_qos: QosPolicies,
   min_keep_samples: History,
   max_keep_samples: i32, // from QoS, for quick, repeated access
-  //TODO: Change this to Option<u32>, where None means "no limit".
+  // TODO: Change this to Option<u32>, where None means "no limit".
 
   // Tha main content of the cache is in this map.
-  // Timestamp is assumed to be unique id over all the ChacheChanges.
+  // Timestamp is assumed to be unique id over all the CacheChanges.
   changes: BTreeMap<Timestamp, CacheChange>,
 
   // sequence_numbers is an index to "changes" by GUID and SN
@@ -138,7 +134,7 @@ impl TopicCache {
     new_self
   }
 
-  fn update_keep_limits(&mut self, qos: &QosPolicies) {
+  pub fn update_keep_limits(&mut self, qos: &QosPolicies) {
     let min_keep_samples = qos
       .history()
       // default history setting from DDS spec v1.4 Section 2.2.3 "Supported QoS",
@@ -147,7 +143,7 @@ impl TopicCache {
 
     // Look up some Topic-specific resource limit
     // and remove earliest samples until we are within limit.
-    // This prevents cache from groving indefinetly.
+    // This prevents cache from growing indefinitely.
     let max_keep_samples = qos
       .resource_limits()
       .unwrap_or(ResourceLimits {
@@ -159,7 +155,7 @@ impl TopicCache {
     // TODO: We cannot currently keep track of instance counts, because TopicCache
     // or DDSCache below do not know about instances.
 
-    // If a definite minimum is apecified, increase resource limit to at least that.
+    // If a definite minimum is specified, increase resource limit to at least that.
     let max_keep_samples = match min_keep_samples {
       History::KeepLast { depth: n } if n > max_keep_samples => n,
       _ => max_keep_samples,
@@ -195,7 +191,7 @@ impl TopicCache {
     cache_change: CacheChange,
   ) -> Option<CacheChange> {
     // First, do garbage collection.
-    // But not at everey insert, just to save time and effort.
+    // But not at every insert, just to save time and effort.
     // Some heuristic to decide if we should collect now.
     let payload_size = max(1, cache_change.data_value.payload_size());
     let semi_random_number = i64::from(cache_change.sequence_number) as usize;
@@ -245,7 +241,7 @@ impl TopicCache {
     self
       .sequence_numbers
       .entry(cc.writer_guid)
-      .or_insert_with(BTreeMap::new)
+      .or_default()
       .insert(cc.sequence_number, instant);
   }
 
@@ -258,8 +254,6 @@ impl TopicCache {
       self
         .changes
         .range((Excluded(start_instant), Included(end_instant)))
-        // .filter(move |(_,cc)| ! limit_by_reliability || cc.sequence_number <
-        // self.reliable_before(cc.writer_guid) )
         .map(|(i, c)| (*i, c)),
     )
   }
@@ -278,10 +272,21 @@ impl TopicCache {
             .cloned()
             .unwrap_or(SequenceNumber::zero());
           let upper_bound_exc = self.reliable_before(*guid);
+          // make sure lower < upper, so that `.range()` does not panic.
+          let upper_bound_exc = max(upper_bound_exc, lower_bound_exc.plus_1());
           sn_map.range((Excluded(lower_bound_exc), Excluded(upper_bound_exc)))
         }) // we get iterator of Timestamp
         .filter_map(|(_sn, t)| self.get_change(t).map(|cc| (*t, cc))),
     )
+  }
+
+  pub fn writers_smallest_sn_in_cache(&self, writer_guid: GUID) -> Option<SequenceNumber> {
+    self
+      .sequence_numbers
+      .get(&writer_guid)
+      .and_then(|sn_to_ts| sn_to_ts.first_key_value())
+      .map(|(sn, _ts)| sn)
+      .copied()
   }
 
   fn reliable_before(&self, writer: GUID) -> SequenceNumber {
@@ -318,13 +323,9 @@ impl TopicCache {
         .wrapping_sub(self.max_keep_samples as usize),
     );
 
-    let max_remove_count = match self.min_keep_samples {
-      History::KeepLast { depth } => max(
-        min_remove_count,
-        self.changes.len().wrapping_sub(depth as usize),
-      ),
-      History::KeepAll => min_remove_count,
-    };
+    let max_remove_count = min_remove_count;
+    // Only observe max cache size
+    // TODO: Can we do better without being able to distinguish between instances?
 
     // Find the first key that is to be retained, i.e. enumerate
     // one past the items to be removed.
@@ -344,7 +345,7 @@ impl TopicCache {
     let to_retain = self.changes.split_off(&split_key);
     let to_remove = std::mem::replace(&mut self.changes, to_retain);
 
-    // update also SequeceNumber map
+    // update also SequenceNumber map
     for r in to_remove.values() {
       self.remove_sn(r);
     }

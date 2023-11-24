@@ -4,7 +4,9 @@ use bytes::Bytes;
 use speedy::{Context, Readable, Writable, Writer};
 
 use crate::{
-  messages::submessages::elements::parameter::Parameter, structure::parameter_id::ParameterId,
+  messages::submessages::elements::parameter::Parameter,
+  serialization::pl_cdr_adapters::PlCdrSerializeError, structure::parameter_id::ParameterId,
+  RepresentationIdentifier,
 };
 
 /// ParameterList is used as part of several messages to encapsulate
@@ -38,6 +40,11 @@ impl ParameterList {
     self.parameters.push(p);
   }
 
+  #[cfg(feature = "security")]
+  pub fn concat(&mut self, other_parameter_list: ParameterList) {
+    self.parameters = [self.parameters.clone(), other_parameter_list.parameters].concat();
+  }
+
   pub fn serialize_to_bytes(&self, endianness: speedy::Endianness) -> Result<Bytes, speedy::Error> {
     let b = self.write_to_vec_with_ctx(endianness)?;
     Ok(Bytes::from(b))
@@ -45,7 +52,7 @@ impl ParameterList {
 
   pub fn to_map(&self) -> BTreeMap<ParameterId, Vec<&Parameter>> {
     self.parameters.iter().fold(BTreeMap::new(), |mut m, p| {
-      m.entry(p.parameter_id).or_insert(Vec::new()).push(p);
+      m.entry(p.parameter_id).or_default().push(p);
       m
     })
   }
@@ -81,7 +88,7 @@ impl<'a, C: Context> Readable<'a, C> for ParameterList {
 
       if parameter_id == ParameterId::PID_SENTINEL {
         // This is parameter list end marker.
-        // We do not read its Parameter contetns ("value"),
+        // We do not read its Parameter contents ("value"),
         // because it is of size zero by definition.
         return Ok(parameters);
       }
@@ -92,4 +99,12 @@ impl<'a, C: Context> Readable<'a, C> for ParameterList {
       });
     }
   }
+}
+
+// Trait for structs which can be converted to a ParameterList
+pub trait ParameterListable {
+  fn to_parameter_list(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<ParameterList, PlCdrSerializeError>;
 }

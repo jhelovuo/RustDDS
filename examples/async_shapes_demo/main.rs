@@ -13,7 +13,8 @@ use log4rs::{
   Config,
 };
 use rustdds::{
-  with_key::Sample, DomainParticipant, Keyed, QosPolicyBuilder, TopicDescription, TopicKind,
+  with_key::Sample, DomainParticipant, Keyed, QosPolicyBuilder, StatusEvented, TopicDescription,
+  TopicKind,
 };
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
@@ -23,15 +24,15 @@ use rand::prelude::*;
 use smol::Timer;
 use futures::{stream::StreamExt, FutureExt, TryFutureExt};
 
-#[derive(Serialize, Deserialize, Clone)]
-struct Shape {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct ShapeType {
   color: String,
   x: i32,
   y: i32,
-  shapesize: i32,
+  shape_size: i32,
 }
 
-impl Keyed for Shape {
+impl Keyed for ShapeType {
   type K = String;
   fn key(&self) -> String {
     self.color.clone()
@@ -57,13 +58,14 @@ fn main() {
     .cloned()
     .unwrap_or("BLUE".to_owned());
 
+  // Domain Participant
   let domain_participant = DomainParticipant::new(*domain_id)
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {e:?}"));
 
   let mut qos_b = QosPolicyBuilder::new()
     .reliability(if matches.get_flag("reliable") {
       Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::DURATION_ZERO,
+        max_blocking_time: rustdds::Duration::ZERO,
       }
     } else {
       Reliability::BestEffort
@@ -113,7 +115,7 @@ fn main() {
 
   let write_interval: Duration = match deadline_policy {
     None => Duration::from_millis(200), // This is the default rate
-    Some(Deadline(dd)) => Duration::from(dd).mul_f32(0.8), // slightly faster than dealine
+    Some(Deadline(dd)) => Duration::from(dd).mul_f32(0.8), // slightly faster than deadline
   };
 
   let topic = domain_participant
@@ -131,9 +133,10 @@ fn main() {
   );
 
   // Set Ctrl-C handler
-  let (stop_sender, stop_receiver) = smol::channel::bounded(2);
+  let (stop_sender, stop_receiver) = smol::channel::bounded(3);
   ctrlc::set_handler(move || {
     // We will send two stop coammnds, one for reader, the other for writer.
+    stop_sender.send_blocking(()).unwrap_or(());
     stop_sender.send_blocking(()).unwrap_or(());
     stop_sender.send_blocking(()).unwrap_or(());
     // ignore errors, as we are quitting anyway
@@ -148,7 +151,7 @@ fn main() {
     debug!("Publisher");
     let publisher = domain_participant.create_publisher(&qos).unwrap();
     let writer = publisher
-      .create_datawriter_cdr::<Shape>(&topic, None) // None = get qos policy from publisher
+      .create_datawriter_cdr::<ShapeType>(&topic, None) // None = get qos policy from publisher
       .unwrap();
     Some(writer)
   } else {
@@ -159,7 +162,7 @@ fn main() {
     debug!("Subscriber");
     let subscriber = domain_participant.create_subscriber(&qos).unwrap();
     let reader = subscriber
-      .create_datareader_cdr::<Shape>(&topic, Some(qos))
+      .create_datareader_cdr::<ShapeType>(&topic, Some(qos))
       .unwrap();
     debug!("Created DataReader");
     Some(reader)
@@ -167,11 +170,11 @@ fn main() {
     None
   };
 
-  let mut shape_sample = Shape {
+  let mut shape_sample = ShapeType {
     color,
     x: 0,
     y: 0,
-    shapesize: 21,
+    shape_size: 21,
   };
 
   let mut random_gen = thread_rng();
@@ -186,6 +189,22 @@ fn main() {
     random_gen.gen_range(1..5)
   } else {
     random_gen.gen_range(-5..-1)
+  };
+
+  let dp_event_loop = async {
+    let mut run = true;
+    let mut stop = stop_receiver.recv().fuse();
+    let dp_status_listener = domain_participant.status_listener();
+    let mut dp_status_stream = dp_status_listener.as_async_status_stream();
+
+    while run {
+      futures::select! {
+        _ = stop => run = false,
+        e = dp_status_stream.select_next_some() => {
+          println!("DP Status: {e:?}");
+        }
+      } // select!
+    } // while
   };
 
   let read_loop = async {
@@ -209,7 +228,7 @@ fn main() {
                       sample.color,
                       sample.x,
                       sample.y,
-                      sample.shapesize,
+                      sample.shape_size,
                     ),
                     Sample::Dispose(key) => println!("Disposed key {key:?}"),
                   }
@@ -237,7 +256,7 @@ fn main() {
         let mut stop = stop_receiver.recv().fuse();
         let mut tick_stream = futures::StreamExt::fuse(Timer::interval(write_interval));
 
-        let mut datawriter_event_stream = datawriter.as_async_event_stream();
+        let mut datawriter_event_stream = datawriter.as_async_status_stream();
 
         while run {
           futures::select! {
@@ -263,7 +282,7 @@ fn main() {
   };
 
   // Run both read and write concurrently, until both are done.
-  smol::block_on(async { futures::join!(read_loop, write_loop) });
+  smol::block_on(async { futures::join!(read_loop, write_loop, dp_event_loop) });
 }
 
 fn configure_logging() {
@@ -393,8 +412,8 @@ fn get_matches() -> ArgMatches {
 }
 
 #[allow(clippy::similar_names)]
-fn move_shape(shape: Shape, xv: i32, yv: i32) -> (Shape, i32, i32) {
-  let half_size = shape.shapesize / 2 + 1;
+fn move_shape(shape: ShapeType, xv: i32, yv: i32) -> (ShapeType, i32, i32) {
+  let half_size = shape.shape_size / 2 + 1;
   let mut x = shape.x + xv;
   let mut y = shape.y + yv;
 
@@ -418,11 +437,11 @@ fn move_shape(shape: Shape, xv: i32, yv: i32) -> (Shape, i32, i32) {
     yv_new = -yv;
   }
   (
-    Shape {
+    ShapeType {
       color: shape.color,
       x,
       y,
-      shapesize: shape.shapesize,
+      shape_size: shape.shape_size,
     },
     xv_new,
     yv_new,

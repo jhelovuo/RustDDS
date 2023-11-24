@@ -1,64 +1,213 @@
-//use mio::Token;
+// use mio::Token;
 use std::{
   collections::HashMap,
+  io,
   io::ErrorKind,
   net::Ipv4Addr,
+  pin::Pin,
   sync::{atomic, Arc, Mutex, RwLock, Weak},
+  task::{Context, Poll},
   thread,
   thread::JoinHandle,
   time::{Duration, Instant},
 };
 
 use mio_extras::channel as mio_channel;
-use mio_06::Token;
+use mio_06::{self, Evented};
+use mio_08::{self, Interest, Registry};
+use futures::stream::{FusedStream, Stream};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::{pubsub::*, qos::*, result::*, topic::*, typedesc::TypeDesc},
+  create_error_out_of_resources, create_error_poisoned,
+  dds::{
+    pubsub::*,
+    qos::*,
+    result::*,
+    statusevents::{
+      sync_status_channel, DomainParticipantStatusEvent, StatusChannelReceiver, StatusChannelSender,
+    },
+    topic::*,
+    typedesc::TypeDesc,
+  },
   discovery::{
     discovery::{Discovery, DiscoveryCommand},
     discovery_db::DiscoveryDB,
     sedp_messages::DiscoveredTopicData,
   },
-  log_and_err_internal,
   network::{constant::*, udp_listener::UDPListener},
   rtps::{
-    dp_event_loop::{DPEventLoop, DomainInfo},
+    constant::*,
+    dp_event_loop::{DPEventLoop, DomainInfo, EventLoopCommand},
     reader::*,
     writer::WriterIngredients,
   },
   structure::{dds_cache::DDSCache, entity::RTPSEntity, guid::*, locator::Locator},
+  StatusEvented,
 };
+#[cfg(feature = "security")]
+use crate::{
+  create_error_internal, create_error_not_allowed_by_security,
+  security::{
+    self,
+    config::DomainParticipantSecurityConfigFiles,
+    security_plugins::{SecurityPlugins, SecurityPluginsHandle},
+    AccessControl, Authentication, Cryptographic,
+  },
+};
+#[cfg(not(feature = "security"))]
+use crate::no_security::SecurityPluginsHandle;
 
-/// DDS DomainParticipant
-///
-/// It is recommended that only one DomainParticipant per OS process is created,
-/// as it allocates network sockets, creates background threads, and allocates
-/// some memory for object caches.
-///
-/// If you need to communicate to many DDS domains,
-/// then you must create a separate DomainParticipant for each of them.
-/// See DDS Spec v1.4 Section "2.2.1.2.2 Overall Conceptual Model" and
-/// "2.2.2.2.1 DomainParticipant Class" for a definition of a (DDS) domain.
-/// Domains are identified by a domain identifier, which is, in Rust terms, a
-/// `u16`. Domain identifier values are application-specific, but `0` is usually
-/// the default.
-#[derive(Clone)]
-// This is a smart pointer for DomainParticipantInner for easier manipulation.
-pub struct DomainParticipant {
-  dpi: Arc<Mutex<DomainParticipantDisc>>,
+pub struct DomainParticipantBuilder {
+  domain_id: u16,
+
+  #[allow(dead_code)] /* only_networks is a placeholder for a feature to limit
+  which interfaces the DomainParticipant will talk to. */
+  only_networks: Option<Vec<String>>, // if specified, run RTPS only over these interfaces
+
+  #[cfg(feature = "security")]
+  security_plugins: Option<SecurityPlugins>,
+  #[cfg(feature = "security")]
+  sec_properties: Option<policy::Property>, // Properties for configuring security plugins
 }
 
-#[allow(clippy::new_without_default)]
-impl DomainParticipant {
-  /// # Examples
-  /// ```
-  /// # use rustdds::DomainParticipant;
-  ///
-  /// let domain_participant = DomainParticipant::new(0).unwrap();
-  /// ```
-  pub fn new(domain_id: u16) -> Result<Self> {
+impl DomainParticipantBuilder {
+  pub fn new(domain_id: u16) -> DomainParticipantBuilder {
+    DomainParticipantBuilder {
+      domain_id,
+      only_networks: None,
+      #[cfg(feature = "security")]
+      security_plugins: None,
+      #[cfg(feature = "security")]
+      sec_properties: None,
+    }
+  }
+
+  #[cfg(feature = "security")]
+  /// Low-level security configuration, which allows supplying custom plugins.
+  pub fn security(
+    &mut self,
+    auth: Box<impl Authentication + 'static>,
+    access: Box<impl AccessControl + 'static>,
+    crypto: Box<impl Cryptographic + 'static>,
+    sec_properties: policy::Property,
+  ) -> &mut DomainParticipantBuilder {
+    self.security_plugins = Some(SecurityPlugins::new(auth, access, crypto));
+    self.sec_properties = Some(sec_properties);
+    self
+  }
+
+  #[cfg(feature = "security")]
+  /// For development and test use only
+  fn add_builtin_security_test_config(mut self) -> Self {
+    let security_test_configs = security::config::test_config();
+
+    if security_test_configs.security_enabled {
+      let auth = Box::new(security::AuthenticationBuiltin::new());
+      let access = Box::new(security::AccessControlBuiltin::new());
+      let crypto = Box::new(security::CryptographicBuiltin::new());
+      self.security(auth, access, crypto, security_test_configs.properties);
+    }
+    self
+  }
+
+  #[cfg(feature = "security")]
+  /// Easier way to configure security.
+  pub fn builtin_security(mut self, configs: DomainParticipantSecurityConfigFiles) -> Self {
+    let auth = Box::new(security::AuthenticationBuiltin::new());
+    let access = Box::new(security::AccessControlBuiltin::new());
+    let crypto = Box::new(security::CryptographicBuiltin::new());
+    self.security(auth, access, crypto, configs.into_property_policy());
+    self
+  }
+
+  pub fn build(#[allow(unused_mut)] mut self) -> CreateResult<DomainParticipant> {
+    // QosPolicies with possible security properties, otherwise default
+    let participant_qos = QosPolicies {
+      #[cfg(feature = "security")]
+      property: self.sec_properties,
+      ..Default::default()
+    };
+
+    let candidate_participant_guid = GUID::new_participant_guid();
+    #[cfg(not(feature = "security"))]
+    let participant_guid = candidate_participant_guid;
+    // If security plugins are present, security is enabled
+    #[cfg(feature = "security")]
+    let participant_guid = if let Some(ref mut security_plugins) = self.security_plugins.as_mut() {
+      trace!("DomainParticipant security construction start");
+      // Do the security checks according to DDS Security spec v1.1
+      // Section "8.8.1 Authentication and AccessControl behavior with local
+      // DomainParticipant". The other steps related to Discovery
+      // (generating tokens etc.) are done when initializing Discovery.
+
+      let sec_guid = match security_plugins.validate_local_identity(
+        self.domain_id,
+        &participant_qos,
+        candidate_participant_guid,
+      ) {
+        Ok(guid) => guid,
+        Err(e) => {
+          return create_error_not_allowed_by_security!(
+            "Validating local identity failed: {}",
+            e.msg
+          );
+        }
+      };
+
+      if let Err(e) = security_plugins.validate_local_permissions(
+        self.domain_id,
+        sec_guid.prefix,
+        &participant_qos,
+      ) {
+        return create_error_not_allowed_by_security!(
+          "Validating local permissions failed: {}",
+          e.msg
+        );
+      }
+
+      match security_plugins.check_create_participant(
+        self.domain_id,
+        sec_guid.prefix,
+        &participant_qos,
+      ) {
+        Ok(check_passed) => {
+          if !check_passed {
+            return create_error_not_allowed_by_security!(
+              "Access control does not allow to create the local participant",
+            );
+          }
+        }
+        Err(e) => {
+          return create_error_internal!(
+            "Something went wrong in checking local participant permissions: {}",
+            e
+          );
+        }
+      }
+
+      // Register participant with the crypto plugin
+      if let Err(e) = security_plugins
+        .get_participant_sec_attributes(sec_guid.prefix)
+        .and_then(|sec_attr| {
+          security_plugins.register_local_participant(
+            sec_guid.prefix,
+            participant_qos.property.clone(),
+            sec_attr,
+          )
+        })
+      {
+        return create_error_internal!(
+          "Could not register participant with crypto plugin {}",
+          e.msg
+        );
+      };
+      sec_guid
+    } else {
+      candidate_participant_guid
+    };
+
     trace!("DomainParticipant construct start");
 
     // Discovery join channel is used to just send a join handle into the inner
@@ -85,23 +234,35 @@ impl DomainParticipant {
     let (discovery_command_sender, discovery_command_receiver) =
       mio_channel::sync_channel::<DiscoveryCommand>(64);
 
+    // Channel used to report noteworthy events to DomainParticipant
+    let (status_sender, status_receiver) = sync_status_channel(16)?;
+
+    #[cfg(not(feature = "security"))]
+    let security_plugins_handle = None;
+    #[cfg(feature = "security")]
+    let security_plugins_handle = self.security_plugins.map(SecurityPluginsHandle::new);
+
     // intermediate DP wrapper
     let dp = DomainParticipantDisc::new(
-      domain_id,
+      self.domain_id,
+      participant_guid,
+      participant_qos,
       djh_receiver,
       discovery_update_notification_receiver,
       discovery_command_sender,
       spdp_liveness_sender,
+      status_sender.clone(),
+      status_receiver,
+      security_plugins_handle.clone(),
     )?;
     let self_locators = dp.self_locators();
 
     // outer DP wrapper
-    let dp = Self {
+    let dp = DomainParticipant {
       dpi: Arc::new(Mutex::new(dp)),
     };
 
-    let (discovery_started_sender, discovery_started_receiver) =
-      std::sync::mpsc::channel::<Result<()>>();
+    let (discovery_started_sender, discovery_started_receiver) = std::sync::mpsc::channel();
 
     // Construct and start background thread
     let dp_clone = dp.weak_clone();
@@ -117,6 +278,8 @@ impl DomainParticipant {
           discovery_command_receiver,
           spdp_liveness_receiver,
           self_locators,
+          status_sender,
+          security_plugins_handle,
         ) {
           discovery.discovery_event_loop(); // run the event loop
         }
@@ -133,10 +296,48 @@ impl DomainParticipant {
       }
       Ok(Err(e)) => {
         std::mem::drop(dp);
-        log_and_err_internal!("Failed to start discovery thread: {e:?}")
+        create_error_poisoned!("Failed to start discovery thread: {e:?}")
       }
-      Err(e) => log_and_err_internal!("Discovery thread channel error: {e:?}"),
+      Err(e) => create_error_poisoned!("Discovery thread channel error: {e:?}"),
     }
+  }
+}
+
+/// DDS DomainParticipant
+///
+/// It is recommended that only one DomainParticipant per OS process is created,
+/// as it allocates network sockets, creates background threads, and allocates
+/// some memory for object caches.
+///
+/// If you need to communicate to many DDS domains,
+/// then you must create a separate DomainParticipant for each of them.
+/// See DDS Spec v1.4 Section "2.2.1.2.2 Overall Conceptual Model" and
+/// "2.2.2.2.1 DomainParticipant Class" for a definition of a (DDS) domain.
+/// Domains are identified by a domain identifier, which is, in Rust terms, a
+/// `u16`. Domain identifier values are application-specific, but `0` is usually
+/// the default.
+#[derive(Clone)]
+// This is a smart pointer for DomainParticipant for easier manipulation.
+pub struct DomainParticipant {
+  dpi: Arc<Mutex<DomainParticipantDisc>>,
+}
+
+impl DomainParticipant {
+  /// # Examples
+  /// ```
+  /// # use rustdds::DomainParticipant;
+  ///
+  /// let domain_participant = DomainParticipant::new(0).unwrap();
+  /// ```
+  pub fn new(domain_id: u16) -> CreateResult<Self> {
+    let dp_builder = DomainParticipantBuilder::new(domain_id);
+
+    #[cfg(feature = "security")]
+    // Add security if so configured in security configs
+    // This is meant to be included only in the development phase for convenience
+    let dp_builder = dp_builder.add_builtin_security_test_config();
+
+    dp_builder.build()
   }
 
   /// Creates DDS Publisher
@@ -155,9 +356,9 @@ impl DomainParticipant {
   /// let qos = QosPolicyBuilder::new().build();
   /// let publisher = domain_participant.create_publisher(&qos);
   /// ```
-  pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
+  pub fn create_publisher(&self, qos: &QosPolicies) -> CreateResult<Publisher> {
     let w = self.weak_clone(); // this must be done first to avoid deadlock
-    self.dpi.lock().unwrap().create_publisher(&w, qos)
+    self.dpi.lock()?.create_publisher(&w, qos)
   }
 
   /// Creates DDS Subscriber
@@ -176,10 +377,10 @@ impl DomainParticipant {
   /// let qos = QosPolicyBuilder::new().build();
   /// let subscriber = domain_participant.create_subscriber(&qos);
   /// ```
-  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  pub fn create_subscriber(&self, qos: &QosPolicies) -> CreateResult<Subscriber> {
     // println!("DP(outer): create_subscriber");
     let w = self.weak_clone(); // do this first, avoid deadlock
-    self.dpi.lock().unwrap().create_subscriber(&w, qos)
+    self.dpi.lock()?.create_subscriber(&w, qos)
   }
 
   /// Create DDS Topic
@@ -206,19 +407,18 @@ impl DomainParticipant {
     type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Result<Topic> {
+  ) -> CreateResult<Topic> {
     // println!("Create topic outer");
     let w = self.weak_clone();
     self
       .dpi
-      .lock()
-      .unwrap()
+      .lock()?
       .create_topic(&w, name, type_desc, qos, topic_kind)
   }
 
-  pub fn find_topic(&self, name: &str, timeout: Duration) -> Result<Option<Topic>> {
+  pub fn find_topic(&self, name: &str, timeout: Duration) -> CreateResult<Option<Topic>> {
     let w = self.weak_clone();
-    self.dpi.lock().unwrap().find_topic(&w, name, timeout)
+    self.dpi.lock()?.find_topic(&w, name, timeout)
   }
 
   /// # Examples
@@ -274,38 +474,199 @@ impl DomainParticipant {
   /// let domain_participant = DomainParticipant::new(0).expect("Failed to create participant");
   /// domain_participant.assert_liveliness();
   /// ```
-  pub fn assert_liveliness(self) -> Result<()> {
-    self.dpi.lock().unwrap().assert_liveliness()
+  pub fn assert_liveliness(&self) -> WriteResult<(), ()> {
+    self.dpi.lock()?.assert_liveliness()
+  }
+
+  /// Get a `DomainDomainParticipantStatusListener` that can be used
+  /// to get `DomainParticipantStatusEvent`s for this DomainParticipant.
+  pub fn status_listener(&self) -> DomainParticipantStatusListener {
+    DomainParticipantStatusListener {
+      dp_disc: Arc::clone(&self.dpi),
+    }
   }
 
   pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
-    DomainParticipantWeak::new(self, self.guid())
+    DomainParticipantWeak::new(self)
   }
 
   pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
     self.dpi.lock().unwrap().dds_cache()
   }
 
+  #[cfg(feature = "security")] // just to avoid warning
+  pub(crate) fn qos(&self) -> QosPolicies {
+    self.dpi.lock().unwrap().qos()
+  }
+
   pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
-    self
-      .dpi
-      .lock()
-      .unwrap()
-      .dpi
-      .lock()
-      .unwrap()
-      .discovery_db
-      .clone()
+    self.dpi.lock().unwrap().dpi.discovery_db.clone()
   }
 
   pub(crate) fn new_entity_id(&self, entity_kind: EntityKind) -> EntityId {
     self.dpi.lock().unwrap().new_entity_id(entity_kind)
   }
 
-  pub(crate) fn self_locators(&self) -> HashMap<Token, Vec<Locator>> {
+  pub(crate) fn self_locators(&self) -> HashMap<mio_06::Token, Vec<Locator>> {
     self.dpi.lock().unwrap().self_locators()
   }
 } // end impl DomainParticipant
+
+// --------------------------------------------------------------------------
+// --------------------------------------------------------------------------
+
+pub struct DomainParticipantStatusListener {
+  dp_disc: Arc<Mutex<DomainParticipantDisc>>,
+}
+
+impl DomainParticipantStatusListener {}
+
+impl<'a> StatusEvented<'a, DomainParticipantStatusEvent, DomainParticipantStatusStream<'a>>
+  for DomainParticipantStatusListener
+{
+  fn as_status_evented(&mut self) -> &dyn Evented {
+    self
+  }
+
+  fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
+    self
+  }
+
+  fn as_async_status_stream(&'a self) -> DomainParticipantStatusStream<'a> {
+    DomainParticipantStatusStream {
+      status_listener: self,
+    }
+  }
+
+  fn try_recv_status(&self) -> Option<DomainParticipantStatusEvent> {
+    self
+      .dp_disc
+      .lock()
+      .unwrap()
+      .status_channel_receiver()
+      .try_recv_status()
+  }
+}
+
+impl mio_08::event::Source for DomainParticipantStatusListener {
+  fn register(
+    &mut self,
+    registry: &Registry,
+    token: mio_08::Token,
+    interests: Interest,
+  ) -> io::Result<()> {
+    self
+      .dp_disc
+      .lock()
+      .unwrap()
+      .status_channel_receiver_mut()
+      .register(registry, token, interests)
+  }
+
+  fn reregister(
+    &mut self,
+    registry: &Registry,
+    token: mio_08::Token,
+    interests: Interest,
+  ) -> io::Result<()> {
+    self
+      .dp_disc
+      .lock()
+      .unwrap()
+      .status_channel_receiver_mut()
+      .reregister(registry, token, interests)
+  }
+
+  fn deregister(&mut self, registry: &Registry) -> io::Result<()> {
+    self
+      .dp_disc
+      .lock()
+      .unwrap()
+      .status_channel_receiver_mut()
+      .deregister(registry)
+  }
+}
+
+impl mio_06::Evented for DomainParticipantStatusListener {
+  // We just delegate all the operations to notification_receiver, since it
+  // already implements Evented
+  fn register(
+    &self,
+    poll: &mio_06::Poll,
+    token: mio_06::Token,
+    interest: mio_06::Ready,
+    opts: mio_06::PollOpt,
+  ) -> io::Result<()> {
+    self
+      .dp_disc
+      .lock()
+      .unwrap()
+      .status_channel_receiver_mut()
+      .as_status_evented()
+      .register(poll, token, interest, opts)
+  }
+
+  fn reregister(
+    &self,
+    poll: &mio_06::Poll,
+    token: mio_06::Token,
+    interest: mio_06::Ready,
+    opts: mio_06::PollOpt,
+  ) -> io::Result<()> {
+    self
+      .dp_disc
+      .lock()
+      .unwrap()
+      .status_channel_receiver_mut()
+      .as_status_evented()
+      .reregister(poll, token, interest, opts)
+  }
+
+  fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
+    self
+      .dp_disc
+      .lock()
+      .unwrap()
+      .status_channel_receiver_mut()
+      .as_status_evented()
+      .deregister(poll)
+  }
+}
+
+pub struct DomainParticipantStatusStream<'a> {
+  status_listener: &'a DomainParticipantStatusListener,
+}
+
+impl<'a> Stream for DomainParticipantStatusStream<'a> {
+  type Item = DomainParticipantStatusEvent;
+
+  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    let dp_lock = self.status_listener.dp_disc.lock().unwrap();
+    let mut w = dp_lock.status_channel_receiver().get_waker_update_lock();
+    // lock already at the beginning, before try_recv
+    match dp_lock.status_channel_receiver().try_recv() {
+      Err(std::sync::mpsc::TryRecvError::Empty) => {
+        // nothing available
+        *w = Some(cx.waker().clone());
+        Poll::Pending
+      }
+      Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+        error!("DomainParticipant status channel disconnected");
+        Poll::Ready(None)
+      }
+      Ok(t) => Poll::Ready(Some(t)), // got data
+    }
+  } // fn
+}
+
+impl<'a> FusedStream for DomainParticipantStatusStream<'a> {
+  fn is_terminated(&self) -> bool {
+    false
+  }
+}
+
+// --------------------------------------------------------------------------
+// --------------------------------------------------------------------------
 
 impl PartialEq for DomainParticipant {
   fn eq(&self, other: &Self) -> bool {
@@ -318,32 +679,54 @@ impl PartialEq for DomainParticipant {
 #[derive(Clone)]
 pub struct DomainParticipantWeak {
   dpi: Weak<Mutex<DomainParticipantDisc>>,
-  // This struct caches the GUID to avoid construction deadlocks
+  // This struct caches some items to avoid construction deadlocks
+  #[cfg(feature = "security")] // just to avoid warning
+  domain_id: u16,
   guid: GUID,
+  #[cfg(feature = "security")] // just to avoid warning
+  qos: QosPolicies,
 }
 
 impl DomainParticipantWeak {
-  pub fn new(dp: &DomainParticipant, guid: GUID) -> Self {
+  pub fn new(dp: &DomainParticipant) -> Self {
     Self {
       dpi: Arc::downgrade(&dp.dpi),
-      guid,
+      #[cfg(feature="security")] // just to avoid warning
+      domain_id: dp.domain_id(),
+      guid: dp.guid(),
+      #[cfg(feature="security")] // just to avoid warning
+      qos: dp.qos(),
     }
   }
 
-  pub fn create_publisher(&self, qos: &QosPolicies) -> Result<Publisher> {
+  pub fn create_publisher(&self, qos: &QosPolicies) -> CreateResult<Publisher> {
     self
       .dpi
       .upgrade()
-      .ok_or(Error::OutOfResources)
-      .and_then(|dpi| dpi.lock().unwrap().create_publisher(self, qos))
+      .ok_or(CreateError::ResourceDropped {
+        reason: "DomainParticipant".to_string(),
+      })
+      .and_then(|dpi| dpi.lock()?.create_publisher(self, qos))
   }
 
-  pub fn create_subscriber(&self, qos: &QosPolicies) -> Result<Subscriber> {
+  pub fn create_subscriber(&self, qos: &QosPolicies) -> CreateResult<Subscriber> {
     self
       .dpi
       .upgrade()
-      .ok_or(Error::OutOfResources)
-      .and_then(|dpi| dpi.lock().unwrap().create_subscriber(self, qos))
+      .ok_or(CreateError::ResourceDropped {
+        reason: "DomainParticipant".to_string(),
+      })
+      .and_then(|dpi| dpi.lock()?.create_subscriber(self, qos))
+  }
+
+  #[cfg(feature = "security")] // just to avoid warning
+  pub fn domain_id(&self) -> u16 {
+    self.domain_id
+  }
+
+  #[cfg(feature = "security")] // just to avoid warning
+  pub fn qos(&self) -> QosPolicies {
+    self.qos.clone()
   }
 
   pub fn create_topic(
@@ -352,54 +735,19 @@ impl DomainParticipantWeak {
     type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Result<Topic> {
+  ) -> CreateResult<Topic> {
     self
       .dpi
       .upgrade()
-      .ok_or(Error::LockPoisoned)
+      .ok_or(CreateError::ResourceDropped {
+        reason: "DomainParticipant".to_string(),
+      })
       .and_then(|dpi| {
         dpi
-          .lock()
-          .unwrap()
+          .lock()?
           .create_topic(self, name, type_desc, qos, topic_kind)
       })
   }
-
-  // pub fn find_topic(&self, name: &str, timeout: Duration) ->
-  // Result<Option<Topic>> {   self
-  //     .dpi
-  //     .upgrade()
-  //     .ok_or(Error::LockPoisoned)
-  //     .and_then(|dpi| dpi.lock().unwrap().find_topic(self, name, timeout))
-  // }
-
-  // pub fn domain_id(&self) -> u16 {
-  //   self
-  //     .dpi
-  //     .upgrade()
-  //     .expect("Unable to get original domain participant.")
-  //     .lock()
-  //     .unwrap()
-  //     .domain_id()
-  // }
-
-  // pub fn participant_id(&self) -> u16 {
-  //   self
-  //     .dpi
-  //     .upgrade()
-  //     .expect("Unable to get original domain participant.")
-  //     .lock()
-  //     .unwrap()
-  //     .participant_id()
-  // }
-
-  // pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-  //   self
-  //     .dpi
-  //     .upgrade()
-  //     .map(|dpi| dpi.lock().unwrap().discovered_topics())
-  //     .unwrap_or_default()
-  // }
 
   pub fn upgrade(self) -> Option<DomainParticipant> {
     self.dpi.upgrade().map(|d| DomainParticipant { dpi: d })
@@ -415,7 +763,7 @@ impl RTPSEntity for DomainParticipantWeak {
 // This struct exists only to control and stop Discovery when DomainParticipant
 // should be dropped
 pub(crate) struct DomainParticipantDisc {
-  dpi: Arc<Mutex<DomainParticipantInner>>,
+  dpi: DomainParticipantInner,
   // Discovery control
   discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
   discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
@@ -424,21 +772,33 @@ pub(crate) struct DomainParticipantDisc {
 }
 
 impl DomainParticipantDisc {
+  #[allow(clippy::too_many_arguments)]
   pub fn new(
     domain_id: u16,
+    participant_guid: GUID,
+    qos_policies: QosPolicies,
     discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
     discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> Result<Self> {
+    status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+    status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
+    security_plugins_handle: Option<SecurityPluginsHandle>,
+  ) -> CreateResult<Self> {
     let dpi = DomainParticipantInner::new(
       domain_id,
+      participant_guid,
+      qos_policies,
       discovery_update_notification_receiver,
+      discovery_command_sender.clone(),
       spdp_liveness_sender,
+      status_sender,
+      status_receiver,
+      security_plugins_handle,
     )?;
 
     Ok(Self {
-      dpi: Arc::new(Mutex::new(dpi)),
+      dpi,
       discovery_command_sender,
       discovery_join_handle,
       entity_id_generator: atomic::AtomicU32::new(0),
@@ -459,11 +819,9 @@ impl DomainParticipantDisc {
     &self,
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
-  ) -> Result<Publisher> {
+  ) -> CreateResult<Publisher> {
     self
       .dpi
-      .lock()
-      .unwrap()
       .create_publisher(dp, qos, self.discovery_command_sender.clone())
   }
 
@@ -471,11 +829,9 @@ impl DomainParticipantDisc {
     &self,
     dp: &DomainParticipantWeak,
     qos: &QosPolicies,
-  ) -> Result<Subscriber> {
+  ) -> CreateResult<Subscriber> {
     self
       .dpi
-      .lock()
-      .unwrap()
       .create_subscriber(dp, qos, self.discovery_command_sender.clone())
   }
 
@@ -486,13 +842,9 @@ impl DomainParticipantDisc {
     type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Result<Topic> {
+  ) -> CreateResult<Topic> {
     // println!("Create topic disc");
-    self
-      .dpi
-      .lock()
-      .unwrap()
-      .create_topic(dp, name, type_desc, qos, topic_kind)
+    self.dpi.create_topic(dp, name, type_desc, qos, topic_kind)
   }
 
   pub fn find_topic(
@@ -500,50 +852,76 @@ impl DomainParticipantDisc {
     dp: &DomainParticipantWeak,
     name: &str,
     timeout: Duration,
-  ) -> Result<Option<Topic>> {
-    self.dpi.lock().unwrap().find_topic(dp, name, timeout)
+  ) -> CreateResult<Option<Topic>> {
+    self.dpi.find_topic(dp, name, timeout)
   }
 
   pub fn domain_id(&self) -> u16 {
-    self.dpi.lock().unwrap().domain_id()
+    self.dpi.domain_id()
   }
 
   pub fn participant_id(&self) -> u16 {
-    self.dpi.lock().unwrap().participant_id()
+    self.dpi.participant_id()
   }
 
   pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
-    self.dpi.lock().unwrap().discovered_topics()
+    self.dpi.discovered_topics()
   }
 
   pub(crate) fn dds_cache(&self) -> Arc<RwLock<DDSCache>> {
-    self.dpi.lock().unwrap().dds_cache()
+    self.dpi.dds_cache()
+  }
+
+  #[cfg(feature = "security")] // just to avoid warning
+  pub(crate) fn qos(&self) -> QosPolicies {
+    self.dpi.qos()
   }
 
   // pub(crate) fn discovery_db(&self) -> Arc<RwLock<DiscoveryDB>> {
   //   self.dpi.lock().unwrap().discovery_db.clone()
   // }
 
-  pub(crate) fn assert_liveliness(&self) -> Result<()> {
+  pub(crate) fn assert_liveliness(&self) -> WriteResult<(), ()> {
     // No point in checking for the LIVELINESS QoS of MANUAL_BY_PARTICIPANT,
     // the discovery command mutates a field which is only read
     // by writers with that particular QoS.
     self
       .discovery_command_sender
       .send(DiscoveryCommand::ManualAssertLiveliness)
-      .or_else(|e| {
-        log_and_err_internal!("assert_liveness - Failed to send DiscoveryCommand. {e:?}")
-      })
+      // TODO: Are there more severe reasons than channel full? Is WouldBlock correct?
+      .map_err(|_e| WriteError::WouldBlock { data: () })
   }
 
-  pub(crate) fn self_locators(&self) -> HashMap<Token, Vec<Locator>> {
-    self.dpi.lock().unwrap().self_locators.clone()
+  pub(crate) fn self_locators(&self) -> HashMap<mio_06::Token, Vec<Locator>> {
+    self.dpi.self_locators.clone()
+  }
+
+  pub(crate) fn status_channel_receiver(
+    &self,
+  ) -> &StatusChannelReceiver<DomainParticipantStatusEvent> {
+    self.dpi.status_channel_receiver()
+  }
+  pub(crate) fn status_channel_receiver_mut(
+    &mut self,
+  ) -> &mut StatusChannelReceiver<DomainParticipantStatusEvent> {
+    self.dpi.status_channel_receiver_mut()
   }
 }
 
 impl Drop for DomainParticipantDisc {
   fn drop(&mut self) {
     info!("===== RustDDS shutting down ===== .drop() DomainParticipantDisc");
+
+    debug!("Wan dp_event_loop about stop.");
+    if self
+      .dpi
+      .stop_poll_sender
+      .send(EventLoopCommand::PrepareStop)
+      .is_err()
+    {
+      error!("dp_event_loop not responding to prepare stop discovery_command");
+    }
+
     debug!("Sending Discovery Stop signal.");
     if self
       .discovery_command_sender
@@ -568,13 +946,15 @@ pub(crate) struct DomainParticipantInner {
   participant_id: u16,
 
   my_guid: GUID,
+  #[cfg(feature = "security")] // just to avoid warning
+  my_qos_policies: QosPolicies,
 
   // Adding Readers
   sender_add_reader: mio_channel::SyncSender<ReaderIngredients>,
   sender_remove_reader: mio_channel::SyncSender<GUID>,
 
   // dp_event_loop control
-  stop_poll_sender: mio_channel::Sender<()>,
+  stop_poll_sender: mio_channel::Sender<EventLoopCommand>,
   ev_loop_handle: Option<JoinHandle<()>>, // this is Option, because it needs to be extracted
   // out of the struct (take) in order to .join() on the handle.
 
@@ -586,15 +966,21 @@ pub(crate) struct DomainParticipantInner {
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   discovery_db_event_receiver: mio_channel::Receiver<()>,
 
+  // status event receiver
+  status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
+
   // RTPS locators describing how to reach this DP
-  self_locators: HashMap<Token, Vec<Locator>>,
+  self_locators: HashMap<mio_06::Token, Vec<Locator>>,
+
+  security_plugins_handle: Option<SecurityPluginsHandle>,
 }
 
 impl Drop for DomainParticipantInner {
   fn drop(&mut self) {
     // if send has an error simply leave as we have lost control of the
     // ev_loop_thread anyways
-    if self.stop_poll_sender.send(()).is_err() {
+    if self.stop_poll_sender.send(EventLoopCommand::Stop).is_err() {
+      error!("dp_event_loop not responding to stop discovery_command");
       return;
     }
 
@@ -613,13 +999,22 @@ impl Drop for DomainParticipantInner {
   }
 }
 
-#[allow(clippy::new_without_default)]
 impl DomainParticipantInner {
+  #[allow(clippy::too_many_arguments)]
   fn new(
     domain_id: u16,
+    participant_guid: GUID,
+    _qos_policies: QosPolicies,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+    discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
-  ) -> Result<Self> {
+    status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+    status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
+    security_plugins_handle: Option<SecurityPluginsHandle>,
+  ) -> CreateResult<Self> {
+    #[cfg(not(feature = "security"))]
+    let _dummy = _qos_policies; // to make clippy happy
+
     let mut listeners = HashMap::new();
 
     match UDPListener::new_multicast(
@@ -655,7 +1050,7 @@ impl DomainParticipantInner {
     // here discovery_listener is redefined (shadowed)
     let discovery_listener = match discovery_listener {
       Some(dl) => dl,
-      None => return log_and_err_internal!("Could not find free ParticipantId"),
+      None => return create_error_out_of_resources!("Could not find free ParticipantId"),
     };
     listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
 
@@ -681,20 +1076,20 @@ impl DomainParticipantInner {
         // If we do not get the preferred listening port,
         // try again, with "any" port number.
         UDPListener::new_unicast("0.0.0.0", 0).or_else(|e| {
-          log_and_err_internal!(
+          create_error_out_of_resources!(
             "Could not open unicast user traffic listener, any port number: {:?}",
             e
           )
         })
       } else {
-        log_and_err_internal!("Could not open unicast user traffic listener: {e:?}")
+        create_error_out_of_resources!("Could not open unicast user traffic listener: {e:?}")
       }
     })?;
 
     listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
 
     // construct our own Locators
-    let self_locators: HashMap<Token, Vec<Locator>> = listeners
+    let self_locators: HashMap<mio_06::Token, Vec<Locator>> = listeners
       .iter()
       .map(|(t, l)| match l.to_locator_address() {
         Ok(locs) => (*t, locs),
@@ -708,16 +1103,15 @@ impl DomainParticipantInner {
     // Adding readers
     let (sender_add_reader, receiver_add_reader) =
       mio_channel::sync_channel::<ReaderIngredients>(100);
-    let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(10);
+    let (sender_remove_reader, receiver_remove_reader) = mio_channel::sync_channel::<GUID>(4);
 
     // Writers
     let (add_writer_sender, add_writer_receiver) =
       mio_channel::sync_channel::<WriterIngredients>(10);
-    let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(10);
+    let (remove_writer_sender, remove_writer_receiver) = mio_channel::sync_channel::<GUID>(4);
 
-    let new_guid = GUID::new_participant_guid();
     let domain_info = DomainInfo {
-      domain_participant_guid: new_guid,
+      domain_participant_guid: participant_guid,
       domain_id,
       participant_id,
     };
@@ -726,25 +1120,27 @@ impl DomainParticipantInner {
 
     let (discovery_db_event_sender, discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(1);
+
+    // Discovert DB creation
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
-      new_guid,
+      participant_guid,
       discovery_db_event_sender,
+      status_sender.clone(),
     )));
 
-    let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel::<()>();
+    let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
 
     // Launch the background thread for DomainParticipant
-    let dds_cache_clone = dds_cache.clone();
     let disc_db_clone = discovery_db.clone();
+    let security_plugins_clone = security_plugins_handle.clone();
     let ev_loop_handle = thread::Builder::new()
       .name(format!("RustDDS Participant {} event loop", participant_id))
       .spawn(move || {
         let dp_event_loop = DPEventLoop::new(
           domain_info,
           listeners,
-          dds_cache_clone,
           disc_db_clone,
-          new_guid.prefix,
+          participant_guid.prefix,
           TokenReceiverPair {
             token: ADD_READER_TOKEN,
             receiver: receiver_add_reader,
@@ -763,19 +1159,28 @@ impl DomainParticipantInner {
           },
           stop_poll_receiver,
           discovery_update_notification_receiver,
+          discovery_command_sender,
           spdp_liveness_sender,
+          status_sender,
+          security_plugins_clone,
         );
         dp_event_loop.event_loop();
       })?;
 
     info!(
-      "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?}",
-      domain_id, participant_id, new_guid
+      "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?} security={}",
+      domain_id,
+      participant_id,
+      participant_guid,
+      cfg!(security)
     );
+
     Ok(Self {
       domain_id,
       participant_id,
-      my_guid: new_guid,
+      #[cfg(feature = "security")]
+      my_qos_policies: _qos_policies,
+      my_guid: participant_guid,
       sender_add_reader,
       sender_remove_reader,
       stop_poll_sender,
@@ -785,7 +1190,9 @@ impl DomainParticipantInner {
       dds_cache,
       discovery_db,
       discovery_db_event_receiver,
+      status_receiver,
       self_locators,
+      security_plugins_handle,
     })
   }
 
@@ -793,14 +1200,10 @@ impl DomainParticipantInner {
     self.dds_cache.clone()
   }
 
-  // pub fn add_reader(&self, reader: ReaderIngredients) {
-  //   self.sender_add_reader.send(reader).unwrap();
-  // }
-
-  // pub fn remove_reader(&self, guid: GUID) {
-  //   let reader_guid = guid; // How to identify reader to be removed?
-  //   self.sender_remove_reader.send(reader_guid).unwrap();
-  // }
+  #[cfg(feature = "security")] // just to avoid warning
+  pub(crate) fn qos(&self) -> QosPolicies {
+    self.my_qos_policies.clone()
+  }
 
   // Publisher and subscriber creation
   //
@@ -812,7 +1215,7 @@ impl DomainParticipantInner {
     domain_participant: &DomainParticipantWeak,
     qos: &QosPolicies,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> Result<Publisher> {
+  ) -> CreateResult<Publisher> {
     Ok(Publisher::new(
       domain_participant.clone(),
       self.discovery_db.clone(),
@@ -821,6 +1224,7 @@ impl DomainParticipantInner {
       self.add_writer_sender.clone(),
       self.remove_writer_sender.clone(),
       discovery_command,
+      self.security_plugins_handle.clone(),
     ))
   }
 
@@ -829,7 +1233,7 @@ impl DomainParticipantInner {
     domain_participant: &DomainParticipantWeak,
     qos: &QosPolicies,
     discovery_command: mio_channel::SyncSender<DiscoveryCommand>,
-  ) -> Result<Subscriber> {
+  ) -> CreateResult<Subscriber> {
     Ok(Subscriber::new(
       domain_participant.clone(),
       self.discovery_db.clone(),
@@ -837,6 +1241,7 @@ impl DomainParticipantInner {
       self.sender_add_reader.clone(),
       self.sender_remove_reader.clone(),
       discovery_command,
+      self.security_plugins_handle.clone(),
     ))
   }
 
@@ -853,17 +1258,50 @@ impl DomainParticipantInner {
     type_desc: String,
     qos: &QosPolicies,
     topic_kind: TopicKind,
-  ) -> Result<Topic> {
+  ) -> CreateResult<Topic> {
+    #[cfg(feature = "security")]
+    if let Some(sec_handle) = self.security_plugins_handle.as_ref() {
+      // Security is enabled.
+      // Check are we allowed to create the topic from Access control
+      let check_res = sec_handle.get_plugins().check_create_topic(
+        self.my_guid.prefix,
+        self.domain_id,
+        name.clone(),
+        qos,
+      );
+      match check_res {
+        Ok(check_passed) => {
+          if !check_passed {
+            return create_error_not_allowed_by_security!(
+              "Not allowed to create the topic {}",
+              name
+            );
+          }
+        }
+        Err(e) => {
+          // Something went wrong in the check
+          return create_error_internal!(
+            "Failed to check Topic rights from Access control: {}",
+            e.msg
+          );
+        }
+      };
+    }
+
+    let topic_type_desc = TypeDesc::new(type_desc);
     let topic = Topic::new(
       domain_participant_weak,
-      name,
-      TypeDesc::new(type_desc),
+      name.clone(),
+      topic_type_desc.clone(),
       qos,
       topic_kind,
     );
-    Ok(topic)
 
-    // TODO: refine
+    // Create the topic cache entry
+    let mut dds_cache_guard = self.dds_cache.write()?;
+    dds_cache_guard.add_new_topic(name, topic_type_desc, qos);
+
+    Ok(topic)
   }
 
   // Do not implement content filtered topics or multi-topics (yet)
@@ -873,7 +1311,7 @@ impl DomainParticipantInner {
     domain_participant_weak: &DomainParticipantWeak,
     name: &str,
     timeout: Duration,
-  ) -> Result<Option<Topic>> {
+  ) -> CreateResult<Option<Topic>> {
     use mio_06 as mio;
 
     let poll = mio::Poll::new()?;
@@ -882,7 +1320,7 @@ impl DomainParticipantInner {
     // event
     poll.register(
       &self.discovery_db_event_receiver,
-      mio::Token(0),
+      mio_06::Token(0),
       mio::Ready::readable(),
       mio::PollOpt::level(),
     )?;
@@ -913,8 +1351,13 @@ impl DomainParticipantInner {
     &self,
     domain_participant_weak: &DomainParticipantWeak,
     name: &str,
-  ) -> Result<Option<Topic>> {
-    let db = self.discovery_db.read().map_err(|_| Error::LockPoisoned)?;
+  ) -> CreateResult<Option<Topic>> {
+    let db = self
+      .discovery_db
+      .read()
+      .map_err(|_| CreateError::Poisoned {
+        reason: "discovery db".to_string(),
+      })?;
 
     let build_topic_fn = |d: &DiscoveredTopicData| {
       let qos = d.topic_data.qos();
@@ -976,6 +1419,16 @@ impl DomainParticipantInner {
 
     db.all_user_topics().cloned().collect()
   }
+  pub(crate) fn status_channel_receiver(
+    &self,
+  ) -> &StatusChannelReceiver<DomainParticipantStatusEvent> {
+    &self.status_receiver
+  }
+  pub(crate) fn status_channel_receiver_mut(
+    &mut self,
+  ) -> &mut StatusChannelReceiver<DomainParticipantStatusEvent> {
+    &mut self.status_receiver
+  }
 } // impl
 
 impl RTPSEntity for DomainParticipant {
@@ -986,7 +1439,7 @@ impl RTPSEntity for DomainParticipant {
 
 impl RTPSEntity for DomainParticipantDisc {
   fn guid(&self) -> GUID {
-    self.dpi.lock().unwrap().guid()
+    self.dpi.guid()
   }
 }
 
@@ -1121,6 +1574,7 @@ mod tests {
     let s: Submessage = Submessage {
       header: sub_header,
       body: SubmessageBody::Reader(ReaderSubmessage::AckNack(a, flags)),
+      original_bytes: None,
     };
     let h = Header {
       protocol_id: ProtocolId::default(),

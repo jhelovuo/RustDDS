@@ -37,6 +37,7 @@ impl InfoDestination {
         content_length: self.len_serialized() as u16,
       },
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoDestination(self, flags)),
+      original_bytes: None,
     }
   }
 }

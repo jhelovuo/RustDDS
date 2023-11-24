@@ -57,8 +57,12 @@ pub struct DataFrag {
   /// Encapsulation of a consecutive series of fragments, starting at
   /// fragment_starting_num for a total of fragments_in_submessage.
   /// Represents part of the new value of the data-object
-  /// after the change. Present only if either the DataFlag or the KeyFlag are
-  /// set in the header. Present only if DataFlag is set in the header.
+  /// after the change.
+  ///
+  /// If payloads are protected, contains the buffer that decodes to the series
+  /// of fragments. In particular, a CryptoHeader, a plaintext buffer or
+  /// CryptoContent depending on the transformation kind, and
+  /// CryptoFooter, which have been serialized and concatenated.
   ///
   /// Note: RTPS spec says the serialized_payload is of type SerializedPayload,
   /// but that is technically incorrect. It is a fragment of
@@ -83,7 +87,7 @@ impl DataFrag {
     2 + // fragmentsInSubmessage
     2 + // fragmentSize
     4 + // sampleSize
-    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParamterList
+    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParameterList
     self.serialized_payload.len()
   }
 
@@ -140,7 +144,7 @@ impl DataFrag {
       u32::read_from_stream_unbuffered_with_ctx(endianness, &mut cursor).map_err(map_speedy_err)?;
 
     let expect_qos = flags.contains(DATAFRAG_Flags::InlineQos);
-    //let expect_key = flags.contains(DATAFRAG_Flags::Key);
+    // let expect_key = flags.contains(DATAFRAG_Flags::Key);
 
     // Size of header after "octets_to_inline_qos" field:
     // reader_id: 4
@@ -211,8 +215,11 @@ impl DataFrag {
     if fragment_size < 1 || (fragment_size as u32) > data_size {
       return Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("Invalid DataFrag. fragment_size={} data_size={}  Expected 1 <= fragment_size <= data_size.",
-          fragment_size, data_size),
+        format!(
+          "Invalid DataFrag. fragment_size={} data_size={}  Expected 1 <= fragment_size <= \
+           data_size.",
+          fragment_size, data_size
+        ),
       ));
     }
 
@@ -238,18 +245,11 @@ impl DataFrag {
     if fragment_starting_num < FragmentNumber::new(1) || fragment_starting_num > expected_total {
       return Err(io::Error::new(
         io::ErrorKind::Other,
-        format!("DataFrag fragmentStartingNum={:?} expected_total={:?}.  Expected 1 <= fragmentStartingNum <= expeceted_total.  Discarding as invalid.",
-          fragment_starting_num,expected_total)
-      ));
-    }
-
-    if datafrag.serialized_payload.len()
-      > (fragments_in_submessage as usize) * (fragment_size as usize)
-    {
-      return Err(io::Error::new(
-        io::ErrorKind::Other,
-        format!("Invalid DataFrag. serializedData length={} should be less than or equal to (fragments_in_submessage={}) x (fragment_size={})",
-          datafrag.serialized_payload.len(), fragments_in_submessage, fragment_size)
+        format!(
+          "DataFrag fragmentStartingNum={:?} expected_total={:?}.  Expected 1 <= \
+           fragmentStartingNum <= expected_total.  Discarding as invalid.",
+          fragment_starting_num, expected_total
+        ),
       ));
     }
 
@@ -277,5 +277,14 @@ impl<C: Context> Writable<C> for DataFrag {
     }
     writer.write_bytes(&self.serialized_payload)?;
     Ok(())
+  }
+}
+
+impl HasEntityIds for DataFrag {
+  fn receiver_entity_id(&self) -> EntityId {
+    self.reader_id
+  }
+  fn sender_entity_id(&self) -> EntityId {
+    self.writer_id
   }
 }

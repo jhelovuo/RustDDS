@@ -14,11 +14,6 @@ use crate::{
     protocol_version::ProtocolVersion,
     submessages::{
       elements::{parameter::Parameter, parameter_list::ParameterList},
-      secure_body::SecureBody,
-      secure_postfix::SecurePostfix,
-      secure_prefix::SecurePrefix,
-      secure_rtps_postfix::SecureRTPSPostfix,
-      secure_rtps_prefix::SecureRTPSPrefix,
       submessage::WriterSubmessage,
       submessages::{SubmessageKind, *},
     },
@@ -28,13 +23,19 @@ use crate::{
   structure::{
     cache_change::CacheChange,
     entity::RTPSEntity,
-    guid::{EntityId, EntityKind, GuidPrefix, GUID},
+    guid::{EntityId, GuidPrefix, GUID},
     parameter_id::ParameterId,
     sequence_number::{FragmentNumber, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
-  RepresentationIdentifier,
 };
+#[cfg(feature = "security")]
+use crate::{
+  security::{security_plugins::SecurityPluginsHandle, SecurityError},
+  security_error,
+};
+#[cfg(not(feature = "security"))]
+use crate::no_security::SecurityPluginsHandle;
 
 #[derive(Debug, Clone)]
 pub struct Message {
@@ -69,214 +70,9 @@ impl Message {
     let mut submessages_left: Bytes = buffer.slice(20..); // header is 20 bytes
                                                           // submessage loop
     while !submessages_left.is_empty() {
-      let sub_header = SubmessageHeader::read_from_buffer(&submessages_left)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-      // Try to figure out how large this submessage is.
-      let sub_header_length = 4; // 4 bytes
-      let proposed_sub_content_length = if sub_header.content_length == 0 {
-        // RTPS spec 2.3, section 9.4.5.1.3:
-        //           In case octetsToNextHeader==0 and the kind of Submessage is
-        // NOT PAD or INFO_TS, the Submessage is the last Submessage in the Message
-        // and extends up to the end of the Message. This makes it possible to send
-        // Submessages larger than 64k (the size that can be stored in the
-        // octetsToNextHeader field), provided they are the last Submessage in the
-        // Message. In case the octetsToNextHeader==0 and the kind of Submessage is
-        // PAD or INFO_TS, the next Submessage header starts immediately after the
-        // current Submessage header OR the PAD or INFO_TS is the last Submessage
-        // in the Message.
-        match sub_header.kind {
-          SubmessageKind::PAD | SubmessageKind::INFO_TS => 0,
-          _not_pad_or_info_ts => submessages_left.len() - sub_header_length,
-        }
-      } else {
-        sub_header.content_length as usize
-      };
-      // check if the declared content length makes sense
-      let sub_content_length = if sub_header_length + proposed_sub_content_length
-        <= submessages_left.len()
-      {
-        proposed_sub_content_length
-      } else {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput,
-            format!("Submessage header declares length larger than remaining message size: {sub_header_length} + {proposed_sub_content_length} <= {}", submessages_left.len())));
-      };
-
-      // split first submessage to new buffer
-      let mut sub_buffer = submessages_left.split_to(sub_header_length + sub_content_length);
-      // split tail part (content) to new buffer
-      let sub_content_buffer = sub_buffer.split_off(sub_header_length);
-
-      let e = endianness_flag(sub_header.flags);
-      let mk_w_subm = move |s: WriterSubmessage| {
-        Ok(Submessage {
-          header: sub_header,
-          body: SubmessageBody::Writer(s),
-        })
-      };
-      let mk_r_subm = move |s: ReaderSubmessage| {
-        Ok(Submessage {
-          header: sub_header,
-          body: SubmessageBody::Reader(s),
-        })
-      };
-      let mk_s_subm = move |s: SecuritySubmessage| {
-        Ok(Submessage {
-          header: sub_header,
-          body: SubmessageBody::Security(s),
-        })
-      };
-      let mk_i_subm = move |s: InterpreterSubmessage| {
-        Ok(Submessage {
-          header: sub_header,
-          body: SubmessageBody::Interpreter(s),
-        })
-      };
-
-      let new_submessage_result: io::Result<Submessage> = match sub_header.kind {
-        SubmessageKind::DATA => {
-          // Manually implemented deserialization for DATA. Speedy does not quite cut it.
-          let f = BitFlags::<DATA_Flags>::from_bits_truncate(sub_header.flags);
-          mk_w_subm(WriterSubmessage::Data(
-            Data::deserialize_data(&sub_content_buffer, f)?,
-            f,
-          ))
-        }
-
-        SubmessageKind::DATA_FRAG => {
-          // Manually implemented deserialization for DATA. Speedy does not quite cut it.
-          let f = BitFlags::<DATAFRAG_Flags>::from_bits_truncate(sub_header.flags);
-          mk_w_subm(WriterSubmessage::DataFrag(
-            DataFrag::deserialize(&sub_content_buffer, f)?,
-            f,
-          ))
-        }
-
-        SubmessageKind::GAP => {
-          let f = BitFlags::<GAP_Flags>::from_bits_truncate(sub_header.flags);
-          mk_w_subm(WriterSubmessage::Gap(
-            Gap::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-
-        SubmessageKind::ACKNACK => {
-          let f = BitFlags::<ACKNACK_Flags>::from_bits_truncate(sub_header.flags);
-          mk_r_subm(ReaderSubmessage::AckNack(
-            AckNack::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-
-        SubmessageKind::NACK_FRAG => {
-          let f = BitFlags::<NACKFRAG_Flags>::from_bits_truncate(sub_header.flags);
-          mk_r_subm(ReaderSubmessage::NackFrag(
-            NackFrag::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-
-        SubmessageKind::HEARTBEAT => {
-          let f = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
-          mk_w_subm(WriterSubmessage::Heartbeat(
-            Heartbeat::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-
-        // interpreter submessages
-        SubmessageKind::INFO_DST => {
-          let f = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);
-          mk_i_subm(InterpreterSubmessage::InfoDestination(
-            InfoDestination::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-        SubmessageKind::INFO_SRC => {
-          let f = BitFlags::<INFOSOURCE_Flags>::from_bits_truncate(sub_header.flags);
-          mk_i_subm(InterpreterSubmessage::InfoSource(
-            InfoSource::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-        SubmessageKind::INFO_TS => {
-          let f = BitFlags::<INFOTIMESTAMP_Flags>::from_bits_truncate(sub_header.flags);
-          let tso = if f.contains(INFOTIMESTAMP_Flags::Invalidate) {
-            None
-          } else {
-            Some(Timestamp::read_from_buffer_with_ctx(
-              e,
-              &sub_content_buffer,
-            )?)
-          };
-          mk_i_subm(InterpreterSubmessage::InfoTimestamp(
-            InfoTimestamp { timestamp: tso },
-            f,
-          ))
-        }
-        SubmessageKind::INFO_REPLY => {
-          let f = BitFlags::<INFOREPLY_Flags>::from_bits_truncate(sub_header.flags);
-          mk_i_subm(InterpreterSubmessage::InfoReply(
-            InfoReply::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-        SubmessageKind::PAD => {
-          continue; // nothing to do here
-        }
-        SubmessageKind::SEC_BODY => {
-          let f = BitFlags::<SECUREBODY_Flags>::from_bits_truncate(sub_header.flags);
-          mk_s_subm(SecuritySubmessage::SecureBody(
-            SecureBody::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-        SubmessageKind::SEC_PREFIX => {
-          let f = BitFlags::<SECUREPREFIX_Flags>::from_bits_truncate(sub_header.flags);
-          mk_s_subm(SecuritySubmessage::SecurePrefix(
-            SecurePrefix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-        SubmessageKind::SEC_POSTFIX => {
-          let f = BitFlags::<SECUREPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
-          mk_s_subm(SecuritySubmessage::SecurePostfix(
-            SecurePostfix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-        SubmessageKind::SRTPS_PREFIX => {
-          let f = BitFlags::<SECURERTPSPREFIX_Flags>::from_bits_truncate(sub_header.flags);
-          mk_s_subm(SecuritySubmessage::SecureRTPSPrefix(
-            SecureRTPSPrefix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-        SubmessageKind::SRTPS_POSTFIX => {
-          let f = BitFlags::<SECURERTPSPOSTFIX_Flags>::from_bits_truncate(sub_header.flags);
-          mk_s_subm(SecuritySubmessage::SecureRTPSPostfix(
-            SecureRTPSPostfix::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
-            f,
-          ))
-        }
-        unknown_kind => {
-          let kind = u8::from(unknown_kind);
-          if kind >= 0x80 {
-            // Kinds 0x80 - 0xFF are vendor-specific.
-            trace!(
-              "Received vendor-specific submessage kind {:?}",
-              unknown_kind
-            );
-            trace!("Submessage was {:?}", &sub_buffer);
-          } else {
-            // Kind is 0x00 - 0x7F, is should be in the standard.
-            error!("Received unknown submessage kind {:?}", unknown_kind);
-            debug!("Submessage was {:?}", &sub_buffer);
-          }
-          continue;
-        }
-      }; // match
-
-      message.submessages.push(new_submessage_result?);
+      if let Some(submessage) = Submessage::read_from_buffer(&mut submessages_left)? {
+        message.submessages.push(submessage);
+      }
     } // loop
 
     Ok(message)
@@ -311,7 +107,7 @@ impl<C: Context> Writable<C> for Message {
   }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct MessageBuilder {
   submessages: Vec<Submessage>,
 }
@@ -327,7 +123,7 @@ impl MessageBuilder {
       kind: SubmessageKind::INFO_DST,
       flags: flags.bits(),
       content_length: 12u16,
-      //InfoDST length is always 12 because message contains only GuidPrefix
+      // InfoDST length is always 12 because message contains only GuidPrefix
     };
     let dst_submessage = Submessage {
       header: submessage_header,
@@ -335,6 +131,7 @@ impl MessageBuilder {
         InfoDestination { guid_prefix },
         flags,
       )),
+      original_bytes: None,
     };
 
     self.submessages.push(dst_submessage);
@@ -361,25 +158,33 @@ impl MessageBuilder {
       content_length,
     };
 
-    let submsg = Submessage {
+    let submessage = Submessage {
       header: submessage_header,
       body: SubmessageBody::Interpreter(InterpreterSubmessage::InfoTimestamp(
         InfoTimestamp { timestamp },
         flags,
       )),
+      original_bytes: None,
     };
 
-    self.submessages.push(submsg);
+    self.submessages.push(submessage);
     self
   }
 
   pub fn data_msg(
     mut self,
     cache_change: &CacheChange,
-    reader_entity_id: EntityId,
-    writer_entity_id: EntityId,
+    reader_entity_id: EntityId, // The entity id to be included in the submessage
+    writer_guid: GUID,
     endianness: Endianness,
+    security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    // Parameter not used
+    let _ = security_plugins;
+
+    let writer_entity_id = writer_guid.entity_id;
+
     let mut param_list = ParameterList::new(); // inline QoS goes here
 
     // Check if we are disposing by key hash
@@ -388,27 +193,70 @@ impl MessageBuilder {
       DDSData::DisposeByKeyHash { key_hash, .. } => {
         // yes, insert to inline QoS
         // insert key hash
-        param_list.parameters.push(Parameter {
+        param_list.push(Parameter {
           parameter_id: ParameterId::PID_KEY_HASH,
           value: key_hash.to_vec(),
         });
 
         // ... and tell what the key_hash means
         let status_info = Parameter::create_pid_status_info_parameter(
-          /* disposed */ true, /* unregisterd */ true, /* filtered */ false,
+          /* disposed */ true, /* unregistered */ true, /* filtered */ false,
         );
-        param_list.parameters.push(status_info);
+        param_list.push(status_info);
       }
     }
 
     // If we are sending related sample identity, then insert that.
-    if let Some(si) = cache_change.write_options.related_sample_identity {
+    if let Some(si) = cache_change.write_options.related_sample_identity() {
       let related_sample_identity_serialized = si.write_to_vec_with_ctx(endianness).unwrap();
-      param_list.parameters.push(Parameter {
+      param_list.push(Parameter {
         parameter_id: ParameterId::PID_RELATED_SAMPLE_IDENTITY,
         value: related_sample_identity_serialized,
       });
     }
+
+    let serialized_payload = match cache_change.data_value {
+      DDSData::Data {
+        ref serialized_payload,
+      } => Some(serialized_payload.clone()), // contents is Bytes
+      DDSData::DisposeByKey { ref key, .. } => Some(key.clone()),
+      DDSData::DisposeByKeyHash { .. } => None,
+    };
+
+    #[cfg(not(feature = "security"))]
+    let encoded_payload = serialized_payload;
+
+    #[cfg(feature = "security")]
+    let encoded_payload = match serialized_payload
+      // Encode payload if it exists
+      .map(|serialized_payload| {
+        serialized_payload
+          // Serialize
+          .write_to_vec()
+          .map_err(|e| security_error!("{e:?}"))
+          .and_then(|serialized_payload| {
+            match security_plugins.map(SecurityPluginsHandle::get_plugins) {
+              Some(security_plugins) => {
+                security_plugins
+                  .encode_serialized_payload(serialized_payload, &writer_guid)
+                  // Add the extra qos
+                  .map(|(encoded_payload, extra_inline_qos)| {
+                    param_list.concat(extra_inline_qos);
+                    encoded_payload
+                  })
+              }
+              None => Ok(serialized_payload),
+            }
+          })
+      })
+      .transpose()
+    {
+      Ok(encoded_payload) => encoded_payload,
+      Err(e) => {
+        error!("{e:?}");
+        return self;
+      }
+    }; // end security
 
     let have_inline_qos = !param_list.is_empty(); // we need this later also
     let inline_qos = if have_inline_qos {
@@ -417,31 +265,13 @@ impl MessageBuilder {
       None
     };
 
-    let mut data_message = Data {
+    let data_message = Data {
       reader_id: reader_entity_id,
       writer_id: writer_entity_id,
       writer_sn: cache_change.sequence_number,
       inline_qos,
-      serialized_payload: match cache_change.data_value {
-        DDSData::Data {
-          ref serialized_payload,
-        } => Some(serialized_payload.clone()), // contents is Bytes
-        DDSData::DisposeByKey { ref key, .. } => Some(key.clone()),
-        DDSData::DisposeByKeyHash { .. } => None,
-      },
+      serialized_payload: encoded_payload.map(Bytes::from),
     };
-
-    // TODO: please explain this logic here:
-    //
-    // Current hypothesis:
-    // If we are writing to a built-in ( = Discovery) topic, then we mark the
-    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
-    // on a little-endian machine.
-    if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
-      if let Some(sp) = data_message.serialized_payload.as_mut() {
-        sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE;
-      }
-    }
 
     let flags: BitFlags<DATA_Flags> = BitFlags::<DATA_Flags>::from_endianness(endianness)
       | (match cache_change.data_value {
@@ -464,6 +294,7 @@ impl MessageBuilder {
         content_length: data_message.len_serialized() as u16, // TODO: Handle overflow?
       },
       body: SubmessageBody::Writer(WriterSubmessage::Data(data_message, flags)),
+      original_bytes: None,
     });
     self
   }
@@ -475,12 +306,19 @@ impl MessageBuilder {
     mut self,
     cache_change: &CacheChange,
     reader_entity_id: EntityId,
-    writer_entity_id: EntityId,
+    writer_guid: GUID,
     fragment_number: FragmentNumber, // We support only submessages with one fragment
     fragment_size: u16,
     sample_size: u32, // all fragments together
     endianness: Endianness,
+    security_plugins: Option<&SecurityPluginsHandle>,
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    // Parameter not used
+    let _ = security_plugins;
+
+    let writer_entity_id = writer_guid.entity_id;
+
     let mut param_list = ParameterList::new(); // inline QoS goes here
 
     // Check if we are disposing by key hash
@@ -499,7 +337,7 @@ impl MessageBuilder {
     }
 
     // If we are sending related sample identity, then insert that.
-    if let Some(si) = cache_change.write_options.related_sample_identity {
+    if let Some(si) = cache_change.write_options.related_sample_identity() {
       let related_sample_identity_serialized = si.write_to_vec_with_ctx(endianness).unwrap();
       param_list.parameters.push(Parameter {
         parameter_id: ParameterId::PID_RELATED_SAMPLE_IDENTITY,
@@ -516,9 +354,42 @@ impl MessageBuilder {
       sample_size.try_into().unwrap(),
     );
 
-    let serialized_payload = cache_change
-      .data_value
-      .bytes_slice(from_byte, up_to_before_byte);
+    let serialized_payload = Vec::from(
+      cache_change
+        .data_value
+        .bytes_slice(from_byte, up_to_before_byte),
+    );
+
+    #[cfg(not(feature = "security"))]
+    let encoded_payload = serialized_payload;
+
+    #[cfg(feature = "security")]
+    let encoded_payload = {
+      let encode_result = match security_plugins.map(SecurityPluginsHandle::get_plugins) {
+        Some(security_plugins) => {
+          security_plugins
+            .encode_serialized_payload(serialized_payload, &writer_guid)
+            // Add the extra qos
+            .map(|(encoded_payload, extra_inline_qos)| {
+              param_list.concat(extra_inline_qos);
+              encoded_payload
+            })
+        }
+        None =>
+        // If there are no security plugins, use plaintext
+        {
+          Ok(serialized_payload)
+        }
+      };
+
+      match encode_result {
+        Ok(encoded_payload) => encoded_payload,
+        Err(e) => {
+          error!("{e:?}");
+          return self;
+        }
+      }
+    }; // end security encoding
 
     let data_message = DataFrag {
       reader_id: reader_entity_id,
@@ -533,26 +404,11 @@ impl MessageBuilder {
       } else {
         None
       },
-      serialized_payload,
+      serialized_payload: Bytes::from(encoded_payload),
     };
 
-    // TODO: please explain this logic here:
-    //
-    // Current hypothesis:
-    // If we are writing to a built-in ( = Discovery) topic, then we mark the
-    // encoding to be PL_CDR_LE, no matter what. This works if we are compiled
-    // on a little-endian machine.
-
-    // Is this ever necessary for fragmented data?
-
-    // if writer_entity_id.kind() == EntityKind::WRITER_WITH_KEY_BUILT_IN {
-    //   if let Some(sp) = data_message.serialized_payload.as_mut() {
-    //     sp.representation_identifier = RepresentationIdentifier::PL_CDR_LE;
-    //   }
-    // }
-
     let flags: BitFlags<DATAFRAG_Flags> =
-      // endinness flag
+      // endianness flag
       BitFlags::<DATAFRAG_Flags>::from_endianness(endianness)
       // key flag
       | (match cache_change.data_value {
@@ -571,34 +427,45 @@ impl MessageBuilder {
       header: SubmessageHeader {
         kind: SubmessageKind::DATA_FRAG,
         flags: flags.bits(),
-        content_length: data_message.len_serialized() as u16, //TODO: Handle overflow
+        content_length: data_message.len_serialized() as u16, // TODO: Handle overflow
       },
       body: SubmessageBody::Writer(WriterSubmessage::DataFrag(data_message, flags)),
+      original_bytes: None,
     });
     self
   }
 
-  // TODO: We should optimize this entire thing to allow long contiguous
-  // irrelevant set to be represented as start_sn +
   pub fn gap_msg(
     mut self,
     irrelevant_sns: &BTreeSet<SequenceNumber>,
-    writer: &RtpsWriter,
+    writer_entity_id: EntityId,
+    writer_endianness: Endianness,
     reader_guid: GUID,
   ) -> Self {
-    match (
-      irrelevant_sns.iter().next(),
-      irrelevant_sns.iter().next_back(),
-    ) {
-      (Some(&base), Some(&_top)) => {
-        let gap_list = SequenceNumberSet::from_base_and_set(base, irrelevant_sns);
+    match (irrelevant_sns.first(), irrelevant_sns.last()) {
+      (Some(&gap_start), Some(&_last_sn)) => {
+        // Determine the contiguous range (starting from gap_start) of irrelevant
+        // seqnums
+        let mut range_end = gap_start;
+        while irrelevant_sns.contains(&range_end.plus_1()) {
+          range_end = range_end.plus_1();
+        }
+        // range_end is now the last seqnum in the contiguous range.
+        // Note that when receiving a GAP, the interpreted range is
+        // (gap_start .. gapList.base -1). But since gapList.base is included in the
+        // gapList, gapList.base is also always interpred as irrelevant, hence
+        // completing the range
+        let list_base = range_end;
+        let list_set = irrelevant_sns.clone().split_off(&list_base);
+        let gap_list = SequenceNumberSet::from_base_and_set(list_base, &list_set);
+
         let gap = Gap {
           reader_id: reader_guid.entity_id,
-          writer_id: writer.entity_id(),
-          gap_start: base,
+          writer_id: writer_entity_id,
+          gap_start,
           gap_list,
         };
-        let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer.endianness);
+        let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer_endianness);
         gap
           .create_submessage(gap_flags)
           .map(|s| self.submessages.push(s));
@@ -611,7 +478,7 @@ impl MessageBuilder {
   pub fn heartbeat_msg(
     mut self,
     writer: &RtpsWriter,
-    reader_entityid: EntityId,
+    reader_entity_id: EntityId,
     set_final_flag: bool,
     set_liveliness_flag: bool,
   ) -> Self {
@@ -619,7 +486,7 @@ impl MessageBuilder {
     let last = writer.last_change_sequence_number;
 
     let heartbeat = Heartbeat {
-      reader_id: reader_entityid,
+      reader_id: reader_entity_id,
       writer_id: writer.entity_id(),
       first_sn: first,
       last_sn: last,
@@ -657,8 +524,8 @@ impl MessageBuilder {
 }
 
 #[cfg(test)]
+#[allow(non_snake_case)]
 mod tests {
-  #![allow(non_snake_case)]
   use log::info;
   use speedy::Writable;
 
@@ -668,7 +535,7 @@ mod tests {
 
   fn rtps_message_test_shapes_demo_message_deserialization() {
     // Data message should contain Shapetype values.
-    // caprured with wireshark from shapes demo.
+    // captured with wireshark from shapes demo.
     // packet with INFO_DST, INFO_TS, DATA, HEARTBEAT
     let bits1 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
@@ -693,7 +560,7 @@ mod tests {
   }
   #[test]
   fn rtps_message_test_shapes_demo_DataP() {
-    // / caprured with wireshark from shapes demo.
+    // / captured with wireshark from shapes demo.
     // packet with DATA(p)
     let bits2 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x04, 0x01, 0x03, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31,
@@ -732,7 +599,7 @@ mod tests {
 
   #[test]
   fn rtps_message_test_shapes_demo_info_TS_dataP() {
-    // caprured with wireshark from shapes demo.
+    // captured with wireshark from shapes demo.
     // rtps packet with info TS and Data(p)
     let bits1 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
@@ -764,7 +631,7 @@ mod tests {
 
   #[test]
   fn rtps_message_test_shapes_demo_info_TS_AckNack() {
-    // caprured with wireshark from shapes demo.
+    // captured with wireshark from shapes demo.
     // rtps packet with info TS three AckNacks
     let bits1 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x04, 0x01, 0x03, 0x01, 0x03, 0x00, 0x0c, 0x29, 0x2d, 0x31,
@@ -790,7 +657,7 @@ mod tests {
 
   #[test]
   fn rtps_message_info_ts_and_dataP() {
-    // caprured with wireshark from shapes demo.
+    // captured with wireshark from shapes demo.
     // rtps packet with info TS and data(p)
     let bits1 = Bytes::from_static(&[
       0x52, 0x54, 0x50, 0x53, 0x02, 0x03, 0x01, 0x0f, 0x01, 0x0f, 0x99, 0x06, 0x78, 0x34, 0x00,
@@ -822,7 +689,7 @@ mod tests {
 
   #[test]
   fn rtps_message_infoDST_infoTS_Data_w_heartbeat() {
-    // caprured with wireshark from shapes demo.
+    // captured with wireshark from shapes demo.
     // rtps packet with InfoDST InfoTS Data(w) Heartbeat
     // This datamessage serialized payload maybe contains topic name (square) and
     // its type (shapetype) look https://www.omg.org/spec/DDSI-RTPS/2.3/PDF page 185
@@ -860,15 +727,12 @@ mod tests {
       Submessage {
         header: _,
         body: SubmessageBody::Writer(WriterSubmessage::Data(d, _flags)),
+        ..
       } => d,
       wtf => panic!("Unexpected message structure {wtf:?}"),
     };
-    let serialized_payload = data_submessage
-      .serialized_payload
-      .as_ref()
-      .unwrap()
-      .value
-      .clone();
+
+    let serialized_payload = data_submessage.unwrap_serialized_payload_value().clone();
     info!("{:x?}", serialized_payload);
 
     let serialized = Bytes::from(

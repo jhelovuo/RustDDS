@@ -18,7 +18,7 @@ use crate::{
     key::*,
     qos::*,
     readcondition::*,
-    result::*,
+    result::ReadResult,
     statusevents::*,
     with_key::{datasample::*, simpledatareader::*},
   },
@@ -68,12 +68,9 @@ pub enum SelectByKey {
 /// ```
 ///
 /// *Note:* Many DataReader methods require mutable access to `self`, because
-/// they need to mutate the datasample ceche, which is an essential content of
+/// they need to mutate the datasample cache, which is an essential content of
 /// this struct.
-pub struct DataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>>
-where
-  <D as Keyed>::K: Key,
-{
+pub struct DataReader<D: Keyed, DA: DeserializerAdapter<D> = CDRDeserializerAdapter<D>> {
   simple_data_reader: SimpleDataReader<D, DA>,
   datasample_cache: DataSampleCache<D>, // DataReader-local cache of deserialized samples
 }
@@ -81,11 +78,10 @@ where
 impl<D: 'static, DA> DataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   pub(crate) fn from_simple_data_reader(simple_data_reader: SimpleDataReader<D, DA>) -> Self {
-    let dsc = DataSampleCache::new(simple_data_reader.topic().qos());
+    let dsc = DataSampleCache::new(simple_data_reader.qos().clone());
 
     Self {
       simple_data_reader,
@@ -96,7 +92,7 @@ where
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
-  fn fill_and_lock_local_datasample_cache(&mut self) -> Result<()> {
+  fn fill_and_lock_local_datasample_cache(&mut self) -> ReadResult<()> {
     while let Some(dcc) = self.simple_data_reader.try_take_one()? {
       self
         .datasample_cache
@@ -178,7 +174,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<&D>>> {
+  ) -> ReadResult<Vec<DataSample<&D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache()?;
@@ -237,7 +233,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<DataSample<D>>> {
+  ) -> ReadResult<Vec<DataSample<D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
 
@@ -286,7 +282,7 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn read_next_sample(&mut self) -> Result<Option<DataSample<&D>>> {
+  pub fn read_next_sample(&mut self) -> ReadResult<Option<DataSample<&D>>> {
     let mut ds = self.read(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
@@ -325,7 +321,7 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn take_next_sample(&mut self) -> Result<Option<DataSample<D>>> {
+  pub fn take_next_sample(&mut self) -> ReadResult<Option<DataSample<D>>> {
     let mut ds = self.take(1, ReadCondition::not_read())?;
     Ok(ds.pop())
   }
@@ -336,7 +332,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<Sample<&D, D::K>>> {
+  ) -> ReadResult<Vec<Sample<&D, D::K>>> {
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache()?;
 
@@ -352,7 +348,7 @@ where
     &mut self,
     max_samples: usize,
     read_condition: ReadCondition,
-  ) -> Result<Vec<Sample<D, D::K>>> {
+  ) -> ReadResult<Vec<Sample<D, D::K>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache()?;
@@ -367,7 +363,7 @@ where
     Ok(result)
   }
 
-  /// Produces an interator over the currently available NOT_READ samples.
+  /// Produces an iterator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// This is not called `iter()` because it takes a mutable reference to self.
   ///
@@ -403,8 +399,8 @@ where
   ///   // do something
   /// }
   /// ```
-  pub fn iterator(&mut self) -> Result<impl Iterator<Item = Sample<&D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+  pub fn iterator(&mut self) -> ReadResult<impl Iterator<Item = Sample<&D, D::K>>> {
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // read call
     Ok(
       self
@@ -413,7 +409,7 @@ where
     )
   }
 
-  /// Produces an interator over the samples filtered by a given condition.
+  /// Produces an iterator over the samples filtered by a given condition.
   /// Yields only payload data, not SampleInfo metadata
   ///
   /// # Examples
@@ -451,13 +447,13 @@ where
   pub fn conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
-  ) -> Result<impl Iterator<Item = Sample<&D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+  ) -> ReadResult<impl Iterator<Item = Sample<&D, D::K>>> {
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // read call
     Ok(self.read_bare(std::usize::MAX, read_condition)?.into_iter())
   }
 
-  /// Produces an interator over the currently available NOT_READ samples.
+  /// Produces an iterator over the currently available NOT_READ samples.
   /// Yields only payload data, not SampleInfo metadata
   /// Removes samples from `DataReader`.
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the
@@ -496,8 +492,8 @@ where
   /// }
   /// ```
 
-  pub fn into_iterator(&mut self) -> Result<impl Iterator<Item = Sample<D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+  pub fn into_iterator(&mut self) -> ReadResult<impl Iterator<Item = Sample<D, D::K>>> {
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // take call
     Ok(
       self
@@ -506,7 +502,7 @@ where
     )
   }
 
-  /// Produces an interator over the samples filtered by the given condition.
+  /// Produces an iterator over the samples filtered by the given condition.
   /// Yields only payload data, not SampleInfo metadata
   /// <strong>Note!</strong> If the iterator is only partially consumed, all the
   /// samples it could have provided are still removed from the `Datareader`.
@@ -546,8 +542,8 @@ where
   pub fn into_conditional_iterator(
     &mut self,
     read_condition: ReadCondition,
-  ) -> Result<impl Iterator<Item = Sample<D, D::K>>> {
-    // TODO: We could come up with a more efficent implementation than wrapping a
+  ) -> ReadResult<impl Iterator<Item = Sample<D, D::K>>> {
+    // TODO: We could come up with a more efficient implementation than wrapping a
     // take call
     Ok(self.take_bare(std::usize::MAX, read_condition)?.into_iter())
   }
@@ -623,7 +619,7 @@ where
     // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
-  ) -> Result<Vec<DataSample<&D>>> {
+  ) -> ReadResult<Vec<DataSample<&D>>> {
     self.drain_read_notifications();
     self.fill_and_lock_local_datasample_cache()?;
 
@@ -690,7 +686,7 @@ where
     // This = Select instance specified by key.
     // Next = select next instance in the order specified by Ord on keys.
     this_or_next: SelectByKey,
-  ) -> Result<Vec<DataSample<D>>> {
+  ) -> ReadResult<Vec<DataSample<D>>> {
     // Clear notification buffer. This must be done first to avoid race conditions.
     self.drain_read_notifications();
 
@@ -725,7 +721,7 @@ where
   // we got.
 
   pub fn get_matched_publications(&self) -> impl Iterator<Item = PublicationBuiltinTopicData> {
-    //TODO: Obviously not implemented
+    // TODO: Obviously not implemented
     vec![].into_iter()
   }
 
@@ -743,11 +739,10 @@ where
 impl<D, DA> Evented for DataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  // We just delegate all the operations to notification_receiver, since it alrady
-  // implements Evented
+  // We just delegate all the operations to notification_receiver, since it
+  // already implements Evented
   fn register(
     &self,
     poll: &mio_06::Poll,
@@ -780,7 +775,6 @@ where
 impl<D, DA> mio_08::event::Source for DataReader<D, DA>
 where
   D: Keyed,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn register(
@@ -821,10 +815,10 @@ where
   }
 }
 
-impl<D, DA> StatusEvented<DataReaderStatus> for DataReader<D, DA>
+impl<'a, D, DA> StatusEvented<'a, DataReaderStatus, SimpleDataReaderEventStream<'a, D, DA>>
+  for DataReader<D, DA>
 where
-  D: Keyed,
-  <D as Keyed>::K: Key,
+  D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -833,6 +827,10 @@ where
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self.simple_data_reader.as_status_source()
+  }
+
+  fn as_async_status_stream(&'a self) -> SimpleDataReaderEventStream<'a, D, DA> {
+    self.simple_data_reader.as_async_status_stream()
   }
 
   fn try_recv_status(&self) -> Option<DataReaderStatus> {
@@ -844,7 +842,6 @@ impl<D, DA> HasQoSPolicy for DataReader<D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  <D as Keyed>::K: Key,
 {
   fn qos(&self) -> QosPolicies {
     self.simple_data_reader.qos().clone()
@@ -854,7 +851,6 @@ where
 impl<D, DA> RTPSEntity for DataReader<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn guid(&self) -> GUID {
@@ -870,16 +866,13 @@ where
 pub struct DataReaderStream<
   D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where
-  <D as Keyed>::K: Key,
-{
+> {
   datareader: Arc<Mutex<DataReader<D, DA>>>,
 }
 
 impl<D, DA> DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   /// Get a stream of status events
@@ -894,7 +887,6 @@ where
 impl<D, DA> Unpin for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
 }
@@ -902,10 +894,9 @@ where
 impl<D, DA> Stream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = Result<Sample<D, D::K>>;
+  type Item = ReadResult<Sample<D, D::K>>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
@@ -946,7 +937,6 @@ where
 impl<D, DA> FusedStream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {
@@ -960,35 +950,26 @@ where
 pub struct DataReaderEventStream<
   D: Keyed + 'static,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
-> where
-  <D as Keyed>::K: Key,
-{
+> {
   datareader: Arc<Mutex<DataReader<D, DA>>>,
 }
 
 impl<D, DA> Stream for DataReaderEventStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
-  type Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>;
+  type Item = DataReaderStatus;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     let datareader = self.datareader.lock().unwrap();
-    Pin::new(
-      &mut datareader
-        .simple_data_reader
-        .as_simple_data_reader_event_stream(),
-    )
-    .poll_next(cx)
+    Pin::new(&mut datareader.simple_data_reader.as_async_status_stream()).poll_next(cx)
   }
 }
 
 impl<D, DA> FusedStream for DataReaderEventStream<D, DA>
 where
   D: Keyed + 'static,
-  <D as Keyed>::K: Key,
   DA: DeserializerAdapter<D>,
 {
   fn is_terminated(&self) -> bool {
@@ -1019,7 +1000,7 @@ mod tests {
       topic::{TopicDescription, TopicKind},
     },
     messages::submessages::{
-      data::Data, elements::serialized_payload::SerializedPayload, submessage_flag::*,
+      elements::serialized_payload::SerializedPayload, submessage_flag::*, submessages::Data,
     },
     mio_source,
     network::udp_sender::UDPSender,
@@ -1040,7 +1021,7 @@ mod tests {
   fn read_and_take() {
     // Test the read and take methods of the DataReader
 
-    let dp = DomainParticipant::new(0).expect("Particpant creation failed!");
+    let dp = DomainParticipant::new(0).expect("Participant creation failed!");
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing
@@ -1068,6 +1049,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1081,16 +1064,19 @@ mod tests {
       status_sender,
       topic_name: topic.name(),
       topic_cache_handle: topic_cache,
+      like_stateless: false,
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
 
     let mut reader = Reader::new(
       reader_ing,
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // Create the corresponding matching DataReader
@@ -1131,24 +1117,30 @@ mod tests {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(1),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data).unwrap()),
-      }),
-      ..Default::default()
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data).unwrap()),
+        }
+        .into(),
+      ),
+      ..Data::default()
     };
 
     let data_msg2 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(2),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap()),
-      }),
-      ..Default::default()
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap()),
+        }
+        .into(),
+      ),
+      ..Data::default()
     };
 
     let data_flags = DATA_Flags::Endianness | DATA_Flags::Data;
@@ -1194,7 +1186,7 @@ mod tests {
   fn read_and_take_with_instance() {
     // Test the methods read_instance and take_instance of the DataReader
 
-    let dp = DomainParticipant::new(0).expect("Particpant creation failed!");
+    let dp = DomainParticipant::new(0).expect("Participant creation failed!");
 
     let mut qos = QosPolicies::qos_none();
     qos.history = Some(policy::History::KeepAll); // Just for testing
@@ -1222,6 +1214,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1235,16 +1229,19 @@ mod tests {
       status_sender,
       topic_name: topic.name(),
       topic_cache_handle: topic_cache,
+      like_stateless: false,
       qos_policy: QosPolicies::qos_none(),
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
 
     let mut reader = Reader::new(
       reader_ing,
       Rc::new(UDPSender::new_with_random_port().unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // Create the corresponding matching DataReader
@@ -1301,44 +1298,56 @@ mod tests {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(1),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
-      }),
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
+        }
+        .into(),
+      ),
       ..Data::default()
     };
     let data_msg2 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(2),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
-      }),
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
+        }
+        .into(),
+      ),
       ..Data::default()
     };
     let data_msg3 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(3),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
-      }),
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
+        }
+        .into(),
+      ),
       ..Data::default()
     };
     let data_msg4 = Data {
       reader_id: reader.entity_id(),
       writer_id: writer_guid.entity_id,
       writer_sn: SequenceNumber::from(4),
-      serialized_payload: Some(SerializedPayload {
-        representation_identifier: RepresentationIdentifier::CDR_LE,
-        representation_options: [0, 0],
-        value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
-      }),
+      serialized_payload: Some(
+        SerializedPayload {
+          representation_identifier: RepresentationIdentifier::CDR_LE,
+          representation_options: [0, 0],
+          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
+        }
+        .into(),
+      ),
       ..Data::default()
     };
 

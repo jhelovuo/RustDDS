@@ -8,8 +8,8 @@ use mio_08;
 
 use crate::{
   dds::{
-    adapters::no_key::*, no_key::datasample::DeserializedCacheChange, qos::*, statusevents::*,
-    with_key, Result,
+    adapters::no_key::*, no_key::datasample::DeserializedCacheChange, qos::*, result::ReadResult,
+    statusevents::*, with_key,
   },
   serialization::CDRDeserializerAdapter,
   structure::entity::RTPSEntity,
@@ -30,7 +30,7 @@ impl<D: 'static, DA> SimpleDataReader<D, DA>
 where
   DA: DeserializerAdapter<D> + 'static,
 {
-  // TODO: Make it possible to construct SimpleDataReader (particualrly, no_key
+  // TODO: Make it possible to construct SimpleDataReader (particularly, no_key
   // version) from the public API. That is, From a Subscriber object like a
   // normal Datareader. This is to be then used from the ros2-client package.
   pub(crate) fn from_keyed(
@@ -49,7 +49,7 @@ where
     self.keyed_simpledatareader.drain_read_notifications();
   }
 
-  pub fn try_take_one(&self) -> Result<Option<DeserializedCacheChange<D>>> {
+  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>> {
     match self.keyed_simpledatareader.try_take_one() {
       Err(e) => Err(e),
       Ok(None) => Ok(None),
@@ -70,7 +70,7 @@ where
 
   pub fn as_async_stream(
     &self,
-  ) -> impl Stream<Item = Result<DeserializedCacheChange<D>>> + FusedStream + '_ {
+  ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_ {
     self
       .keyed_simpledatareader
       .as_async_stream()
@@ -89,14 +89,11 @@ where
       })
   }
 
-  pub fn as_simple_data_reader_event_stream(
-    &self,
-  ) -> impl Stream<Item = std::result::Result<DataReaderStatus, std::sync::mpsc::RecvError>> + '_
-  {
-    self
-      .keyed_simpledatareader
-      .as_simple_data_reader_event_stream()
-  }
+  // pub fn as_simple_data_reader_event_stream(
+  //   &self,
+  // ) -> impl Stream<Item = ReadResult<DataReaderStatus>> + '_ { self
+  //   .keyed_simpledatareader .as_simple_data_reader_event_stream()
+  // }
 }
 
 // This is  not part of DDS spec. We implement mio Eventd so that the
@@ -147,7 +144,7 @@ where
     interests: mio_08::Interest,
   ) -> io::Result<()> {
     mio_08::event::Source::register(&mut self.keyed_simpledatareader, registry, token, interests)
-    //self.keyed_simpledatareader.register(registry, token, interests)
+    // self.keyed_simpledatareader.register(registry, token, interests)
   }
 
   fn reregister(
@@ -157,17 +154,25 @@ where
     interests: mio_08::Interest,
   ) -> io::Result<()> {
     mio_08::event::Source::reregister(&mut self.keyed_simpledatareader, registry, token, interests)
-    //self.keyed_simpledatareader.reregister(registry, token, interests)
+    // self.keyed_simpledatareader.reregister(registry, token, interests)
   }
 
   fn deregister(&mut self, registry: &mio_08::Registry) -> io::Result<()> {
     mio_08::event::Source::deregister(&mut self.keyed_simpledatareader, registry)
-    //self.keyed_simpledatareader.deregister(registry)
+    // self.keyed_simpledatareader.deregister(registry)
   }
 }
 
-impl<D, DA> StatusEvented<DataReaderStatus> for SimpleDataReader<D, DA>
+use crate::with_key::SimpleDataReaderEventStream;
+
+impl<'a, D, DA>
+  StatusEvented<
+    'a,
+    DataReaderStatus,
+    SimpleDataReaderEventStream<'a, NoKeyWrapper<D>, DAWrapper<DA>>,
+  > for SimpleDataReader<D, DA>
 where
+  D: 'static,
   DA: DeserializerAdapter<D>,
 {
   fn as_status_evented(&mut self) -> &dyn Evented {
@@ -176,6 +181,12 @@ where
 
   fn as_status_source(&mut self) -> &mut dyn mio_08::event::Source {
     self.keyed_simpledatareader.as_status_source()
+  }
+
+  fn as_async_status_stream(
+    &'a self,
+  ) -> SimpleDataReaderEventStream<'a, NoKeyWrapper<D>, DAWrapper<DA>> {
+    self.keyed_simpledatareader.as_async_status_stream()
   }
 
   fn try_recv_status(&self) -> Option<DataReaderStatus> {

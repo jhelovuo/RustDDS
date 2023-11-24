@@ -1,6 +1,6 @@
 use std::time::Instant;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
@@ -23,13 +23,16 @@ use crate::{
     with_key::datawriter::DataWriter,
   },
   discovery::content_filter_property::ContentFilterProperty,
-  messages::submessages::elements::{parameter::Parameter, parameter_list::ParameterList},
+  messages::submessages::elements::{
+    parameter::Parameter,
+    parameter_list::{ParameterList, ParameterListable},
+  },
   network::{constant::user_traffic_unicast_port, util::get_local_unicast_locators},
   rtps::{rtps_reader_proxy::RtpsReaderProxy, rtps_writer_proxy::RtpsWriterProxy},
-  security::EndpointSecurityInfo,
   serialization::{
-    error as ser,
-    pl_cdr_adapters::{PlCdrDeserialize, PlCdrSerialize},
+    pl_cdr_adapters::{
+      PlCdrDeserialize, PlCdrDeserializeError, PlCdrSerialize, PlCdrSerializeError,
+    },
     representation_identifier::RepresentationIdentifier,
     speedy_pl_cdr_helpers::*,
   },
@@ -42,29 +45,12 @@ use crate::{
   },
   Key, Keyed,
 };
+#[cfg(feature = "security")]
+use crate::security::EndpointSecurityInfo;
+#[cfg(not(feature = "security"))]
+use crate::no_security::EndpointSecurityInfo;
 #[cfg(test)]
 use crate::structure::guid::EntityKind;
-
-macro_rules! fake_implement_serialize_and_deserialize {
-  ($t:ty) => {
-    impl Serialize for $t {
-      fn serialize<S>(&self, _serializer: S) -> Result<S::Ok, S::Error>
-      where
-        S: Serializer,
-      {
-        unimplemented!()
-      }
-    }
-    impl<'de> Deserialize<'de> for $t {
-      fn deserialize<D>(_deserializer: D) -> Result<$t, D::Error>
-      where
-        D: Deserializer<'de>,
-      {
-        unimplemented!()
-      }
-    }
-  };
-}
 
 // We need a wrapper to distinguish between Participant and Endpoint GUIDs.
 // They need to be distinguished, because the PL_CDR serialization is different:
@@ -80,8 +66,8 @@ impl PlCdrDeserialize for Endpoint_GUID {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -97,7 +83,10 @@ impl PlCdrDeserialize for Endpoint_GUID {
 }
 
 impl PlCdrSerialize for Endpoint_GUID {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let mut pl = ParameterList::new();
     let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
     macro_rules! emit {
@@ -147,7 +136,7 @@ impl From<RtpsReaderProxy> for ReaderProxy {
   fn from(rtps_reader_proxy: RtpsReaderProxy) -> Self {
     Self {
       remote_reader_guid: rtps_reader_proxy.remote_reader_guid,
-      expects_inline_qos: rtps_reader_proxy.expects_in_line_qos,
+      expects_inline_qos: rtps_reader_proxy.expects_inline_qos(),
       unicast_locator_list: rtps_reader_proxy.unicast_locator_list,
       multicast_locator_list: rtps_reader_proxy.multicast_locator_list,
     }
@@ -164,7 +153,7 @@ impl From<RtpsReaderProxy> for ReaderProxy {
 pub struct SubscriptionBuiltinTopicData {
   key: GUID,
   participant_key: Option<GUID>,
-  topic_name: String,
+  pub topic_name: String,
   type_name: String,
   durability: Option<Durability>,
   deadline: Option<Deadline>,
@@ -188,6 +177,7 @@ pub struct SubscriptionBuiltinTopicData {
   topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates if the
                                        * parameter was present or not */
   // DDS Security:
+  #[cfg(feature = "security")]
   security_info: Option<EndpointSecurityInfo>,
 }
 
@@ -198,14 +188,17 @@ impl SubscriptionBuiltinTopicData {
     topic_name: String,
     type_name: String,
     qos: &QosPolicies,
-    security_info: Option<EndpointSecurityInfo>,
+    _security_info: Option<EndpointSecurityInfo>, // used only with security feature
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    let _dummy = _security_info; // avoid clippy warning
+
     let mut sbtd = Self {
       key,
       participant_key,
       topic_name,
       type_name,
-      //QoS
+      // QoS
       durability: None,
       deadline: None,
       latency_budget: None,
@@ -221,8 +214,10 @@ impl SubscriptionBuiltinTopicData {
       service_instance_name: None,  // Note: Not implemented
       related_datawriter_key: None, // Note: Not implemented
       topic_aliases: None,          // Note: Not implemented
+
       // DDS Security
-      security_info,
+      #[cfg(feature = "security")]
+      security_info: _security_info,
     };
 
     sbtd.set_qos(qos);
@@ -245,6 +240,7 @@ impl SubscriptionBuiltinTopicData {
     &self.type_name
   }
 
+  #[cfg(feature = "security")]
   pub fn security_info(&self) -> &Option<EndpointSecurityInfo> {
     &self.security_info
   }
@@ -278,6 +274,9 @@ impl SubscriptionBuiltinTopicData {
       history: None, // SubscriptionBuiltinTopicData does not contain History QoS
       resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
+
+      #[cfg(feature = "security")]
+      property: None, // TODO: no property QoS?
     }
   }
 
@@ -303,8 +302,6 @@ pub struct DiscoveredReaderData {
   pub subscription_topic_data: SubscriptionBuiltinTopicData,
   pub content_filter: Option<ContentFilterProperty>,
 }
-
-fake_implement_serialize_and_deserialize! {DiscoveredReaderData}
 
 impl DiscoveredReaderData {
   // This is for generating test data only
@@ -339,8 +336,8 @@ impl PlCdrDeserialize for DiscoveredReaderData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -363,13 +360,13 @@ impl PlCdrDeserialize for DiscoveredReaderData {
 
     let unicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
       "unicast locators",
     )?;
     let multicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
       "multicast locators",
     )?;
@@ -395,6 +392,9 @@ impl PlCdrDeserialize for DiscoveredReaderData {
       e
     })?;
 
+    #[cfg(not(feature = "security"))]
+    let security_info = None;
+    #[cfg(feature = "security")]
     let security_info: Option<EndpointSecurityInfo> = get_option_from_pl_map(
       &pl_map,
       ctx,
@@ -425,7 +425,22 @@ impl PlCdrDeserialize for DiscoveredReaderData {
 }
 
 impl PlCdrSerialize for DiscoveredReaderData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = self.to_parameter_list(encoding)?;
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
+  }
+}
+
+impl ParameterListable for DiscoveredReaderData {
+  fn to_parameter_list(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<ParameterList, PlCdrSerializeError> {
     let DiscoveredReaderData {
       reader_proxy:
         ReaderProxy {
@@ -456,7 +471,9 @@ impl PlCdrSerialize for DiscoveredReaderData {
           service_instance_name,
           related_datawriter_key,
           topic_aliases,
-          security_info, //TODO: Imissing implementation
+
+          #[cfg(feature = "security")]
+          security_info,
         },
       content_filter,
     } = self;
@@ -518,7 +535,7 @@ impl PlCdrSerialize for DiscoveredReaderData {
       StringWithNul
     );
     emit_option!(PID_RELATED_ENTITY_GUID, related_datawriter_key, GUID);
-    // TODO: Shoudl topic alaes be on paramter with vector or multiple
+    // TODO: Should topic alias be on parameter with vector or multiple
     // parameters with one alias name each?
     for topic_alias in topic_aliases.as_ref().unwrap_or(&Vec::new()) {
       emit!(
@@ -533,14 +550,14 @@ impl PlCdrSerialize for DiscoveredReaderData {
       ContentFilterProperty
     );
 
+    #[cfg(feature = "security")]
     emit_option!(
       PID_ENDPOINT_SECURITY_INFO,
       security_info,
       EndpointSecurityInfo
     );
 
-    let bytes = pl.serialize_to_bytes(ctx)?;
-    Ok(bytes)
+    Ok(pl)
   }
 }
 
@@ -592,7 +609,7 @@ impl From<RtpsWriterProxy> for WriterProxy {
 pub struct PublicationBuiltinTopicData {
   pub key: GUID, // endpoint GUID
   pub participant_key: Option<GUID>,
-  pub topic_name: String, // TODO: Convert to method for symmetry with SubscrptionBuiltinTopicData
+  pub topic_name: String, // TODO: Convert to method for symmetry with SubscriptionBuiltinTopicData
   pub type_name: String,
   pub durability: Option<Durability>,
   pub deadline: Option<Deadline>,
@@ -611,6 +628,7 @@ pub struct PublicationBuiltinTopicData {
   pub topic_aliases: Option<Vec<String>>, /* Option is a bit redundant, but it indicates
                                            * if the parameter was present or not */
   // DDS Security:
+  #[cfg(feature = "security")]
   pub security_info: Option<EndpointSecurityInfo>,
 }
 
@@ -620,8 +638,11 @@ impl PublicationBuiltinTopicData {
     participant_guid: Option<GUID>,
     topic_name: String,
     type_name: String,
-    security_info: Option<EndpointSecurityInfo>,
+    _security_info: Option<EndpointSecurityInfo>,
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    let _dummy = _security_info; // suppress clippy warning
+
     Self {
       key: guid,
       participant_key: participant_guid,
@@ -643,7 +664,8 @@ impl PublicationBuiltinTopicData {
       related_datareader_key: None, // TODO
       topic_aliases: None,          // TODO
 
-      security_info,
+      #[cfg(feature = "security")]
+      security_info: _security_info,
     }
   }
 
@@ -687,19 +709,30 @@ impl PublicationBuiltinTopicData {
       history: None,         // PublicationBuiltinTopicData does not contain History QoS
       resource_limits: None, // nor Resource Limits, see Figure 8.30 in RTPS spec 2.5
       lifespan: self.lifespan,
+      #[cfg(feature = "security")]
+      property: None, // TODO: no property Qos?
     }
+  }
+
+  pub fn topic_name(&self) -> &String {
+    &self.topic_name
   }
 
   pub fn to_topic_data(&self) -> TopicBuiltinTopicData {
     TopicBuiltinTopicData::new(
       None, // This would be topic GUID or BuiltinInTopicKey_t. What is it and who defines it?
       // According to various googled sources, it is either 3x u32 or 4x u32
-      // or a GUID or a GuidPrefx. Does it even matter?
+      // or a GUID or a GuidPrefix. Does it even matter?
       // TODO: Find out.
       self.topic_name.clone(),
       self.type_name.clone(),
       &self.qos(),
     )
+  }
+
+  #[cfg(feature = "security")]
+  pub fn security_info(&self) -> &Option<EndpointSecurityInfo> {
+    &self.security_info
   }
 }
 
@@ -715,8 +748,6 @@ pub struct DiscoveredWriterData {
   pub writer_proxy: WriterProxy,
   pub publication_topic_data: PublicationBuiltinTopicData,
 }
-
-fake_implement_serialize_and_deserialize! {DiscoveredWriterData}
 
 impl Keyed for DiscoveredWriterData {
   type K = Endpoint_GUID;
@@ -758,8 +789,8 @@ impl PlCdrDeserialize for DiscoveredWriterData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -778,13 +809,13 @@ impl PlCdrDeserialize for DiscoveredWriterData {
 
     let unicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
       "unicast locators",
     )?;
     let multicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
-      ctx,
+      &ctx,
       ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
       "multicast locators",
     )?;
@@ -802,12 +833,17 @@ impl PlCdrDeserialize for DiscoveredWriterData {
       ParameterId::PID_TYPE_MAX_SIZE_SERIALIZED,
       "Max size serialized",
     )?;
+
+    #[cfg(feature = "security")]
     let security_info: Option<EndpointSecurityInfo> = get_option_from_pl_map(
       &pl_map,
       ctx,
       ParameterId::PID_ENDPOINT_SECURITY_INFO,
       "endpoint security info",
     )?;
+
+    #[cfg(not(feature = "security"))]
+    let security_info: Option<EndpointSecurityInfo> = None;
 
     let qos = QosPolicies::from_parameter_list(ctx, &pl_map)?;
 
@@ -832,7 +868,22 @@ impl PlCdrDeserialize for DiscoveredWriterData {
 }
 
 impl PlCdrSerialize for DiscoveredWriterData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+    let pl = self.to_parameter_list(encoding)?;
+    let bytes = pl.serialize_to_bytes(ctx)?;
+    Ok(bytes)
+  }
+}
+
+impl ParameterListable for DiscoveredWriterData {
+  fn to_parameter_list(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<ParameterList, PlCdrSerializeError> {
     let DiscoveredWriterData {
       last_updated: _, // This is never serialized
       writer_proxy:
@@ -864,6 +915,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
           service_instance_name,
           related_datareader_key,
           topic_aliases,
+          #[cfg(feature = "security")]
           security_info,
         },
     } = self;
@@ -925,7 +977,7 @@ impl PlCdrSerialize for DiscoveredWriterData {
       StringWithNul
     );
     emit_option!(PID_RELATED_ENTITY_GUID, related_datareader_key, GUID);
-    // TODO: Should topic aliaes be on paramter with vector or multiple
+    // TODO: Should topic alias be on parameter with vector or multiple
     // parameters with one alias name each?
     for topic_alias in topic_aliases.as_ref().unwrap_or(&Vec::new()) {
       emit!(
@@ -934,14 +986,15 @@ impl PlCdrSerialize for DiscoveredWriterData {
         StringWithNul
       );
     }
+
+    #[cfg(feature = "security")]
     emit_option!(
       PID_ENDPOINT_SECURITY_INFO,
       security_info,
       EndpointSecurityInfo
     );
 
-    let bytes = pl.serialize_to_bytes(ctx)?;
-    Ok(bytes)
+    Ok(pl)
   }
 }
 
@@ -1004,8 +1057,27 @@ impl HasQoSPolicy for TopicBuiltinTopicData {
       history: self.history,
       resource_limits: self.resource_limits,
       lifespan: self.lifespan,
+      #[cfg(feature = "security")]
+      property: None, // TODO: no property Qos?
     }
   }
+}
+
+pub fn topics_inconsistent(t1: &TopicBuiltinTopicData, t2: &TopicBuiltinTopicData) -> bool {
+  // We are not comparing Topic names, because consistency should only ever be
+  // compared between descriptions of the same Topic.
+  //
+  // We are not comparing the key, becaues we have no idea what that even means.
+
+  // Check for type name
+  t1.type_name != t2.type_name
+
+  // Check for QoS inconsistencies:
+
+  // TODO: Is there any combination of Topic QoS settings that would make the
+  // two definitions of the Topic definetely incompatible (inconsistent).
+  // There are several QoS policies that must match between Reader and Writer,
+  // but the spec seems to say nothing about Topics.
 }
 
 // =======================================================================
@@ -1021,8 +1093,6 @@ pub struct DiscoveredTopicData {
   updated_time: DateTime<Utc>,
   pub topic_data: TopicBuiltinTopicData,
 }
-
-fake_implement_serialize_and_deserialize! {DiscoveredTopicData}
 
 impl DiscoveredTopicData {
   pub fn new(updated_time: DateTime<Utc>, topic_data: TopicBuiltinTopicData) -> Self {
@@ -1056,8 +1126,8 @@ impl PlCdrDeserialize for DiscoveredTopicData {
   fn from_pl_cdr_bytes(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> ser::Result<Self> {
-    let ctx = pl_cdr_rep_id_to_speedy(encoding)?;
+  ) -> Result<Self, PlCdrDeserializeError> {
+    let ctx = pl_cdr_rep_id_to_speedy_d(encoding)?;
     let pl = ParameterList::read_from_buffer_with_ctx(ctx, input_bytes)?;
     let pl_map = pl.to_map();
 
@@ -1087,7 +1157,10 @@ impl PlCdrDeserialize for DiscoveredTopicData {
 }
 
 impl PlCdrSerialize for DiscoveredTopicData {
-  fn to_pl_cdr_bytes(&self, encoding: RepresentationIdentifier) -> ser::Result<Bytes> {
+  fn to_pl_cdr_bytes(
+    &self,
+    encoding: RepresentationIdentifier,
+  ) -> Result<Bytes, PlCdrSerializeError> {
     let DiscoveredTopicData {
       updated_time: _, // This is never serialized
       topic_data:
@@ -1155,7 +1228,7 @@ pub struct ParticipantMessageDataKind {
 }
 
 impl ParticipantMessageDataKind {
-  #[allow(dead_code)] // This is defined in the spec, but currenty unused.
+  // This is defined in the spec, but currently unused.
   pub const UNKNOWN: Self = Self {
     value: [0x00, 0x00, 0x00, 0x00],
   };
@@ -1204,7 +1277,7 @@ mod tests {
   use byteorder::LittleEndian;
   use bytes::Bytes;
   use log::info;
-  use test_log::test; // to capture logigng macros run by test cases
+  use test_log::test; // to capture logging macros run by test cases
 
   use crate::dds::adapters::no_key::SerializerAdapter;
   use super::*;

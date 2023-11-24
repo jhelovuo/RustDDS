@@ -1,4 +1,4 @@
-// This module defines traits to specifiy a key as defined in DDS specification.
+// This module defines traits to specify a key as defined in DDS specification.
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
 use std::{convert::TryFrom, hash::Hash};
 
@@ -8,7 +8,9 @@ use log::error;
 use serde::{Deserialize, Serialize};
 pub use cdr_encoding_size::*;
 
-use crate::serialization::{cdr_serializer::to_bytes, error::Error};
+use crate::serialization::cdr_serializer::to_bytes;
+// use crate::serialization::{cdr_serializer::to_bytes, };
+use crate::serialization::pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializeError};
 
 /// Data sample must implement [`Keyed`] to be used in a WITH_KEY topic.
 ///
@@ -16,7 +18,7 @@ use crate::serialization::{cdr_serializer::to_bytes, error::Error};
 /// sample. In its simplest form, the key may be just a part of the sample data,
 /// but it can be anything computable from an immutable sample by an
 /// application-defined function. It is recommended that this function be
-/// lightwieght to compute.
+/// lightweight to compute.
 ///
 /// The key is used to distinguish between different Instances of the data in a
 /// DDS Topic.
@@ -29,10 +31,7 @@ use crate::serialization::{cdr_serializer::to_bytes, error::Error};
 /// [`Key`]: trait.Key.html
 
 pub trait Keyed {
-  //type K: Key;  // This does not work yet is stable Rust, 2020-08-11
-  // Instead, where D:Keyed we do anything with D::K, we must specify bound:
-  // where <D as Keyed>::K : Key,
-  type K;
+  type K: Key;
 
   fn key(&self) -> Self::K;
 }
@@ -51,13 +50,14 @@ impl KeyHash {
     Vec::from(self.0)
   }
 
-  pub fn into_cdr_bytes(self) -> Result<Vec<u8>, Error> {
+  pub fn into_pl_cdr_bytes(self) -> Result<Vec<u8>, PlCdrSerializeError> {
     Ok(self.to_vec())
   }
 
-  pub fn from_cdr_bytes(bytes: Vec<u8>) -> Result<Self, Error> {
-    let a = <[u8; 16]>::try_from(bytes).map_err(|_e| Error::Eof)?;
-    Ok(Self(a))
+  pub fn from_pl_cdr_bytes(bytes: Vec<u8>) -> Result<Self, PlCdrDeserializeError> {
+    <[u8; 16]>::try_from(bytes)
+      .map(Self)
+      .map_err(|_e| speedy::Error::custom("expected 16 bytes for KeyHash").into())
   }
 }
 
@@ -111,7 +111,7 @@ pub trait Key:
   // no methods required
 
   // provided method:
-  fn hash_key(&self) -> KeyHash {
+  fn hash_key(&self, force_md5: bool) -> KeyHash {
     // See RTPS Spec v2.3 Section 9.6.3.8 KeyHash
 
     /* The KeyHash_t is computed from the Data as follows using one of two algorithms depending on whether
@@ -135,16 +135,33 @@ pub trait Key:
     // (Does it include CDR-specified alignment padding too?)
     //
 
+    /*
+      DDS Security specification v1.1, Section 7.3.4 Mandatory use of the KeyHash for encrypted
+      messages:
+
+      [...] For this reason the DDS Security specification imposes additional constraints in the use
+      of the key hash. These constraints apply only to the Data or DataFrag RTPS SubMessages where
+      the SerializedPayload SubmessageElement is encrypted by the operation
+      encode_serialized_payload of the CryptoTransform plugin:
+
+      (1) The KeyHash shall be included in the Inline Qos.
+
+      (2) The KeyHash shall be computed as the 128 bit MD5 Digest (IETF RFC 1321) applied to the CDR
+      Big- Endian encapsulation of all the Key fields in sequence. Unlike the rule stated in sub
+      clause 9.6.3.3 of the DDS specification, the MD5 hash shall be used regardless of the
+      maximum-size of the serialized key.
+    */
+
     let mut cdr_bytes = to_bytes::<Self, BigEndian>(self).unwrap_or_else(|e| {
       error!("Hashing key {:?} failed!", e);
       // This would cause a lot of hash collisions, but wht else we could do
       // if the key cannot be serialized? Are there any realistic conditions
-      // this could even ocur?
+      // this could even occur?
       vec![0; 16]
     });
 
     KeyHash(
-      if Self::cdr_encoding_max_size() > CdrEncodingMaxSize::Bytes(16) {
+      if force_md5 || Self::cdr_encoding_max_size() > CdrEncodingMaxSize::Bytes(16) {
         // use MD5 hash to get the hash. The MD5 hash is always exactly
         // 16 bytes, so just deref it to [u8;16]
         *md5::compute(&cdr_bytes)
@@ -158,7 +175,7 @@ pub trait Key:
 }
 
 impl Key for () {
-  fn hash_key(&self) -> KeyHash {
+  fn hash_key(&self, _force_md5: bool) -> KeyHash {
     KeyHash::zero()
   }
 }
@@ -180,14 +197,14 @@ impl Key for i16 {}
 impl Key for i32 {}
 impl Key for i64 {}
 impl Key for i128 {}
-//impl Key for isize {} // should not be used in serializable data, as size is
+// impl Key for isize {} // should not be used in serializable data, as size is
 // platform-dependent
 impl Key for u8 {}
 impl Key for u16 {}
 impl Key for u32 {}
 impl Key for u64 {}
 impl Key for u128 {}
-//impl Key for usize {} // should not be used in serializable data, as size is
+// impl Key for usize {} // should not be used in serializable data, as size is
 // platform-dependent
 
 impl Key for String {}
@@ -195,7 +212,7 @@ impl Key for String {}
 #[derive(
   Debug, Default, Eq, PartialEq, PartialOrd, Ord, Hash, Serialize, Deserialize, CdrEncodingSize,
 )]
-/// Key type to identicy data instances in builtin topics
+/// Key type to identify data instances in builtin topics
 pub struct BuiltInTopicKey {
   /// IDL PSM (2.3.3, pg 138) uses array of 3x long to implement this
   value: [i32; 3],

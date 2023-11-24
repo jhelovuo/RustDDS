@@ -11,8 +11,8 @@ use crate::RepresentationIdentifier;
 /// representation of either value of an application-defined data-object or
 /// the value of the key that uniquely identifies the data-object
 /// See RTPS spec v2.3 section 10.
-/// Standard representation identifer values are defined in sections 10.2 - 10.5
-/// representation_options "shall be interpreted in the context of the
+/// Standard representation identifier values are defined in sections 10.2 -
+/// 10.5 representation_options "shall be interpreted in the context of the
 /// RepresentationIdentifier, such that each RepresentationIdentifier may define
 /// the representation_options that it requires." and "The [2.3] version of the
 /// protocol does not use the representation_options: The sender shall set the
@@ -21,7 +21,8 @@ use crate::RepresentationIdentifier;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct SerializedPayload {
   pub representation_identifier: RepresentationIdentifier,
-  pub representation_options: [u8; 2], // Not used. Send as zero, ignore on receive.
+  // Can represent payload protection kind. Currently not used outside security.
+  pub representation_options: [u8; 2],
   pub value: Bytes,
 }
 
@@ -113,5 +114,15 @@ impl<C: Context> Writable<C> for SerializedPayload {
     writer.write_u8(self.representation_options[1])?;
     writer.write_bytes(&self.value)?;
     Ok(())
+  }
+}
+
+// TODO: Should this be fallible try_from instead?
+// The speedy write_to_buffer() call could in theory fail, but it is hard to see
+// how.
+impl From<SerializedPayload> for Bytes {
+  fn from(sp: SerializedPayload) -> Bytes {
+    let buf = sp.write_to_vec().unwrap(); //TODO: deal with (unlikely) error
+    buf.into()
   }
 }

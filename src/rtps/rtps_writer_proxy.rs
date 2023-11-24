@@ -1,24 +1,20 @@
 use core::ops::Bound::{Included, Unbounded};
-use std::{cmp::max, collections::BTreeMap, iter};
+use std::{cmp::max, collections::BTreeMap};
 
-use enumflags2::BitFlags;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  dds::ddsdata::DDSData,
   discovery::sedp_messages::DiscoveredWriterData,
-  messages::submessages::submessages::{DATAFRAG_Flags, DataFrag},
-  rtps::fragment_assembler::FragmentAssembler,
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,
-    sequence_number::{FragmentNumber, SequenceNumber},
+    sequence_number::SequenceNumber,
     time::Timestamp,
   },
 };
 
-#[derive(Debug)] // these are not cloneable, because contined data may be large
+#[derive(Debug)] // these are not cloneable, because contained data may be large
 pub(crate) struct RtpsWriterProxy {
   /// Identifies the remote matched Writer
   pub remote_writer_guid: GUID,
@@ -78,8 +74,7 @@ pub(crate) struct RtpsWriterProxy {
   // These are used for quick tracking of
   last_received_sequence_number: SequenceNumber,
   last_received_timestamp: Timestamp,
-
-  fragment_assembler: Option<FragmentAssembler>,
+  //fragment_assembler: Option<FragmentAssembler>,
 }
 
 impl RtpsWriterProxy {
@@ -102,7 +97,7 @@ impl RtpsWriterProxy {
       ack_base: SequenceNumber::new(1),
       last_received_sequence_number: SequenceNumber::new(0),
       last_received_timestamp: Timestamp::INVALID,
-      fragment_assembler: None,
+      //fragment_assembler: None,
     }
   }
 
@@ -138,7 +133,7 @@ impl RtpsWriterProxy {
     self.ack_base == SequenceNumber::new(0) && self.changes.is_empty()
   }
 
-  // Given an availabilty range from a HEARTBEAT, find out what we are missing.
+  // Given an availability range from a HEARTBEAT, find out what we are missing.
   //
   // Note: Heartbeat gives bounds only. Some samples within that range may
   // have been received already, or not really available, i.e. there may be GAPs
@@ -243,7 +238,8 @@ impl RtpsWriterProxy {
     }
   }
 
-  // Used to add range of irrelevant changes from GAP message
+  // Used to add range of irrelevant changes from GAP submessage or unavailable
+  // changes from HEARTBEAT submessage
   pub fn irrelevant_changes_range(
     &mut self,
     remove_from: SequenceNumber,
@@ -269,10 +265,17 @@ impl RtpsWriterProxy {
     if remove_from <= self.ack_base {
       let mut removed_and_after = self.changes.split_off(&remove_from);
       let mut after = removed_and_after.split_off(&remove_until_before);
-      //let removed = removed_and_after;
+      // let removed = removed_and_after;
       self.changes.append(&mut after);
 
-      self.ack_base = max(remove_until_before, self.ack_base);
+      if remove_until_before > self.ack_base {
+        // Move the base to skip the irrelevant changes
+        self.ack_base = remove_until_before;
+        // The new base might be a sample that we already have, move the base forward
+        // until we hit a missing one
+        self.advance_ack_base();
+      }
+
       debug!(
         "ack_base increased to {:?} by irrelevant_changes_range {:?} to {:?}. writer={:?}",
         self.ack_base, remove_from, remove_until_before, self.remote_writer_guid
@@ -327,43 +330,9 @@ impl RtpsWriterProxy {
       ack_base: SequenceNumber::default(),
       last_received_sequence_number: SequenceNumber::new(0),
       last_received_timestamp: Timestamp::INVALID,
-      fragment_assembler: None,
+      //fragment_assembler: None,
     }
   } // fn
-
-  pub fn handle_datafrag(
-    &mut self,
-    datafrag: &DataFrag,
-    flags: BitFlags<DATAFRAG_Flags>,
-  ) -> Option<DDSData> {
-    if let Some(ref mut fa) = self.fragment_assembler {
-      fa.new_datafrag(datafrag, flags)
-    } else {
-      let mut fa = FragmentAssembler::new(datafrag.fragment_size);
-      //TODO: Test that the fragment size is not zero
-      let ret = fa.new_datafrag(datafrag, flags);
-      self.fragment_assembler = Some(fa);
-      ret
-    }
-  } // fn
-
-  pub fn missing_frags_for<'a>(
-    &'a self,
-    seq: SequenceNumber,
-  ) -> Box<dyn 'a + Iterator<Item = FragmentNumber>> {
-    if let Some(ref fa) = self.fragment_assembler {
-      fa.missing_frags_for(seq)
-    } else {
-      Box::new(iter::empty())
-    }
-  }
-  pub fn is_partially_received(&self, seq: SequenceNumber) -> bool {
-    if let Some(ref fa) = self.fragment_assembler {
-      fa.is_partially_received(seq)
-    } else {
-      false
-    }
-  }
 
   // Advance ack_base as far as possible
   // This function should be called after the writer proxy has modified its

@@ -1,10 +1,24 @@
-use std::convert::From;
+use std::{convert::From, fmt};
 
+use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};
 
-use crate::{rtps::Submessage, security::types::DataHolder};
+use crate::{
+  messages::submessages::submessage::{InterpreterSubmessage, ReaderSubmessage, WriterSubmessage},
+  rtps::Submessage,
+  security::types::DataHolder,
+  structure::guid::GuidPrefix,
+};
+
+// Crypto related message class IDs for GenericMessageClassId:
+// See section 7.4.4.5 of the security spec
+pub const GMCLASSID_SECURITY_PARTICIPANT_CRYPTO_TOKENS: &str = "dds.sec.participant_crypto_tokens";
+pub const GMCLASSID_SECURITY_DATAWRITER_CRYPTO_TOKENS: &str = "dds.sec.datawriter_crypto_tokens";
+pub const GMCLASSID_SECURITY_DATAREADER_CRYPTO_TOKENS: &str = "dds.sec.datareader_crypto_tokens";
+
 /// CryptoToken: sections 7.2.4.2 and 8.5.1.1 of the Security specification (v.
 /// 1.1)
+#[derive(Clone)]
 pub struct CryptoToken {
   pub data_holder: DataHolder,
 }
@@ -17,17 +31,23 @@ pub type ParticipantCryptoToken = CryptoToken;
 pub type DatawriterCryptoToken = CryptoToken;
 pub type DatareaderCryptoToken = CryptoToken;
 
-/// TODO: ParticipantCryptoHandle: section 8.5.1.2 of the Security specification
-/// (v. 1.1)
-pub struct ParticipantCryptoHandle {}
+/// CryptoHandles are supposed to be opaque references to key material that can
+/// only be interpreted inside the plugin implementation (8.5.1.2–4).
+pub type CryptoHandle = u32;
 
-/// TODO: DatawriterCryptoHandle: section 8.5.1.3 of the Security specification
+/// ParticipantCryptoHandle: section 8.5.1.2 of the Security specification
 /// (v. 1.1)
-pub struct DatawriterCryptoHandle {}
+pub type ParticipantCryptoHandle = CryptoHandle;
 
-/// TODO: DatareaderCryptoHandle: section 8.5.1.4 of the Security specification
+pub type EndpointCryptoHandle = CryptoHandle;
+
+/// DatawriterCryptoHandle: section 8.5.1.3 of the Security specification
 /// (v. 1.1)
-pub struct DatareaderCryptoHandle {}
+pub type DatawriterCryptoHandle = EndpointCryptoHandle;
+
+/// DatareaderCryptoHandle: section 8.5.1.4 of the Security specification
+/// (v. 1.1)
+pub type DatareaderCryptoHandle = EndpointCryptoHandle;
 
 /// CryptoTransformIdentifier: section 8.5.1.5 of the Security specification (v.
 /// 1.1)
@@ -41,30 +61,32 @@ pub struct CryptoTransformIdentifier {
 pub type CryptoTransformKind = [u8; 4];
 /// transformation_key_id: section 8.5.1.5.2 of the Security specification (v.
 /// 1.1)
-pub type CryptoTransformKeyId = [u8; 4];
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Readable, Writable, Serialize, Deserialize, Hash)]
+pub struct CryptoTransformKeyId([u8; 4]);
 
-/// SecureSubmessageCategory_t: section 8.5.1.6 of the Security specification
-/// (v. 1.1)
-///
-/// Used as a return type by
-///[super::cryptographic_plugin::CryptoTransform::preprocess_secure_submsg],
-/// and therefore includes the crypto handles that would be returned in the
-/// latter two cases.
+impl CryptoTransformKeyId {
+  pub const ZERO: Self = CryptoTransformKeyId([0, 0, 0, 0]);
 
-#[allow(clippy::enum_variant_names)] // We are using variant names from the spec
-pub enum SecureSubmessageCategory {
-  InfoSubmessage,
-  DatawriterSubmessage(DatawriterCryptoHandle, DatareaderCryptoHandle),
-  DatareaderSubmessage(DatareaderCryptoHandle, DatawriterCryptoHandle),
+  pub fn is_zero(&self) -> bool {
+    *self == Self::ZERO
+  }
+
+  pub fn random() -> Self {
+    let random_array: [u8; 4] = rand::random();
+    Self(random_array)
+  }
 }
 
-/// [super::cryptographic_plugin::CryptoTransform::encode_datawriter_submessage]
-/// and [super::cryptographic_plugin::CryptoTransform::encode_rtps_message] may
-/// return different results for each receiver, or one result to be used for all
-/// receivers.
-pub enum EncodeResult<T> {
-  One(T),
-  Many(Vec<T>),
+impl From<[u8; 4]> for CryptoTransformKeyId {
+  fn from(b: [u8; 4]) -> Self {
+    Self(b)
+  }
+}
+
+impl fmt::Display for CryptoTransformKeyId {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{:02x?}", self.0)
+  }
 }
 
 /// [super::cryptographic_plugin::CryptoTransform::encode_datawriter_submessage]
@@ -76,4 +98,41 @@ pub enum EncodeResult<T> {
 pub enum EncodedSubmessage {
   Unencoded(Submessage),
   Encoded(Submessage, Submessage, Submessage),
+}
+
+impl From<EncodedSubmessage> for Vec<Submessage> {
+  fn from(value: EncodedSubmessage) -> Self {
+    match value {
+      EncodedSubmessage::Unencoded(submessage) => vec![submessage],
+      EncodedSubmessage::Encoded(prefix, submessage, postfix) => vec![prefix, submessage, postfix],
+    }
+  }
+}
+
+/// Result of submessage decoding. Contains the decoded submessage body and a
+/// list of endpoint crypto handles, the decode keys of which match the one used
+/// for decoding, i.e. which are approved to receive the submessage by access
+/// control.
+pub enum DecodedSubmessage {
+  // TODO: Should we support interpreter submessages here? The specification is unclear on this.
+  // See 8.5.1.6
+  Interpreter(InterpreterSubmessage),
+  Writer(WriterSubmessage, Vec<EndpointCryptoHandle>),
+  Reader(ReaderSubmessage, Vec<EndpointCryptoHandle>),
+}
+
+pub enum DecodeOutcome<T> {
+  Success(T),
+  /// It is normal to receive encoded communication that is meant for another
+  /// participant, in which case the keys are missing and we cannot decode, but
+  /// we cannot distinguish this case without searching through the available
+  /// keys. In other words, not finding keys is not necessarily erroneous
+  /// behavior, and such communication should just be ignored.
+  KeysNotFound(CryptoTransformKeyId),
+  /// It is normal to receive messages or submessages that are missing the
+  /// required receiver-specific MAC due to multicasting.
+  ValidatingReceiverSpecificMACFailed,
+  /// It is normal to receive encoded messages from participants that have
+  /// not been matched with.
+  ParticipantCryptoHandleNotFound(GuidPrefix),
 }

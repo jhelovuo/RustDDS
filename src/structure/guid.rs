@@ -60,9 +60,12 @@ impl AsRef<[u8]> for GuidPrefix {
 }
 
 impl fmt::Debug for GuidPrefix {
-  // This is so common that we skip all the inroductions and just print the data.
+  // This is so common that we skip all the introductions and just print the data.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    self.bytes.fmt(f)
+    for b in self.bytes.iter() {
+      write!(f, "{:02x}", b)?;
+    }
+    Ok(())
   }
 }
 
@@ -106,7 +109,7 @@ pub struct EntityKind(u8);
 impl EntityKind {
   // constants from RTPS spec Table 9.1
   pub const UNKNOWN_USER_DEFINED: Self = Self(0x00);
-  //pub const PARTICIPANT_USER_DEFINED : Self = Self(0x01);
+  // pub const PARTICIPANT_USER_DEFINED : Self = Self(0x01);
   // User-defined participants do not exist by definition.
   pub const WRITER_WITH_KEY_USER_DEFINED: Self = Self(0x02);
   pub const WRITER_NO_KEY_USER_DEFINED: Self = Self(0x03);
@@ -139,7 +142,7 @@ impl EntityKind {
   // 5 = fixed poll tokens continued
   // 6 = fixed poll tokens continued
   // 7 = fixed poll tokens continued
-  // 8
+  // 8 = fixed poll tokens continued
   // 9
   // A
   // B
@@ -273,6 +276,59 @@ impl EntityId {
     entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
   };
 
+  // DDS SEcurity spec v1.1
+  // Section "7.3.7 Mapping to UDP/IP PSM"
+  // Table 9 – EntityId values for secure builtin data writers and data readers
+  //
+  pub const SEDP_BUILTIN_PUBLICATIONS_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x00, 0x03],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN, // 0xc2
+  };
+  pub const SEDP_BUILTIN_PUBLICATIONS_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x00, 0x03],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
+  };
+  pub const SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x00, 0x04],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+  };
+  pub const SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x00, 0x04],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x02, 0x00],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_MESSAGE_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x02, 0x00],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER: Self = Self {
+    entity_key: [0x00, 0x02, 0x01],
+    entity_kind: EntityKind::WRITER_NO_KEY_BUILT_IN, //0xc3
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_STATELESS_READER: Self = Self {
+    entity_key: [0x00, 0x02, 0x01],
+    entity_kind: EntityKind::READER_NO_KEY_BUILT_IN, // 0xc4
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x02, 0x02],
+    entity_kind: EntityKind::WRITER_NO_KEY_BUILT_IN,
+  };
+  pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x02, 0x02],
+    entity_kind: EntityKind::READER_NO_KEY_BUILT_IN,
+  };
+  pub const SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER: Self = Self {
+    entity_key: [0xff, 0x01, 0x01],
+    entity_kind: EntityKind::WRITER_WITH_KEY_BUILT_IN,
+  };
+  pub const SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_READER: Self = Self {
+    entity_key: [0xff, 0x01, 0x01],
+    entity_kind: EntityKind::READER_WITH_KEY_BUILT_IN,
+  };
+
   pub const MIN: Self = Self {
     entity_key: [0x00; 3],
     entity_kind: EntityKind::MIN,
@@ -295,7 +351,7 @@ impl EntityId {
   }
 
   fn as_usize(self) -> usize {
-    // usize is generated like this beacause there needs to be
+    // usize is generated like this because there needs to be
     // a way to tell entity kind from the result
     let u1 = u32::from(self.entity_key[0]);
     let u2 = u32::from(self.entity_key[1]);
@@ -345,7 +401,7 @@ impl EntityId {
     match (t.0 & 0xF0) as u8 {
       0x00 | 0xC0 => TokenDecode::Entity(Self::from_usize(t.0)),
       0x20 | 0xE0 => TokenDecode::AltEntity(Self::from_usize(t.0 & !0x20)),
-      0x40 | 0x50 | 0x60 | 0x70 => TokenDecode::FixedToken(t),
+      0x40 | 0x50 | 0x60 | 0x70 | 0x80 => TokenDecode::FixedToken(t),
       _other => {
         warn!("EntityId::from_token tried to decode 0x{:x?}", t.0);
         TokenDecode::FixedToken(t)
@@ -416,6 +472,8 @@ impl fmt::Debug for EntityId {
       Self::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER => {
         f.write_str("EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER")
       }
+      // TODO: This list is missing multiple entries.
+      // Can can we somehow autogenerate this?
       _ => {
         f.write_str("EntityId {")?;
         self.entity_key.fmt(f)?;
@@ -610,7 +668,7 @@ mod tests {
   fn keyhash_test() {
     let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     let test_guid = GUID::from_bytes(test_bytes);
-    let key_hash = test_guid.hash_key(); // from trait Key
+    let key_hash = test_guid.hash_key(false); // from trait Key
     assert_eq!(key_hash.to_vec(), test_bytes.to_vec());
   }
 

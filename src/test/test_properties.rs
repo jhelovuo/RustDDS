@@ -1,3 +1,5 @@
+use speedy::Writable;
+
 use crate::{
   messages::submessages::{
     elements::serialized_payload::SerializedPayload,
@@ -30,7 +32,7 @@ impl Default for Data {
       writer_id: EntityId::default(),
       writer_sn: SequenceNumber::default(),
       inline_qos: None,
-      serialized_payload: Some(SerializedPayload::default()),
+      serialized_payload: Some(SerializedPayload::default().write_to_vec().unwrap().into()),
     }
   }
 }
@@ -46,7 +48,6 @@ trait TestingTrait {
 impl<'a, D: 'static, SA> DataReader<'a, D, SA>
 where
   D: DeserializeOwned + Keyed,
-  <D as Keyed>::K: Key,
   SA: DeserializerAdapter<D>,
   {
 

@@ -41,13 +41,16 @@ impl Parameter {
     //+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
     //|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|X|F|U|D|
     //+--------------+---------------+---------------+----------------+
-    //The current version of the protocol (2.3) defines the DisposedFlag, the
+    // The current version of the protocol (2.3) defines the DisposedFlag, the
     // UnregisteredFlag, the FilteredFlag. DisposedFlag is represented with the
     // literal ‘D.’ UnregisteredFlag is represented with the literal ‘U.’
     // FilteredFlag is represented with the literal ‘F.’
 
+    // TODO: This serialization logic is duplicated in inline_qos module.
+    // Deduplicate.
+
     let mut bit_vec = BitVec::from_bytes(&[0b0000_0000]);
-    bit_vec.set(7, is_disposed);
+    bit_vec.set(7, is_disposed); // bit_vec uses MSB-to-LSM bit numbering
     bit_vec.set(6, is_unregistered);
     bit_vec.set(5, is_filtered);
     let bytes = bit_vec.to_bytes();

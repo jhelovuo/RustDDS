@@ -7,7 +7,7 @@ use crate::{
   structure::cache_change::ChangeKind,
 };
 
-// DDSData represets a serialized data sample with metadata
+// DDSData represents a serialized data sample with metadata
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 // Contents of a DATA submessage or several DATAFRAG submessages. This is either
@@ -42,7 +42,6 @@ impl DDSData {
     }
   }
 
-  #[allow(dead_code)] // Why is this not used?
   pub fn change_kind(&self) -> ChangeKind {
     match self {
       DDSData::Data {..} /*| DDSData::DataFrags {..}*/ => ChangeKind::Alive,

@@ -13,7 +13,7 @@ fn main() {
 
   let qos = QosPolicyBuilder::new()
     .reliability(policy::Reliability::Reliable {
-      max_blocking_time: rustdds::Duration::DURATION_ZERO,
+      max_blocking_time: rustdds::Duration::ZERO,
     })
     .build();
 
@@ -37,7 +37,7 @@ fn main() {
     .unwrap();
 
   // Used type needs Serialize for writers and Deserialize for readers
-  #[derive(Serialize, Deserialize)]
+  #[derive(Serialize, Deserialize, Debug)]
   struct SomeType {
     a: i32,
   }
@@ -94,7 +94,7 @@ fn main() {
     smol::block_on(async {
       let mut tick_stream = futures::StreamExt::fuse(Timer::interval(SECOND / 10));
 
-      let mut datawriter_event_stream = writer.as_async_event_stream();
+      let mut datawriter_event_stream = writer.as_async_status_stream();
 
       let mut i = 0;
 

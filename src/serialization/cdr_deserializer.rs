@@ -11,7 +11,6 @@ use paste::paste;
 
 use crate::{
   dds::adapters::{no_key, with_key},
-  serialization::error::{Error, Result},
   Keyed, RepresentationIdentifier,
 };
 
@@ -36,6 +35,8 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
 where
   D: DeserializeOwned,
 {
+  type Error = Error;
+
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &REPR_IDS
   }
@@ -55,13 +56,52 @@ where
   }
 }
 
+// Error handling
+
+pub type Result<T> = std::result::Result<T, Error>;
+
+// cdr_deserializer::Error
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+  #[error("Deserializer does not support this operation: {0}")]
+  NotSupported(String),
+
+  #[error("unexpected end of input")]
+  Eof,
+
+  #[error("Expected 0 or 1 as Boolean, got: {0}")]
+  BadBoolean(u8),
+
+  // was not valid UTF-8
+  #[error("UTF-8 error: {0}")]
+  BadUTF8(std::str::Utf8Error),
+
+  #[error("Bad Unicode character code: {0}")]
+  BadChar(u32), // invalid Unicode codepoint
+
+  #[error("Option value must have discriminant 0 or 1, read: {0}")]
+  BadOption(u32), // Option variant tag (discriminant) is not 0 or 1
+
+  #[error("Trailing garbage, {:?} bytes", .0.len())]
+  TrailingCharacters(Vec<u8>),
+
+  #[error("Serde says: {0}")]
+  Serde(String),
+}
+
+impl de::Error for Error {
+  fn custom<T: std::fmt::Display>(msg: T) -> Self {
+    Self::Serde(msg.to_string())
+  }
+}
+
 /// a CDR deserializer implementation.
 ///
 /// Input is from &[u8], since we expect to have the data in contiguous memory
 /// buffers.
-pub struct CdrDeserializer<'de, BO> {
+pub struct CdrDeserializer<'i, BO> {
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
-  input: &'de [u8],         /* We borrow the input data, therefore we carry lifetime 'de all
+  input: &'i [u8],          /* We borrow the input data, therefore we carry lifetime 'i all
                              * around. */
   serialized_data_count: usize, // This is to keep track of CDR data alignment requirements.
 }
@@ -106,13 +146,13 @@ where
 
   fn calculate_padding_count_from_written_bytes_and_remove(
     &mut self,
-    type_octet_aligment: usize,
+    type_octet_alignment: usize,
   ) -> Result<()> {
-    let modulo = self.serialized_data_count % type_octet_aligment;
+    let modulo = self.serialized_data_count % type_octet_alignment;
     if modulo == 0 {
       Ok(())
     } else {
-      let padding = type_octet_aligment - modulo;
+      let padding = type_octet_alignment - modulo;
       self.remove_bytes_from_input(padding)
     }
   }
@@ -139,8 +179,8 @@ where
       Ok((t, deserializer.serialized_data_count))
     }
 
-    repr_id => Err(Error::Message(format!(
-      "Unknown representaiton identifier {:?}.",
+    repr_id => Err(Error::NotSupported(format!(
+      "Unknown serialization format. requested={:?}.",
       repr_id
     ))),
   }
@@ -183,24 +223,25 @@ macro_rules! deserialize_multibyte_number {
   };
 }
 
-impl<'de, 'a, BO> de::Deserializer<'de> for &'a mut CdrDeserializer<'de, BO>
+impl<'de, 'a, 'c, BO> de::Deserializer<'de> for &'a mut CdrDeserializer<'c, BO>
 where
   BO: ByteOrder,
 {
   type Error = Error;
 
   /// CDR serialization is not a self-describing data format, so we cannot
-  /// implement this.
+  /// implement this. Serialized CDR data has no clue to what each bit means,
+  /// so we have to know the structure beforehand.
   fn deserialize_any<V>(self, _visitor: V) -> Result<V::Value>
   where
     V: Visitor<'de>,
   {
-    Err(Error::Message(
-      "cdr_desrializer: Cannot deserialize \"any\" type. ".to_string(),
+    Err(Error::NotSupported(
+      "CDR cannot deserialize \"any\" type. ".to_string(),
     ))
   }
 
-  //15.3.1.5 Boolean
+  // 15.3.1.5 Boolean
   //  Boolean values are encoded as single octets, where TRUE is the value 1, and
   // FALSE as 0.
   fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value>
@@ -284,10 +325,15 @@ where
       }
     };
 
-    match std::str::from_utf8(bytes_without_null) {
-      Ok(s) => visitor.visit_str(s),
-      Err(utf8_err) => Err(Error::BadString(utf8_err)),
-    }
+    // convert contents without NUL to String and apply visitor
+    std::str::from_utf8(bytes_without_null)
+      .map_err(Error::BadUTF8)
+      .and_then(|s| visitor.visit_str(s))
+
+    // match  {
+    //   Ok(s) => visitor.visit_str(s),
+    //   Err(utf8_err) => Err(Error::BadUTF8(utf8_err)),
+    // }
   }
 
   fn deserialize_string<V>(self, visitor: V) -> Result<V::Value>
@@ -349,9 +395,9 @@ where
     visitor.visit_newtype_struct(self)
   }
 
-  ///Sequences are encoded as an unsigned long value, followed by the elements
+  /// Sequences are encoded as an unsigned long value, followed by the elements
   /// of the
-  //sequence. The initial unsigned long contains the number of elements in the
+  // sequence. The initial unsigned long contains the number of elements in the
   // sequence. The elements of the sequence are encoded as specified for their
   // type.
   fn deserialize_seq<V>(self, visitor: V) -> Result<V::Value>
@@ -404,7 +450,7 @@ where
     visitor.visit_seq(SequenceHelper::new(self, fields.len()))
   }
 
-  ///Enum values are encoded as unsigned longs. (u32)
+  /// Enum values are encoded as unsigned longs. (u32)
   /// The numeric values associated with enum identifiers are determined by the
   /// order in which the identifiers appear in the enum declaration. The first
   /// enum identifier has the numeric value zero (0). Successive enum
@@ -444,20 +490,20 @@ where
 
 // ----------------------------------------------------------
 
-struct EnumerationHelper<'a, 'de: 'a, BO> {
-  de: &'a mut CdrDeserializer<'de, BO>,
+struct EnumerationHelper<'a, 'i: 'a, BO> {
+  de: &'a mut CdrDeserializer<'i, BO>,
 }
 
-impl<'a, 'de, BO> EnumerationHelper<'a, 'de, BO>
+impl<'a, 'i, BO> EnumerationHelper<'a, 'i, BO>
 where
   BO: ByteOrder,
 {
-  fn new(de: &'a mut CdrDeserializer<'de, BO>) -> Self {
+  fn new(de: &'a mut CdrDeserializer<'i, BO>) -> Self {
     EnumerationHelper::<BO> { de }
   }
 }
 
-impl<'de, 'a, BO> EnumAccess<'de> for EnumerationHelper<'a, 'de, BO>
+impl<'de, 'a, BO> EnumAccess<'de> for EnumerationHelper<'a, '_, BO>
 where
   BO: ByteOrder,
 {
@@ -468,7 +514,7 @@ where
   where
     V: DeserializeSeed<'de>,
   {
-    // preceeding deserialize_enum aligned to 4
+    // preceding deserialize_enum aligned to 4
     let enum_tag = self.de.next_bytes(4)?.read_u32::<BO>().unwrap();
     let val: Result<_> = seed.deserialize(enum_tag.into_deserializer());
     Ok((val?, self))
@@ -477,7 +523,7 @@ where
 
 // ----------------------------------------------------------
 
-impl<'de, 'a, BO> VariantAccess<'de> for EnumerationHelper<'a, 'de, BO>
+impl<'de, 'a, BO> VariantAccess<'de> for EnumerationHelper<'a, '_, BO>
 where
   BO: ByteOrder,
 {
@@ -511,14 +557,14 @@ where
 
 // ----------------------------------------------------------
 
-struct SequenceHelper<'a, 'de: 'a, BO> {
-  de: &'a mut CdrDeserializer<'de, BO>,
+struct SequenceHelper<'a, 'i: 'a, BO> {
+  de: &'a mut CdrDeserializer<'i, BO>,
   element_counter: usize,
   expected_count: usize,
 }
 
-impl<'a, 'de, BO> SequenceHelper<'a, 'de, BO> {
-  fn new(de: &'a mut CdrDeserializer<'de, BO>, expected_count: usize) -> Self {
+impl<'a, 'i, BO> SequenceHelper<'a, 'i, BO> {
+  fn new(de: &'a mut CdrDeserializer<'i, BO>, expected_count: usize) -> Self {
     SequenceHelper {
       de,
       element_counter: 0,
@@ -529,7 +575,7 @@ impl<'a, 'de, BO> SequenceHelper<'a, 'de, BO> {
 
 // `SeqAccess` is provided to the `Visitor` to give it the ability to iterate
 // through elements of the sequence.
-impl<'a, 'de, BO> SeqAccess<'de> for SequenceHelper<'a, 'de, BO>
+impl<'a, 'de, BO> SeqAccess<'de> for SequenceHelper<'a, '_, BO>
 where
   BO: ByteOrder,
 {
@@ -550,7 +596,7 @@ where
 
 // `MapAccess` is provided to the `Visitor` to give it the ability to iterate
 // through entries of the map.
-impl<'de, 'a, BO> MapAccess<'de> for SequenceHelper<'a, 'de, BO>
+impl<'de, 'a, BO> MapAccess<'de> for SequenceHelper<'a, '_, BO>
 where
   BO: ByteOrder,
 {
@@ -578,8 +624,8 @@ where
 }
 
 #[cfg(test)]
+#[allow(clippy::needless_pass_by_value)]
 mod tests {
-  #![allow(clippy::needless_pass_by_value)]
   use byteorder::{BigEndian, LittleEndian};
   use log::info;
   use serde::{Deserialize, Serialize};
@@ -599,7 +645,7 @@ mod tests {
   fn cdr_deserialization_struct() {
     //IDL
     /*
-    struct OmaTyyppi
+    struct MyType
     {
      octet first;
     octet second;
@@ -608,11 +654,11 @@ mod tests {
     boolean fifth;
     float sixth;
     boolean seventh;
-    sequence<long> eigth;
+    sequence<long> eighth;
     sequence<octet> ninth;
     sequence<short> tenth;
     sequence<long long> eleventh;
-    unsigned short twelwe [3];
+    unsigned short twelve [3];
     string thirteen;
     };
     */
@@ -626,16 +672,16 @@ mod tests {
     ser_var.fifth(true);
     ser_var.sixth(-6.6);
     ser_var.seventh(true);
-    ser_var.eigth({1,2});
+    ser_var.eighth({1,2});
     ser_var.ninth({1});
     ser_var.tenth({5,-4,3,-2,1});
     ser_var.eleventh({});
-    ser_var.twelwe({3,2,1});
+    ser_var.twelve({3,2,1});
     ser_var.thirteen("abc");
 
       */
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
-    struct OmaTyyppi {
+    struct MyType {
       first_value: u8,
       second_value: i8,
       third_value: i32,
@@ -643,15 +689,15 @@ mod tests {
       fifth: bool,
       sixth: f32,
       seventh: bool,
-      eigth: Vec<i32>,
+      eighth: Vec<i32>,
       ninth: Vec<u8>,
       tenth: Vec<i16>,
       eleventh: Vec<i64>,
-      twelwe: [u16; 3],
+      twelve: [u16; 3],
       thirteen: String,
     }
 
-    let mikki_hiiri = OmaTyyppi {
+    let micky_mouse = MyType {
       first_value: 1,
       second_value: -3,
       third_value: -5000,
@@ -659,11 +705,11 @@ mod tests {
       fifth: true,
       sixth: -6.6f32,
       seventh: true,
-      eigth: vec![1, 2],
+      eighth: vec![1, 2],
       ninth: vec![1],
       tenth: vec![5, -4, 3, -2, 1],
       eleventh: vec![],
-      twelwe: [3, 2, 1],
+      twelve: [3, 2, 1],
       thirteen: "abc".to_string(),
     };
 
@@ -676,27 +722,26 @@ mod tests {
       0x00, 0x04, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x00,
     ];
 
-    let sarjallistettu = to_bytes::<OmaTyyppi, LittleEndian>(&mikki_hiiri).unwrap();
+    let serialized = to_bytes::<MyType, LittleEndian>(&micky_mouse).unwrap();
 
     for x in 0..expected_serialized_result.len() {
-      if expected_serialized_result[x] != sarjallistettu[x] {
+      if expected_serialized_result[x] != serialized[x] {
         info!("index: {}", x);
       }
     }
-    assert_eq!(sarjallistettu, expected_serialized_result);
-    info!("serialization successfull!");
+    assert_eq!(serialized, expected_serialized_result);
+    info!("serialization successful!");
 
-    let rakennettu: OmaTyyppi =
-      deserialize_from_little_endian(&expected_serialized_result).unwrap();
-    assert_eq!(rakennettu, mikki_hiiri);
-    info!("deserialized: {:?}", rakennettu);
+    let built: MyType = deserialize_from_little_endian(&expected_serialized_result).unwrap();
+    assert_eq!(built, micky_mouse);
+    info!("deserialized: {:?}", built);
   }
 
   #[test]
 
   fn cdr_deserialization_user_defined_data() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
-    //10.7 Example for User-defined Topic Data
+    // 10.7 Example for User-defined Topic Data
     #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
     struct ShapeType {
       color: String,
@@ -727,12 +772,12 @@ mod tests {
 
   fn cdr_deserialization_serialization_topic_name() {
     // look this example https://www.omg.org/spec/DDSI-RTPS/2.3/PDF
-    //10.6 Example for Built-in Endpoint Data
+    // 10.6 Example for Built-in Endpoint Data
     // this is just CRD topic name strings
 
     // TODO what about padding??
     let received_cdr_string: Vec<u8> = vec![
-      0x07, 0x00, 0x00, 0x00, 0x053, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, /* 0x00, */
+      0x07, 0x00, 0x00, 0x00, 0x053, 0x71, 0x75, 0x61, 0x72, 0x65, 0x00, // 0x00,
     ];
 
     let deserialized_message: String =
@@ -742,7 +787,7 @@ mod tests {
 
     let received_cdr_string2: Vec<u8> = vec![
       0x0A, 0x00, 0x00, 0x00, 0x53, 0x68, 0x61, 0x70, 0x65, 0x54, 0x79, 0x70, 0x65,
-      0x00, /* 0x00, 0x00, */
+      0x00, // 0x00, 0x00,
     ];
 
     let deserialized_message2: String =
@@ -790,7 +835,7 @@ mod tests {
 
     assert_eq!(deserialized_le, o);
     assert_eq!(deserialized_be, o);
-    info!("deserialition success");
+    info!("deserialization success");
   }
 
   #[test]
@@ -805,7 +850,7 @@ mod tests {
       y: i32,
       size: i32,
     }
-    // this message is DataMessages serialized data withoutt encapsulation kind and
+    // this message is DataMessages serialized data without encapsulation kind and
     // encapsulation options
     let received_message: Vec<u8> = vec![
       0x04, 0x00, 0x00, 0x00, 0x52, 0x45, 0x44, 0x00, 0x61, 0x00, 0x00, 0x00, 0x1b, 0x00, 0x00,
@@ -823,20 +868,20 @@ mod tests {
     let serialized_message = to_bytes::<ShapeType, LittleEndian>(&deserialized_message).unwrap();
 
     assert_eq!(serialized_message, received_message2);
-    //assert_eq!(deserialized_message,received_message)
+    // assert_eq!(deserialized_message,received_message)
   }
 
   #[test]
 
   fn cdr_deserialization_custom_data_message_from_ros_and_wireshark() {
-    // IDL of messsage
-    //float64 x
-    //float64 y
-    //float64 heading
-    //float64 v_x
-    //float64 v_y
-    //float64 kappa
-    //string test
+    // IDL of message
+    // float64 x
+    // float64 y
+    // float64 heading
+    // float64 v_x
+    // float64 v_y
+    // float64 kappa
+    // string test
 
     #[derive(Serialize, Deserialize, Debug, PartialEq)]
     struct MessageType {
@@ -849,12 +894,13 @@ mod tests {
       test: String,
     }
 
+    // The serialized form of the message "Toimiiko?" (?) (Finnish for "Working?")
     let received_message_le: Vec<u8> = vec![
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
       0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1f, 0x85, 0xeb, 0x51, 0xb8,
       0x1e, 0xd5, 0x3f, 0x0a, 0x00, 0x00, 0x00, 0x54, 0x6f, 0x69, 0x6d, 0x69, 0x69, 0x6b, 0x6f,
-      0x3f, 0x00, //0x00, 0x00,
+      0x3f, 0x00, // 0x00, 0x00,
     ];
 
     let value: MessageType = deserialize_from_little_endian(&received_message_le).unwrap();
@@ -867,13 +913,13 @@ mod tests {
     unbounded_string: String,
     x: i32,
     y: i32,
-    shapesize: i32,
-    liuku: f32,
-    tuplaliuku: f64,
-    kolme_lyhytta: [u16; 3],
-    nelja_lyhytta: [i16; 4],
-    totuusarvoja: Vec<bool>,
-    kolm_tavua: Vec<u8>,
+    shape_size: i32,
+    slide: f32,
+    double_slide: f64,
+    three_short: [u16; 3],
+    four_short: [i16; 4],
+    booleans: Vec<bool>,
+    three_bytes: Vec<u8>,
   }
 
   #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -891,44 +937,45 @@ mod tests {
     string unbounded_string;
       long x;
       long y;
-      long shapesize;
-      float liuku;
-      double tuplaliuku;
-      unsigned short kolme_lyhytta [3];
-      short nelja_lyhytta [4];
-      sequence<boolean> totuusarvoja;
-      sequence<octet,3> kolm_tavua;
+      long shape_size;
+      float slide;
+      double double_slide;
+      unsigned short three_short [3];
+      short four_short [4];
+      sequence<boolean> booleans;
+      sequence<octet,3> three_bytes;
     };
     */
 
-    // values put to serilization message with eprosima fastbuffers
+    // values put to serialization message with eprosima fastbuffers
     /*
-      ser_var.unbounded_string("tassa on aika pitka teksti");
+      ser_var.unbounded_string("Here is a fairly long text");
       ser_var.x(1);
       ser_var.x(2);
       ser_var.y(-3);
-      ser_var.shapesize(-4);
-      ser_var.liuku(5.5);
-      ser_var.tuplaliuku(-6.6);
+      ser_var.shape_size(-4);
+      ser_var.slide(5.5);
+      ser_var.double_slide(-6.6);
       std::array<uint16_t, 3> foo  = {1,2,3};
-      ser_var.kolme_lyhytta(foo);
+      ser_var.three_short(foo);
       std::array<int16_t, 4>  faa = {1,-2,-3,4};
-      ser_var.nelja_lyhytta(faa);
-      ser_var.totuusarvoja({true,false,true});
-      ser_var.kolm_tavua({23,0,2});
+      ser_var.four_short(faa);
+      ser_var.booleans({true,false,true});
+      ser_var.three_bytes({23,0,2});
     */
 
     let value = InterestingMessage {
-      unbounded_string: "Tassa on aika pitka teksti".to_string(),
+      unbounded_string: "Tassa on aika pitka teksti".to_string(), /* Finnish for "Here us a
+                                                                   * fairly long text" */
       x: 2,
       y: -3,
-      shapesize: -4,
-      liuku: 5.5,
-      tuplaliuku: -6.6,
-      kolme_lyhytta: [1, 2, 3],
-      nelja_lyhytta: [1, -2, -3, 4],
-      totuusarvoja: vec![true, false, true],
-      kolm_tavua: [23, 0, 2].to_vec(),
+      shape_size: -4,
+      slide: 5.5,
+      double_slide: -6.6,
+      three_short: [1, 2, 3],
+      four_short: [1, -2, -3, 4],
+      booleans: vec![true, false, true],
+      three_bytes: [23, 0, 2].to_vec(),
     };
 
     const DATA: &[u8] = &[
@@ -997,29 +1044,29 @@ mod tests {
   #[test_case("BLUE".to_string() ; "string")]
   #[test_case(vec![1_i32, -2_i32, 3_i32] ; "Vec<i32>")]
   #[test_case(InterestingMessage {
-      unbounded_string: "Tässä on aika pitkä teksti".to_string(),
+      unbounded_string: "Here is a fairly long text".to_string(),
       x: 2,
       y: -3,
-      shapesize: -4,
-      liuku: 5.5,
-      tuplaliuku: -6.6,
-      kolme_lyhytta: [1, 2, 3],
-      nelja_lyhytta: [1, -2, -3, 4],
-      totuusarvoja: vec![true, false, true],
-      kolm_tavua: [23, 0, 2].to_vec(),
+      shape_size: -4,
+      slide: 5.5,
+      double_slide: -6.6,
+      three_short: [1, 2, 3],
+      four_short: [1, -2, -3, 4],
+      booleans: vec![true, false, true],
+      three_bytes: [23, 0, 2].to_vec(),
     } ; "InterestingMessage")]
   #[test_case( BigEnum::Boring ; "BigEnum::Boring")]
   #[test_case( BigEnum::Interesting(InterestingMessage {
-      unbounded_string: "Tässä on aika pitkä teksti".to_string(),
+      unbounded_string: "Here is a fairly long text".to_string(),
       x: 2,
       y: -3,
-      shapesize: -4,
-      liuku: 5.5,
-      tuplaliuku: -6.6,
-      kolme_lyhytta: [1, 2, 3],
-      nelja_lyhytta: [1, -2, -3, 4],
-      totuusarvoja: vec![true, false, true],
-      kolm_tavua: [23, 0, 2].to_vec(),
+      shape_size: -4,
+      slide: 5.5,
+      double_slide: -6.6,
+      three_short: [1, 2, 3],
+      four_short: [1, -2, -3, 4],
+      booleans: vec![true, false, true],
+      three_bytes: [23, 0, 2].to_vec(),
     }) ; "BigEnum::Interesting")]
   #[test_case( BigEnum::Something{ x:123.0, y:-0.1 } ; "BigEnum::Something")]
   #[test_case( SomeTupleEnum::A(123) ; "SomeTupleEnum::A")]
@@ -1039,7 +1086,7 @@ mod tests {
     println!("Serialized data: {:x?}", &serialized);
     let (deserialized, bytes_consumed): (T, usize) =
       deserialize_from_cdr(&serialized, RepresentationIdentifier::CDR_LE).unwrap();
-    //let deserialized = deserialize_from_little_endian(&serialized).unwrap();
+    // let deserialized = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(input, deserialized);
     assert_eq!(serialized.len(), bytes_consumed);
   }

@@ -1,5 +1,5 @@
 //! Interoperability test program for `RustDDS` library
-//! This is using pacakge "mio" version 0.8.x.
+//! This is using package "mio" version 0.8.x.
 
 #![deny(clippy::all)]
 #![warn(clippy::pedantic)]
@@ -30,15 +30,15 @@ use clap::{Arg, ArgMatches, Command}; // command line argument processing
 use mio_08::{Events, Interest, Poll, Token}; // non-blocking i/o polling
 use rand::prelude::*;
 
-#[derive(Serialize, Deserialize, Clone)]
-struct Shape {
+#[derive(Serialize, Deserialize, Clone, Debug)]
+struct ShapeType {
   color: String,
   x: i32,
   y: i32,
-  shapesize: i32,
+  shape_size: i32,
 }
 
-impl Keyed for Shape {
+impl Keyed for ShapeType {
   type K = String;
   fn key(&self) -> String {
     self.color.clone()
@@ -74,7 +74,7 @@ fn main() {
   let mut qos_b = QosPolicyBuilder::new()
     .reliability(if matches.get_flag("reliable") {
       Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::DURATION_ZERO,
+        max_blocking_time: rustdds::Duration::ZERO,
       }
     } else {
       Reliability::BestEffort
@@ -128,7 +128,7 @@ fn main() {
 
   let loop_delay: Duration = match deadline_policy {
     None => Duration::from_millis(200), // This is the default rate
-    Some(Deadline(dd)) => Duration::from(dd).mul_f32(0.8), // slightly faster than dealine
+    Some(Deadline(dd)) => Duration::from(dd).mul_f32(0.8), // slightly faster than deadline
   };
 
   let topic = domain_participant
@@ -162,7 +162,7 @@ fn main() {
     debug!("Publisher");
     let publisher = domain_participant.create_publisher(&qos).unwrap();
     let mut writer = publisher
-      .create_datawriter_cdr::<Shape>(&topic, None) // None = get qos policy from publisher
+      .create_datawriter_cdr::<ShapeType>(&topic, None) // None = get qos policy from publisher
       .unwrap();
     poll
       .registry()
@@ -181,7 +181,7 @@ fn main() {
     debug!("Subscriber");
     let subscriber = domain_participant.create_subscriber(&qos).unwrap();
     let mut reader = subscriber
-      .create_datareader_cdr::<Shape>(&topic, Some(qos))
+      .create_datareader_cdr::<ShapeType>(&topic, Some(qos))
       .unwrap();
     poll
       .registry()
@@ -201,11 +201,11 @@ fn main() {
     None
   };
 
-  let mut shape_sample = Shape {
+  let mut shape_sample = ShapeType {
     color: color.to_string(),
     x: 0,
     y: 0,
-    shapesize: 21,
+    shape_size: 21,
   };
   let mut random_gen = thread_rng();
   // a bit complicated lottery to ensure we do not end up with zero velocity.
@@ -243,7 +243,7 @@ fn main() {
                       sample.color,
                       sample.x,
                       sample.y,
-                      sample.shapesize,
+                      sample.shape_size,
                     ),
                     Sample::Dispose(key) => println!("Disposed key {key:?}"),
                   },
@@ -304,7 +304,7 @@ fn main() {
       None => {
         if is_publisher {
           error!("Where is my writer?");
-        } else { /* never mind */
+        } else { // never mind
         }
       }
     }
@@ -435,8 +435,8 @@ fn get_matches() -> ArgMatches {
 }
 
 #[allow(clippy::similar_names)]
-fn move_shape(shape: Shape, xv: i32, yv: i32) -> (Shape, i32, i32) {
-  let half_size = shape.shapesize / 2 + 1;
+fn move_shape(shape: ShapeType, xv: i32, yv: i32) -> (ShapeType, i32, i32) {
+  let half_size = shape.shape_size / 2 + 1;
   let mut x = shape.x + xv;
   let mut y = shape.y + yv;
 
@@ -460,11 +460,11 @@ fn move_shape(shape: Shape, xv: i32, yv: i32) -> (Shape, i32, i32) {
     yv_new = -yv;
   }
   (
-    Shape {
+    ShapeType {
       color: shape.color,
       x,
       y,
-      shapesize: shape.shapesize,
+      shape_size: shape.shape_size,
     },
     xv_new,
     yv_new,

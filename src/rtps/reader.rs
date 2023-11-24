@@ -17,7 +17,9 @@ use crate::{
   dds::{
     ddsdata::DDSData,
     qos::{policy, HasQoSPolicy, QosPolicies},
-    statusevents::{CountWithChange, DataReaderStatus, StatusChannelSender},
+    statusevents::{
+      CountWithChange, DataReaderStatus, DomainParticipantStatusEvent, StatusChannelSender,
+    },
     with_key::{
       datawriter::{WriteOptions, WriteOptionsBuilder},
       simpledatareader::ReaderCommand,
@@ -28,31 +30,42 @@ use crate::{
     protocol_id::ProtocolId,
     protocol_version::ProtocolVersion,
     submessages::{
-      elements::{inline_qos::InlineQos, parameter_list::ParameterList},
+      elements::{
+        inline_qos::InlineQos, parameter_list::ParameterList, serialized_payload::SerializedPayload,
+      },
       submessages::*,
     },
     vendor_id::VendorId,
   },
   mio_source,
   network::udp_sender::UDPSender,
-  rtps::{message_receiver::MessageReceiverState, rtps_writer_proxy::RtpsWriterProxy, Message},
+  rtps::{
+    fragment_assembler::FragmentAssembler, message_receiver::MessageReceiverState,
+    rtps_writer_proxy::RtpsWriterProxy, Message,
+  },
   structure::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::TopicCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
-    sequence_number::{FragmentNumberSet, SequenceNumber, SequenceNumberSet},
+    sequence_number::{FragmentNumber, FragmentNumberSet, SequenceNumber, SequenceNumberSet},
     time::Timestamp,
   },
 };
+#[cfg(feature = "security")]
+use super::Submessage;
+#[cfg(feature = "security")]
+use crate::security::{security_plugins::SecurityPluginsHandle, SecurityResult};
+#[cfg(not(feature = "security"))]
+use crate::no_security::SecurityPluginsHandle;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum TimedEvent {
   DeadlineMissedCheck,
 }
 
-// Some pieces necessary to contruct a reader.
+// Some pieces necessary to construct a reader.
 // These can be sent between threads, whereas a Reader cannot.
 pub(crate) struct ReaderIngredients {
   pub guid: GUID,
@@ -61,10 +74,13 @@ pub(crate) struct ReaderIngredients {
   pub topic_name: String,
   pub(crate) topic_cache_handle: Arc<Mutex<TopicCache>>, /* A handle to the topic cache in DDS
                                                           * cache */
+  pub(crate) like_stateless: bool, // Usually false (see like_stateless attribute of Reader)
   pub qos_policy: QosPolicies,
   pub data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
   pub(crate) data_reader_waker: Arc<Mutex<Option<Waker>>>,
   pub(crate) poll_event_sender: mio_source::PollEventSender,
+
+  pub(crate) security_plugins: Option<SecurityPluginsHandle>,
 }
 
 impl ReaderIngredients {
@@ -74,7 +90,7 @@ impl ReaderIngredients {
 }
 
 impl fmt::Debug for ReaderIngredients {
-  // Need manual implementation, because channels cannot be Dubug formatted.
+  // Need manual implementation, because channels cannot be Debug formatted.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.debug_struct("Reader")
       .field("my_guid", &self.guid)
@@ -90,11 +106,13 @@ pub(crate) struct Reader {
   status_sender: StatusChannelSender<DataReaderStatus>,
   udp_sender: Rc<UDPSender>,
 
-  is_stateful: bool, // is this StatefulReader or Statelessreader as per RTPS spec
-  // Currently we support only stateful behaviour.
-  // RTPS Spec: Section 8.4.11.2 Reliable StatelessReader Behavior
-  // "This combination is not supported by the RTPS protocol."
-  // So stateful must be true whenever we are Reliable.
+  // By default, this reader is a StatefulReader (see RTPS spec section 8.4.12)
+  // If like_stateless is true, then the reader mimics the behavior of a StatelessReader
+  // This means for example that the reader does not keep track of matched remote writers.
+  // This behavior is needed only for a single built-in discovery topic of Secure DDS
+  // (topic DCPSParticipantStatelessMessage)
+  like_stateless: bool,
+  // Reliability Qos. Note that a StatelessReader cannot be Reliable (RTPS Spec: Section 8.4.11.2)
   reliability: policy::Reliability,
   // Reader stores a pointer to a mutex on the topic cache
   topic_cache: Arc<Mutex<TopicCache>>,
@@ -111,10 +129,11 @@ pub(crate) struct Reader {
 
   // TODO: Implement (use) this
   #[allow(dead_code)]
-  heartbeat_supression_duration: StdDuration,
+  heartbeat_suppression_duration: StdDuration,
 
-  received_hearbeat_count: i32,
+  received_heartbeat_count: i32,
 
+  fragment_assemblers: BTreeMap<GUID, FragmentAssembler>,
   matched_writers: BTreeMap<GUID, RtpsWriterProxy>,
   writer_match_count_total: i32, // total count, never decreases
 
@@ -125,13 +144,19 @@ pub(crate) struct Reader {
   pub(crate) data_reader_command_receiver: mio_channel::Receiver<ReaderCommand>,
   data_reader_waker: Arc<Mutex<Option<Waker>>>,
   poll_event_sender: mio_source::PollEventSender,
+
+  participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+
+  #[allow(dead_code)] // to avoid warning if no security feature
+  security_plugins: Option<SecurityPluginsHandle>,
 }
 
 impl Reader {
-  pub fn new(
+  pub(crate) fn new(
     i: ReaderIngredients,
     udp_sender: Rc<UDPSender>,
     timed_event_timer: Timer<TimedEvent>,
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
   ) -> Self {
     // Verify that the topic cache corresponds to the topic of the Reader
     let topic_cache_name = i.topic_cache_handle.lock().unwrap().topic_name();
@@ -142,12 +167,16 @@ impl Reader {
       );
     }
 
+    // If reader should be stateless, only BestEffort QoS is supported
+    if i.like_stateless && i.qos_policy.is_reliable() {
+      panic!("Attempted to create a stateless Reader with other than BestEffort reliability");
+    }
+
     Self {
       notification_sender: i.notification_sender,
       status_sender: i.status_sender,
       udp_sender,
-      is_stateful: true, // Do not change this before stateless functionality is implemented.
-
+      like_stateless: i.like_stateless,
       reliability: i
         .qos_policy
         .reliability() // use qos specification
@@ -161,8 +190,9 @@ impl Reader {
       my_guid: i.guid,
 
       heartbeat_response_delay: StdDuration::new(0, 500_000_000), // 0,5sec
-      heartbeat_supression_duration: StdDuration::new(0, 0),
-      received_hearbeat_count: 0,
+      heartbeat_suppression_duration: StdDuration::new(0, 0),
+      received_heartbeat_count: 0,
+      fragment_assemblers: BTreeMap::new(),
       matched_writers: BTreeMap::new(),
       writer_match_count_total: 0,
       requested_deadline_missed_count: 0,
@@ -171,6 +201,9 @@ impl Reader {
       data_reader_command_receiver: i.data_reader_command_receiver,
       data_reader_waker: i.data_reader_waker,
       poll_event_sender: i.poll_event_sender,
+      participant_status_sender,
+
+      security_plugins: i.security_plugins,
     }
   }
   // TODO: check if it's necessary to implement different handlers for discovery
@@ -194,7 +227,7 @@ impl Reader {
         .set_timeout(deadline.0.to_std(), TimedEvent::DeadlineMissedCheck);
     } else {
       trace!(
-        "GUID={:?} - no deaadline policy - do not set set_requested_deadline_check_timer",
+        "GUID={:?} - no deadline policy - do not set set_requested_deadline_check_timer",
         self.my_guid
       );
     }
@@ -219,6 +252,13 @@ impl Reader {
         error!("send_status_change - cannot send status: {e:?}");
       }
     }
+  }
+
+  fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
+    self
+      .participant_status_sender
+      .try_send(event)
+      .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
   }
 
   // The deadline that the DataReader was expecting through its QosPolicy
@@ -285,7 +325,7 @@ impl Reader {
       match self.data_reader_command_receiver.try_recv() {
         Ok(ReaderCommand::ResetRequestedDeadlineStatus) => {
           warn!("RESET_REQUESTED_DEADLINE_STATUS not implemented!");
-          //TODO: This should be implemented.
+          // TODO: This should be implemented.
         }
         // Disconnected is normal when terminating
         Err(TryRecvError::Disconnected) => {
@@ -335,32 +375,56 @@ impl Reader {
 
   // updates or adds a new writer proxy, doesn't touch changes
   pub fn update_writer_proxy(&mut self, proxy: RtpsWriterProxy, offered_qos: &QosPolicies) {
+    if self.like_stateless {
+      debug!(
+        "Attempted to update writer proxy for stateless reader. Ignoring. topic={:?}",
+        self.topic_name
+      );
+      return;
+    }
+
     debug!("update_writer_proxy topic={:?}", self.topic_name);
+    let writer = proxy.remote_writer_guid;
+
     match offered_qos.compliance_failure_wrt(&self.qos_policy) {
       None => {
         // success, update or insert
-        let writer_id = proxy.remote_writer_guid;
         let count_change = self.matched_writer_update(proxy);
         if count_change > 0 {
           self.writer_match_count_total += count_change;
           self.send_status_change(DataReaderStatus::SubscriptionMatched {
             total: CountWithChange::new(self.writer_match_count_total, count_change),
             current: CountWithChange::new(self.matched_writers.len() as i32, count_change),
+            writer,
           });
+          self.send_participant_status(DomainParticipantStatusEvent::RemoteWriterMatched {
+            local_reader: self.my_guid,
+            remote_writer: writer,
+          });
+
           info!(
-            "Matched new remote writer on topic={:?} writer= {:?}",
-            self.topic_name, writer_id
+            "Matched new remote writer on topic={:?} writer={:?}",
+            self.topic_name, writer
           );
         }
       }
       Some(bad_policy_id) => {
-        // no QoS match
+        // no QoS match.
         self.offered_incompatible_qos_count += 1;
         self.send_status_change(DataReaderStatus::RequestedIncompatibleQos {
           count: CountWithChange::new(self.offered_incompatible_qos_count, 1),
           last_policy_id: bad_policy_id,
-          policies: Vec::new(), // TODO. implementation missing
+          writer,
+          requested_qos: Box::new(self.qos_policy.clone()),
+          offered_qos: Box::new(offered_qos.clone()),
         });
+        self.send_participant_status(DomainParticipantStatusEvent::RemoteWriterQosIncompatible {
+          local_reader: self.my_guid,
+          remote_writer: writer,
+          requested_qos: Box::new(self.qos_policy.clone()),
+          offered_qos: Box::new(offered_qos.clone()),
+        });
+
         warn!("update_writer_proxy - QoS mismatch {:?}", bad_policy_id);
         info!(
           "update_writer_proxy - QoS mismatch: topic={:?} requested={:?}  offered={:?}",
@@ -384,31 +448,44 @@ impl Reader {
   pub fn remove_writer_proxy(&mut self, writer_guid: GUID) {
     if self.matched_writers.contains_key(&writer_guid) {
       self.matched_writers.remove(&writer_guid);
+      #[cfg(feature = "security")]
+      if let Some(security_plugins_handle) = &self.security_plugins {
+        security_plugins_handle
+          .get_plugins()
+          .unregister_remote_writer(&self.my_guid, &writer_guid)
+          .unwrap_or_else(|e| error!("{e}"));
+      }
       self.send_status_change(DataReaderStatus::SubscriptionMatched {
         total: CountWithChange::new(self.writer_match_count_total, 0),
         current: CountWithChange::new(self.matched_writers.len() as i32, -1),
+        writer: writer_guid,
       });
     }
   }
 
   // Entire remote participant was lost.
-  // Remove all remote readers belonging to it.
+  // Remove all remote writers belonging to it.
   pub fn participant_lost(&mut self, guid_prefix: GuidPrefix) {
-    let lost_readers: Vec<GUID> = self
+    let lost_writers: Vec<GUID> = self
       .matched_writers
       .range(guid_prefix.range())
       .map(|(g, _)| *g)
       .collect();
-    for reader in lost_readers {
-      self.remove_writer_proxy(reader);
+    for writer in lost_writers {
+      self.remove_writer_proxy(writer);
     }
   }
 
   pub fn contains_writer(&self, entity_id: EntityId) -> bool {
-    self
-      .matched_writers
-      .iter()
-      .any(|(&g, _)| g.entity_id == entity_id)
+    if !self.like_stateless {
+      self
+        .matched_writers
+        .iter()
+        .any(|(&g, _)| g.entity_id == entity_id)
+    } else {
+      // Making it explicit: stateless reader does not contain any writers
+      false
+    }
   }
 
   #[cfg(test)]
@@ -444,7 +521,7 @@ impl Reader {
     data_flags: BitFlags<DATA_Flags>,
     mr_state: &MessageReceiverState,
   ) {
-    //trace!("handle_data_msg entry");
+    // trace!("handle_data_msg entry");
     let receive_timestamp = Timestamp::now();
 
     // parse write_options out of the message
@@ -454,12 +531,15 @@ impl Reader {
       write_options_b = write_options_b.source_timestamp(source_timestamp);
     }
     // Check if the message specifies a related_sample_identity
-    let ri = DATA_Flags::cdr_representation_identifier(data_flags);
-    if let Some(related_sample_identity) = data
-      .inline_qos
-      .as_ref()
-      .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
-      .flatten()
+    let representation_identifier = DATA_Flags::cdr_representation_identifier(data_flags);
+    if let Some(related_sample_identity) =
+      data.inline_qos.as_ref().and_then(|inline_qos_parameters| {
+        InlineQos::related_sample_identity(inline_qos_parameters, representation_identifier)
+          .unwrap_or_else(|e| {
+            error!("Deserializing related_sample_identity: {:?}", &e);
+            None
+          })
+      })
     {
       write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
@@ -467,9 +547,9 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let writer_seq_num = data.writer_sn; // for borrow checker
 
-    match self.data_to_ddsdata(data, data_flags) {
-      Ok(ddsdata) => self.process_received_data(
-        ddsdata,
+    match self.data_to_dds_data(data, data_flags) {
+      Ok(dds_data) => self.process_received_data(
+        dds_data,
         receive_timestamp,
         write_options_b.build(),
         writer_guid,
@@ -488,6 +568,7 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, datafrag.writer_id);
     let seq_num = datafrag.writer_sn;
     let receive_timestamp = Timestamp::now();
+    //trace!("DATAFRAG received topic={:?}", self.topic_name);
 
     // check if this submessage is expired already
     // TODO: Maybe this check is in the wrong place altogether? It should be
@@ -498,7 +579,7 @@ impl Reader {
       let elapsed = receive_timestamp.duration_since(source_timestamp);
       if lifespan.duration < elapsed {
         info!(
-          "DataFrag {:?} from {:?} lifespan exeeded. duration={:?} elapsed={:?}",
+          "DataFrag {:?} from {:?} lifespan exceeded. duration={:?} elapsed={:?}",
           seq_num, writer_guid, lifespan.duration, elapsed
         );
         return;
@@ -508,72 +589,115 @@ impl Reader {
     // parse write_options out of the message
     // TODO: This is almost duplicate code from DATA processing
     let mut write_options_b = WriteOptionsBuilder::new();
-    // Check if we have s source timestamp
+    // Check if we have a source timestamp
     if let Some(source_timestamp) = mr_state.source_timestamp {
       write_options_b = write_options_b.source_timestamp(source_timestamp);
     }
     // Check if the message specifies a related_sample_identity
-    let ri = DATAFRAG_Flags::cdr_representation_identifier(datafrag_flags);
-    if let Some(related_sample_identity) = datafrag
-      .inline_qos
-      .as_ref()
-      .and_then(|iqos| InlineQos::related_sample_identity(iqos, ri).ok())
-      .flatten()
+    let representation_identifier = DATAFRAG_Flags::cdr_representation_identifier(datafrag_flags);
+    if let Some(related_sample_identity) =
+      datafrag
+        .inline_qos
+        .as_ref()
+        .and_then(|inline_qos_parameters| {
+          InlineQos::related_sample_identity(inline_qos_parameters, representation_identifier)
+            .unwrap_or_else(|e| {
+              error!("Deserializing related_sample_identity: {:?}", &e);
+              None
+            })
+        })
     {
       write_options_b = write_options_b.related_sample_identity(related_sample_identity);
     }
 
+    // Feed to fragment assembler ...
     let writer_seq_num = datafrag.writer_sn; // for borrow checker
-    if let Some(writer_proxy) = self.matched_writer_mut(writer_guid) {
-      if let Some(complete_ddsdata) = writer_proxy.handle_datafrag(datafrag, datafrag_flags) {
-        // Source timestamp (if any) will be the timestamp of the last fragment (that
-        // completes the sample).
-        self.process_received_data(
-          complete_ddsdata,
-          receive_timestamp,
-          write_options_b.build(),
-          writer_guid,
-          writer_seq_num,
-        );
-      } else {
-        // not yet complete, nothing more to do
-      }
-    } else {
-      info!(
-        "handle_datafrag_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
-        self.my_guid.entity_id, writer_guid, self.topic_name,
+    let completed_dds_data = self
+      .fragment_assembler_mutable(writer_guid, datafrag.fragment_size)
+      .new_datafrag(datafrag, datafrag_flags);
+
+    // ... and continue processing, if data was completed.
+    if let Some(dds_data) = completed_dds_data {
+      // Source timestamp (if any) will be the timestamp of the last fragment (that
+      // completes the sample).
+      self.process_received_data(
+        dds_data,
+        receive_timestamp,
+        write_options_b.build(),
+        writer_guid,
+        writer_seq_num,
       );
+    } else {
+      self.garbage_collect_fragments();
     }
+  }
+
+  fn fragment_assembler_mutable(
+    &mut self,
+    writer_guid: GUID,
+    frag_size: u16,
+  ) -> &mut FragmentAssembler {
+    self
+      .fragment_assemblers
+      .entry(writer_guid)
+      .or_insert_with(|| FragmentAssembler::new(frag_size))
+  }
+
+  fn garbage_collect_fragments(&mut self) {
+    // TODO: On most calls, do nothing.
+    //
+    // If GC time/packet limit has been exceeded, iterate through
+    // fragment assemblers and discard those assembly buffers whose
+    // creation / modification timestamps look like it is no longer receiving
+    // data and can therefore be discarded.
+  }
+
+  fn missing_frags_for(
+    &self,
+    writer_guid: GUID,
+    seq: SequenceNumber,
+  ) -> Box<dyn '_ + Iterator<Item = FragmentNumber>> {
+    self.fragment_assemblers.get(&writer_guid).map_or_else(
+      || Box::new(iter::empty()) as Box<dyn Iterator<Item = FragmentNumber>>,
+      |fa| fa.missing_frags_for(seq),
+    )
+  }
+
+  fn is_frag_partially_received(&self, writer_guid: GUID, seq: SequenceNumber) -> bool {
+    self
+      .fragment_assemblers
+      .get(&writer_guid)
+      .map_or(false, |fa| fa.is_partially_received(seq))
   }
 
   // common parts of processing DATA or a completed DATAFRAG (when all frags are
   // received)
   fn process_received_data(
     &mut self,
-    ddsdata: DDSData,
+    dds_data: DDSData,
     receive_timestamp: Timestamp,
     write_options: WriteOptions,
     writer_guid: GUID,
     writer_sn: SequenceNumber,
   ) {
     trace!(
-      "handle_data_msg from {:?} seq={:?} topic={:?} reliability={:?} stateful={:?}",
+      "handle_data_msg from {:?} seq={:?} topic={:?} reliability={:?} stateless={:?}",
       &writer_guid,
       writer_sn,
       self.topic_name,
       self.reliability,
-      self.is_stateful,
+      self.like_stateless,
     );
-    if self.is_stateful {
-      let my_entityid = self.my_guid.entity_id; // to please borrow checker
+    if !self.like_stateless {
+      let my_entity_id = self.my_guid.entity_id; // to please borrow checker
       if let Some(writer_proxy) = self.matched_writer_mut(writer_guid) {
         if writer_proxy.should_ignore_change(writer_sn) {
           // change already present
           debug!("handle_data_msg already have this seq={:?}", writer_sn);
-          if my_entityid == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
+          if my_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
             debug!("Accepting duplicate message to participant reader.");
-            // This is an attmpted workaround to eProsima FastRTPS not
-            // incrementing sequence numbers. (eProsime shapes demo 2.1.0 from
+            // This is an attempted workaround to eProsima FastRTPS not
+            // incrementing sequence numbers. (eProsima shapes demo 2.1.0 from
             // 2021)
           } else {
             return;
@@ -583,9 +707,9 @@ impl Reader {
         writer_proxy.received_changes_add(writer_sn, receive_timestamp);
       } else {
         // no writer proxy found
-        info!(
+        debug!(
           "handle_data_msg in stateful Reader {:?} has no writer proxy for {:?} topic={:?}",
-          my_entityid, writer_guid, self.topic_name,
+          my_entity_id, writer_guid, self.topic_name,
         );
         // This is normal if the DATA was broadcast, but it was from another topic.
         // We just ignore the data in such a case
@@ -595,26 +719,25 @@ impl Reader {
         }
       }
     } else {
-      // stateless reader
-      todo!()
+      // stateless reader: nothing to do before making cache change
     }
 
     self.make_cache_change(
-      ddsdata,
+      dds_data,
       receive_timestamp,
       write_options,
       writer_guid,
       writer_sn,
     );
 
-    // Add to own track-keeping datastructure
+    // Add to own track-keeping data structure
     #[cfg(test)]
     self.seqnum_instant_map.insert(writer_sn, receive_timestamp);
 
     self.notify_cache_change();
   }
 
-  fn data_to_ddsdata(
+  fn data_to_dds_data(
     &self,
     data: Data,
     data_flags: BitFlags<DATA_Flags>,
@@ -626,16 +749,18 @@ impl Reader {
       data_flags.contains(DATA_Flags::Data),
       data_flags.contains(DATA_Flags::Key),
     ) {
-      (Some(sp), true, false) => {
+      (Some(serialized_payload), true, false) => {
         // data
-        Ok(DDSData::new(sp))
+        Ok(DDSData::new(
+          SerializedPayload::from_bytes(&serialized_payload).map_err(|e| format!("{e:?}"))?,
+        ))
       }
 
-      (Some(sp), false, true) => {
+      (Some(serialized_payload), false, true) => {
         // key
         Ok(DDSData::new_disposed_by_key(
           Self::deduce_change_kind(&data.inline_qos, false, representation_identifier),
-          sp,
+          SerializedPayload::from_bytes(&serialized_payload).map_err(|e| format!("{e:?}"))?,
         ))
       }
 
@@ -643,12 +768,12 @@ impl Reader {
         // no data, no key. Maybe there is inline QoS?
         // At least we should find key hash, or we do not know WTF the writer is talking
         // about
-        let key_hash = if let Some(h) = data
-          .inline_qos
-          .as_ref()
-          .and_then(|iqos| InlineQos::key_hash(iqos).ok())
-          .flatten()
-        {
+        let key_hash = if let Some(h) = data.inline_qos.as_ref().and_then(|inline_qos_parameters| {
+          InlineQos::key_hash(inline_qos_parameters).unwrap_or_else(|e| {
+            error!("Deserializing key_hash: {:?}", &e);
+            None
+          })
+        }) {
           Ok(h)
         } else {
           info!("Received DATA that has no payload and no key_hash inline QoS - discarding");
@@ -687,6 +812,27 @@ impl Reader {
     }
   }
 
+  // helper to work with mutable proxy
+  fn with_mutable_writer_proxy<F, U>(&mut self, writer_guid: GUID, worker: F) -> Option<U>
+  where
+    F: FnOnce(&mut Self, &mut RtpsWriterProxy) -> U,
+  {
+    match self.matched_writers.remove(&writer_guid) {
+      None => {
+        error!("Writer proxy {writer_guid:?} not found");
+        None
+      }
+      Some(mut wp) => {
+        let res = worker(self, &mut wp);
+        let x = self.matched_writers.insert(writer_guid, wp); // re-insert
+        if x.is_some() {
+          panic!("with_mutable_writer_proxy: Worker inserted writer proxy behind my back!")
+        }
+        Some(res)
+      }
+    }
+  }
+
   // Returns if responding with ACKNACK?
   // TODO: Return value seems to go unused in callers.
   // ...except in test cases, but not sure if this is strictly necessary to have.
@@ -694,14 +840,15 @@ impl Reader {
     &mut self,
     heartbeat: &Heartbeat,
     final_flag_set: bool,
-    mr_state: MessageReceiverState,
+    mr_state: &MessageReceiverState,
   ) -> bool {
     let writer_guid =
       GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, heartbeat.writer_id);
 
-    if self.reliability == policy::Reliability::BestEffort {
+    if self.reliability == policy::Reliability::BestEffort || self.like_stateless {
       debug!(
-        "HEARTBEAT from {:?}, but this Reader is BestEffort. Ignoring. topic={:?} reader={:?}",
+        "HEARTBEAT from {:?}, but this Reader is BestEffort or stateless. Ignoring. topic={:?} \
+         reader={:?}",
         writer_guid, self.topic_name, self.my_guid
       );
       // BestEffort Reader reacts only to DATA and GAP
@@ -713,7 +860,7 @@ impl Reader {
     }
 
     if !self.matched_writers.contains_key(&writer_guid) {
-      info!(
+      debug!(
         "HEARTBEAT from {:?}, but no writer proxy available. topic={:?} reader={:?}",
         writer_guid, self.topic_name, self.my_guid
       );
@@ -727,158 +874,160 @@ impl Reader {
       );
     }
 
-    let writer_proxy = if let Some(wp) = self.matched_writer_mut(writer_guid) {
-      wp
-    } else {
-      error!("Writer proxy disappeared 1!");
-      return false;
-    };
+    self
+      .with_mutable_writer_proxy(writer_guid, |this, writer_proxy| {
+        // Note: This is worker closure. Use `this` instead of `self`.
 
-    let mut mr_state = mr_state;
-    mr_state.unicast_reply_locator_list = writer_proxy.unicast_locator_list.clone();
+        // Decide where should we send a reply, i.e. ACKNACK
+        let reply_locators = match mr_state.unicast_reply_locator_list.as_slice() {
+          [] | [Locator::Invalid] => writer_proxy.unicast_locator_list.clone(),
+          //TODO: What is writer_proxy has an empty list?
+          others => others.to_vec(),
+        };
 
-    if heartbeat.count <= writer_proxy.received_heartbeat_count {
-      // This heartbeat was already seen an processed.
-      return false;
-    }
-    writer_proxy.received_heartbeat_count = heartbeat.count;
-
-    // remove fragmented changes until first_sn.
-    writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
-
-    //let received_before = writer_proxy.all_ackable_before();
-    let reader_id = self.entity_id();
-    // this is duplicate code from above, but needed, because we need another
-    // mutable borrow. TODO: Maybe could be written in some sensible way.
-    let writer_proxy = if let Some(wp) = self.matched_writer_mut(writer_guid) {
-      wp
-    } else {
-      error!("Writer proxy disappeared 2!");
-      return false;
-    };
-
-    // See if ACKNACK is needed, and generate one.
-    let missing_seqnums = writer_proxy.missing_seqnums(heartbeat.first_sn, heartbeat.last_sn);
-
-    // Interpretation of final flag in RTPS spec
-    // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with
-    // final flag not set
-    //
-    // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must
-    // respond with an ACKNACK Message. The ACKNACK Message may acknowledge
-    // having received all the data samples or may indicate that some data
-    // samples are missing. The response may be delayed to avoid message storms.
-
-    if !missing_seqnums.is_empty() || !final_flag_set {
-      let mut partially_received = Vec::new();
-      // report of what we have.
-      // We claim to have received all SNs before "base" and produce a set of missing
-      // sequence numbers that are >= base.
-      let reader_sn_state = match missing_seqnums.get(0) {
-        Some(&first_missing) => {
-          // Here we assume missing_seqnums are returned in order.
-          // Limit the set to maximum that can be sent in acknack submessage.
-
-          SequenceNumberSet::from_base_and_set(
-            first_missing,
-            &missing_seqnums
-              .iter()
-              .copied()
-              .take_while(|sn| sn < &(first_missing + SequenceNumber::new(256)))
-              .filter(|sn| {
-                if writer_proxy.is_partially_received(*sn) {
-                  partially_received.push(*sn);
-                  false
-                } else {
-                  true
-                }
-              })
-              .collect(),
-          )
+        if heartbeat.count <= writer_proxy.received_heartbeat_count {
+          // This heartbeat was already seen an processed.
+          return false;
         }
+        writer_proxy.received_heartbeat_count = heartbeat.count;
 
-        // Nothing missing. Report that we have all we have.
-        None => SequenceNumberSet::new_empty(writer_proxy.all_ackable_before()),
-      };
+        // remove changes until first_sn.
+        writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
+        let mut tc = this.acquire_the_topic_cache_guard();
+        tc.mark_reliably_received_before(writer_guid, writer_proxy.all_ackable_before());
 
-      let response_ack_nack = AckNack {
-        reader_id,
-        writer_id: heartbeat.writer_id,
-        reader_sn_state,
-        count: writer_proxy.next_ack_nack_sequence_number(),
-      };
+        // let received_before = writer_proxy.all_ackable_before();
+        let reader_id = this.entity_id();
 
-      // Sanity check
-      //
-      // Wrong. This sanity check is invalid. The condition
-      // ack_base > heartbeat.last_sn + 1
-      // May be legitimately true, if there are some changes available, and a GAP
-      // after that. E.g. HEARTBEAT 1..8 and GAP 9..10. Then acknack_base == 11
-      // and 11 > 8 + 1.
-      //
-      //
-      // if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn +
-      // SequenceNumber::new(1) {   error!(
-      //     "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}
-      // missing_seqnums = {:?} all_ackable_before = {:?} writer={:?}",
-      //     &heartbeat, &response_ack_nack, missing_seqnums,
-      // writer_proxy.all_ackable_before(), writer_guid,   );
-      // }
+        // See if ACKNACK is needed, and generate one.
+        let missing_seqnums = writer_proxy.missing_seqnums(heartbeat.first_sn, heartbeat.last_sn);
 
-      // The acknack can be sent now or later. The rest of the RTPS message
-      // needs to be constructed. p. 48
-      let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
-        | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
+        // Interpretation of final flag in RTPS spec
+        // 8.4.2.3.1 Readers must respond eventually after receiving a HEARTBEAT with
+        // final flag not set
+        //
+        // Upon receiving a HEARTBEAT Message with final flag not set, the Reader must
+        // respond with an ACKNACK Message. The ACKNACK Message may acknowledge
+        // having received all the data samples or may indicate that some data
+        // samples are missing. The response may be delayed to avoid message storms.
 
-      let fflags = BitFlags::<NACKFRAG_Flags>::from_flag(NACKFRAG_Flags::Endianness);
+        if !missing_seqnums.is_empty() || !final_flag_set {
+          let mut partially_received = Vec::new();
+          // report of what we have.
+          // We claim to have received all SNs before "base" and produce a set of missing
+          // sequence numbers that are >= base.
+          let reader_sn_state = match missing_seqnums.first() {
+            Some(&first_missing) => {
+              // Here we assume missing_seqnums are returned in order.
+              // Limit the set to maximum that can be sent in acknack submessage.
 
-      // send NackFrags, if any
-      let mut nackfrags = Vec::new();
-      for sn in partially_received {
-        let count = writer_proxy.next_ack_nack_sequence_number();
-        let mut missing_frags = writer_proxy.missing_frags_for(sn);
-        let first_missing = missing_frags.next();
-        if let Some(first) = first_missing {
-          let missing_frags_set = iter::once(first).chain(missing_frags).collect(); // "undo" the .next() above
-          let nf = NackFrag {
-            reader_id,
-            writer_id: writer_proxy.remote_writer_guid.entity_id,
-            writer_sn: sn,
-            fragment_number_state: FragmentNumberSet::from_base_and_set(first, &missing_frags_set),
-            count,
+              SequenceNumberSet::from_base_and_set(
+                first_missing,
+                &missing_seqnums
+                  .iter()
+                  .copied()
+                  .take_while(|sn| sn < &(first_missing + SequenceNumber::new(256)))
+                  .filter(|sn| {
+                    if this.is_frag_partially_received(writer_guid, *sn) {
+                      partially_received.push(*sn);
+                      false
+                    } else {
+                      true
+                    }
+                  })
+                  .collect(),
+              )
+            }
+
+            // Nothing missing. Report that we have all we have.
+            None => SequenceNumberSet::new_empty(writer_proxy.all_ackable_before()),
           };
-          nackfrags.push(nf);
-        } else {
-          error!("The dog ate my missing fragments.");
-          // Really, this should not happen, as we are above checking
-          // that this SN is really partially (and not fully) received.
+
+          let response_ack_nack = AckNack {
+            reader_id,
+            writer_id: heartbeat.writer_id,
+            reader_sn_state,
+            count: writer_proxy.next_ack_nack_sequence_number(),
+          };
+
+          // Sanity check
+          //
+          // Wrong. This sanity check is invalid. The condition
+          // ack_base > heartbeat.last_sn + 1
+          // May be legitimately true, if there are some changes available, and a GAP
+          // after that. E.g. HEARTBEAT 1..8 and GAP 9..10. Then acknack_base == 11
+          // and 11 > 8 + 1.
+          //
+          //
+          // if response_ack_nack.reader_sn_state.base() > heartbeat.last_sn +
+          // SequenceNumber::new(1) {   error!(
+          //     "OOPS! AckNack sanity check tripped: HEARTBEAT = {:?} ACKNACK = {:?}
+          // missing_seqnums = {:?} all_ackable_before = {:?} writer={:?}",
+          //     &heartbeat, &response_ack_nack, missing_seqnums,
+          // writer_proxy.all_ackable_before(), writer_guid,   );
+          // }
+
+          // The acknack can be sent now or later. The rest of the RTPS message
+          // needs to be constructed. p. 48
+          let acknack_flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness)
+            | BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Final);
+
+          let nackfrag_flags = BitFlags::<NACKFRAG_Flags>::from_flag(NACKFRAG_Flags::Endianness);
+
+          // send NackFrags, if any
+          let mut nackfrags = Vec::new();
+          for sn in partially_received {
+            let count = writer_proxy.next_ack_nack_sequence_number();
+            let mut missing_frags = this.missing_frags_for(writer_guid, sn);
+            let first_missing = missing_frags.next();
+            if let Some(first) = first_missing {
+              let missing_frags_set = iter::once(first).chain(missing_frags).collect(); // "undo" the .next() above
+              let nf = NackFrag {
+                reader_id,
+                writer_id: writer_proxy.remote_writer_guid.entity_id,
+                writer_sn: sn,
+                fragment_number_state: FragmentNumberSet::from_base_and_set(
+                  first,
+                  &missing_frags_set,
+                ),
+                count,
+              };
+              nackfrags.push(nf);
+            } else {
+              error!("The dog ate my missing fragments.");
+              // Really, this should not happen, as we are above checking
+              // that this SN is really partially (and not fully) received.
+            }
+          }
+
+          if !nackfrags.is_empty() {
+            this.send_nackfrags_to(
+              nackfrag_flags,
+              nackfrags,
+              InfoDestination {
+                guid_prefix: mr_state.source_guid_prefix,
+              },
+              &reply_locators,
+              writer_guid,
+            );
+          }
+
+          this.send_acknack_to(
+            acknack_flags,
+            response_ack_nack,
+            InfoDestination {
+              guid_prefix: mr_state.source_guid_prefix,
+            },
+            &reply_locators,
+            writer_guid,
+          );
+
+          return true;
         }
-      }
 
-      if !nackfrags.is_empty() {
-        self.send_nackfrags_to(
-          fflags,
-          nackfrags,
-          InfoDestination {
-            guid_prefix: mr_state.source_guid_prefix,
-          },
-          &mr_state.unicast_reply_locator_list,
-        );
-      }
-
-      self.send_acknack_to(
-        flags,
-        response_ack_nack,
-        InfoDestination {
-          guid_prefix: mr_state.source_guid_prefix,
-        },
-        &mr_state.unicast_reply_locator_list,
-      );
-
-      return true;
-    }
-
-    false
+        false
+      }) // worker fn
+      .unwrap_or(false) // default false: no writer_proxy -> no acknack
   } // fn
 
   pub fn handle_gap_msg(&mut self, gap: &Gap, mr_state: &MessageReceiverState) {
@@ -886,9 +1035,9 @@ impl Reader {
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
 
-    if !self.is_stateful {
+    if self.like_stateless {
       debug!(
-        "GAP from {:?}, reader is stateless. Ignoring. topic={:?} reader={:?}",
+        "GAP from {:?}, but reader is stateless. Ignoring. topic={:?} reader={:?}",
         writer_guid, self.topic_name, self.my_guid
       );
       return;
@@ -915,8 +1064,12 @@ impl Reader {
       }
       if gap.gap_list.base() <= SequenceNumber::new(0) {
         debug!(
-          "Invalid GAP from {:?}: minimum of gap_list (={:?}) is zero or negative. topic={:?} reader={:?}",
-          writer_guid, gap.gap_list.base(), self.topic_name, self.my_guid
+          "Invalid GAP from {:?}: minimum of gap_list (={:?}) is zero or negative. topic={:?} \
+           reader={:?}",
+          writer_guid,
+          gap.gap_list.base(),
+          self.topic_name,
+          self.my_guid
         );
         return;
       }
@@ -942,6 +1095,10 @@ impl Reader {
     // TODO: If receiving GAP actually moved the reliably received mark forward
     // in the Topic Cache, then we should generate a SAMPLE_LOST status event
     // from our Datareader (DDS Spec Section 2.2.4.1)
+    //
+    // If the the GAP message contained filteredCount (RTPS spec v2.5 Table
+    // 8.43), then some of the not-available messages should not be treated
+    // as "lost" but "filtered".
   }
 
   pub fn handle_heartbeatfrag_msg(
@@ -960,12 +1117,17 @@ impl Reader {
   fn deduce_change_kind(
     inline_qos: &Option<ParameterList>,
     no_writers: bool,
-    ri: RepresentationIdentifier,
+    representation_identifier: RepresentationIdentifier,
   ) -> ChangeKind {
-    match inline_qos
-      .as_ref()
-      .and_then(|iqos| InlineQos::status_info(iqos, ri).ok())
-    {
+    match inline_qos.as_ref().and_then(|inline_qos_parameters| {
+      InlineQos::status_info(inline_qos_parameters, representation_identifier).map_or_else(
+        |e| {
+          error!("Deserializing status_info: {:?}", &e);
+          None
+        },
+        Some,
+      )
+    }) {
       Some(si) => si.change_kind(), // get from inline QoS
       // TODO: What if si.change_kind() gives ALIVE ??
       None => {
@@ -993,9 +1155,12 @@ impl Reader {
     let mut tc = self.acquire_the_topic_cache_guard();
 
     tc.add_change(&receive_timestamp, cache_change);
-    self.matched_writer(writer_guid).map(|wp| {
-      tc.mark_reliably_received_before(writer_guid, wp.all_ackable_before());
-    });
+    // Mark seqnums as received if not behaving statelessly
+    if !self.like_stateless {
+      self.matched_writer(writer_guid).map(|wp| {
+        tc.mark_reliably_received_before(writer_guid, wp.all_ackable_before());
+      });
+    }
   }
 
   // notifies DataReaders (or any listeners that history cache has changed for
@@ -1007,7 +1172,7 @@ impl Reader {
       .lock()
       .unwrap() // TODO: unwrap
       .take() // Take to nullify the reference
-      .map(|w| w.wake_by_ref()); //If Some, call wake_by_ref
+      .map(|w| w.wake_by_ref()); // If Some, call wake_by_ref
 
     // mio-0.8 notify
     self.poll_event_sender.send();
@@ -1027,12 +1192,91 @@ impl Reader {
     }
   }
 
+  #[cfg(not(feature = "security"))]
+  fn encode_and_send(
+    &self,
+    message: Message,
+    _destination_guid: GUID,
+    dst_locator_list: &[Locator],
+  ) {
+    let bytes = message
+      .write_to_vec_with_ctx(Endianness::LittleEndian)
+      .unwrap(); //TODO!
+    let _dummy = message; // consume it to avoid clippy warning
+    self
+      .udp_sender
+      .send_to_locator_list(&bytes, dst_locator_list);
+  }
+
+  #[cfg(feature = "security")]
+  fn encode_and_send(
+    &self,
+    message: Message,
+    destination_guid: GUID,
+    dst_locator_list: &[Locator],
+  ) {
+    match self.security_encode(message, destination_guid) {
+      Ok(message) => {
+        let bytes = message
+          .write_to_vec_with_ctx(Endianness::LittleEndian)
+          .unwrap(); //TODO!!
+        self
+          .udp_sender
+          .send_to_locator_list(&bytes, dst_locator_list);
+      }
+      Err(e) => error!("Failed to send message to writers. Encoding failed: {e:?}"),
+    }
+  }
+
+  #[cfg(feature = "security")]
+  fn security_encode(&self, message: Message, destination_guid: GUID) -> SecurityResult<Message> {
+    // If we have security plugins, use them, otherwise pass through
+    if let Some(security_plugins_handle) = &self.security_plugins {
+      // Get the source GUID
+      let source_guid = self.guid();
+      // Destructure
+      let Message {
+        header,
+        submessages,
+      } = message;
+
+      // Encode submessages
+      SecurityResult::<Vec<Vec<Submessage>>>::from_iter(submessages.iter().map(|submessage| {
+        security_plugins_handle
+          .get_plugins()
+          .encode_datareader_submessage(submessage.clone(), &source_guid, &[destination_guid])
+          // Convert each encoding output to a Vec of 1 or 3 submessages
+          .map(Vec::from)
+      }))
+      // Flatten and convert back to Message
+      .map(|encoded_submessages| Message {
+        header,
+        submessages: encoded_submessages.concat(),
+      })
+      // Encode message
+      .and_then(|message| {
+        // Convert GUIDs to GuidPrefixes
+        let source_guid_prefix = source_guid.prefix;
+        let destination_guid_prefix = destination_guid.prefix;
+        // Encode message
+        security_plugins_handle.get_plugins().encode_message(
+          message,
+          &source_guid_prefix,
+          &[destination_guid_prefix],
+        )
+      })
+    } else {
+      Ok(message)
+    }
+  }
+
   fn send_acknack_to(
     &self,
     flags: BitFlags<ACKNACK_Flags>,
     acknack: AckNack,
     info_dst: InfoDestination,
-    dst_localtor_list: &[Locator],
+    dst_locator_list: &[Locator],
+    destination_guid: GUID,
   ) {
     let infodst_flags =
       BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
@@ -1048,12 +1292,7 @@ impl Reader {
 
     message.add_submessage(acknack.create_submessage(flags));
 
-    let bytes = message
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap();
-    self
-      .udp_sender
-      .send_to_locator_list(&bytes, dst_localtor_list);
+    self.encode_and_send(message, destination_guid, dst_locator_list);
   }
 
   fn send_nackfrags_to(
@@ -1062,6 +1301,7 @@ impl Reader {
     nackfrags: Vec<NackFrag>,
     info_dst: InfoDestination,
     dst_locator_list: &[Locator],
+    destination_guid: GUID,
   ) {
     let infodst_flags =
       BitFlags::<INFODESTINATION_Flags>::from_flag(INFODESTINATION_Flags::Endianness);
@@ -1079,15 +1319,19 @@ impl Reader {
       message.add_submessage(nf.create_submessage(flags));
     }
 
-    let bytes = message
-      .write_to_vec_with_ctx(Endianness::LittleEndian)
-      .unwrap();
-    self
-      .udp_sender
-      .send_to_locator_list(&bytes, dst_locator_list);
+    self.encode_and_send(message, destination_guid, dst_locator_list);
   }
 
   pub fn send_preemptive_acknacks(&mut self) {
+    if self.like_stateless {
+      info!(
+        "Attempted to send pre-emptive acknacks in a stateless Reader, which does not support \
+         them. Ignoring. topic={:?}",
+        self.topic_name
+      );
+      return;
+    }
+
     let flags = BitFlags::<ACKNACK_Flags>::from_flag(ACKNACK_Flags::Endianness);
     // Do not set final flag --> we are requesting immediate heartbeat from writers.
 
@@ -1100,18 +1344,24 @@ impl Reader {
       .filter(|(_, p)| p.no_changes_received())
     {
       let acknack_count = writer_proxy.next_ack_nack_sequence_number();
+      let RtpsWriterProxy {
+        remote_writer_guid,
+        unicast_locator_list,
+        ..
+      } = writer_proxy;
       self.send_acknack_to(
         flags,
         AckNack {
           reader_id,
-          writer_id: writer_proxy.remote_writer_guid.entity_id,
+          writer_id: remote_writer_guid.entity_id,
           reader_sn_state: SequenceNumberSet::new_empty(SequenceNumber::new(1)),
           count: acknack_count,
         },
         InfoDestination {
-          guid_prefix: writer_proxy.remote_writer_guid.prefix,
+          guid_prefix: remote_writer_guid.prefix,
         },
-        &writer_proxy.unicast_locator_list,
+        unicast_locator_list,
+        *remote_writer_guid,
       );
     }
     // put writer proxies back
@@ -1130,7 +1380,7 @@ impl Reader {
       )
     })
   }
-} // impl
+} // impl Reader
 
 impl HasQoSPolicy for Reader {
   fn qos(&self) -> QosPolicies {
@@ -1151,7 +1401,7 @@ impl fmt::Debug for Reader {
       .field("topic_name", &self.topic_name)
       .field("my_guid", &self.my_guid)
       .field("heartbeat_response_delay", &self.heartbeat_response_delay)
-      .field("received_hearbeat_count", &self.received_hearbeat_count)
+      .field("received_heartbeat_count", &self.received_heartbeat_count)
       .finish()
   }
 }
@@ -1200,6 +1450,8 @@ mod tests {
 
     // Create status channel
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     // Create reader command channel
     let (_reader_command_sender, reader_command_receiver) =
@@ -1213,15 +1465,18 @@ mod tests {
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle,
+      like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
     let mut reader = Reader::new(
       reader_ing,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // 2. Add info of a matched writer to the reader
@@ -1281,6 +1536,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1293,15 +1550,18 @@ mod tests {
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle: topic_cache_handle.clone(),
+      like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
     let mut reader = Reader::new(
       reader_ing,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // 2. Add info of a matched writer to the reader
@@ -1337,22 +1597,22 @@ mod tests {
     // 5. Verify that the reader sent the data to the topic cache
     let topic_cache = topic_cache_handle.lock().unwrap();
 
-    let cc_from_chache = topic_cache
+    let cc_from_cache = topic_cache
       .get_change(reader.seqnum_instant_map.get(&sequence_num).unwrap())
       .expect("No cache change in topic cache");
 
     // 6. Verify that the content of the cache change is as expected
     // Construct a cache change with the expected content
-    let ddsdata = DDSData::new(data.serialized_payload.unwrap());
+    let dds_data = DDSData::new(data.unwrap_serialized_payload());
     let cc_locally_built = CacheChange::new(
       writer_guid,
       sequence_num,
       WriteOptions::from(Some(source_timestamp)),
-      ddsdata,
+      dds_data,
     );
 
     assert_eq!(
-      cc_from_chache, &cc_locally_built,
+      cc_from_cache, &cc_locally_built,
       "The content of the cache change in the topic cache not as expected"
     );
   }
@@ -1382,6 +1642,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1394,15 +1656,18 @@ mod tests {
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle,
+      like_stateless: false,
       qos_policy: reliable_qos.clone(),
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
     let mut reader = Reader::new(
       reader_ing,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // 2. Add info of a matched writer to the reader
@@ -1430,7 +1695,7 @@ mod tests {
       last_sn: SequenceNumber::new(0),
       count: 1,
     };
-    assert!(!reader.handle_heartbeat_msg(&hb_new, true, mr_state.clone())); // should be false, no ack
+    assert!(!reader.handle_heartbeat_msg(&hb_new, true, &mr_state)); // should be false, no ack
 
     // 4. Send the first proper heartbeat, reader should respond with acknack
     let hb_one = Heartbeat {
@@ -1440,12 +1705,12 @@ mod tests {
       last_sn: SequenceNumber::new(1),
       count: 2,
     };
-    assert!(reader.handle_heartbeat_msg(&hb_one, false, mr_state.clone())); // Should send an ack_nack
+    assert!(reader.handle_heartbeat_msg(&hb_one, false, &mr_state)); // Should send an ack_nack
 
     // 5. Send a duplicate of the first heartbeat, reader should not respond with
     // acknack
     let hb_one2 = hb_one.clone();
-    assert!(!reader.handle_heartbeat_msg(&hb_one2, false, mr_state.clone())); // No acknack
+    assert!(!reader.handle_heartbeat_msg(&hb_one2, false, &mr_state)); // No acknack
 
     // 6. Send a second proper heartbeat, reader should respond with acknack
     let hb_2 = Heartbeat {
@@ -1455,7 +1720,7 @@ mod tests {
       last_sn: SequenceNumber::new(3),  // writer has written 3 samples
       count: 3,
     };
-    assert!(reader.handle_heartbeat_msg(&hb_2, false, mr_state)); // Should send an ack_nack
+    assert!(reader.handle_heartbeat_msg(&hb_2, false, &mr_state)); // Should send an ack_nack
 
     // 7. Count of acknack sent should be 2
     // The count is verified from the writer proxy
@@ -1486,6 +1751,8 @@ mod tests {
     let data_reader_waker = Arc::new(Mutex::new(None));
 
     let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let (_reader_command_sender, reader_command_receiver) =
       mio_channel::sync_channel::<ReaderCommand>(10);
@@ -1498,15 +1765,18 @@ mod tests {
       status_sender,
       topic_name: topic_name.to_string(),
       topic_cache_handle,
+      like_stateless: false,
       qos_policy,
       data_reader_command_receiver: reader_command_receiver,
       data_reader_waker,
       poll_event_sender: notification_event_sender,
+      security_plugins: None,
     };
     let mut reader = Reader::new(
       reader_ing,
       Rc::new(UDPSender::new(0).unwrap()),
       mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
     );
 
     // 2. Add info of a matched writer to the reader
@@ -1594,5 +1864,77 @@ mod tests {
         .all_ackable_before(),
       SequenceNumber::new(6)
     );
+  }
+
+  #[test]
+  fn stateless_reader_does_not_contain_writer_proxies() {
+    // 1. Create a stateless-like reader
+    // Create the DDS cache and a topic
+    let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let topic_name = "test_name";
+    let qos_policy = QosPolicies::builder()
+      .reliability(Reliability::BestEffort) // Stateless needs to be BestEffort
+      .build();
+
+    let topic_cache_handle = dds_cache.write().unwrap().add_new_topic(
+      topic_name.to_string(),
+      TypeDesc::new("test_type".to_string()),
+      &qos_policy,
+    );
+
+    // Create mechanisms for notifications, statuses & commands
+    let (notification_sender, _notification_receiver) = mio_channel::sync_channel::<()>(100);
+    let (_notification_event_source, notification_event_sender) =
+      mio_source::make_poll_channel().unwrap();
+    let data_reader_waker = Arc::new(Mutex::new(None));
+
+    let (status_sender, _status_receiver) = sync_status_channel::<DataReaderStatus>(4).unwrap();
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
+
+    let (_reader_command_sender, reader_command_receiver) =
+      mio_channel::sync_channel::<ReaderCommand>(10);
+
+    let like_stateless = true;
+    let reader_guid = GUID::dummy_test_guid(EntityKind::READER_NO_KEY_USER_DEFINED);
+    let reader_ing = ReaderIngredients {
+      guid: reader_guid,
+      notification_sender,
+      status_sender,
+      topic_name: topic_name.to_string(),
+      topic_cache_handle,
+      like_stateless,
+      qos_policy,
+      data_reader_command_receiver: reader_command_receiver,
+      data_reader_waker,
+      poll_event_sender: notification_event_sender,
+      security_plugins: None,
+    };
+    let mut reader = Reader::new(
+      reader_ing,
+      Rc::new(UDPSender::new(0).unwrap()),
+      mio_extras::timer::Builder::default().build(),
+      participant_status_sender,
+    );
+
+    // 2. Attempt to add info of a matched writer to the reader
+    let writer_guid = GUID::dummy_test_guid(EntityKind::WRITER_NO_KEY_USER_DEFINED);
+
+    let mr_state = MessageReceiverState {
+      source_guid_prefix: writer_guid.prefix,
+      ..Default::default()
+    };
+
+    reader.matched_writer_add(
+      writer_guid,
+      EntityId::UNKNOWN,
+      mr_state.unicast_reply_locator_list.clone(),
+      mr_state.multicast_reply_locator_list.clone(),
+      &QosPolicies::qos_none(),
+    );
+
+    // 3. Verify that the reader does not contain a writer proxy for the writer that
+    // we attempted to add
+    assert!(reader.matched_writer(writer_guid).is_none());
   }
 }

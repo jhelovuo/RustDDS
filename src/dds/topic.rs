@@ -1,10 +1,13 @@
 use std::{fmt::Debug, sync::Arc};
 
-use crate::dds::{
-  dds_entity::DDSEntity,
-  participant::{DomainParticipant, DomainParticipantWeak},
-  qos::{HasQoSPolicy, QosPolicies},
-  typedesc::TypeDesc,
+use crate::{
+  dds::{
+    dds_entity::DDSEntity,
+    participant::{DomainParticipant, DomainParticipantWeak},
+    qos::{HasQoSPolicy, QosPolicies},
+    typedesc::TypeDesc,
+  },
+  discovery::sedp_messages::TopicBuiltinTopicData,
 };
 pub use crate::structure::topic_kind::TopicKind;
 
@@ -18,14 +21,34 @@ pub trait TopicDescription {
   fn name(&self) -> String;
 }
 
+/// This is a more usable version of TopicBuiltinTopicData from Discovery.
+///
+/// It is used for describing discovered topics.
+#[derive(Debug, Clone)]
+pub struct TopicData {
+  pub name: String,
+  pub type_name: String,
+  pub qos: QosPolicies,
+}
+
+impl From<&TopicBuiltinTopicData> for TopicData {
+  fn from(tbtd: &TopicBuiltinTopicData) -> Self {
+    TopicData {
+      name: tbtd.name.clone(),
+      type_name: tbtd.type_name.clone(),
+      qos: tbtd.qos(),
+    }
+  }
+}
+
 /// DDS Topic
 ///
 /// DDS Specification, Section 2.2.1.2 Conceptual outline:
 /// > Topic objects conceptually fit between publications and subscriptions.
 /// > Publications must be known in such a way that
 /// > subscriptions can refer to them unambiguously. A Topic is meant to fulfill
-/// that purpose: it associates a name (unique in the > domain), a data-type,
-/// and QoS related to the data itself.
+/// > that purpose: it associates a name (unique in the domain), a data-type,
+/// > and QoS related to the data itself.
 ///
 /// Topics can be created (or found) using a [`DomainParticipant`].
 ///
@@ -42,14 +65,14 @@ pub trait TopicDescription {
 /// ```
 #[derive(Clone)]
 pub struct Topic {
-  //TODO: Do we really need set_qos operation?
+  // TODO: Do we really need set_qos operation?
   // Maybe not. Let's make Topic immutable.
   inner: Arc<InnerTopic>,
 }
 
 impl Topic {
   pub(crate) fn new(
-    my_domainparticipant: &DomainParticipantWeak,
+    my_domain_participant: &DomainParticipantWeak,
     my_name: String,
     my_typedesc: TypeDesc,
     my_qos_policies: &QosPolicies,
@@ -57,7 +80,7 @@ impl Topic {
   ) -> Self {
     Self {
       inner: Arc::new(InnerTopic::new(
-        my_domainparticipant,
+        my_domain_participant,
         my_name,
         my_typedesc,
         my_qos_policies,
@@ -145,13 +168,13 @@ impl HasQoSPolicy for Topic {
   }
 }
 
-//impl DDSEntity for Topic {}
+// impl DDSEntity for Topic {}
 
 // -------------------------------- InnerTopic -----------------------------
 
 #[derive(Clone)]
 pub struct InnerTopic {
-  my_domainparticipant: DomainParticipantWeak,
+  my_domain_participant: DomainParticipantWeak,
   my_name: String,
   my_typedesc: TypeDesc,
   my_qos_policies: QosPolicies,
@@ -162,14 +185,14 @@ impl InnerTopic {
   // visibility pub(crate), because only DomainParticipant should be able to
   // create new Topic objects from an application point of view.
   fn new(
-    my_domainparticipant: &DomainParticipantWeak,
+    my_domain_participant: &DomainParticipantWeak,
     my_name: String,
     my_typedesc: TypeDesc,
     my_qos_policies: &QosPolicies,
     topic_kind: TopicKind,
   ) -> Self {
     Self {
-      my_domainparticipant: my_domainparticipant.clone(),
+      my_domain_participant: my_domain_participant.clone(),
       my_name,
       my_typedesc,
       my_qos_policies: my_qos_policies.clone(),
@@ -178,7 +201,7 @@ impl InnerTopic {
   }
 
   fn participant(&self) -> Option<DomainParticipant> {
-    self.my_domainparticipant.clone().upgrade()
+    self.my_domain_participant.clone().upgrade()
   }
 
   fn get_type(&self) -> TypeDesc {

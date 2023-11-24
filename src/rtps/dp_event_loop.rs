@@ -10,16 +10,20 @@ use mio_06::{Event, Events, Poll, PollOpt, Ready, Token};
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{qos::policy, typedesc::TypeDesc},
+  dds::{
+    qos::policy,
+    statusevents::{DomainParticipantStatusEvent, StatusChannelSender},
+  },
   discovery::{
-    builtin_endpoint::BuiltinEndpointSet,
-    discovery::Discovery,
-    discovery_db::DiscoveryDB,
+    discovery::DiscoveryCommand,
+    discovery_db::{discovery_db_read, DiscoveryDB},
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
   messages::submessages::submessages::AckSubmessage,
-  network::{constant::*, udp_listener::UDPListener, udp_sender::UDPSender},
+  network::{udp_listener::UDPListener, udp_sender::UDPSender},
+  qos::HasQoSPolicy,
   rtps::{
+    constant::*,
     message_receiver::MessageReceiver,
     reader::{Reader, ReaderIngredients},
     rtps_reader_proxy::RtpsReaderProxy,
@@ -27,11 +31,18 @@ use crate::{
     writer::{Writer, WriterIngredients},
   },
   structure::{
-    dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
   },
 };
+#[cfg(feature = "security")]
+use crate::{
+  discovery::secure_discovery::AuthenticationStatus,
+  security::{security_plugins::SecurityPluginsHandle, EndpointSecurityInfo},
+  security_warn,
+};
+#[cfg(not(feature = "security"))]
+use crate::no_security::security_plugins::SecurityPluginsHandle;
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,
@@ -39,19 +50,21 @@ pub struct DomainInfo {
   pub participant_id: u16,
 }
 
-pub const PREEMPTIVE_ACKNACK_PERIOD: Duration = Duration::from_secs(5);
-
-// RTPS spec Section 8.4.7.1.1  "Default Timing-Related Values"
-pub const NACK_RESPONSE_DELAY: Duration = Duration::from_millis(200);
-pub const NACK_SUPPRESSION_DURATION: Duration = Duration::from_millis(0);
+pub(crate) enum EventLoopCommand {
+  Stop,
+  PrepareStop,
+}
 
 pub struct DPEventLoop {
   domain_info: DomainInfo,
   poll: Poll,
-  ddscache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   udp_listeners: HashMap<Token, UDPListener>,
   message_receiver: MessageReceiver, // This contains our Readers
+
+  // If security is enabled, this contains the security plugins
+  #[cfg(feature = "security")]
+  security_plugins_opt: Option<SecurityPluginsHandle>,
 
   // Adding readers
   add_reader_receiver: TokenReceiverPair<ReaderIngredients>,
@@ -60,7 +73,7 @@ pub struct DPEventLoop {
   // Writers
   add_writer_receiver: TokenReceiverPair<WriterIngredients>,
   remove_writer_receiver: TokenReceiverPair<GUID>,
-  stop_poll_receiver: mio_channel::Receiver<()>,
+  stop_poll_receiver: mio_channel::Receiver<EventLoopCommand>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this
   // to locate RTPSReaderProxy if negative acknack.
   ack_nack_receiver: mio_channel::Receiver<(GuidPrefix, AckSubmessage)>,
@@ -68,26 +81,35 @@ pub struct DPEventLoop {
   writers: HashMap<EntityId, Writer>,
   udp_sender: Rc<UDPSender>,
 
+  participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+  #[cfg(feature = "security")]
+  discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
 }
 
 impl DPEventLoop {
   // This pub(crate) , because it should be constructed only by DomainParticipant.
-  #[allow(clippy::too_many_arguments)]
+  #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
   pub(crate) fn new(
     domain_info: DomainInfo,
     udp_listeners: HashMap<Token, UDPListener>,
-    ddscache: Arc<RwLock<DDSCache>>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     participant_guid_prefix: GuidPrefix,
     add_reader_receiver: TokenReceiverPair<ReaderIngredients>,
     remove_reader_receiver: TokenReceiverPair<GUID>,
     add_writer_receiver: TokenReceiverPair<WriterIngredients>,
     remove_writer_receiver: TokenReceiverPair<GUID>,
-    stop_poll_receiver: mio_channel::Receiver<()>,
+    stop_poll_receiver: mio_channel::Receiver<EventLoopCommand>,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
+    _discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
+    participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
+    security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> Self {
+    #[cfg(not(feature = "security"))]
+    let _dummy = _discovery_command_sender;
+
     let poll = Poll::new().expect("Unable to create new poll.");
     let (acknack_sender, acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(100);
@@ -150,11 +172,11 @@ impl DPEventLoop {
     poll
       .register(
         &acknack_receiver,
-        ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN,
+        ACKNACK_MESSAGE_TO_LOCAL_WRITER_TOKEN,
         Ready::readable(),
         PollOpt::edge(),
       )
-      .expect("Failed to register AckNack submessage sending from MessageReciever to DPEventLoop");
+      .expect("Failed to register AckNack submessage sending from MessageReceiver to DPEventLoop");
 
     poll
       .register(
@@ -168,10 +190,12 @@ impl DPEventLoop {
     // port number 0 means OS chooses an available port number.
     let udp_sender = UDPSender::new(0).expect("UDPSender construction fail"); // TODO
 
+    #[cfg(not(feature = "security"))]
+    let security_plugins_opt = security_plugins_opt.and(None); // make sure it is None an consume value
+
     Self {
       domain_info,
       poll,
-      ddscache,
       discovery_db,
       udp_listeners,
       udp_sender: Rc::new(udp_sender),
@@ -179,7 +203,10 @@ impl DPEventLoop {
         participant_guid_prefix,
         acknack_sender,
         spdp_liveness_sender,
+        security_plugins_opt.clone(),
       ),
+      #[cfg(feature = "security")]
+      security_plugins_opt,
       add_reader_receiver,
       remove_reader_receiver,
       add_writer_receiver,
@@ -188,6 +215,9 @@ impl DPEventLoop {
       writers: HashMap::new(),
       ack_nack_receiver: acknack_receiver,
       discovery_update_notification_receiver,
+      participant_status_sender,
+      #[cfg(feature = "security")]
+      discovery_command_sender: _discovery_command_sender,
     }
   }
 
@@ -207,6 +237,9 @@ impl DPEventLoop {
       .unwrap();
     let mut poll_alive = Instant::now();
     let mut ev_wrapper = self;
+    let mut preparing_to_stop = false;
+
+    // loop starts here
     loop {
       ev_wrapper
         .poll
@@ -227,10 +260,25 @@ impl DPEventLoop {
           match EntityId::from_token(event.token()) {
             TokenDecode::FixedToken(fixed_token) => match fixed_token {
               STOP_POLL_TOKEN => {
-                let _ = ev_wrapper.stop_poll_receiver.try_recv();
-                // we are not really interested in the content
-                info!("Stopping dp_event_loop");
-                return;
+                use std::sync::mpsc::TryRecvError;
+                match ev_wrapper.stop_poll_receiver.try_recv() {
+                  Ok(EventLoopCommand::Stop) => {
+                    info!("Stopping dp_event_loop");
+                    return;
+                  }
+                  Ok(EventLoopCommand::PrepareStop) => {
+                    info!("dp_event_loop preparing to stop.");
+                    preparing_to_stop = true;
+                  }
+                  Err(TryRecvError::Empty) => {
+                    warn!("Spurious wake-up from dp_event_loop command channel. Very fishy.");
+                  }
+                  Err(TryRecvError::Disconnected) => {
+                    error!(
+                      "Application thread has exited abnormally. Stopping RustDDS event loop."
+                    );
+                  }
+                }
               }
               DISCOVERY_LISTENER_TOKEN
               | DISCOVERY_MUL_LISTENER_TOKEN
@@ -256,7 +304,7 @@ impl DPEventLoop {
               ADD_WRITER_TOKEN | REMOVE_WRITER_TOKEN => {
                 ev_wrapper.handle_writer_action(&event);
               }
-              ACKNACK_MESSGAGE_TO_LOCAL_WRITER_TOKEN => {
+              ACKNACK_MESSAGE_TO_LOCAL_WRITER_TOKEN => {
                 ev_wrapper.handle_writer_acknack_action(&event);
               }
               DISCOVERY_UPDATE_NOTIFICATION_TOKEN => {
@@ -292,6 +340,11 @@ impl DPEventLoop {
                         .get_mut(&writer_guid.entity_id)
                         .map(|w| w.handle_heartbeat_tick(manual_assertion));
                     }
+
+                    #[cfg(feature = "security")]
+                    ParticipantAuthenticationStatusChanged { guid_prefix } => {
+                      ev_wrapper.on_remote_participant_authentication_status_changed(guid_prefix);
+                    }
                   }
                 }
               }
@@ -314,13 +367,19 @@ impl DPEventLoop {
             TokenDecode::Entity(eid) => {
               if eid.kind().is_reader() {
                 ev_wrapper.message_receiver.reader_mut(eid).map_or_else(
-                  || error!("Event for unknown reader {eid:?}"),
+                  || {
+                    if !preparing_to_stop {
+                      error!("Event for unknown reader {eid:?}");
+                    }
+                  },
                   Reader::process_command,
                 );
               } else if eid.kind().is_writer() {
                 let local_readers = match ev_wrapper.writers.get_mut(&eid) {
                   None => {
-                    error!("Event for unknown writer {eid:?}");
+                    if !preparing_to_stop {
+                      error!("Event for unknown writer {eid:?}");
+                    };
                     vec![]
                   }
                   Some(writer) => {
@@ -355,55 +414,26 @@ impl DPEventLoop {
     } // loop
   } // fn
 
+  #[cfg(feature = "security")] // Currently used only with security.
+                               // Just remove attribute if used also without.
+  fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
+    self
+      .participant_status_sender
+      .try_send(event)
+      .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
+  }
+
   fn handle_reader_action(&mut self, event: &Event) {
     match event.token() {
       ADD_READER_TOKEN => {
         trace!("add reader(s)");
         while let Ok(new_reader_ing) = self.add_reader_receiver.receiver.try_recv() {
-          let timer = mio_extras::timer::Builder::default().num_slots(8).build();
-          self
-            .poll
-            .register(
-              &timer,
-              new_reader_ing.alt_entity_token(),
-              Ready::readable(),
-              PollOpt::edge(),
-            )
-            .expect("Reader timer channel registeration failed!");
-          let mut new_reader = Reader::new(new_reader_ing, self.udp_sender.clone(), timer);
-
-          // Non-timed action polling
-          self
-            .poll
-            .register(
-              &new_reader.data_reader_command_receiver,
-              new_reader.entity_token(),
-              Ready::readable(),
-              PollOpt::edge(),
-            )
-            .expect("Reader command channel registration failed!!!");
-
-          new_reader.set_requested_deadline_check_timer();
-          trace!("Add reader: {:?}", new_reader);
-          self.message_receiver.add_reader(new_reader);
+          self.add_local_reader(new_reader_ing);
         }
       }
       REMOVE_READER_TOKEN => {
         while let Ok(old_reader_guid) = self.remove_reader_receiver.receiver.try_recv() {
-          if let Some(old_reader) = self.message_receiver.remove_reader(old_reader_guid) {
-            self
-              .poll
-              .deregister(&old_reader.timed_event_timer)
-              .unwrap_or_else(|e| error!("Cannot deregister Reader timed_event_timer: {e:?}"));
-            self
-              .poll
-              .deregister(&old_reader.data_reader_command_receiver)
-              .unwrap_or_else(|e| {
-                error!("Cannot deregister data_reader_command_receiver: {e:?}");
-              });
-          } else {
-            warn!("Tried to remove nonexistent Reader {old_reader_guid:?}");
-          }
+          self.remove_local_reader(old_reader_guid);
         }
       }
       _ => {}
@@ -414,49 +444,19 @@ impl DPEventLoop {
     match event.token() {
       ADD_WRITER_TOKEN => {
         while let Ok(new_writer_ingredients) = self.add_writer_receiver.receiver.try_recv() {
-          let timer = mio_extras::timer::Builder::default().num_slots(8).build();
-          self
-            .poll
-            .register(
-              &timer,
-              new_writer_ingredients.alt_entity_token(),
-              Ready::readable(),
-              PollOpt::edge(),
-            )
-            .expect("Writer heartbeat timer channel registration failed!!");
-          let new_writer = Writer::new(new_writer_ingredients, self.udp_sender.clone(), timer);
-
-          self
-            .poll
-            .register(
-              &new_writer.writer_command_receiver,
-              new_writer.entity_token(),
-              Ready::readable(),
-              PollOpt::edge(),
-            )
-            .expect("Writer command channel registration failed!!");
-          self.writers.insert(new_writer.guid().entity_id, new_writer);
+          self.add_local_writer(new_writer_ingredients);
         }
       }
       REMOVE_WRITER_TOKEN => {
         while let Ok(writer_guid) = &self.remove_writer_receiver.receiver.try_recv() {
-          if let Some(w) = self.writers.remove(&writer_guid.entity_id) {
-            self
-              .poll
-              .deregister(&w.writer_command_receiver)
-              .unwrap_or_else(|e| error!("Deregister fail (writer command rec) {e:?}"));
-            self
-              .poll
-              .deregister(&w.timed_event_timer)
-              .unwrap_or_else(|e| error!("Deregister fail (writer timer) {e:?}"));
-          }
+          self.remove_local_writer(writer_guid);
         }
       }
       other => error!("Expected writer action token, got {:?}", other),
     }
   }
 
-  /// Writer timed events can be heatrbeats or cache cleaning events.
+  /// Writer timed events can be heartbeats or cache cleaning events.
   /// events are distinguished by TimerMessageType which is send via mio
   /// channel. Channel token in
   fn handle_writer_timed_event(&mut self, entity_id: EntityId) {
@@ -509,47 +509,79 @@ impl DPEventLoop {
       participant_guid_prefix == self.domain_info.domain_participant_guid.prefix
     );
 
-    {
-      let db = self.discovery_db.read().unwrap();
-      // new Remote Participant discovered
-      let discovered_participant =
-        if let Some(dpd) = db.find_participant_proxy(participant_guid_prefix) {
-          dpd
-        } else {
-          error!("Participant was updated, but DB does not have it. Strange.");
-          return;
-        };
+    let db = discovery_db_read(&self.discovery_db);
+    // new Remote Participant discovered
+    let discovered_participant =
+      if let Some(dpd) = db.find_participant_proxy(participant_guid_prefix) {
+        dpd
+      } else {
+        error!("Participant was updated, but DB does not have it. Strange.");
+        return;
+      };
 
-      for (writer_eid, reader_eid, endpoint) in &[
-        (
-          EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
-          EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-          BuiltinEndpointSet::PARTICIPANT_DETECTOR,
-        ),
-        (
-          EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
-          EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-          BuiltinEndpointSet::SUBSCRIPTIONS_DETECTOR,
-        ),
-        (
-          EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
-          EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
-          BuiltinEndpointSet::PUBLICATIONS_DETECTOR,
-        ),
-        (
-          EntityId::SEDP_BUILTIN_TOPIC_WRITER,
-          EntityId::SEDP_BUILTIN_TOPIC_READER,
-          BuiltinEndpointSet::TOPICS_DETECTOR,
-        ),
-        (
-          EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-          EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-          BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_READER,
-        ),
-      ] {
-        if let Some(writer) = self.writers.get_mut(writer_eid) {
-          debug!("update_discovery_writer - {:?}", writer.topic_name());
-          let mut qos = Discovery::subscriber_qos();
+    // Select which builtin endpoints of the remote participant are updated to local
+    // readers & writers
+    #[cfg(not(feature = "security"))]
+    let (readers_init_list, writers_init_list) = (
+      STANDARD_BUILTIN_READERS_INIT_LIST.to_vec(),
+      STANDARD_BUILTIN_WRITERS_INIT_LIST.to_vec(),
+    );
+
+    #[cfg(feature = "security")]
+    let (readers_init_list, writers_init_list) = match &self.security_plugins_opt {
+      None => {
+        // No security enabled, just the standard endpoints
+        let readers_init_list = STANDARD_BUILTIN_READERS_INIT_LIST.to_vec();
+        let writers_init_list = STANDARD_BUILTIN_WRITERS_INIT_LIST.to_vec();
+
+        (readers_init_list, writers_init_list)
+      }
+      Some(_handle) => {
+        // Security enabled. The endpoints are selected based on the authentication
+        // status of the remote participant
+        let mut readers_init_list = vec![];
+        let mut writers_init_list = vec![];
+
+        match db.get_authentication_status(participant_guid_prefix) {
+          Some(AuthenticationStatus::Authenticating) => {
+            // Add just the stateless endpoint used for authentication
+            readers_init_list.extend_from_slice(AUTHENTICATION_BUILTIN_READERS_INIT_LIST);
+            writers_init_list.extend_from_slice(AUTHENTICATION_BUILTIN_WRITERS_INIT_LIST);
+          }
+          Some(AuthenticationStatus::Authenticated) => {
+            // Match all builtin endpoints
+            readers_init_list.extend_from_slice(STANDARD_BUILTIN_READERS_INIT_LIST);
+            writers_init_list.extend_from_slice(STANDARD_BUILTIN_WRITERS_INIT_LIST);
+            readers_init_list.extend_from_slice(SECURE_BUILTIN_READERS_INIT_LIST);
+            writers_init_list.extend_from_slice(SECURE_BUILTIN_WRITERS_INIT_LIST);
+          }
+          Some(AuthenticationStatus::Unauthenticated) => {
+            // Match only the regular builtin endpoints (see Security spec section 8.8.2.1)
+            readers_init_list.extend_from_slice(STANDARD_BUILTIN_READERS_INIT_LIST);
+            writers_init_list.extend_from_slice(STANDARD_BUILTIN_WRITERS_INIT_LIST);
+          }
+          _ => {
+            // Not adding any endpoints when authentication status is Rejected
+            // or None
+          }
+        }
+        (readers_init_list, writers_init_list)
+      }
+    };
+
+    // Update local writers
+    for (writer_eid, reader_eid, endpoint) in &readers_init_list {
+      if let Some(writer) = self.writers.get_mut(writer_eid) {
+        debug!("update_discovery_writer - {:?}", writer.topic_name());
+
+        if discovered_participant
+          .available_builtin_endpoints
+          .contains(*endpoint)
+        {
+          let reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
+
+          // Get the QoS for the built-in topic from the local writer
+          let mut qos = writer.qos();
           // special case by RTPS 2.3 spec Section
           // "8.4.13.3 BuiltinParticipantMessageWriter and
           // BuiltinParticipantMessageReader QoS"
@@ -561,104 +593,53 @@ impl DPEventLoop {
             qos.reliability = Some(policy::Reliability::BestEffort);
           };
 
-          if discovered_participant
-            .available_builtin_endpoints
-            .contains(*endpoint)
-          {
-            let mut reader_proxy = discovered_participant.as_reader_proxy(true, Some(*reader_eid));
-
-            if *writer_eid == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
-              // Simple Particiapnt Discovery Protocol (SPDP) writer is special,
-              // different from SEDP writers
-              qos = Discovery::create_spdp_patricipant_qos(); // different QoS
-                                                              // adding a multicast reader
-              reader_proxy.remote_reader_guid = GUID::new_with_prefix_and_id(
-                GuidPrefix::UNKNOWN,
-                EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-              );
-
-              // reader_proxy.multicast_locator_list =
-              // get_local_multicast_locators(
-              //   spdp_well_known_multicast_port(self.domain_info.domain_id),
-              // );
-            }
-            // common processing for SPDP and SEDP
-            writer.update_reader_proxy(&reader_proxy, &qos);
-            debug!(
-              "update_discovery writer - endpoint {:?} - {:?}",
-              endpoint, discovered_participant.participant_guid
-            );
-          }
-
-          writer.notify_new_data_to_all_readers();
+          writer.update_reader_proxy(&reader_proxy, &qos);
+          debug!(
+            "update_discovery writer - endpoint {:?} - {:?}",
+            endpoint, discovered_participant.participant_guid
+          );
         }
       }
-      // update local readers.
-      // list to be looped over is the same as above, but now
-      // EntityIds are for announcers
-      for (writer_eid, reader_eid, endpoint) in &[
-        (
-          EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER, // SPDP
-          EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
-          BuiltinEndpointSet::PARTICIPANT_ANNOUNCER,
-        ),
-        (
-          EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER, // SEDP ...
-          EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
-          BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
-        ),
-        (
-          EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
-          EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
-          BuiltinEndpointSet::PUBLICATIONS_ANNOUNCER,
-        ),
-        (
-          EntityId::SEDP_BUILTIN_TOPIC_WRITER,
-          EntityId::SEDP_BUILTIN_TOPIC_READER,
-          BuiltinEndpointSet::TOPICS_ANNOUNCER,
-        ),
-        (
-          EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_WRITER,
-          EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER,
-          BuiltinEndpointSet::PARTICIPANT_MESSAGE_DATA_WRITER,
-        ),
-      ] {
-        if let Some(reader) = self.message_receiver.available_readers.get_mut(reader_eid) {
-          debug!("try update_discovery_reader - {:?}", reader.topic_name());
-          let qos = if *reader_eid == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
-            Discovery::create_spdp_patricipant_qos()
-          } else {
-            Discovery::publisher_qos()
-          };
+    }
+    // update local readers.
+    // list to be looped over is the same as above, but now
+    // EntityIds are for announcers
+    for (writer_eid, reader_eid, endpoint) in &writers_init_list {
+      if let Some(reader) = self.message_receiver.available_readers.get_mut(reader_eid) {
+        debug!("try update_discovery_reader - {:?}", reader.topic_name());
+
+        if discovered_participant
+          .available_builtin_endpoints
+          .contains(*endpoint)
+        {
           let wp = discovered_participant.as_writer_proxy(true, Some(*writer_eid));
 
-          if discovered_participant
-            .available_builtin_endpoints
-            .contains(*endpoint)
-          {
-            reader.update_writer_proxy(wp, &qos);
-            debug!(
-              "update_discovery_reader - endpoint {:?} - {:?}",
-              *endpoint, discovered_participant.participant_guid
-            );
-          }
+          // Get the QoS for the built-in topic from the local reader
+          let qos = reader.qos();
+
+          reader.update_writer_proxy(wp, &qos);
+          debug!(
+            "update_discovery_reader - endpoint {:?} - {:?}",
+            *endpoint, discovered_participant.participant_guid
+          );
         }
-      } // for
-    } // if
+      }
+    } // for
+
     debug!(
       "update_participant - finished for {:?}",
       participant_guid_prefix
     );
-  } // fn
+  }
 
   fn remote_participant_lost(&mut self, participant_guid_prefix: GuidPrefix) {
     info!(
       "remote_participant_lost guid_prefix={:?}",
       &participant_guid_prefix
     );
-    // Discovery has already removed Particiapnt from Discovery DB
+    // Discovery has already removed Participant from Discovery DB
     // Now we have to remove any ReaderProxies and WriterProxies belonging
-    // to that particiapnt, so that we do not send messages to them anymore.
+    // to that participant, so that we do not send messages to them anymore.
 
     for writer in self.writers.values_mut() {
       writer.participant_lost(participant_guid_prefix);
@@ -667,25 +648,81 @@ impl DPEventLoop {
     for reader in self.message_receiver.available_readers.values_mut() {
       reader.participant_lost(participant_guid_prefix);
     }
+
+    #[cfg(feature = "security")]
+    if let Some(security_plugins_handle) = &self.security_plugins_opt {
+      security_plugins_handle
+        .get_plugins()
+        .unregister_remote_participant(&participant_guid_prefix)
+        .unwrap_or_else(|e| error!("{e}"));
+    }
   }
 
-  fn remote_reader_discovered(&mut self, drd: &DiscoveredReaderData) {
+  fn remote_reader_discovered(&mut self, remote_reader: &DiscoveredReaderData) {
     for writer in self.writers.values_mut() {
-      if drd.subscription_topic_data.topic_name() == writer.topic_name() {
-        // // see if the participant has published a QoS for the topic
-        // // If yes, we take that as a basis QoS
-        // let topic_qos = self.discovery_db.read().unwrap()
-        //   .get_topic_for_participant(&drd.subscription_topic_data.topic_name(),
-        //     drd.reader_proxy.remote_reader_guid.prefix )
-        //   .map( |dtd| dtd.topic_data.qos() );
-        // let requested_qos = topic_qos
-        //   .unwrap_or_else( QosPolicies::default )
-        //   .modify_by( &drd.subscription_topic_data.qos() );
-        let requested_qos = drd.subscription_topic_data.qos();
-        writer.update_reader_proxy(
-          &RtpsReaderProxy::from_discovered_reader_data(drd, &[], &[]),
-          &requested_qos,
-        );
+      if remote_reader.subscription_topic_data.topic_name() == writer.topic_name() {
+        #[cfg(not(feature = "security"))]
+        let match_to_reader = true;
+        #[cfg(feature = "security")]
+        let match_to_reader = if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+          // Security is enabled.
+          let local_writer_guid = writer.guid();
+          let remote_reader_guid = remote_reader.reader_proxy.remote_reader_guid;
+
+          // Check do we have compatible security with the remote
+          let local_writer_sec_info_opt = plugins_handle
+            .get_plugins()
+            .get_writer_sec_attributes(writer.guid(), writer.topic_name().clone())
+            .map(EndpointSecurityInfo::from)
+            .ok();
+          let remote_reader_sec_info_opt = remote_reader
+            .subscription_topic_data
+            .security_info()
+            .clone();
+
+          let compatible = check_are_endpoints_securities_compatible(
+            local_writer_sec_info_opt,
+            remote_reader_sec_info_opt,
+          );
+          if !compatible {
+            security_warn!(
+              "Local writer {:?} and remote reader {:?} have incompatible security, ignoring the \
+               remote.",
+              writer.guid(),
+              remote_reader_guid
+            );
+            false // match_to_reader
+          } else {
+            // Signal Secure discovery to exchange keys with the remote
+            // TODO: do this only at first encounter with the remote / before keys have been
+            // sent, not every time
+            if let Err(e) = self.discovery_command_sender.send(
+              DiscoveryCommand::StartKeyExchangeWithRemoteEndpoint {
+                local_endpoint_guid: local_writer_guid,
+                remote_endpoint_guid: remote_reader_guid,
+              },
+            ) {
+              error!(
+                "Could not signal Secure Discovery to start the key exchange with remote reader \
+                 {:?}. Reason: {}.",
+                remote_reader_guid, e
+              );
+            }
+            true // match_to_reader
+          }
+        } else {
+          // No security enabled. Always match
+          true // match_to_reader
+        };
+
+        if match_to_reader {
+          // Should we check if the participant has published a QoS for the topic?
+          let requested_qos = remote_reader.subscription_topic_data.qos();
+          writer.update_reader_proxy(
+            &RtpsReaderProxy::from_discovered_reader_data(remote_reader, &[], &[]),
+            &requested_qos,
+          );
+        }
       }
     }
   }
@@ -696,39 +733,72 @@ impl DPEventLoop {
     }
   }
 
-  fn remote_writer_discovered(&mut self, dwd: &DiscoveredWriterData) {
+  fn remote_writer_discovered(&mut self, remote_writer: &DiscoveredWriterData) {
     // update writer proxies in local readers
     for reader in self.message_receiver.available_readers.values_mut() {
-      if &dwd.publication_topic_data.topic_name == reader.topic_name() {
-        let offered_qos = dwd.publication_topic_data.qos();
-        // // see if the participant has published a QoS for the topic
-        // // If yes, we take that as a basis QoS
-        // let topic_qos = self.discovery_db.read().unwrap()
-        //   .get_topic_for_participant(&dwd.publication_topic_data.topic_name,
-        //     dwd.writer_proxy.remote_writer_guid.prefix )
-        //   .map( |dtd| dtd.topic_data.qos() );
-        // let offered_qos = topic_qos
-        //   .unwrap_or_else( QosPolicies::default )
-        //   .modify_by( &dwd.publication_topic_data.qos() );
+      if &remote_writer.publication_topic_data.topic_name == reader.topic_name() {
+        #[cfg(not(feature = "security"))]
+        let match_to_writer = true;
+        #[cfg(feature = "security")]
+        let match_to_writer = if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+          // Security is enabled.
+          let local_reader_guid = reader.guid();
+          let remote_writer_guid = remote_writer.writer_proxy.remote_writer_guid;
 
-        reader.update_writer_proxy(
-          RtpsWriterProxy::from_discovered_writer_data(dwd, &[], &[]),
-          &offered_qos,
-        );
-      }
-    }
-    // notify DDSCache to create topic if it does not exist yet
-    match self.ddscache.write() {
-      Ok(mut ddsc) => {
-        let ptd = &dwd.publication_topic_data;
-        ddsc.add_new_topic(
-          ptd.topic_name.clone(),
-          TypeDesc::new(ptd.type_name.clone()),
-          &ptd.qos(),
-        );
-      }
+          // Check do we have compatible security with the remote
+          let local_reader_sec_info_opt = plugins_handle
+            .get_plugins()
+            .get_reader_sec_attributes(local_reader_guid, reader.topic_name().clone())
+            .map(EndpointSecurityInfo::from)
+            .ok();
+          let remote_writer_sec_info_opt =
+            remote_writer.publication_topic_data.security_info.clone();
 
-      _ => panic!("DDSCache is poisoned"),
+          let compatible = check_are_endpoints_securities_compatible(
+            local_reader_sec_info_opt,
+            remote_writer_sec_info_opt,
+          );
+
+          if !compatible {
+            security_warn!(
+              "Local reader {:?} and remote writer {:?} have incompatible security, ignoring the \
+               remote.",
+              local_reader_guid,
+              remote_writer_guid
+            );
+            false // match_to_writer
+          } else {
+            // Signal Secure discovery to exchange keys with the remote
+            // TODO: do this only at first encounter with the remote / before keys have been
+            // sent, not every time
+            if let Err(e) = self.discovery_command_sender.send(
+              DiscoveryCommand::StartKeyExchangeWithRemoteEndpoint {
+                local_endpoint_guid: local_reader_guid,
+                remote_endpoint_guid: remote_writer_guid,
+              },
+            ) {
+              error!(
+                "Could not signal Secure Discovery to start the key exchange with remote writer \
+                 {:?}. Reason: {}.",
+                remote_writer_guid, e
+              );
+            }
+            true // match_to_writer
+          }
+        } else {
+          // No security enabled. Always match
+          true // match_to_writer
+        };
+
+        if match_to_writer {
+          let offered_qos = remote_writer.publication_topic_data.qos();
+          // Should we check if the participant has published a QoS for the topic?
+          reader.update_writer_proxy(
+            RtpsWriterProxy::from_discovered_writer_data(remote_writer, &[], &[]),
+            &offered_qos,
+          );
+        }
+      }
     }
   }
 
@@ -736,6 +806,211 @@ impl DPEventLoop {
     for reader in self.message_receiver.available_readers.values_mut() {
       reader.remove_writer_proxy(writer_guid);
     }
+  }
+
+  fn add_local_reader(&mut self, reader_ing: ReaderIngredients) {
+    let timer = mio_extras::timer::Builder::default().num_slots(8).build();
+    self
+      .poll
+      .register(
+        &timer,
+        reader_ing.alt_entity_token(),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Reader timer channel registration failed!");
+
+    let mut new_reader = Reader::new(
+      reader_ing,
+      self.udp_sender.clone(),
+      timer,
+      self.participant_status_sender.clone(),
+    );
+
+    // Non-timed action polling
+    self
+      .poll
+      .register(
+        &new_reader.data_reader_command_receiver,
+        new_reader.entity_token(),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Reader command channel registration failed!!!");
+
+    new_reader.set_requested_deadline_check_timer();
+    trace!("Add reader: {:?}", new_reader);
+    self.message_receiver.add_reader(new_reader);
+  }
+
+  fn remove_local_reader(&mut self, reader_guid: GUID) {
+    if let Some(old_reader) = self.message_receiver.remove_reader(reader_guid) {
+      self
+        .poll
+        .deregister(&old_reader.timed_event_timer)
+        .unwrap_or_else(|e| error!("Cannot deregister Reader timed_event_timer: {e:?}"));
+      self
+        .poll
+        .deregister(&old_reader.data_reader_command_receiver)
+        .unwrap_or_else(|e| {
+          error!("Cannot deregister data_reader_command_receiver: {e:?}");
+        });
+
+      #[cfg(feature = "security")]
+      if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+        // Security is enabled. Unregister the reader with the crypto plugin.
+        // Currently the unregister method is called for every reader, and errors are
+        // ignored. If this is inconvenient, add a check if the reader has been
+        // registered/is secure, and unregister only if it is so
+        let _ = plugins_handle
+          .get_plugins()
+          .unregister_local_reader(&reader_guid);
+      }
+    } else {
+      warn!("Tried to remove nonexistent Reader {reader_guid:?}");
+    }
+  }
+
+  fn add_local_writer(&mut self, writer_ing: WriterIngredients) {
+    let timer = mio_extras::timer::Builder::default().num_slots(8).build();
+    self
+      .poll
+      .register(
+        &timer,
+        writer_ing.alt_entity_token(),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Writer heartbeat timer channel registration failed!!");
+
+    let new_writer = Writer::new(
+      writer_ing,
+      self.udp_sender.clone(),
+      timer,
+      self.participant_status_sender.clone(),
+    );
+
+    self
+      .poll
+      .register(
+        &new_writer.writer_command_receiver,
+        new_writer.entity_token(),
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Writer command channel registration failed!!");
+
+    self.writers.insert(new_writer.guid().entity_id, new_writer);
+  }
+
+  fn remove_local_writer(&mut self, writer_guid: &GUID) {
+    if let Some(w) = self.writers.remove(&writer_guid.entity_id) {
+      self
+        .poll
+        .deregister(&w.writer_command_receiver)
+        .unwrap_or_else(|e| error!("Deregister fail (writer command rec) {e:?}"));
+      self
+        .poll
+        .deregister(&w.timed_event_timer)
+        .unwrap_or_else(|e| error!("Deregister fail (writer timer) {e:?}"));
+
+      #[cfg(feature = "security")]
+      if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+        // Security is enabled. Unregister the writer with the crypto plugin.
+        // Currently the unregister method is called for every writer, and errors are
+        // ignored. If this is inconvenient, add a check if the writer has been
+        // registered/is secure, and unregister only if it is so
+        let _ = plugins_handle
+          .get_plugins()
+          .unregister_local_writer(writer_guid);
+      }
+    }
+  }
+
+  #[cfg(feature = "security")]
+  fn on_remote_participant_authentication_status_changed(&mut self, remote_guidp: GuidPrefix) {
+    let auth_status = discovery_db_read(&self.discovery_db).get_authentication_status(remote_guidp);
+
+    auth_status.map(|status| {
+      self.send_participant_status(DomainParticipantStatusEvent::Authentication {
+        participant: remote_guidp,
+        status,
+      });
+    });
+
+    match auth_status {
+      Some(AuthenticationStatus::Authenticated) => {
+        // The participant has been authenticated
+        // First connect the built-in endpoints
+        self.update_participant(remote_guidp);
+        // Then start the key exchange
+        if let Err(e) = self.discovery_command_sender.send(
+          DiscoveryCommand::StartKeyExchangeWithRemoteParticipant {
+            participant_guid_prefix: remote_guidp,
+          },
+        ) {
+          error!(
+            "Could not signal Discovery to start the key exchange with remote. Reason: {}. \
+             Remote: {:?}",
+            e, remote_guidp
+          );
+        }
+      }
+      Some(AuthenticationStatus::Authenticating) => {
+        // The following call should connect the endpoints used for authentication
+        self.update_participant(remote_guidp);
+      }
+      Some(AuthenticationStatus::Rejected) => {
+        // TODO: disconnect endpoints from the participant?
+        info!(
+          "Status Rejected in on_remote_participant_authentication_status_changed with {:?}. TODO!",
+          remote_guidp
+        );
+      }
+      other => {
+        info!(
+          "Status {:?}, in on_remote_participant_authentication_status_changed. What to do?",
+          other
+        );
+      }
+    }
+  }
+}
+
+#[cfg(feature = "security")]
+fn check_are_endpoints_securities_compatible(
+  local_info_opt: Option<EndpointSecurityInfo>,
+  remote_info_opt: Option<EndpointSecurityInfo>,
+) -> bool {
+  let (local_info, remote_info) = match (local_info_opt, remote_info_opt) {
+    (None, None) => {
+      // Neither has security info. Pass?
+      return true;
+    }
+    (Some(_info), None) | (None, Some(_info)) => {
+      // Only one of the endpoints has security info. Reject.
+      return false;
+    }
+    (Some(local_info), Some(remote_info)) => (local_info, remote_info),
+  };
+
+  // See Security specification section 7.2.8 EndpointSecurityInfo
+  if local_info.endpoint_security_attributes.is_valid()
+    && local_info.plugin_endpoint_security_attributes.is_valid()
+    && remote_info.endpoint_security_attributes.is_valid()
+    && remote_info.plugin_endpoint_security_attributes.is_valid()
+  {
+    // When all masks are valid, values need to be equal
+    local_info == remote_info
+  } else {
+    // From the spec:
+    // "If the is_valid is set to zero on either of the masks, the comparison
+    // between the local and remote setting for the EndpointSecurityInfo shall
+    // ignore the attribute"
+
+    // TODO: Does it actually make sense to ignore the masks if they're not valid?
+    // Seems a bit strange. Currently we require that all masks are valid
+    false
   }
 }
 
@@ -786,7 +1061,11 @@ mod tests {
 
     let (_discovery_update_notification_sender, discovery_update_notification_receiver) =
       mio_channel::channel();
+    let (discovery_command_sender, _discovery_command_receiver) =
+      mio_channel::sync_channel::<DiscoveryCommand>(64);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
+    let (participant_status_sender, _participant_status_receiver) =
+      sync_status_channel(16).unwrap();
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
@@ -795,6 +1074,7 @@ mod tests {
     let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new(
       GUID::new_participant_guid(),
       discovery_db_event_sender,
+      participant_status_sender.clone(),
     )));
 
     let domain_info = DomainInfo {
@@ -805,13 +1085,11 @@ mod tests {
 
     let (sender_stop, receiver_stop) = mio_channel::channel::<i32>();
 
-    let dds_cache_clone = dds_cache.clone();
     // Start event loop
     let child = thread::spawn(move || {
       let dp_event_loop = DPEventLoop::new(
         domain_info,
         HashMap::new(),
-        dds_cache_clone,
         discovery_db,
         GuidPrefix::default(),
         TokenReceiverPair {
@@ -832,7 +1110,10 @@ mod tests {
         },
         stop_poll_receiver,
         discovery_update_notification_receiver,
+        discovery_command_sender,
         spdp_liveness_sender,
+        participant_status_sender,
+        None,
       );
       dp_event_loop
         .poll
@@ -877,10 +1158,12 @@ mod tests {
         status_sender,
         topic_cache_handle: topic_cache.clone(),
         topic_name: "test".to_string(),
+        like_stateless: false,
         qos_policy: QosPolicies::qos_none(),
         data_reader_command_receiver: reader_command_receiver,
         data_reader_waker: data_reader_waker.clone(),
         poll_event_sender: notification_event_sender,
+        security_plugins: None,
       };
 
       reader_guids.push(new_reader_ing.guid);
@@ -890,12 +1173,12 @@ mod tests {
     }
 
     // Send a command to remove the second reader
-    info!("\npoistetaan toka\n");
+    info!("\nremoving the second\n");
     let some_guid = reader_guids[1];
     sender_remove_reader.send(some_guid).unwrap();
     std::thread::sleep(Duration::new(0, 100));
 
-    info!("\nLopetustoken lähtee\n");
+    info!("\nsending end token\n");
     sender_stop.send(0).unwrap();
     child.join().unwrap();
   }
@@ -924,14 +1207,14 @@ mod tests {
   // participant");   let sub = dp.create_subscriber(&somePolicies).unwrap();
 
   //   let topic_1 = dp
-  //     .create_topic("TOPIC_1", "jotain", &somePolicies, TopicKind::WithKey)
-  //     .unwrap();
+  //     .create_topic("TOPIC_1", "something", &somePolicies,
+  // TopicKind::WithKey)     .unwrap();
   //   let _topic_2 = dp
-  //     .create_topic("TOPIC_2", "jotain", &somePolicies, TopicKind::WithKey)
-  //     .unwrap();
+  //     .create_topic("TOPIC_2", "something", &somePolicies,
+  // TopicKind::WithKey)     .unwrap();
   //   let _topic_3 = dp
-  //     .create_topic("TOPIC_3", "jotain", &somePolicies, TopicKind::WithKey)
-  //     .unwrap();
+  //     .create_topic("TOPIC_3", "something", &somePolicies,
+  // TopicKind::WithKey)     .unwrap();
 
   //   // Adding readers
   //   let (sender_add_reader, receiver_add) = mio_channel::channel::<Reader>();
@@ -947,7 +1230,7 @@ mod tests {
   //   let (_discovery_update_notification_sender,
   // discovery_update_notification_receiver) =     mio_channel::channel();
 
-  //   let ddshc = Arc::new(RwLock::new(DDSCache::new()));
+  //   let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
   //   let discovery_db = Arc::new(RwLock::new(DiscoveryDB::new()));
 
   //   let domain_info = DomainInfo {
@@ -959,7 +1242,7 @@ mod tests {
   //   let dp_event_loop = DPEventLoop::new(
   //     domain_info,
   //     HashMap::new(),
-  //     ddshc,
+  //     dds_cache,
   //     discovery_db,
   //     GuidPrefix::default(),
   //     TokenReceiverPair {
@@ -1108,7 +1391,7 @@ mod tests {
   //     ))
   //   );
 
-  //   info!("\nLopetustoken lähtee\n");
+  //   info!("\nsending end token\n");
   //   sender_stop.send(0).unwrap();
   //   child.join().unwrap();
   // }
