@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use serde::{Serialize, Deserialize};
 use speedy::{Readable, Writable};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -64,7 +65,7 @@ pub enum QosPolicyId {
 }
 
 /// Utility for building [QosPolicies]
-#[derive(Default)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct QosPolicyBuilder {
   durability: Option<policy::Durability>,
   presentation: Option<policy::Presentation>,
@@ -201,7 +202,7 @@ impl QosPolicyBuilder {
 /// Describes a set of RTPS/DDS QoS policies
 ///
 /// QosPolicies are constructed using a [`QosPolicyBuilder`]
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct QosPolicies {
   // pub(crate) because as we want to have some builtin QoS Policies as constant.
   pub(crate) durability: Option<policy::Durability>,
@@ -303,7 +304,7 @@ impl QosPolicies {
   /// Merge two QosPolicies
   ///
   /// Constructs a QosPolicy, where each policy is taken from `self`,
-  /// and overwritten with those policies from `other` that are defined.  
+  /// and overwritten with those policies from `other` that are defined.
   #[must_use]
   pub fn modify_by(&self, other: &Self) -> Self {
     Self {
@@ -658,6 +659,7 @@ pub mod policy {
   use std::cmp::Ordering;
 
   use speedy::{Readable, Writable};
+  use serde::{Serialize, Deserialize};
   #[allow(unused_imports)]
   use log::{debug, error, info, trace, warn};
   #[cfg(feature = "security")]
@@ -686,13 +688,26 @@ pub mod policy {
   */
 
   /// DDS 2.2.3.16 LIFESPAN
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub struct Lifespan {
     pub duration: Duration,
   }
 
   /// DDS 2.2.3.4 DURABILITY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Readable, Writable)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Readable,
+    Writable,
+    Serialize,
+    Deserialize,
+  )]
   pub enum Durability {
     Volatile,
     TransientLocal,
@@ -701,7 +716,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.6 PRESENTATION
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub struct Presentation {
     pub access_scope: PresentationAccessScope,
     pub coherent_access: bool,
@@ -709,7 +724,20 @@ pub mod policy {
   }
 
   /// Access scope that is part of DDS 2.2.3.6 PRESENTATION
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Readable, Writable)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Readable,
+    Writable,
+    Serialize,
+    Deserialize,
+  )]
   pub enum PresentationAccessScope {
     Instance,
     Topic,
@@ -717,24 +745,37 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.7 DEADLINE
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Readable, Writable)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Readable,
+    Writable,
+    Serialize,
+    Deserialize,
+  )]
   pub struct Deadline(pub Duration);
 
   /// DDS 2.2.3.8 LATENCY_BUDGET
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub struct LatencyBudget {
     pub duration: Duration,
   }
 
   /// DDS 2.2.3.9 OWNERSHIP
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum Ownership {
     Shared,
     Exclusive { strength: i32 }, // This also implements OwnershipStrength
   }
 
   /// DDS 2.2.3.11 LIVELINESS
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub enum Liveliness {
     Automatic { lease_duration: Duration },
     ManualByParticipant { lease_duration: Duration },
@@ -777,7 +818,7 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.12 TIME_BASED_FILTER
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Readable, Writable, Serialize, Deserialize)]
   pub struct TimeBasedFilter {
     pub minimum_separation: Duration,
   }
@@ -789,7 +830,7 @@ pub mod policy {
   */
 
   /// DDS 2.2.3.14 RELIABILITY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
   pub enum Reliability {
     BestEffort,
     Reliable { max_blocking_time: Duration },
@@ -819,14 +860,27 @@ pub mod policy {
   }
 
   /// DDS 2.2.3.17 DESTINATION_ORDER
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Hash, Readable, Writable)]
+  #[derive(
+    Copy,
+    Clone,
+    Debug,
+    PartialEq,
+    Eq,
+    Ord,
+    PartialOrd,
+    Hash,
+    Readable,
+    Writable,
+    Serialize,
+    Deserialize,
+  )]
   pub enum DestinationOrder {
     ByReceptionTimestamp,
     BySourceTimeStamp,
   }
 
   /// DDS 2.2.3.18 HISTORY
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
   pub enum History {
     // Variants must be in this order ot derive Ord correctly.
     KeepLast { depth: i32 },
@@ -844,7 +898,7 @@ pub mod policy {
   ///
   /// Negative values are needed, because DDS spec defines the special value
   /// const long LENGTH_UNLIMITED = -1;
-  #[derive(Copy, Clone, Debug, PartialEq, Eq, Writable, Readable)]
+  #[derive(Copy, Clone, Debug, PartialEq, Eq, Writable, Readable, Serialize, Deserialize)]
   pub struct ResourceLimits {
     pub max_samples: i32,
     pub max_instances: i32,
@@ -857,7 +911,7 @@ pub mod policy {
   // Section 7.2.5 PropertyQosPolicy, DomainParticipantQos, DataWriterQos, and
   // DataReaderQos
   #[cfg(feature = "security")]
-  #[derive(Clone, Debug, PartialEq, Eq)]
+  #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
   pub struct Property {
     pub value: Vec<security::types::Property>,
     pub binary_value: Vec<security::types::BinaryProperty>,
