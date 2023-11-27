@@ -1,0 +1,92 @@
+MIME-Version: 1.0
+Content-Type: multipart/signed; protocol="application/x-pkcs7-signature"; micalg="sha-256"; boundary="----0ACE8DCADB156B6CFC73CD44A50EB831"
+
+This is an S/MIME signed message
+
+------0ACE8DCADB156B6CFC73CD44A50EB831
+<?xml version="1.0" encoding="UTF-8"?>
+<dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170901/omg_shared_ca_permissions.xsd">
+    <permissions>
+        <grant name="Participant1ExamplePermission">
+            <subject_name>CN=participant1_common_name,O=Example Organization</subject_name>
+            <validity>
+                <not_before>2023-01-01T00:00:00</not_before>
+                <not_after>9999-01-01T00:00:00</not_after>
+            </validity>
+            <allow_rule>
+                <domains>
+                    <id>0</id>
+                </domains>
+                <publish>
+                    <topics>
+                        <topic>Square</topic>
+                    </topics>
+                </publish>
+                <subscribe>
+                    <topics>
+                        <topic>Square</topic>
+                    </topics>
+                </subscribe>
+                <relay>
+                    <topics>
+                        <topic>example_topic</topic>
+                    </topics>
+                </relay>
+            </allow_rule>
+            <default>DENY</default>
+        </grant>
+        <grant name="Participant2ExamplePermission">
+            <subject_name>CN=participant2_common_name,O=Example Organization</subject_name>
+            <validity>
+                <not_before>2023-01-01T00:00:00</not_before>
+                <not_after>9999-01-01T00:00:00</not_after>
+            </validity>
+            <allow_rule>
+                <domains>
+                    <id>0</id>
+                </domains>
+                <publish>
+                    <topics>
+                        <topic>Square</topic>
+                    </topics>
+                </publish>
+                <subscribe>
+                    <topics>
+                        <topic>Square</topic>
+                    </topics>
+                </subscribe>
+            </allow_rule>
+            <default>DENY</default>
+        </grant>
+    </permissions>
+</dds>
+------0ACE8DCADB156B6CFC73CD44A50EB831
+Content-Type: application/x-pkcs7-signature; name="smime.p7s"
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="smime.p7s"
+
+MIIDzwYJKoZIhvcNAQcCoIIDwDCCA7wCAQExDzANBglghkgBZQMEAgEFADALBgkq
+hkiG9w0BBwGgggHjMIIB3zCCAYWgAwIBAgIUArkFHlgvGsil7TuYvQqROBhEJU4w
+CgYIKoZIzj0EAwIwRDEdMBsGA1UECgwURXhhbXBsZSBPcmdhbml6YXRpb24xIzAh
+BgNVBAMMGnBlcm1pc3Npb25zX2NhX2NvbW1vbl9uYW1lMCAXDTIzMTEyNzEzNDUw
+M1oYDzQ3NjExMDIzMTM0NTAzWjBEMR0wGwYDVQQKDBRFeGFtcGxlIE9yZ2FuaXph
+dGlvbjEjMCEGA1UEAwwacGVybWlzc2lvbnNfY2FfY29tbW9uX25hbWUwWTATBgcq
+hkjOPQIBBggqhkjOPQMBBwNCAATEROqDZhxrXDXM0gWDxy+wavkwB/Gl32rF+bdW
+fPf2oQAkuy0+nqXx7KPAWfBSHEWxyjxnXnNkzVy7S60vsaEto1MwUTAdBgNVHQ4E
+FgQUCbDH5hkTzYiyO2fiDM1kiOXz8wkwHwYDVR0jBBgwFoAUCbDH5hkTzYiyO2fi
+DM1kiOXz8wkwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAgNIADBFAiEArYKx
+izKj1wpRriFmSDncj9T+bocWStWIGDynJUZtZ8sCIEsMHMD9iG0JakUMxZHFfJfm
+t5B+FBfN3Oj18kiBMnnxMYIBsDCCAawCAQEwXDBEMR0wGwYDVQQKDBRFeGFtcGxl
+IE9yZ2FuaXphdGlvbjEjMCEGA1UEAwwacGVybWlzc2lvbnNfY2FfY29tbW9uX25h
+bWUCFAK5BR5YLxrIpe07mL0KkTgYRCVOMA0GCWCGSAFlAwQCAQUAoIHkMBgGCSqG
+SIb3DQEJAzELBgkqhkiG9w0BBwEwHAYJKoZIhvcNAQkFMQ8XDTIzMTEyNzEzNDUw
+M1owLwYJKoZIhvcNAQkEMSIEIEjonjTFRKfHUE3pci4O1ZL15hhKex62/rN/I9tq
+GFz+MHkGCSqGSIb3DQEJDzFsMGowCwYJYIZIAWUDBAEqMAsGCWCGSAFlAwQBFjAL
+BglghkgBZQMEAQIwCgYIKoZIhvcNAwcwDgYIKoZIhvcNAwICAgCAMA0GCCqGSIb3
+DQMCAgFAMAcGBSsOAwIHMA0GCCqGSIb3DQMCAgEoMAoGCCqGSM49BAMCBEcwRQIg
+GZCH97FMki/HtAzmUvdY6kot55MUArOXNaFCSy8soSMCIQDwq1i+UlZ9IVoKsNGY
+CiIb+CtznA8D+gwr/HC5R1gsBQ==
+
+------0ACE8DCADB156B6CFC73CD44A50EB831--
+
