@@ -99,20 +99,6 @@ impl DomainParticipantBuilder {
   }
 
   #[cfg(feature = "security")]
-  /// For development and test use only
-  fn add_builtin_security_test_config(mut self) -> Self {
-    let security_test_configs = security::config::test_config();
-
-    if security_test_configs.security_enabled {
-      let auth = Box::new(security::AuthenticationBuiltin::new());
-      let access = Box::new(security::AccessControlBuiltin::new());
-      let crypto = Box::new(security::CryptographicBuiltin::new());
-      self.security(auth, access, crypto, security_test_configs.properties);
-    }
-    self
-  }
-
-  #[cfg(feature = "security")]
   /// Easier way to configure security.
   pub fn builtin_security(mut self, configs: DomainParticipantSecurityConfigFiles) -> Self {
     let auth = Box::new(security::AuthenticationBuiltin::new());
@@ -331,12 +317,6 @@ impl DomainParticipant {
   /// ```
   pub fn new(domain_id: u16) -> CreateResult<Self> {
     let dp_builder = DomainParticipantBuilder::new(domain_id);
-
-    #[cfg(feature = "security")]
-    // Add security if so configured in security configs
-    // This is meant to be included only in the development phase for convenience
-    let dp_builder = dp_builder.add_builtin_security_test_config();
-
     dp_builder.build()
   }
 
