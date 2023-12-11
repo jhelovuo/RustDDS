@@ -72,4 +72,4 @@ The following security configuration files are needed:
 
 Configuration files can be created using any method, but the OpenSSL tool is recommended.
 
-Please see the examples and scripts in the subdirectory [example_security_configuration_files](example_security_configuration_files/).
+Please see the examples and scripts in the subdirectory [example_security_configuration_files](examples/security_configuration_files).
