@@ -31,18 +31,23 @@ const REPR_IDS: [RepresentationIdentifier; 3] = [
   RepresentationIdentifier::PL_CDR_LE,
 ];
 
-impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
-where
-  D: DeserializeOwned,
-{
+impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
   type Error = Error;
+  type Deserialized = D;
 
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &REPR_IDS
   }
 
-  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
-    deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
+  fn from_bytes_seed<'de, S>(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+    seed: S,
+  ) -> Result<D>
+  where
+    S: DeserializeSeed<'de, Value = Self::Deserialized>,
+  {
+    deserialize_from_cdr_seed(input_bytes, encoding, seed).map(|(d, _size)| d)
   }
 }
 
@@ -166,16 +171,28 @@ pub fn deserialize_from_cdr<T>(
 where
   T: DeserializeOwned,
 {
+  deserialize_from_cdr_seed(input_bytes, encoding, PhantomData)
+}
+
+/// return deserialized object + count of bytes consumed
+pub fn deserialize_from_cdr_seed<'de, S>(
+  input_bytes: &[u8],
+  encoding: RepresentationIdentifier,
+  seed: S,
+) -> Result<(S::Value, usize)>
+where
+  S: DeserializeSeed<'de>,
+{
   match encoding {
     RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
       let mut deserializer = CdrDeserializer::<LittleEndian>::new(input_bytes);
-      let t = T::deserialize(&mut deserializer)?;
+      let t = seed.deserialize(&mut deserializer)?;
       Ok((t, deserializer.serialized_data_count))
     }
 
     RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => {
       let mut deserializer = CdrDeserializer::<BigEndian>::new(input_bytes);
-      let t = T::deserialize(&mut deserializer)?;
+      let t = seed.deserialize(&mut deserializer)?;
       Ok((t, deserializer.serialized_data_count))
     }
 

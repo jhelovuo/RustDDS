@@ -7,7 +7,10 @@
 /// for WITH_KEY topics, we need to be able to (de)serialize the key in addition
 /// to data.
 pub mod no_key {
+  use std::marker::PhantomData;
+
   use bytes::Bytes;
+  use serde::{de::DeserializeSeed, Deserialize};
 
   use crate::RepresentationIdentifier;
 
@@ -16,29 +19,76 @@ pub mod no_key {
   pub trait DeserializerAdapter<D> {
     type Error: std::error::Error; // Error type
 
+    /// Type after deserialization.
+    ///
+    /// The adapter might apply additional operations or wrapper types to the
+    /// deserialized value, so this type might be different from `D`. The basic
+    /// pipeline is:
+    ///
+    /// bytes -> deserialize -> value of type `Self::Deserialized` -> transform -> value of type `D`
+    type Deserialized;
+
     /// Which data representations can the DeserializerAdapter read?
     /// See RTPS specification Section 10 and Table 10.3
     fn supported_encodings() -> &'static [RepresentationIdentifier];
 
+    /// Deserialize data from bytes to an object using the given seed.
+    ///
+    /// `encoding` must be something given by `supported_encodings()`, or
+    /// implementation may fail with Err or `panic!()`.
+    fn from_bytes_seed<'de, S>(
+      input_bytes: &[u8],
+      encoding: RepresentationIdentifier,
+      seed: S,
+    ) -> Result<D, Self::Error>
+    where
+      S: DeserializeSeed<'de, Value = Self::Deserialized>;
+
     /// Deserialize data from bytes to an object.
     /// `encoding` must be something given by `supported_encodings()`, or
     /// implementation may fail with Err or `panic!()`.
-    fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier)
-      -> Result<D, Self::Error>;
+    ///
+    /// Only usable if the `Self::Deserialized` type can be deserialized without a seed.
+    fn from_bytes<'de>(
+      input_bytes: &[u8],
+      encoding: RepresentationIdentifier,
+    ) -> Result<D, Self::Error>
+    where
+      Self::Deserialized: Deserialize<'de>,
+    {
+      Self::from_bytes_seed(input_bytes, encoding, PhantomData)
+    }
 
     /// This method has a default implementation, but the default will make a
     /// copy of all the input data in memory and then call from_bytes() .
     // In order to avoid the copy, implement also this method.
-    fn from_vec_bytes(
+    fn from_vec_bytes_seed<'de, S>(
       input_vec_bytes: &[Bytes],
       encoding: RepresentationIdentifier,
-    ) -> Result<D, Self::Error> {
+      seed: S,
+    ) -> Result<D, Self::Error>
+    where
+      S: DeserializeSeed<'de, Value = Self::Deserialized>,
+    {
       let total_len = input_vec_bytes.iter().map(Bytes::len).sum();
       let mut total_payload = Vec::with_capacity(total_len);
       for iv in input_vec_bytes {
         total_payload.extend(iv);
       }
-      Self::from_bytes(&total_payload, encoding)
+      Self::from_bytes_seed(&total_payload, encoding, seed)
+    }
+
+    /// Deserialize from a vector of `Bytes`.
+    ///
+    /// Only usable if the `Self::Deserialized` type can be deserialized without a seed.
+    fn from_vec_bytes<'de>(
+      input_vec_bytes: &[Bytes],
+      encoding: RepresentationIdentifier,
+    ) -> Result<D, Self::Error>
+    where
+      Self::Deserialized: Deserialize<'de>,
+    {
+      Self::from_vec_bytes_seed(input_vec_bytes, encoding, PhantomData)
     }
   }
 

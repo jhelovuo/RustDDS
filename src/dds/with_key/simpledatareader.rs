@@ -9,7 +9,10 @@ use std::{
 };
 
 use futures::stream::{FusedStream, Stream};
-use serde::de::DeserializeOwned;
+use serde::{
+  de::{DeserializeOwned, DeserializeSeed},
+  Deserialize,
+};
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -235,11 +238,15 @@ where
     hash_to_key_map.insert(instance_key.hash_key(false), instance_key);
   }
 
-  fn deserialize(
+  fn deserialize_seed<'de, S>(
     timestamp: Timestamp,
     cc: &CacheChange,
     hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
-  ) -> ReadResult<DeserializedCacheChange<D>> {
+    seed: S,
+  ) -> ReadResult<DeserializedCacheChange<D>>
+  where
+    S: DeserializeSeed<'de, Value = DA::Deserialized>,
+  {
     match cc.data_value {
       DDSData::Data {
         ref serialized_payload,
@@ -249,7 +256,7 @@ where
           .iter()
           .find(|r| **r == serialized_payload.representation_identifier)
         {
-          match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
+          match DA::from_bytes_seed(&serialized_payload.value, *recognized_rep_id, seed) {
             // Data update, decoded ok
             Ok(payload) => {
               let p = Sample::Value(payload);
@@ -309,7 +316,19 @@ where
 
   /// Note: Always remember to call .drain_read_notifications() just before
   /// calling this one. Otherwise, new notifications may not appear.
-  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>> {
+  pub fn try_take_one<'de>(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    DA::Deserialized: Deserialize<'de>,
+  {
+    Self::try_take_one_seed(self, PhantomData)
+  }
+
+  /// Note: Always remember to call .drain_read_notifications() just before
+  /// calling this one. Otherwise, new notifications may not appear.
+  pub fn try_take_one_seed<'de, S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    S: DeserializeSeed<'de, Value = DA::Deserialized>,
+  {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
       Some(policy::Reliability::Reliable { .. })
@@ -332,7 +351,7 @@ where
       Some((ts, cc)) => (ts, cc),
     };
 
-    match Self::deserialize(timestamp, cc, hash_to_key_map) {
+    match Self::deserialize_seed(timestamp, cc, hash_to_key_map, seed) {
       Ok(dcc) => {
         read_state_ref.latest_instant = max(read_state_ref.latest_instant, timestamp);
         read_state_ref
@@ -509,10 +528,11 @@ where
 {
 }
 
-impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
+impl<'a, 'de, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
+  DA::Deserialized: Deserialize<'de>,
 {
   type Item = ReadResult<DeserializedCacheChange<D>>;
 
@@ -553,10 +573,11 @@ where
   } // fn
 } // impl
 
-impl<'a, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
+impl<'a, 'de, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
+  DA::Deserialized: Deserialize<'de>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

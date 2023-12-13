@@ -5,6 +5,7 @@ use futures::stream::{FusedStream, Stream, StreamExt};
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
 use mio_08;
+use serde::Deserialize;
 
 use crate::{
   dds::{
@@ -49,7 +50,10 @@ where
     self.keyed_simpledatareader.drain_read_notifications();
   }
 
-  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>> {
+  pub fn try_take_one<'de>(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    DA::Deserialized: Deserialize<'de>,
+  {
     match self.keyed_simpledatareader.try_take_one() {
       Err(e) => Err(e),
       Ok(None) => Ok(None),
@@ -68,9 +72,12 @@ where
     self.keyed_simpledatareader.guid()
   }
 
-  pub fn as_async_stream(
+  pub fn as_async_stream<'de>(
     &self,
-  ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_ {
+  ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_
+  where
+    DA::Deserialized: Deserialize<'de>,
+  {
     self
       .keyed_simpledatareader
       .as_async_stream()

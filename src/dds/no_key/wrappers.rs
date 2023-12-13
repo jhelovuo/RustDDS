@@ -1,10 +1,9 @@
 use std::{marker::PhantomData, ops::Deref};
 
 use bytes::Bytes;
+use serde::de::DeserializeSeed;
 
-use crate::{
-  dds::adapters::*, messages::submessages::submessages::RepresentationIdentifier, Keyed,
-};
+use crate::{dds::adapters::*, messages::submessages::submessages::RepresentationIdentifier, Keyed};
 
 // This wrapper is used to convert NO_KEY types to WITH_KEY
 // * inside the wrapper there is a NO_KEY type
@@ -81,16 +80,21 @@ where
   DA: no_key::DeserializerAdapter<D>,
 {
   type Error = DA::Error;
+  type Deserialized = DA::Deserialized;
 
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     DA::supported_encodings()
   }
 
-  fn from_bytes(
+  fn from_bytes_seed<'de, S>(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-  ) -> Result<NoKeyWrapper<D>, DA::Error> {
-    DA::from_bytes(input_bytes, encoding).map(|d| NoKeyWrapper::<D> { d })
+    seed: S,
+  ) -> Result<NoKeyWrapper<D>, DA::Error>
+  where
+    S: DeserializeSeed<'de, Value = Self::Deserialized>,
+  {
+    DA::from_bytes_seed(input_bytes, encoding, seed).map(|d| NoKeyWrapper::<D> { d })
   }
 }
 

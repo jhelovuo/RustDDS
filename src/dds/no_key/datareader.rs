@@ -6,6 +6,7 @@ use std::{
 
 use mio_06::{self, Evented};
 use futures::stream::{FusedStream, Stream};
+use serde::Deserialize;
 
 use crate::{
   dds::{
@@ -71,7 +72,13 @@ where
       keyed_datareader: keyed,
     }
   }
+}
 
+impl<'de, D: 'static, DA> DataReader<D, DA>
+where
+  DA: DeserializerAdapter<D>,
+  DA::Deserialized: Deserialize<'de>,
+{
   /// Reads amount of samples found with `max_samples` and `read_condition`
   /// parameters.
   ///
@@ -594,10 +601,11 @@ where
 {
 }
 
-impl<D, DA> Stream for DataReaderStream<D, DA>
+impl<'de, D, DA> Stream for DataReaderStream<D, DA>
 where
   D: 'static,
   DA: DeserializerAdapter<D>,
+  DA::Deserialized: Deserialize<'de>,
 {
   type Item = ReadResult<D>;
 
@@ -613,10 +621,11 @@ where
   }
 }
 
-impl<D, DA> FusedStream for DataReaderStream<D, DA>
+impl<'de, D, DA> FusedStream for DataReaderStream<D, DA>
 where
   D: 'static,
   DA: DeserializerAdapter<D>,
+  DA::Deserialized: Deserialize<'de>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

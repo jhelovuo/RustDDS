@@ -2,6 +2,7 @@ use std::marker::PhantomData;
 
 use bytes::Bytes;
 use byteorder::{ByteOrder, LittleEndian};
+use serde::de::DeserializeSeed;
 
 use crate::{
   dds::adapters::{no_key, with_key},
@@ -107,12 +108,20 @@ where
   D: PlCdrDeserialize,
 {
   type Error = PlCdrDeserializeError;
+  type Deserialized = D;
 
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &REPR_IDS
   }
 
-  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D, Self::Error> {
+  fn from_bytes_seed<'de, S>(
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+    _seed: S,
+  ) -> Result<D, Self::Error>
+  where
+    S: DeserializeSeed<'de, Value = Self::Deserialized>,
+  {
     match encoding {
       RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
         D::from_pl_cdr_bytes(input_bytes, encoding)
