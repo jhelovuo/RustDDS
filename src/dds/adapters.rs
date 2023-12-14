@@ -10,7 +10,7 @@ pub mod no_key {
   use std::marker::PhantomData;
 
   use bytes::Bytes;
-  use serde::{de::DeserializeSeed, Deserialize};
+  use serde::Deserialize;
 
   use crate::RepresentationIdentifier;
 
@@ -42,7 +42,7 @@ pub mod no_key {
       seed: S,
     ) -> Result<D, Self::Error>
     where
-      S: DeserializeSeed<'de, Value = Self::Deserialized>;
+      S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>;
 
     /// Deserialize data from bytes to an object.
     /// `encoding` must be something given by `supported_encodings()`, or
@@ -54,7 +54,7 @@ pub mod no_key {
       encoding: RepresentationIdentifier,
     ) -> Result<D, Self::Error>
     where
-      Self: DefaultSeed<'de, Value = Self::Deserialized>,
+      Self: DefaultSeed<'de, D>,
     {
       Self::from_bytes_seed(input_bytes, encoding, Self::SEED)
     }
@@ -68,7 +68,7 @@ pub mod no_key {
       seed: S,
     ) -> Result<D, Self::Error>
     where
-      S: DeserializeSeed<'de, Value = Self::Deserialized>,
+      S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>
     {
       let total_len = input_vec_bytes.iter().map(Bytes::len).sum();
       let mut total_payload = Vec::with_capacity(total_len);
@@ -86,16 +86,25 @@ pub mod no_key {
       encoding: RepresentationIdentifier,
     ) -> Result<D, Self::Error>
     where
-      Self::Deserialized: Deserialize<'de>,
+      Self: DefaultSeed<'de, D>
     {
-      Self::from_vec_bytes_seed(input_vec_bytes, encoding, PhantomData)
+      Self::from_vec_bytes_seed(input_vec_bytes, encoding, Self::SEED)
     }
   }
 
-  pub trait DefaultSeed<'de> {
-    type Value;
-    type Seed: DeserializeSeed<'de, Value = Self::Value>;
+  pub trait DefaultSeed<'de, D>: DeserializerAdapter<D> {
+    type Seed: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>;
     const SEED: Self::Seed;
+  }
+
+  pub trait FromBytesWithEncoding<D> {
+    type Error;
+
+    fn from_bytes<'de>(
+      self,
+      input_bytes: &[u8],
+      encoding: RepresentationIdentifier,
+    ) -> Result<D, Self::Error>;
   }
 
   /// trait for connecting a Serializer implementation and DataWriter

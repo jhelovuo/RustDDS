@@ -94,8 +94,7 @@ where
 impl<'de, D: 'static, DA> DataReader<D, DA>
 where
   D: Keyed,
-  DA: DeserializerAdapter<D>,
-  DA: DefaultSeed<'de, Value = DA::Deserialized>,
+  DA: DeserializerAdapter<D> + DefaultSeed<'de, D>,
 {
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
@@ -902,8 +901,7 @@ where
 impl<'de, D, DA> Stream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D>,
-  DA: DefaultSeed<'de, Value = DA::Deserialized>,
+  DA: DeserializerAdapter<D> + DefaultSeed<'de, D>,
 {
   type Item = ReadResult<Sample<D, D::K>>;
 
@@ -946,8 +944,7 @@ where
 impl<'de, D, DA> FusedStream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D>,
-  DA: DefaultSeed<'de, Value = DA::Deserialized>,
+  DA: DeserializerAdapter<D> + DefaultSeed<'de, D>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

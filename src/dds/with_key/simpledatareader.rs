@@ -21,7 +21,7 @@ use mio_08;
 
 use crate::{
   dds::{
-    adapters::{with_key::*, no_key::DefaultSeed},
+    adapters::{with_key::*, no_key::{DefaultSeed, FromBytesWithEncoding}},
     ddsdata::*,
     key::*,
     pubsub::Subscriber,
@@ -245,7 +245,7 @@ where
     seed: S,
   ) -> ReadResult<DeserializedCacheChange<D>>
   where
-    S: DeserializeSeed<'de, Value = DA::Deserialized>,
+    S: FromBytesWithEncoding<DA::Deserialized, Error = DA::Error>,
   {
     match cc.data_value {
       DDSData::Data {
@@ -318,7 +318,7 @@ where
   /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one<'de>(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    DA: DefaultSeed<'de, Value = DA::Deserialized>,
+    DA: DeserializerAdapter<D> + DefaultSeed<'de, D>,
   {
     Self::try_take_one_seed(self, DA::SEED)
   }
@@ -327,7 +327,7 @@ where
   /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one_seed<'de, S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    S: DeserializeSeed<'de, Value = DA::Deserialized>,
+    S: FromBytesWithEncoding<DA::Deserialized, Error = DA::Error>,
   {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
@@ -531,8 +531,7 @@ where
 impl<'a, 'de, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D>,
-  DA: DefaultSeed<'de, Value = DA::Deserialized>,
+  DA: DeserializerAdapter<D> + DefaultSeed<'de, D>,
 {
   type Item = ReadResult<DeserializedCacheChange<D>>;
 
@@ -576,8 +575,7 @@ where
 impl<'a, 'de, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D>,
-  DA: DefaultSeed<'de, Value = DA::Deserialized>,
+  DA: DeserializerAdapter<D> + DefaultSeed<'de, D>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

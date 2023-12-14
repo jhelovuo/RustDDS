@@ -53,8 +53,7 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
   }
 }
 
-impl<'de, D> DefaultSeed<'de> for CDRDeserializerAdapter<D> where D: serde::Deserialize<'de> {
-    type Value = D;
+impl<'de, D> DefaultSeed<'de, D> for CDRDeserializerAdapter<D> where D: serde::Deserialize<'de> {
     type Seed = PhantomData<D>;
     const SEED: Self::Seed = PhantomData;
 }

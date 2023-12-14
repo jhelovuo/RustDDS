@@ -52,7 +52,7 @@ where
 
   pub fn try_take_one<'de>(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    DA: DefaultSeed<'de, Value = DA::Deserialized>,
+    DA: DefaultSeed<'de, D>,
   {
     match self.keyed_simpledatareader.try_take_one() {
       Err(e) => Err(e),
@@ -76,7 +76,7 @@ where
     &self,
   ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_
   where
-    DA: DefaultSeed<'de, Value = DA::Deserialized>,
+    DA: DefaultSeed<'de, D>,
   {
     self
       .keyed_simpledatareader

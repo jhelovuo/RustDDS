@@ -135,8 +135,7 @@ where
 }
 
 
-impl<'de, D> no_key::DefaultSeed<'de> for PlCdrDeserializerAdapter<D> where D: PlCdrDeserialize {
-  type Value = D;
+impl<'de, D> no_key::DefaultSeed<'de, D> for PlCdrDeserializerAdapter<D> where D: PlCdrDeserialize {
   type Seed = Dummy<D>;
   const SEED: Self::Seed = Dummy(PhantomData);
 }
