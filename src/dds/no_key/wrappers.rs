@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::Deref};
 use bytes::Bytes;
 use serde::de::DeserializeSeed;
 
-use crate::{dds::adapters::*, messages::submessages::submessages::RepresentationIdentifier, Keyed};
+use crate::{dds::adapters::{*, no_key::DefaultSeed}, messages::submessages::submessages::RepresentationIdentifier, Keyed};
 
 // This wrapper is used to convert NO_KEY types to WITH_KEY
 // * inside the wrapper there is a NO_KEY type
@@ -96,6 +96,12 @@ where
   {
     DA::from_bytes_seed(input_bytes, encoding, seed).map(|d| NoKeyWrapper::<D> { d })
   }
+}
+
+impl<'de, DA> DefaultSeed<'de> for DAWrapper<DA> where DA: DefaultSeed<'de> {
+    type Value = DA::Value;
+    type Seed = DA::Seed;
+    const SEED: Self::Seed = DA::SEED;
 }
 
 // then, implement with_key DA

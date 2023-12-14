@@ -10,7 +10,7 @@ use serde::Deserialize;
 
 use crate::{
   dds::{
-    adapters::no_key::DeserializerAdapter,
+    adapters::no_key::{DeserializerAdapter, DefaultSeed},
     no_key::datasample::DataSample,
     qos::{HasQoSPolicy, QosPolicies},
     readcondition::ReadCondition,
@@ -77,7 +77,7 @@ where
 impl<'de, D: 'static, DA> DataReader<D, DA>
 where
   DA: DeserializerAdapter<D>,
-  DA::Deserialized: Deserialize<'de>,
+  DA: DefaultSeed<'de, Value = DA::Deserialized>,
 {
   /// Reads amount of samples found with `max_samples` and `read_condition`
   /// parameters.
@@ -605,7 +605,7 @@ impl<'de, D, DA> Stream for DataReaderStream<D, DA>
 where
   D: 'static,
   DA: DeserializerAdapter<D>,
-  DA::Deserialized: Deserialize<'de>,
+  DA: DefaultSeed<'de, Value = DA::Deserialized>,
 {
   type Item = ReadResult<D>;
 
@@ -625,7 +625,7 @@ impl<'de, D, DA> FusedStream for DataReaderStream<D, DA>
 where
   D: 'static,
   DA: DeserializerAdapter<D>,
-  DA::Deserialized: Deserialize<'de>,
+  DA: DefaultSeed<'de, Value = DA::Deserialized>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

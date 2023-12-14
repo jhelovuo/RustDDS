@@ -14,6 +14,8 @@ use crate::{
   Keyed, RepresentationIdentifier,
 };
 
+use super::no_key::DefaultSeed;
+
 /// This type adapts CdrDeserializer (which implements serde::Deserializer) to
 /// work as a [`with_key::DeserializerAdapter`] and
 /// [`no_key::DeserializerAdapter`].
@@ -49,6 +51,12 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
   {
     deserialize_from_cdr_seed(input_bytes, encoding, seed).map(|(d, _size)| d)
   }
+}
+
+impl<'de, D> DefaultSeed<'de> for CDRDeserializerAdapter<D> where D: serde::Deserialize<'de> {
+    type Value = D;
+    type Seed = PhantomData<D>;
+    const SEED: Self::Seed = PhantomData;
 }
 
 impl<D> with_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>

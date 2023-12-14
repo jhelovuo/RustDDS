@@ -134,6 +134,24 @@ where
   }
 }
 
+
+impl<'de, D> no_key::DefaultSeed<'de> for PlCdrDeserializerAdapter<D> where D: PlCdrDeserialize {
+  type Value = D;
+  type Seed = Dummy<D>;
+  const SEED: Self::Seed = Dummy(PhantomData);
+}
+
+pub struct Dummy<D>(PhantomData<D>);
+impl<'de, T> DeserializeSeed<'de> for Dummy<T> {
+    type Value = T;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de> {
+        todo!()
+    }
+}
+
 impl<D> with_key::DeserializerAdapter<D> for PlCdrDeserializerAdapter<D>
 where
   D: Keyed + PlCdrDeserialize,

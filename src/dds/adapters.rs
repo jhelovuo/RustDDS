@@ -54,9 +54,9 @@ pub mod no_key {
       encoding: RepresentationIdentifier,
     ) -> Result<D, Self::Error>
     where
-      Self::Deserialized: Deserialize<'de>,
+      Self: DefaultSeed<'de, Value = Self::Deserialized>,
     {
-      Self::from_bytes_seed(input_bytes, encoding, PhantomData)
+      Self::from_bytes_seed(input_bytes, encoding, Self::SEED)
     }
 
     /// This method has a default implementation, but the default will make a
@@ -90,6 +90,12 @@ pub mod no_key {
     {
       Self::from_vec_bytes_seed(input_vec_bytes, encoding, PhantomData)
     }
+  }
+
+  pub trait DefaultSeed<'de> {
+    type Value;
+    type Seed: DeserializeSeed<'de, Value = Self::Value>;
+    const SEED: Self::Seed;
   }
 
   /// trait for connecting a Serializer implementation and DataWriter

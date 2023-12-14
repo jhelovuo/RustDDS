@@ -15,7 +15,7 @@ use serde::Deserialize;
 use super::datasample_cache::DataSampleCache;
 use crate::{
   dds::{
-    adapters::with_key::*,
+    adapters::{with_key::*, no_key::DefaultSeed},
     key::*,
     qos::*,
     readcondition::*,
@@ -95,7 +95,7 @@ impl<'de, D: 'static, DA> DataReader<D, DA>
 where
   D: Keyed,
   DA: DeserializerAdapter<D>,
-  DA::Deserialized: Deserialize<'de>,
+  DA: DefaultSeed<'de, Value = DA::Deserialized>,
 {
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
@@ -903,7 +903,7 @@ impl<'de, D, DA> Stream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  DA::Deserialized: Deserialize<'de>,
+  DA: DefaultSeed<'de, Value = DA::Deserialized>,
 {
   type Item = ReadResult<Sample<D, D::K>>;
 
@@ -947,7 +947,7 @@ impl<'de, D, DA> FusedStream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  DA::Deserialized: Deserialize<'de>,
+  DA: DefaultSeed<'de, Value = DA::Deserialized>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

@@ -21,7 +21,7 @@ use mio_08;
 
 use crate::{
   dds::{
-    adapters::with_key::*,
+    adapters::{with_key::*, no_key::DefaultSeed},
     ddsdata::*,
     key::*,
     pubsub::Subscriber,
@@ -318,9 +318,9 @@ where
   /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one<'de>(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    DA::Deserialized: Deserialize<'de>,
+    DA: DefaultSeed<'de, Value = DA::Deserialized>,
   {
-    Self::try_take_one_seed(self, PhantomData)
+    Self::try_take_one_seed(self, DA::SEED)
   }
 
   /// Note: Always remember to call .drain_read_notifications() just before
@@ -532,7 +532,7 @@ impl<'a, 'de, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  DA::Deserialized: Deserialize<'de>,
+  DA: DefaultSeed<'de, Value = DA::Deserialized>,
 {
   type Item = ReadResult<DeserializedCacheChange<D>>;
 
@@ -577,7 +577,7 @@ impl<'a, 'de, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  DA::Deserialized: Deserialize<'de>,
+  DA: DefaultSeed<'de, Value = DA::Deserialized>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().
