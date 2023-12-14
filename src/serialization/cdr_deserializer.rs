@@ -14,7 +14,7 @@ use crate::{
   Keyed, RepresentationIdentifier,
 };
 
-use super::no_key::DefaultSeed;
+use super::no_key::{DefaultSeed, FromBytesWithEncoding};
 
 /// This type adapts CdrDeserializer (which implements serde::Deserializer) to
 /// work as a [`with_key::DeserializerAdapter`] and
@@ -47,16 +47,32 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
     seed: S,
   ) -> Result<D>
   where
-    S: DeserializeSeed<'de, Value = Self::Deserialized>,
+    S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>,
   {
-    deserialize_from_cdr_seed(input_bytes, encoding, seed).map(|(d, _size)| d)
+    seed.from_bytes(input_bytes, encoding)
   }
 }
 
 impl<'de, D> DefaultSeed<'de, D> for CDRDeserializerAdapter<D> where D: serde::Deserialize<'de> {
-    type Seed = PhantomData<D>;
-    const SEED: Self::Seed = PhantomData;
+    type Seed = CdrDeserializerSeed<D>;
+    const SEED: Self::Seed = CdrDeserializerSeed(PhantomData);
 }
+
+pub struct CdrDeserializerSeed<D>(PhantomData<D>);
+
+impl<'de, D> FromBytesWithEncoding<D> for CdrDeserializerSeed<D> where D: serde::Deserialize<'de> {
+    type Error = Error;
+
+    fn from_bytes<'d>(
+      self,
+      input_bytes: &[u8],
+      encoding: RepresentationIdentifier,
+    ) -> Result<D> {
+      deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
+    }
+}
+
+
 
 impl<D> with_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
 where
@@ -171,12 +187,12 @@ where
 }
 
 /// return deserialized object + count of bytes consumed
-pub fn deserialize_from_cdr<T>(
+pub fn deserialize_from_cdr<'de, T>(
   input_bytes: &[u8],
   encoding: RepresentationIdentifier,
 ) -> Result<(T, usize)>
 where
-  T: DeserializeOwned,
+  T: serde::Deserialize<'de>,
 {
   deserialize_from_cdr_seed(input_bytes, encoding, PhantomData)
 }
