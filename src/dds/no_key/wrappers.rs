@@ -92,7 +92,7 @@ where
     DA::supported_encodings()
   }
 
-  fn from_bytes_seed<'de, S>(
+  fn from_bytes_seed<S>(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
     seed: S,

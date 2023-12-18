@@ -33,7 +33,7 @@ pub mod no_key {
     ///
     /// `encoding` must be something given by `supported_encodings()`, or
     /// implementation may fail with Err or `panic!()`.
-    fn from_bytes_seed<'de, S>(
+    fn from_bytes_seed<S>(
       input_bytes: &[u8],
       encoding: RepresentationIdentifier,
       seed: S,
@@ -59,7 +59,7 @@ pub mod no_key {
     /// This method has a default implementation, but the default will make a
     /// copy of all the input data in memory and then call from_bytes() .
     // In order to avoid the copy, implement also this method.
-    fn from_vec_bytes_seed<'de, S>(
+    fn from_vec_bytes_seed<S>(
       input_vec_bytes: &[Bytes],
       encoding: RepresentationIdentifier,
       seed: S,
@@ -97,7 +97,7 @@ pub mod no_key {
   pub trait FromBytesWithEncoding<D> {
     type Error;
 
-    fn from_bytes<'de>(
+    fn from_bytes(
       self,
       input_bytes: &[u8],
       encoding: RepresentationIdentifier,

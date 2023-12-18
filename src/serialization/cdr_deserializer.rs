@@ -41,7 +41,7 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
     &REPR_IDS
   }
 
-  fn from_bytes_seed<'de, S>(
+  fn from_bytes_seed<S>(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
     seed: S,
@@ -69,7 +69,7 @@ where
 {
   type Error = Error;
 
-  fn from_bytes<'d>(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
+  fn from_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
     deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
   }
 }

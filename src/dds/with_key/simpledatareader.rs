@@ -238,7 +238,7 @@ where
     hash_to_key_map.insert(instance_key.hash_key(false), instance_key);
   }
 
-  fn deserialize_seed<'de, S>(
+  fn deserialize_seed<S>(
     timestamp: Timestamp,
     cc: &CacheChange,
     hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
@@ -325,7 +325,7 @@ where
 
   /// Note: Always remember to call .drain_read_notifications() just before
   /// calling this one. Otherwise, new notifications may not appear.
-  pub fn try_take_one_seed<'de, S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  pub fn try_take_one_seed<S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
     S: FromBytesWithEncoding<DA::Deserialized, Error = DA::Error>,
   {
