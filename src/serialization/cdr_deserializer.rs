@@ -69,8 +69,13 @@ where
 
 pub struct CdrDeserializerSeed<S>(S);
 
-impl<'de, S> CdrDeserializerSeed<S> where S: serde::de::DeserializeSeed<'de> {
-  pub fn new(seed: S) -> Self { Self(seed) }
+impl<'de, S> From<S> for CdrDeserializerSeed<S>
+where
+  S: serde::de::DeserializeSeed<'de>,
+{
+  fn from(seed: S) -> Self {
+    Self(seed)
+  }
 }
 
 impl<'de, D, S> DecodeWithEncoding<D> for CdrDeserializerSeed<S>
@@ -83,7 +88,6 @@ where
     deserialize_from_cdr_seed(input_bytes, encoding, self.0).map(|(d, _size)| d)
   }
 }
-
 
 impl<D> with_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
 where

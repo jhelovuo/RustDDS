@@ -53,7 +53,14 @@ where
   where
     DA: DefaultSeed<D>,
   {
-    match self.keyed_simpledatareader.try_take_one() {
+    Self::try_take_one_seed(&self, DA::SEED)
+  }
+
+  pub fn try_take_one_seed<S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    S: DecodeWithEncoding<DA::Deserialized>,
+  {
+    match self.keyed_simpledatareader.try_take_one_seed(seed) {
       Err(e) => Err(e),
       Ok(None) => Ok(None),
       Ok(Some(kdcc)) => match DeserializedCacheChange::<D>::from_keyed(kdcc) {
