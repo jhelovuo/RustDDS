@@ -9,10 +9,7 @@ use std::{
 };
 
 use futures::stream::{FusedStream, Stream};
-use serde::{
-  de::{DeserializeOwned, DeserializeSeed},
-  Deserialize,
-};
+use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};

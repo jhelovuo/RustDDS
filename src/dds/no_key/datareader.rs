@@ -6,7 +6,6 @@ use std::{
 
 use mio_06::{self, Evented};
 use futures::stream::{FusedStream, Stream};
-use serde::Deserialize;
 
 use crate::{
   dds::{

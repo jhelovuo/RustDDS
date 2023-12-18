@@ -1,7 +1,6 @@
 use std::{marker::PhantomData, ops::Deref};
 
 use bytes::Bytes;
-use serde::de::DeserializeSeed;
 
 use crate::{dds::adapters::{*, no_key::{DefaultSeed, FromBytesWithEncoding}}, messages::submessages::submessages::RepresentationIdentifier, Keyed};
 

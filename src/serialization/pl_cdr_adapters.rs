@@ -2,7 +2,6 @@ use std::marker::PhantomData;
 
 use bytes::Bytes;
 use byteorder::{ByteOrder, LittleEndian};
-use serde::de::DeserializeSeed;
 
 use crate::{
   dds::adapters::{no_key, with_key},

@@ -7,10 +7,7 @@
 /// for WITH_KEY topics, we need to be able to (de)serialize the key in addition
 /// to data.
 pub mod no_key {
-  use std::marker::PhantomData;
-
   use bytes::Bytes;
-  use serde::Deserialize;
 
   use crate::RepresentationIdentifier;
 

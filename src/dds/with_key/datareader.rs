@@ -10,7 +10,6 @@ use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
 use mio_08;
 use futures::stream::{FusedStream, Stream};
-use serde::Deserialize;
 
 use super::datasample_cache::DataSampleCache;
 use crate::{

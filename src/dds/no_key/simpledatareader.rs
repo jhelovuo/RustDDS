@@ -5,7 +5,6 @@ use futures::stream::{FusedStream, Stream, StreamExt};
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
 use mio_08;
-use serde::Deserialize;
 
 use crate::{
   dds::{
