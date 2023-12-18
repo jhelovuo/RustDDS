@@ -153,6 +153,12 @@ where
   }
 }
 
+impl<D> Clone for PlCdrDeserializer<D> {
+  fn clone(&self) -> Self {
+    Self(self.0.clone())
+  }
+}
+
 impl<D> with_key::DeserializerAdapter<D> for PlCdrDeserializerAdapter<D>
 where
   D: Keyed + PlCdrDeserialize,

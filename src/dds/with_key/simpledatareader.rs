@@ -382,9 +382,22 @@ where
     &self.my_topic
   }
 
-  pub fn as_async_stream(&self) -> SimpleDataReaderStream<D, DA> {
+  pub fn as_async_stream<S>(&self) -> SimpleDataReaderStream<D, S, DA>
+  where
+    DA: DefaultSeed<D, Seed = S>,
+    DA::Seed: Clone,
+    S: DecodeWithEncoding<DA::Deserialized>,
+  {
+    Self::as_async_stream_seed(self, DA::SEED)
+  }
+
+  pub fn as_async_stream_seed<S>(&self, seed: S) -> SimpleDataReaderStream<D, S, DA>
+  where
+    S: DecodeWithEncoding<DA::Deserialized> + Clone,
+  {
     SimpleDataReaderStream {
       simple_datareader: self,
+      seed,
     }
   }
 
@@ -512,26 +525,30 @@ where
 pub struct SimpleDataReaderStream<
   'a,
   D: Keyed + 'static,
+  S: DecodeWithEncoding<DA::Deserialized>,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
   simple_datareader: &'a SimpleDataReader<D, DA>,
+  seed: S,
 }
 
 // ----------------------------------------------
 // ----------------------------------------------
 
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
-impl<'a, D, DA> Unpin for SimpleDataReaderStream<'a, D, DA>
+impl<'a, D, S, DA> Unpin for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
+  S: DecodeWithEncoding<DA::Deserialized> + Unpin,
 {
 }
 
-impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
+impl<'a, D, S, DA> Stream for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D> + DefaultSeed<D>,
+  DA: DeserializerAdapter<D>,
+  S: DecodeWithEncoding<DA::Deserialized> + Clone,
 {
   type Item = ReadResult<DeserializedCacheChange<D>>;
 
@@ -544,7 +561,7 @@ where
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
-    match self.simple_datareader.try_take_one() {
+    match self.simple_datareader.try_take_one_seed(self.seed.clone()) {
       Err(e) =>
       // DDS fails
       {
@@ -562,7 +579,7 @@ where
         // 2. try take_bare again, in case something arrived just now
         // 3. if nothing still, return pending.
         self.simple_datareader.set_waker(Some(cx.waker().clone()));
-        match self.simple_datareader.try_take_one() {
+        match self.simple_datareader.try_take_one_seed(self.seed.clone()) {
           Err(e) => Poll::Ready(Some(Err(e))),
           Ok(Some(d)) => Poll::Ready(Some(Ok(d))),
           Ok(None) => Poll::Pending,
@@ -572,10 +589,11 @@ where
   } // fn
 } // impl
 
-impl<'a, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
+impl<'a, D, S, DA> FusedStream for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D> + DefaultSeed<D>,
+  DA: DeserializerAdapter<D>,
+  S: DecodeWithEncoding<DA::Deserialized> + Clone,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

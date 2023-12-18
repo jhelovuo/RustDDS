@@ -96,7 +96,7 @@ pub mod no_key {
   }
 
   pub trait DefaultSeed<D>: DeserializerAdapter<D> {
-    type Seed: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>;
+    type Seed: DecodeWithEncoding<Self::Deserialized, Error = Self::Error> + Clone;
     const SEED: Self::Seed;
   }
 

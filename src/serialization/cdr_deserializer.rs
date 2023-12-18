@@ -67,6 +67,13 @@ where
   }
 }
 
+impl<D> Clone for CdrDeserializerNoSeed<D> {
+  fn clone(&self) -> Self {
+    Self(self.0.clone())
+  }
+}
+
+#[derive(Clone)]
 pub struct CdrDeserializerSeed<S>(S);
 
 impl<'de, S> From<S> for CdrDeserializerSeed<S>

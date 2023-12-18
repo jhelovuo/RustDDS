@@ -84,9 +84,19 @@ where
   where
     DA: DefaultSeed<D>,
   {
+    Self::as_async_stream_seed(self, DA::SEED)
+  }
+
+  pub fn as_async_stream_seed<'a, S>(
+    &'a self,
+    seed: S,
+  ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + 'a
+  where
+    S: DecodeWithEncoding<DA::Deserialized> + Clone + 'a,
+  {
     self
       .keyed_simpledatareader
-      .as_async_stream()
+      .as_async_stream_seed(seed)
       .filter_map(move |r| async {
         // This is Stream::filter_map, so returning None means just skipping Item.
         match r {
