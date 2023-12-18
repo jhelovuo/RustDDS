@@ -10,6 +10,8 @@ use crate::{
   Keyed, RepresentationIdentifier,
 };
 
+use super::no_key::FromBytesWithEncoding;
+
 // This is to be implemented by all Discovery message types.
 // .. likely it is not useful for others.
 pub trait PlCdrSerialize {
@@ -117,37 +119,40 @@ where
   fn from_bytes_seed<'de, S>(
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
-    _seed: S,
+    seed: S,
   ) -> Result<D, Self::Error>
   where
-    S: DeserializeSeed<'de, Value = Self::Deserialized>,
+    S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>,
   {
-    match encoding {
-      RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
-        D::from_pl_cdr_bytes(input_bytes, encoding)
-      }
-      repr_id => Err(PlCdrDeserializeError::NotSupported(format!(
-        "Unknown representation identifier {:?}",
-        repr_id
-      ))),
-    }
+    seed.from_bytes(input_bytes, encoding)
   }
 }
 
 
 impl<'de, D> no_key::DefaultSeed<'de, D> for PlCdrDeserializerAdapter<D> where D: PlCdrDeserialize {
-  type Seed = Dummy<D>;
-  const SEED: Self::Seed = Dummy(PhantomData);
+  type Seed = PlCdrDeserializer<D>;
+  const SEED: Self::Seed = PlCdrDeserializer(PhantomData);
 }
 
-pub struct Dummy<D>(PhantomData<D>);
-impl<'de, T> DeserializeSeed<'de> for Dummy<T> {
-    type Value = T;
+pub struct PlCdrDeserializer<D>(PhantomData<D>);
 
-    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-    where
-        D: serde::Deserializer<'de> {
-        todo!()
+impl<D> FromBytesWithEncoding<D> for PlCdrDeserializer<D> where D: PlCdrDeserialize {
+    type Error = PlCdrDeserializeError;
+
+    fn from_bytes<'de>(
+      self,
+      input_bytes: &[u8],
+      encoding: RepresentationIdentifier,
+    ) -> Result<D, Self::Error> {
+      match encoding {
+        RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
+          D::from_pl_cdr_bytes(input_bytes, encoding)
+        }
+        repr_id => Err(PlCdrDeserializeError::NotSupported(format!(
+          "Unknown representation identifier {:?}",
+          repr_id
+        ))),
+      }
     }
 }
 
