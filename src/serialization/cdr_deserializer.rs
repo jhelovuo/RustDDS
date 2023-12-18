@@ -50,13 +50,13 @@ impl<'de, D> DefaultSeed<D> for CDRDeserializerAdapter<D>
 where
   D: serde::Deserialize<'de>,
 {
-  type Seed = CdrDeserializerSeed<D>;
-  const SEED: Self::Seed = CdrDeserializerSeed(PhantomData);
+  type Seed = CdrDeserializerNoSeed<D>;
+  const SEED: Self::Seed = CdrDeserializerNoSeed(PhantomData);
 }
 
-pub struct CdrDeserializerSeed<D>(PhantomData<D>);
+pub struct CdrDeserializerNoSeed<D>(PhantomData<D>);
 
-impl<'de, D> DecodeWithEncoding<D> for CdrDeserializerSeed<D>
+impl<'de, D> DecodeWithEncoding<D> for CdrDeserializerNoSeed<D>
 where
   D: serde::Deserialize<'de>,
 {
@@ -66,6 +66,24 @@ where
     deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
   }
 }
+
+pub struct CdrDeserializerSeed<S>(S);
+
+impl<'de, S> CdrDeserializerSeed<S> where S: serde::de::DeserializeSeed<'de> {
+  pub fn new(seed: S) -> Self { Self(seed) }
+}
+
+impl<'de, D, S> DecodeWithEncoding<D> for CdrDeserializerSeed<S>
+where
+  S: serde::de::DeserializeSeed<'de, Value = D>,
+{
+  type Error = Error;
+
+  fn decode_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
+    deserialize_from_cdr_seed(input_bytes, encoding, self.0).map(|(d, _size)| d)
+  }
+}
+
 
 impl<D> with_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
 where
