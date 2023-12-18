@@ -39,7 +39,7 @@ pub mod no_key {
       seed: S,
     ) -> Result<D, Self::Error>
     where
-      S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>;
+      S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>;
 
     /// Deserialize data from bytes to an object.
     /// `encoding` must be something given by `supported_encodings()`, or
@@ -65,7 +65,7 @@ pub mod no_key {
       seed: S,
     ) -> Result<D, Self::Error>
     where
-      S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>,
+      S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>,
     {
       let total_len = input_vec_bytes.iter().map(Bytes::len).sum();
       let mut total_payload = Vec::with_capacity(total_len);
@@ -90,14 +90,14 @@ pub mod no_key {
   }
 
   pub trait DefaultSeed<'de, D>: DeserializerAdapter<D> {
-    type Seed: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>;
+    type Seed: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>;
     const SEED: Self::Seed;
   }
 
-  pub trait FromBytesWithEncoding<D> {
+  pub trait DecodeWithEncoding<D> {
     type Error;
 
-    fn from_bytes(
+    fn decode_bytes(
       self,
       input_bytes: &[u8],
       encoding: RepresentationIdentifier,

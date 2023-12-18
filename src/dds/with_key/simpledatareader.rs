@@ -20,7 +20,7 @@ use crate::{
   dds::{
     adapters::{
       with_key::*,
-      no_key::{DefaultSeed, FromBytesWithEncoding},
+      no_key::{DefaultSeed, DecodeWithEncoding},
     },
     ddsdata::*,
     key::*,
@@ -245,7 +245,7 @@ where
     seed: S,
   ) -> ReadResult<DeserializedCacheChange<D>>
   where
-    S: FromBytesWithEncoding<DA::Deserialized, Error = DA::Error>,
+    S: DecodeWithEncoding<DA::Deserialized, Error = DA::Error>,
   {
     match cc.data_value {
       DDSData::Data {
@@ -327,7 +327,7 @@ where
   /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one_seed<S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    S: FromBytesWithEncoding<DA::Deserialized, Error = DA::Error>,
+    S: DecodeWithEncoding<DA::Deserialized, Error = DA::Error>,
   {
     let is_reliable = matches!(
       self.qos_policy.reliability(),

@@ -14,7 +14,7 @@ use crate::{
   Keyed, RepresentationIdentifier,
 };
 
-use super::no_key::{DefaultSeed, FromBytesWithEncoding};
+use super::no_key::{DefaultSeed, DecodeWithEncoding};
 
 /// This type adapts CdrDeserializer (which implements serde::Deserializer) to
 /// work as a [`with_key::DeserializerAdapter`] and
@@ -47,9 +47,9 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
     seed: S,
   ) -> Result<D>
   where
-    S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>,
+    S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>,
   {
-    seed.from_bytes(input_bytes, encoding)
+    seed.decode_bytes(input_bytes, encoding)
   }
 }
 
@@ -63,13 +63,13 @@ where
 
 pub struct CdrDeserializerSeed<D>(PhantomData<D>);
 
-impl<'de, D> FromBytesWithEncoding<D> for CdrDeserializerSeed<D>
+impl<'de, D> DecodeWithEncoding<D> for CdrDeserializerSeed<D>
 where
   D: serde::Deserialize<'de>,
 {
   type Error = Error;
 
-  fn from_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
+  fn decode_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
     deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
   }
 }

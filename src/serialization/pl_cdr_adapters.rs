@@ -9,7 +9,7 @@ use crate::{
   Keyed, RepresentationIdentifier,
 };
 
-use super::no_key::FromBytesWithEncoding;
+use super::no_key::DecodeWithEncoding;
 
 // This is to be implemented by all Discovery message types.
 // .. likely it is not useful for others.
@@ -121,9 +121,9 @@ where
     seed: S,
   ) -> Result<D, Self::Error>
   where
-    S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>,
+    S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>,
   {
-    seed.from_bytes(input_bytes, encoding)
+    seed.decode_bytes(input_bytes, encoding)
   }
 }
 
@@ -137,13 +137,13 @@ where
 
 pub struct PlCdrDeserializer<D>(PhantomData<D>);
 
-impl<D> FromBytesWithEncoding<D> for PlCdrDeserializer<D>
+impl<D> DecodeWithEncoding<D> for PlCdrDeserializer<D>
 where
   D: PlCdrDeserialize,
 {
   type Error = PlCdrDeserializeError;
 
-  fn from_bytes(
+  fn decode_bytes(
     self,
     input_bytes: &[u8],
     encoding: RepresentationIdentifier,
