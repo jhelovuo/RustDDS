@@ -115,15 +115,8 @@ where
     &REPR_IDS
   }
 
-  fn from_bytes_seed<S>(
-    input_bytes: &[u8],
-    encoding: RepresentationIdentifier,
-    seed: S,
-  ) -> Result<D, Self::Error>
-  where
-    S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>,
-  {
-    seed.decode_bytes(input_bytes, encoding)
+  fn transform_deserialized(deserialized: Self::Deserialized) -> D {
+    deserialized
   }
 }
 

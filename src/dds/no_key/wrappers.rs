@@ -3,10 +3,7 @@ use std::{marker::PhantomData, ops::Deref};
 use bytes::Bytes;
 
 use crate::{
-  dds::adapters::{
-    *,
-    no_key::{DefaultSeed, DecodeWithEncoding},
-  },
+  dds::adapters::{*, no_key::DefaultSeed},
   messages::submessages::submessages::RepresentationIdentifier,
   Keyed,
 };
@@ -92,15 +89,10 @@ where
     DA::supported_encodings()
   }
 
-  fn from_bytes_seed<S>(
-    input_bytes: &[u8],
-    encoding: RepresentationIdentifier,
-    seed: S,
-  ) -> Result<NoKeyWrapper<D>, DA::Error>
-  where
-    S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>,
-  {
-    DA::from_bytes_seed(input_bytes, encoding, seed).map(|d| NoKeyWrapper::<D> { d })
+  fn transform_deserialized(deserialized: Self::Deserialized) -> NoKeyWrapper<D> {
+    NoKeyWrapper::<D> {
+      d: DA::transform_deserialized(deserialized),
+    }
   }
 }
 

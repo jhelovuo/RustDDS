@@ -29,6 +29,8 @@ pub mod no_key {
     /// See RTPS specification Section 10 and Table 10.3
     fn supported_encodings() -> &'static [RepresentationIdentifier];
 
+    fn transform_deserialized(deserialized: Self::Deserialized) -> D;
+
     /// Deserialize data from bytes to an object using the given seed.
     ///
     /// `encoding` must be something given by `supported_encodings()`, or
@@ -39,7 +41,12 @@ pub mod no_key {
       seed: S,
     ) -> Result<D, Self::Error>
     where
-      S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>;
+      S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>,
+    {
+      seed
+        .decode_bytes(input_bytes, encoding)
+        .map(Self::transform_deserialized)
+    }
 
     /// Deserialize data from bytes to an object.
     /// `encoding` must be something given by `supported_encodings()`, or
