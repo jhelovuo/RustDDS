@@ -316,9 +316,9 @@ where
 
   /// Note: Always remember to call .drain_read_notifications() just before
   /// calling this one. Otherwise, new notifications may not appear.
-  pub fn try_take_one<'de>(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    DA: DeserializerAdapter<D> + DefaultSeed<'de, D>,
+    DA: DeserializerAdapter<D> + DefaultSeed<D>,
   {
     Self::try_take_one_seed(self, DA::SEED)
   }
@@ -528,10 +528,10 @@ where
 {
 }
 
-impl<'a, 'de, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
+impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D> + DefaultSeed<'de, D>,
+  DA: DeserializerAdapter<D> + DefaultSeed<D>,
 {
   type Item = ReadResult<DeserializedCacheChange<D>>;
 
@@ -572,10 +572,10 @@ where
   } // fn
 } // impl
 
-impl<'a, 'de, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
+impl<'a, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D> + DefaultSeed<'de, D>,
+  DA: DeserializerAdapter<D> + DefaultSeed<D>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

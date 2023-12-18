@@ -53,7 +53,7 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
   }
 }
 
-impl<'de, D> DefaultSeed<'de, D> for CDRDeserializerAdapter<D>
+impl<'de, D> DefaultSeed<D> for CDRDeserializerAdapter<D>
 where
   D: serde::Deserialize<'de>,
 {

@@ -127,7 +127,7 @@ where
   }
 }
 
-impl<'de, D> no_key::DefaultSeed<'de, D> for PlCdrDeserializerAdapter<D>
+impl<D> no_key::DefaultSeed<D> for PlCdrDeserializerAdapter<D>
 where
   D: PlCdrDeserialize,
 {

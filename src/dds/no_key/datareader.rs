@@ -73,9 +73,9 @@ where
   }
 }
 
-impl<'de, D: 'static, DA> DataReader<D, DA>
+impl<D: 'static, DA> DataReader<D, DA>
 where
-  DA: DefaultSeed<'de, D>,
+  DA: DefaultSeed<D>,
 {
   /// Reads amount of samples found with `max_samples` and `read_condition`
   /// parameters.
@@ -599,10 +599,10 @@ where
 {
 }
 
-impl<'de, D, DA> Stream for DataReaderStream<D, DA>
+impl<D, DA> Stream for DataReaderStream<D, DA>
 where
   D: 'static,
-  DA: DefaultSeed<'de, D>,
+  DA: DefaultSeed<D>,
 {
   type Item = ReadResult<D>;
 
@@ -618,10 +618,10 @@ where
   }
 }
 
-impl<'de, D, DA> FusedStream for DataReaderStream<D, DA>
+impl<D, DA> FusedStream for DataReaderStream<D, DA>
 where
   D: 'static,
-  DA: DefaultSeed<'de, D>,
+  DA: DefaultSeed<D>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

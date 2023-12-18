@@ -49,9 +49,9 @@ where
     self.keyed_simpledatareader.drain_read_notifications();
   }
 
-  pub fn try_take_one<'de>(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    DA: DefaultSeed<'de, D>,
+    DA: DefaultSeed<D>,
   {
     match self.keyed_simpledatareader.try_take_one() {
       Err(e) => Err(e),
@@ -71,11 +71,11 @@ where
     self.keyed_simpledatareader.guid()
   }
 
-  pub fn as_async_stream<'de>(
+  pub fn as_async_stream(
     &self,
   ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_
   where
-    DA: DefaultSeed<'de, D>,
+    DA: DefaultSeed<D>,
   {
     self
       .keyed_simpledatareader

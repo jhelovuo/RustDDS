@@ -104,9 +104,9 @@ where
   }
 }
 
-impl<'de, D, DA> DefaultSeed<'de, NoKeyWrapper<D>> for DAWrapper<DA>
+impl<D, DA> DefaultSeed<NoKeyWrapper<D>> for DAWrapper<DA>
 where
-  DA: DefaultSeed<'de, D>,
+  DA: DefaultSeed<D>,
 {
   type Seed = DA::Seed;
   const SEED: Self::Seed = DA::SEED;

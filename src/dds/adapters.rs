@@ -46,12 +46,9 @@ pub mod no_key {
     /// implementation may fail with Err or `panic!()`.
     ///
     /// Only usable if the `Self::Deserialized` type can be deserialized without a seed.
-    fn from_bytes<'de>(
-      input_bytes: &[u8],
-      encoding: RepresentationIdentifier,
-    ) -> Result<D, Self::Error>
+    fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D, Self::Error>
     where
-      Self: DefaultSeed<'de, D>,
+      Self: DefaultSeed<D>,
     {
       Self::from_bytes_seed(input_bytes, encoding, Self::SEED)
     }
@@ -78,18 +75,18 @@ pub mod no_key {
     /// Deserialize from a vector of `Bytes`.
     ///
     /// Only usable if the `Self::Deserialized` type can be deserialized without a seed.
-    fn from_vec_bytes<'de>(
+    fn from_vec_bytes(
       input_vec_bytes: &[Bytes],
       encoding: RepresentationIdentifier,
     ) -> Result<D, Self::Error>
     where
-      Self: DefaultSeed<'de, D>,
+      Self: DefaultSeed<D>,
     {
       Self::from_vec_bytes_seed(input_vec_bytes, encoding, Self::SEED)
     }
   }
 
-  pub trait DefaultSeed<'de, D>: DeserializerAdapter<D> {
+  pub trait DefaultSeed<D>: DeserializerAdapter<D> {
     type Seed: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>;
     const SEED: Self::Seed;
   }
