@@ -65,7 +65,7 @@ pub mod no_key {
       seed: S,
     ) -> Result<D, Self::Error>
     where
-      S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>
+      S: FromBytesWithEncoding<Self::Deserialized, Error = Self::Error>,
     {
       let total_len = input_vec_bytes.iter().map(Bytes::len).sum();
       let mut total_payload = Vec::with_capacity(total_len);
@@ -83,7 +83,7 @@ pub mod no_key {
       encoding: RepresentationIdentifier,
     ) -> Result<D, Self::Error>
     where
-      Self: DefaultSeed<'de, D>
+      Self: DefaultSeed<'de, D>,
     {
       Self::from_vec_bytes_seed(input_vec_bytes, encoding, Self::SEED)
     }

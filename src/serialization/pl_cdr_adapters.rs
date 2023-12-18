@@ -127,32 +127,37 @@ where
   }
 }
 
-
-impl<'de, D> no_key::DefaultSeed<'de, D> for PlCdrDeserializerAdapter<D> where D: PlCdrDeserialize {
+impl<'de, D> no_key::DefaultSeed<'de, D> for PlCdrDeserializerAdapter<D>
+where
+  D: PlCdrDeserialize,
+{
   type Seed = PlCdrDeserializer<D>;
   const SEED: Self::Seed = PlCdrDeserializer(PhantomData);
 }
 
 pub struct PlCdrDeserializer<D>(PhantomData<D>);
 
-impl<D> FromBytesWithEncoding<D> for PlCdrDeserializer<D> where D: PlCdrDeserialize {
-    type Error = PlCdrDeserializeError;
+impl<D> FromBytesWithEncoding<D> for PlCdrDeserializer<D>
+where
+  D: PlCdrDeserialize,
+{
+  type Error = PlCdrDeserializeError;
 
-    fn from_bytes<'de>(
-      self,
-      input_bytes: &[u8],
-      encoding: RepresentationIdentifier,
-    ) -> Result<D, Self::Error> {
-      match encoding {
-        RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
-          D::from_pl_cdr_bytes(input_bytes, encoding)
-        }
-        repr_id => Err(PlCdrDeserializeError::NotSupported(format!(
-          "Unknown representation identifier {:?}",
-          repr_id
-        ))),
+  fn from_bytes<'de>(
+    self,
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> Result<D, Self::Error> {
+    match encoding {
+      RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
+        D::from_pl_cdr_bytes(input_bytes, encoding)
       }
+      repr_id => Err(PlCdrDeserializeError::NotSupported(format!(
+        "Unknown representation identifier {:?}",
+        repr_id
+      ))),
     }
+  }
 }
 
 impl<D> with_key::DeserializerAdapter<D> for PlCdrDeserializerAdapter<D>

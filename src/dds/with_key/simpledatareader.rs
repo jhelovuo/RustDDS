@@ -18,7 +18,10 @@ use mio_08;
 
 use crate::{
   dds::{
-    adapters::{with_key::*, no_key::{DefaultSeed, FromBytesWithEncoding}},
+    adapters::{
+      with_key::*,
+      no_key::{DefaultSeed, FromBytesWithEncoding},
+    },
     ddsdata::*,
     key::*,
     pubsub::Subscriber,
