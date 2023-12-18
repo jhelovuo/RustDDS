@@ -7,6 +7,8 @@
 /// for WITH_KEY topics, we need to be able to (de)serialize the key in addition
 /// to data.
 pub mod no_key {
+  use std::error::Error;
+
   use bytes::Bytes;
 
   use crate::RepresentationIdentifier;
@@ -39,9 +41,9 @@ pub mod no_key {
       input_bytes: &[u8],
       encoding: RepresentationIdentifier,
       seed: S,
-    ) -> Result<D, Self::Error>
+    ) -> Result<D, S::Error>
     where
-      S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>,
+      S: DecodeWithEncoding<Self::Deserialized>,
     {
       seed
         .decode_bytes(input_bytes, encoding)
@@ -99,7 +101,7 @@ pub mod no_key {
   }
 
   pub trait DecodeWithEncoding<D> {
-    type Error;
+    type Error: Error;
 
     fn decode_bytes(
       self,

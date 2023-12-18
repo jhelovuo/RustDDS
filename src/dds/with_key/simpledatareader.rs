@@ -245,7 +245,7 @@ where
     seed: S,
   ) -> ReadResult<DeserializedCacheChange<D>>
   where
-    S: DecodeWithEncoding<DA::Deserialized, Error = DA::Error>,
+    S: DecodeWithEncoding<DA::Deserialized>,
   {
     match cc.data_value {
       DDSData::Data {
@@ -327,7 +327,7 @@ where
   /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one_seed<S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    S: DecodeWithEncoding<DA::Deserialized, Error = DA::Error>,
+    S: DecodeWithEncoding<DA::Deserialized>,
   {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
