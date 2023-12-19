@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::Deref};
 use bytes::Bytes;
 
 use crate::{
-  dds::adapters::{*, no_key::DefaultDecoder},
+  dds::adapters::{no_key::DefaultDecoder, *},
   messages::submessages::submessages::RepresentationIdentifier,
   Keyed,
 };

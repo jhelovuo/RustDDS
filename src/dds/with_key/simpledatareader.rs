@@ -19,8 +19,8 @@ use mio_08;
 use crate::{
   dds::{
     adapters::{
+      no_key::{Decode, DefaultDecoder},
       with_key::*,
-      no_key::{DefaultDecoder, Decode},
     },
     ddsdata::*,
     key::*,

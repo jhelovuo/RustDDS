@@ -23,16 +23,19 @@ pub mod no_key {
     /// deserialized value, so this type might be different from `D`. The basic
     /// pipeline is:
     ///
-    /// byte slice → deserialize → value of type `Self::Deserialized` → call [`Self::transform_deserialized`] → value of type `D`
+    /// byte slice → deserialize → value of type `Self::Deserialized` → call
+    /// [`Self::transform_deserialized`] → value of type `D`
     type Deserialized;
 
     /// Which data representations can the DeserializerAdapter read?
     /// See RTPS specification Section 10 and Table 10.3
     fn supported_encodings() -> &'static [RepresentationIdentifier];
 
-    /// Transform the `Self::Deserialized` type returned by the decoder into a value of type `D`.
+    /// Transform the `Self::Deserialized` type returned by the decoder into a
+    /// value of type `D`.
     ///
-    /// If [`Self::Deserialized`] is set to `D`, this method can be the identity function.
+    /// If [`Self::Deserialized`] is set to `D`, this method can be the identity
+    /// function.
     fn transform_deserialized(deserialized: Self::Deserialized) -> D;
 
     /// Deserialize data from bytes to an object using the given decoder.
@@ -67,7 +70,8 @@ pub mod no_key {
     /// Decode from a slice of [`Bytes`] using the given decoder.
     ///
     /// This method has a default implementation, but the default will make a
-    /// copy of all the input data in memory and then call [`Self::from_bytes_with`].
+    /// copy of all the input data in memory and then call
+    /// [`Self::from_bytes_with`].
     // In order to avoid the copy, implement also this method.
     fn from_vec_bytes_with<S>(
       input_vec_bytes: &[Bytes],
@@ -99,7 +103,8 @@ pub mod no_key {
     }
   }
 
-  /// The `DeserializerAdapter` can be used without a decoder as there is a default one.
+  /// The `DeserializerAdapter` can be used without a decoder as there is a
+  /// default one.
   pub trait DefaultDecoder<D>: DeserializerAdapter<D> {
     /// Type of the default decoder.
     ///
@@ -114,7 +119,8 @@ pub mod no_key {
     const DECODER: Self::Decoder;
   }
 
-  /// Decodes a value of type `D` from a slice of bytes and a [`RepresentationIdentifier`].
+  /// Decodes a value of type `D` from a slice of bytes and a
+  /// [`RepresentationIdentifier`].
   pub trait Decode<D> {
     /// The decoding error type returned by [`Self::decode_bytes`].
     type Error: std::error::Error;

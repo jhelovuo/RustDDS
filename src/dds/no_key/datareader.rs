@@ -9,7 +9,7 @@ use futures::stream::{FusedStream, Stream};
 
 use crate::{
   dds::{
-    adapters::no_key::{DeserializerAdapter, DefaultDecoder},
+    adapters::no_key::{DefaultDecoder, DeserializerAdapter},
     no_key::datasample::DataSample,
     qos::{HasQoSPolicy, QosPolicies},
     readcondition::ReadCondition,

@@ -8,7 +8,6 @@ use crate::{
   structure::parameter_id::ParameterId,
   Keyed, RepresentationIdentifier,
 };
-
 use super::no_key::Decode;
 
 // This is to be implemented by all Discovery message types.
@@ -120,7 +119,8 @@ where
   }
 }
 
-/// A default decoder is available if the target type implements [`PlCdrDeserialize`].
+/// A default decoder is available if the target type implements
+/// [`PlCdrDeserialize`].
 impl<D> no_key::DefaultDecoder<D> for PlCdrDeserializerAdapter<D>
 where
   D: PlCdrDeserialize,

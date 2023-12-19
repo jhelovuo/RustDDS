@@ -13,8 +13,7 @@ use crate::{
   dds::adapters::{no_key, with_key},
   Keyed, RepresentationIdentifier,
 };
-
-use super::no_key::{DefaultDecoder, Decode};
+use super::no_key::{Decode, DefaultDecoder};
 
 /// This type adapts CdrDeserializer (which implements serde::Deserializer) to
 /// work as a [`with_key::DeserializerAdapter`] and
@@ -46,7 +45,8 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
   }
 }
 
-/// A default decoder is available for all types that implement `serde::Deserialize`.
+/// A default decoder is available for all types that implement
+/// `serde::Deserialize`.
 impl<'de, D> DefaultDecoder<D> for CDRDeserializerAdapter<D>
 where
   D: serde::Deserialize<'de>,
