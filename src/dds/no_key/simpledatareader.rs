@@ -51,16 +51,16 @@ where
 
   pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    DA: DefaultSeed<D>,
+    DA: DefaultDecoder<D>,
   {
-    Self::try_take_one_seed(&self, DA::SEED)
+    Self::try_take_one_with(&self, DA::DECODER)
   }
 
-  pub fn try_take_one_seed<S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
     S: Decode<DA::Deserialized>,
   {
-    match self.keyed_simpledatareader.try_take_one_seed(seed) {
+    match self.keyed_simpledatareader.try_take_one_with(decoder) {
       Err(e) => Err(e),
       Ok(None) => Ok(None),
       Ok(Some(kdcc)) => match DeserializedCacheChange::<D>::from_keyed(kdcc) {
@@ -82,21 +82,21 @@ where
     &self,
   ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_
   where
-    DA: DefaultSeed<D>,
+    DA: DefaultDecoder<D>,
   {
-    Self::as_async_stream_seed(self, DA::SEED)
+    Self::as_async_stream_with(self, DA::DECODER)
   }
 
-  pub fn as_async_stream_seed<'a, S>(
+  pub fn as_async_stream_with<'a, S>(
     &'a self,
-    seed: S,
+    decoder: S,
   ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + 'a
   where
     S: Decode<DA::Deserialized> + Clone + 'a,
   {
     self
       .keyed_simpledatareader
-      .as_async_stream_seed(seed)
+      .as_async_stream_with(decoder)
       .filter_map(move |r| async {
         // This is Stream::filter_map, so returning None means just skipping Item.
         match r {

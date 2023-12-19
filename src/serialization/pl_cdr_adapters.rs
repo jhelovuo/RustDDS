@@ -120,14 +120,16 @@ where
   }
 }
 
-impl<D> no_key::DefaultSeed<D> for PlCdrDeserializerAdapter<D>
+/// A default decoder is available if the target type implements [`PlCdrDeserialize`].
+impl<D> no_key::DefaultDecoder<D> for PlCdrDeserializerAdapter<D>
 where
   D: PlCdrDeserialize,
 {
-  type Seed = PlCdrDeserializer<D>;
-  const SEED: Self::Seed = PlCdrDeserializer(PhantomData);
+  type Decoder = PlCdrDeserializer<D>;
+  const DECODER: Self::Decoder = PlCdrDeserializer(PhantomData);
 }
 
+/// Decode type based on [`PlCdrDeserialize`] implementation.
 pub struct PlCdrDeserializer<D>(PhantomData<D>);
 
 impl<D> Decode<D> for PlCdrDeserializer<D>
@@ -155,7 +157,7 @@ where
 
 impl<D> Clone for PlCdrDeserializer<D> {
   fn clone(&self) -> Self {
-    Self(self.0.clone())
+    Self(self.0)
   }
 }
 

@@ -20,7 +20,7 @@ use crate::{
   dds::{
     adapters::{
       with_key::*,
-      no_key::{DefaultSeed, Decode},
+      no_key::{DefaultDecoder, Decode},
     },
     ddsdata::*,
     key::*,
@@ -238,11 +238,11 @@ where
     hash_to_key_map.insert(instance_key.hash_key(false), instance_key);
   }
 
-  fn deserialize_seed<S>(
+  fn deserialize_with<S>(
     timestamp: Timestamp,
     cc: &CacheChange,
     hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
-    seed: S,
+    decoder: S,
   ) -> ReadResult<DeserializedCacheChange<D>>
   where
     S: Decode<DA::Deserialized>,
@@ -256,7 +256,7 @@ where
           .iter()
           .find(|r| **r == serialized_payload.representation_identifier)
         {
-          match DA::from_bytes_seed(&serialized_payload.value, *recognized_rep_id, seed) {
+          match DA::from_bytes_with(&serialized_payload.value, *recognized_rep_id, decoder) {
             // Data update, decoded ok
             Ok(payload) => {
               let p = Sample::Value(payload);
@@ -318,14 +318,14 @@ where
   /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    DA: DeserializerAdapter<D> + DefaultSeed<D>,
+    DA: DeserializerAdapter<D> + DefaultDecoder<D>,
   {
-    Self::try_take_one_seed(self, DA::SEED)
+    Self::try_take_one_with(self, DA::DECODER)
   }
 
   /// Note: Always remember to call .drain_read_notifications() just before
   /// calling this one. Otherwise, new notifications may not appear.
-  pub fn try_take_one_seed<S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
     S: Decode<DA::Deserialized>,
   {
@@ -351,7 +351,7 @@ where
       Some((ts, cc)) => (ts, cc),
     };
 
-    match Self::deserialize_seed(timestamp, cc, hash_to_key_map, seed) {
+    match Self::deserialize_with(timestamp, cc, hash_to_key_map, decoder) {
       Ok(dcc) => {
         read_state_ref.latest_instant = max(read_state_ref.latest_instant, timestamp);
         read_state_ref
@@ -384,20 +384,20 @@ where
 
   pub fn as_async_stream<S>(&self) -> SimpleDataReaderStream<D, S, DA>
   where
-    DA: DefaultSeed<D, Seed = S>,
-    DA::Seed: Clone,
+    DA: DefaultDecoder<D, Decoder = S>,
+    DA::Decoder: Clone,
     S: Decode<DA::Deserialized>,
   {
-    Self::as_async_stream_seed(self, DA::SEED)
+    Self::as_async_stream_with(self, DA::DECODER)
   }
 
-  pub fn as_async_stream_seed<S>(&self, seed: S) -> SimpleDataReaderStream<D, S, DA>
+  pub fn as_async_stream_with<S>(&self, decoder: S) -> SimpleDataReaderStream<D, S, DA>
   where
     S: Decode<DA::Deserialized> + Clone,
   {
     SimpleDataReaderStream {
       simple_datareader: self,
-      seed,
+      decoder,
     }
   }
 
@@ -529,7 +529,7 @@ pub struct SimpleDataReaderStream<
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
   simple_datareader: &'a SimpleDataReader<D, DA>,
-  seed: S,
+  decoder: S,
 }
 
 // ----------------------------------------------
@@ -561,7 +561,10 @@ where
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
-    match self.simple_datareader.try_take_one_seed(self.seed.clone()) {
+    match self
+      .simple_datareader
+      .try_take_one_with(self.decoder.clone())
+    {
       Err(e) =>
       // DDS fails
       {
@@ -579,7 +582,10 @@ where
         // 2. try take_bare again, in case something arrived just now
         // 3. if nothing still, return pending.
         self.simple_datareader.set_waker(Some(cx.waker().clone()));
-        match self.simple_datareader.try_take_one_seed(self.seed.clone()) {
+        match self
+          .simple_datareader
+          .try_take_one_with(self.decoder.clone())
+        {
           Err(e) => Poll::Ready(Some(Err(e))),
           Ok(Some(d)) => Poll::Ready(Some(Ok(d))),
           Ok(None) => Poll::Pending,

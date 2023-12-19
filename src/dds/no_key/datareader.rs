@@ -9,7 +9,7 @@ use futures::stream::{FusedStream, Stream};
 
 use crate::{
   dds::{
-    adapters::no_key::{DeserializerAdapter, DefaultSeed},
+    adapters::no_key::{DeserializerAdapter, DefaultDecoder},
     no_key::datasample::DataSample,
     qos::{HasQoSPolicy, QosPolicies},
     readcondition::ReadCondition,
@@ -75,7 +75,7 @@ where
 
 impl<D: 'static, DA> DataReader<D, DA>
 where
-  DA: DefaultSeed<D>,
+  DA: DefaultDecoder<D>,
 {
   /// Reads amount of samples found with `max_samples` and `read_condition`
   /// parameters.
@@ -602,7 +602,7 @@ where
 impl<D, DA> Stream for DataReaderStream<D, DA>
 where
   D: 'static,
-  DA: DefaultSeed<D>,
+  DA: DefaultDecoder<D>,
 {
   type Item = ReadResult<D>;
 
@@ -621,7 +621,7 @@ where
 impl<D, DA> FusedStream for DataReaderStream<D, DA>
 where
   D: 'static,
-  DA: DefaultSeed<D>,
+  DA: DefaultDecoder<D>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

@@ -14,7 +14,7 @@ use crate::{
   Keyed, RepresentationIdentifier,
 };
 
-use super::no_key::{DefaultSeed, Decode};
+use super::no_key::{DefaultDecoder, Decode};
 
 /// This type adapts CdrDeserializer (which implements serde::Deserializer) to
 /// work as a [`with_key::DeserializerAdapter`] and
@@ -46,17 +46,19 @@ impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
   }
 }
 
-impl<'de, D> DefaultSeed<D> for CDRDeserializerAdapter<D>
+/// A default decoder is available for all types that implement `serde::Deserialize`.
+impl<'de, D> DefaultDecoder<D> for CDRDeserializerAdapter<D>
 where
   D: serde::Deserialize<'de>,
 {
-  type Seed = CdrDeserializerNoSeed<D>;
-  const SEED: Self::Seed = CdrDeserializerNoSeed(PhantomData);
+  type Decoder = CdrDeserializeDecoder<D>;
+  const DECODER: Self::Decoder = CdrDeserializeDecoder(PhantomData);
 }
 
-pub struct CdrDeserializerNoSeed<D>(PhantomData<D>);
+/// Decode type based on a `serde::Deserialize` implementation.
+pub struct CdrDeserializeDecoder<D>(PhantomData<D>);
 
-impl<'de, D> Decode<D> for CdrDeserializerNoSeed<D>
+impl<'de, D> Decode<D> for CdrDeserializeDecoder<D>
 where
   D: serde::Deserialize<'de>,
 {
@@ -67,32 +69,34 @@ where
   }
 }
 
-impl<D> Clone for CdrDeserializerNoSeed<D> {
+impl<D> Clone for CdrDeserializeDecoder<D> {
   fn clone(&self) -> Self {
-    Self(self.0.clone())
+    Self(self.0)
   }
 }
 
+/// Decode type based on a `serde::de::DeserializeSeed` implementation.
 #[derive(Clone)]
-pub struct CdrDeserializerSeed<S>(S);
+pub struct CdrDeserializeSeedDecoder<S>(S);
 
-impl<'de, S> From<S> for CdrDeserializerSeed<S>
+impl<'de, S> From<S> for CdrDeserializeSeedDecoder<S>
 where
   S: serde::de::DeserializeSeed<'de>,
 {
-  fn from(seed: S) -> Self {
-    Self(seed)
+  fn from(decoder: S) -> Self {
+    Self(decoder)
   }
 }
 
-impl<'de, D, S> Decode<D> for CdrDeserializerSeed<S>
+/// Decode type based on a [`serde::de::DeserializeSeed`]-based decoder.
+impl<'de, D, S> Decode<D> for CdrDeserializeSeedDecoder<S>
 where
   S: serde::de::DeserializeSeed<'de, Value = D>,
 {
   type Error = Error;
 
   fn decode_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
-    deserialize_from_cdr_seed(input_bytes, encoding, self.0).map(|(d, _size)| d)
+    deserialize_from_cdr_with(input_bytes, encoding, self.0).map(|(d, _size)| d)
   }
 }
 
@@ -208,6 +212,8 @@ where
   }
 }
 
+/// Decode type based on a [`serde::Deserialize`] implementation.
+///
 /// return deserialized object + count of bytes consumed
 pub fn deserialize_from_cdr<'de, T>(
   input_bytes: &[u8],
@@ -216,14 +222,16 @@ pub fn deserialize_from_cdr<'de, T>(
 where
   T: serde::Deserialize<'de>,
 {
-  deserialize_from_cdr_seed(input_bytes, encoding, PhantomData)
+  deserialize_from_cdr_with(input_bytes, encoding, PhantomData)
 }
 
+/// Decode type using the given [`DeserializeSeed`]-based decoder.
+///
 /// return deserialized object + count of bytes consumed
-pub fn deserialize_from_cdr_seed<'de, S>(
+pub fn deserialize_from_cdr_with<'de, S>(
   input_bytes: &[u8],
   encoding: RepresentationIdentifier,
-  seed: S,
+  decoder: S,
 ) -> Result<(S::Value, usize)>
 where
   S: DeserializeSeed<'de>,
@@ -231,13 +239,13 @@ where
   match encoding {
     RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
       let mut deserializer = CdrDeserializer::<LittleEndian>::new(input_bytes);
-      let t = seed.deserialize(&mut deserializer)?;
+      let t = decoder.deserialize(&mut deserializer)?;
       Ok((t, deserializer.serialized_data_count))
     }
 
     RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => {
       let mut deserializer = CdrDeserializer::<BigEndian>::new(input_bytes);
-      let t = seed.deserialize(&mut deserializer)?;
+      let t = decoder.deserialize(&mut deserializer)?;
       Ok((t, deserializer.serialized_data_count))
     }
 

@@ -7,8 +7,6 @@
 /// for WITH_KEY topics, we need to be able to (de)serialize the key in addition
 /// to data.
 pub mod no_key {
-  use std::error::Error;
-
   use bytes::Bytes;
 
   use crate::RepresentationIdentifier;
@@ -16,7 +14,8 @@ pub mod no_key {
   /// trait for connecting a Deserializer implementation and DataReader
   /// together - no_key version.
   pub trait DeserializerAdapter<D> {
-    type Error: std::error::Error; // Error type
+    /// The error type returned when decoding fails.
+    type Error: std::error::Error;
 
     /// Type after deserialization.
     ///
@@ -24,28 +23,31 @@ pub mod no_key {
     /// deserialized value, so this type might be different from `D`. The basic
     /// pipeline is:
     ///
-    /// bytes -> deserialize -> value of type `Self::Deserialized` -> transform -> value of type `D`
+    /// byte slice → deserialize → value of type `Self::Deserialized` → call [`Self::transform_deserialized`] → value of type `D`
     type Deserialized;
 
     /// Which data representations can the DeserializerAdapter read?
     /// See RTPS specification Section 10 and Table 10.3
     fn supported_encodings() -> &'static [RepresentationIdentifier];
 
+    /// Transform the `Self::Deserialized` type returned by the decoder into a value of type `D`.
+    ///
+    /// If [`Self::Deserialized`] is set to `D`, this method can be the identity function.
     fn transform_deserialized(deserialized: Self::Deserialized) -> D;
 
-    /// Deserialize data from bytes to an object using the given seed.
+    /// Deserialize data from bytes to an object using the given decoder.
     ///
     /// `encoding` must be something given by `supported_encodings()`, or
     /// implementation may fail with Err or `panic!()`.
-    fn from_bytes_seed<S>(
+    fn from_bytes_with<S>(
       input_bytes: &[u8],
       encoding: RepresentationIdentifier,
-      seed: S,
+      decoder: S,
     ) -> Result<D, S::Error>
     where
       S: Decode<Self::Deserialized>,
     {
-      seed
+      decoder
         .decode_bytes(input_bytes, encoding)
         .map(Self::transform_deserialized)
     }
@@ -54,21 +56,23 @@ pub mod no_key {
     /// `encoding` must be something given by `supported_encodings()`, or
     /// implementation may fail with Err or `panic!()`.
     ///
-    /// Only usable if the `Self::Deserialized` type can be deserialized without a seed.
+    /// Only usable if the adapter has a default decoder.
     fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D, Self::Error>
     where
-      Self: DefaultSeed<D>,
+      Self: DefaultDecoder<D>,
     {
-      Self::from_bytes_seed(input_bytes, encoding, Self::SEED)
+      Self::from_bytes_with(input_bytes, encoding, Self::DECODER)
     }
 
+    /// Decode from a slice of [`Bytes`] using the given decoder.
+    ///
     /// This method has a default implementation, but the default will make a
-    /// copy of all the input data in memory and then call from_bytes() .
+    /// copy of all the input data in memory and then call [`Self::from_bytes_with`].
     // In order to avoid the copy, implement also this method.
-    fn from_vec_bytes_seed<S>(
+    fn from_vec_bytes_with<S>(
       input_vec_bytes: &[Bytes],
       encoding: RepresentationIdentifier,
-      seed: S,
+      decoder: S,
     ) -> Result<D, Self::Error>
     where
       S: Decode<Self::Deserialized, Error = Self::Error>,
@@ -78,31 +82,45 @@ pub mod no_key {
       for iv in input_vec_bytes {
         total_payload.extend(iv);
       }
-      Self::from_bytes_seed(&total_payload, encoding, seed)
+      Self::from_bytes_with(&total_payload, encoding, decoder)
     }
 
-    /// Deserialize from a vector of `Bytes`.
+    /// Decode from a slice of [`Bytes`].
     ///
-    /// Only usable if the `Self::Deserialized` type can be deserialized without a seed.
+    /// Only usable if the `Self::Deserialized` type has a default decoder.
     fn from_vec_bytes(
       input_vec_bytes: &[Bytes],
       encoding: RepresentationIdentifier,
     ) -> Result<D, Self::Error>
     where
-      Self: DefaultSeed<D>,
+      Self: DefaultDecoder<D>,
     {
-      Self::from_vec_bytes_seed(input_vec_bytes, encoding, Self::SEED)
+      Self::from_vec_bytes_with(input_vec_bytes, encoding, Self::DECODER)
     }
   }
 
-  pub trait DefaultSeed<D>: DeserializerAdapter<D> {
-    type Seed: Decode<Self::Deserialized, Error = Self::Error> + Clone;
-    const SEED: Self::Seed;
+  /// The `DeserializerAdapter` can be used without a decoder as there is a default one.
+  pub trait DefaultDecoder<D>: DeserializerAdapter<D> {
+    /// Type of the default decoder.
+    ///
+    /// The default decoder needs to be clonable to be usable for async stream
+    /// creation (as it's needed multiple times).
+    type Decoder: Decode<Self::Deserialized, Error = Self::Error> + Clone;
+
+    /// The default decoder value.
+    ///
+    /// This default decoder is typically implemented by forwarding to a
+    /// different trait, e.g. `serde::Deserialize`.
+    const DECODER: Self::Decoder;
   }
 
+  /// Decodes a value of type `D` from a slice of bytes and a [`RepresentationIdentifier`].
   pub trait Decode<D> {
-    type Error: Error;
+    /// The decoding error type returned by [`Self::decode_bytes`].
+    type Error: std::error::Error;
 
+    /// Tries to decode the given byte slice to a value of type `D` using the
+    /// given encoding.
     fn decode_bytes(
       self,
       input_bytes: &[u8],

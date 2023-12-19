@@ -3,7 +3,7 @@ use std::{marker::PhantomData, ops::Deref};
 use bytes::Bytes;
 
 use crate::{
-  dds::adapters::{*, no_key::DefaultSeed},
+  dds::adapters::{*, no_key::DefaultDecoder},
   messages::submessages::submessages::RepresentationIdentifier,
   Keyed,
 };
@@ -89,6 +89,7 @@ where
     DA::supported_encodings()
   }
 
+  /// Wraps the deserialized value into a [`NoKeyWrapper`].
   fn transform_deserialized(deserialized: Self::Deserialized) -> NoKeyWrapper<D> {
     NoKeyWrapper::<D> {
       d: DA::transform_deserialized(deserialized),
@@ -96,12 +97,12 @@ where
   }
 }
 
-impl<D, DA> DefaultSeed<NoKeyWrapper<D>> for DAWrapper<DA>
+impl<D, DA> DefaultDecoder<NoKeyWrapper<D>> for DAWrapper<DA>
 where
-  DA: DefaultSeed<D>,
+  DA: DefaultDecoder<D>,
 {
-  type Seed = DA::Seed;
-  const SEED: Self::Seed = DA::SEED;
+  type Decoder = DA::Decoder;
+  const DECODER: Self::Decoder = DA::DECODER;
 }
 
 // then, implement with_key DA
