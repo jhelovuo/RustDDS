@@ -53,7 +53,7 @@ where
   where
     DA: DefaultDecoder<D>,
   {
-    Self::try_take_one_with(&self, DA::DECODER)
+    Self::try_take_one_with(self, DA::DECODER)
   }
 
   pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
