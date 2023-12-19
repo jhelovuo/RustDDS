@@ -1,6 +1,6 @@
 use std::{io, task::Waker};
 
-use futures::stream::{FusedStream, Stream, StreamExt};
+use futures::stream::{FusedStream, StreamExt};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
@@ -80,7 +80,7 @@ where
 
   pub fn as_async_stream(
     &self,
-  ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_
+  ) -> impl FusedStream<Item = ReadResult<DeserializedCacheChange<D>>> + '_
   where
     DA: DefaultDecoder<D>,
   {
@@ -90,7 +90,7 @@ where
   pub fn as_async_stream_with<'a, S>(
     &'a self,
     decoder: S,
-  ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + 'a
+  ) -> impl FusedStream<Item = ReadResult<DeserializedCacheChange<D>>> + 'a
   where
     S: Decode<DA::Deserialized> + Clone + 'a,
   {
