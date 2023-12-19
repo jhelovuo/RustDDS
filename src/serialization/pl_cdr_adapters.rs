@@ -9,7 +9,7 @@ use crate::{
   Keyed, RepresentationIdentifier,
 };
 
-use super::no_key::DecodeWithEncoding;
+use super::no_key::Decode;
 
 // This is to be implemented by all Discovery message types.
 // .. likely it is not useful for others.
@@ -130,7 +130,7 @@ where
 
 pub struct PlCdrDeserializer<D>(PhantomData<D>);
 
-impl<D> DecodeWithEncoding<D> for PlCdrDeserializer<D>
+impl<D> Decode<D> for PlCdrDeserializer<D>
 where
   D: PlCdrDeserialize,
 {

@@ -20,7 +20,7 @@ use crate::{
   dds::{
     adapters::{
       with_key::*,
-      no_key::{DefaultSeed, DecodeWithEncoding},
+      no_key::{DefaultSeed, Decode},
     },
     ddsdata::*,
     key::*,
@@ -245,7 +245,7 @@ where
     seed: S,
   ) -> ReadResult<DeserializedCacheChange<D>>
   where
-    S: DecodeWithEncoding<DA::Deserialized>,
+    S: Decode<DA::Deserialized>,
   {
     match cc.data_value {
       DDSData::Data {
@@ -327,7 +327,7 @@ where
   /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one_seed<S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    S: DecodeWithEncoding<DA::Deserialized>,
+    S: Decode<DA::Deserialized>,
   {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
@@ -386,14 +386,14 @@ where
   where
     DA: DefaultSeed<D, Seed = S>,
     DA::Seed: Clone,
-    S: DecodeWithEncoding<DA::Deserialized>,
+    S: Decode<DA::Deserialized>,
   {
     Self::as_async_stream_seed(self, DA::SEED)
   }
 
   pub fn as_async_stream_seed<S>(&self, seed: S) -> SimpleDataReaderStream<D, S, DA>
   where
-    S: DecodeWithEncoding<DA::Deserialized> + Clone,
+    S: Decode<DA::Deserialized> + Clone,
   {
     SimpleDataReaderStream {
       simple_datareader: self,
@@ -525,7 +525,7 @@ where
 pub struct SimpleDataReaderStream<
   'a,
   D: Keyed + 'static,
-  S: DecodeWithEncoding<DA::Deserialized>,
+  S: Decode<DA::Deserialized>,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
   simple_datareader: &'a SimpleDataReader<D, DA>,
@@ -540,7 +540,7 @@ impl<'a, D, S, DA> Unpin for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  S: DecodeWithEncoding<DA::Deserialized> + Unpin,
+  S: Decode<DA::Deserialized> + Unpin,
 {
 }
 
@@ -548,7 +548,7 @@ impl<'a, D, S, DA> Stream for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  S: DecodeWithEncoding<DA::Deserialized> + Clone,
+  S: Decode<DA::Deserialized> + Clone,
 {
   type Item = ReadResult<DeserializedCacheChange<D>>;
 
@@ -593,7 +593,7 @@ impl<'a, D, S, DA> FusedStream for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  S: DecodeWithEncoding<DA::Deserialized> + Clone,
+  S: Decode<DA::Deserialized> + Clone,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

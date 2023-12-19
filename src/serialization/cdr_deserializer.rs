@@ -14,7 +14,7 @@ use crate::{
   Keyed, RepresentationIdentifier,
 };
 
-use super::no_key::{DefaultSeed, DecodeWithEncoding};
+use super::no_key::{DefaultSeed, Decode};
 
 /// This type adapts CdrDeserializer (which implements serde::Deserializer) to
 /// work as a [`with_key::DeserializerAdapter`] and
@@ -56,7 +56,7 @@ where
 
 pub struct CdrDeserializerNoSeed<D>(PhantomData<D>);
 
-impl<'de, D> DecodeWithEncoding<D> for CdrDeserializerNoSeed<D>
+impl<'de, D> Decode<D> for CdrDeserializerNoSeed<D>
 where
   D: serde::Deserialize<'de>,
 {
@@ -85,7 +85,7 @@ where
   }
 }
 
-impl<'de, D, S> DecodeWithEncoding<D> for CdrDeserializerSeed<S>
+impl<'de, D, S> Decode<D> for CdrDeserializerSeed<S>
 where
   S: serde::de::DeserializeSeed<'de, Value = D>,
 {

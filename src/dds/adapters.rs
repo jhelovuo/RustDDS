@@ -43,7 +43,7 @@ pub mod no_key {
       seed: S,
     ) -> Result<D, S::Error>
     where
-      S: DecodeWithEncoding<Self::Deserialized>,
+      S: Decode<Self::Deserialized>,
     {
       seed
         .decode_bytes(input_bytes, encoding)
@@ -71,7 +71,7 @@ pub mod no_key {
       seed: S,
     ) -> Result<D, Self::Error>
     where
-      S: DecodeWithEncoding<Self::Deserialized, Error = Self::Error>,
+      S: Decode<Self::Deserialized, Error = Self::Error>,
     {
       let total_len = input_vec_bytes.iter().map(Bytes::len).sum();
       let mut total_payload = Vec::with_capacity(total_len);
@@ -96,11 +96,11 @@ pub mod no_key {
   }
 
   pub trait DefaultSeed<D>: DeserializerAdapter<D> {
-    type Seed: DecodeWithEncoding<Self::Deserialized, Error = Self::Error> + Clone;
+    type Seed: Decode<Self::Deserialized, Error = Self::Error> + Clone;
     const SEED: Self::Seed;
   }
 
-  pub trait DecodeWithEncoding<D> {
+  pub trait Decode<D> {
     type Error: Error;
 
     fn decode_bytes(

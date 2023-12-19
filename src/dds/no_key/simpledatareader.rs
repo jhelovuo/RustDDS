@@ -58,7 +58,7 @@ where
 
   pub fn try_take_one_seed<S>(&self, seed: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    S: DecodeWithEncoding<DA::Deserialized>,
+    S: Decode<DA::Deserialized>,
   {
     match self.keyed_simpledatareader.try_take_one_seed(seed) {
       Err(e) => Err(e),
@@ -92,7 +92,7 @@ where
     seed: S,
   ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + 'a
   where
-    S: DecodeWithEncoding<DA::Deserialized> + Clone + 'a,
+    S: Decode<DA::Deserialized> + Clone + 'a,
   {
     self
       .keyed_simpledatareader
