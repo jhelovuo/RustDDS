@@ -1,6 +1,11 @@
 use bytes::Bytes;
 use log::debug;
 
+use x509_certificate::{
+  self,
+  KeyAlgorithm,
+};
+
 use crate::{
   security::{
     authentication::types::*, security_error, DataHolderBuilder, SecurityError, SecurityResult,
@@ -56,6 +61,20 @@ impl TryFrom<String> for CertificateAlgorithm {
   type Error = SecurityError;
   fn try_from(value: String) -> Result<Self, Self::Error> {
     CertificateAlgorithm::try_from(value.as_str())
+  }
+}
+
+// Convert public-key algortihm identifiers from x509_certficate crate to
+// our representation.
+impl TryFrom<x509_certificate::KeyAlgorithm> for CertificateAlgorithm {
+  type Error = SecurityError;
+  fn try_from(value: KeyAlgorithm) -> Result<Self, Self::Error> {
+    match value {
+      KeyAlgorithm::Rsa => Ok(CertificateAlgorithm::RSA2048),
+      KeyAlgorithm::Ecdsa(x509_certificate::algorithm::EcdsaCurve::Secp256r1) => 
+        Ok(CertificateAlgorithm::ECPrime256v1),
+      x => Err(security_error!("Unsuppored certificate algorithm: {:?}",x))
+    }
   }
 }
 

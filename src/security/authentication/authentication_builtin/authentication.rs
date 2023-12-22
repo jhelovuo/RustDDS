@@ -178,12 +178,18 @@ impl Authentication for AuthenticationBuiltin {
     // Section "9.3.2.1 DDS:Auth:PKI-DH IdentityToken"
     // Table 45
     //
-    // TODO: dig out ".algo" values from identity_certificate and identity_ca
+    let certificate_algorithm = identity_certificate.key_algorithm()
+      .ok_or(security_error!("Identity Certificate specifies no public key algorithm"))
+      .and_then(CertificateAlgorithm::try_from)?;
+    let ca_algorithm = identity_ca.key_algorithm()
+      .ok_or(security_error!("CA Certificate specifies no public key algorithm"))
+      .and_then(CertificateAlgorithm::try_from)?;
+
     let identity_token = BuiltinIdentityToken {
       certificate_subject: Some(identity_certificate.subject_name().clone().serialize()),
-      certificate_algorithm: Some(CertificateAlgorithm::ECPrime256v1), // TODO: hardwired
+      certificate_algorithm: Some(certificate_algorithm), 
       ca_subject: Some(identity_ca.subject_name().clone().serialize()),
-      ca_algorithm: Some(CertificateAlgorithm::ECPrime256v1), // TODO: hardwired
+      ca_algorithm: Some(ca_algorithm), 
     };
 
     let local_identity_handle = self.get_new_identity_handle();
@@ -398,7 +404,7 @@ impl Authentication for AuthenticationBuiltin {
 
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
-    let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
+    let dsign_algo = local_info.identity_certificate.signature_algorithm_identifier()?;
 
     let kagree_algo = Bytes::from(dh_keys.kagree_algo_name_str());
 
@@ -503,7 +509,7 @@ impl Authentication for AuthenticationBuiltin {
 
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
-    let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
+    let dsign_algo = local_info.identity_certificate.signature_algorithm_identifier()?;
 
     // Check which key agreement algorithm the remote has chosen & generate our own
     // key pair
