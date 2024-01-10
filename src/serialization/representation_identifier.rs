@@ -25,6 +25,9 @@ impl RepresentationIdentifier {
     bytes: [0x00, 0x03],
   };
 
+  // [0x00,0x04] defined below
+  // [0x00,0x05] is not defined, as far as we know
+
   pub const CDR2_BE: Self = Self {
     bytes: [0x00, 0x10],
   };
@@ -46,8 +49,40 @@ impl RepresentationIdentifier {
     bytes: [0x00, 0x15],
   };
 
+  // XML
   pub const XML: Self = Self {
     bytes: [0x00, 0x04],
+  };
+
+
+  // The following are from 
+  // "Extensible and Dynamic Topic Types for DDS" (DDS X-Types v 1.2) spec, Table 60,
+  // Section 7.6.2.1.2 Use of the RTPS Encapsulation Identifier
+
+  // Table says "CDR2_BE", but that name is already taken.
+  pub const XCDR2_BE: Self = Self {
+    bytes: [0x00, 0x06],
+  };
+
+  pub const XCDR2_LE: Self = Self {
+    bytes: [0x00, 0x07],
+  };
+
+  pub const D_CDR2_BE: Self = Self {
+    bytes: [0x00, 0x08],
+  };
+
+  pub const D_CDR2_LE: Self = Self {
+    bytes: [0x00, 0x09],
+  };
+
+  // Table says "PL_CDR2_BE", but name is already taken
+  pub const PL_XCDR2_BE: Self = Self {
+    bytes: [0x00, 0x0a],
+  };
+  // Table says "PL_CDR_LE" (no "2"), but this is likely a typo in the spec.
+  pub const PL_XCDR2_LE: Self = Self {
+    bytes: [0x00, 0x0b],
   };
 
   // Reads two bytes to form a `RepresentationIdentifier`

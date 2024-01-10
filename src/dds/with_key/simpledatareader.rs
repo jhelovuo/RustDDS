@@ -261,6 +261,10 @@ where
             }),
           }
         } else {
+          info!("Unknown representation id: {:?} data = {:02x?}", 
+            serialized_payload.representation_identifier,
+            serialized_payload.value,
+            );
           Err(ReadError::Deserialization {
             reason: format!(
               "Unknown representation id {:?}.",
