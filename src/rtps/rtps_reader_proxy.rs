@@ -97,7 +97,7 @@ impl RtpsReaderProxy {
     {
       info!("Update changes Locators in ReaderProxy.");
       let mut unicasts = update.unicast_locator_list.clone();
-      unicasts.retain( Self::not_loopback );
+      unicasts.retain(Self::not_loopback);
       self.unicast_locator_list = unicasts;
       self.multicast_locator_list = update.multicast_locator_list.clone();
     }
@@ -175,12 +175,11 @@ impl RtpsReaderProxy {
   fn not_loopback(l: &Locator) -> bool {
     let is_loopback = l.is_loopback();
     if is_loopback {
-      info!("Ignoring loopback address {:?}",l);
+      info!("Ignoring loopback address {:?}", l);
     }
 
-    ! is_loopback    
+    !is_loopback
   }
-
 
   pub fn from_discovered_reader_data(
     discovered_reader_data: &DiscoveredReaderData,
@@ -191,7 +190,7 @@ impl RtpsReaderProxy {
       &discovered_reader_data.reader_proxy.unicast_locator_list,
       default_unicast_locators,
     );
-    unicast_locator_list.retain( Self::not_loopback );
+    unicast_locator_list.retain(Self::not_loopback);
 
     let multicast_locator_list = Self::discovered_or_default(
       &discovered_reader_data.reader_proxy.multicast_locator_list,

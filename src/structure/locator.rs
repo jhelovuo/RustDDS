@@ -35,7 +35,7 @@ impl Locator {
     match self {
       Locator::UdpV4(socket_address) => socket_address.ip().is_loopback(),
       Locator::UdpV6(socket_address) => socket_address.ip().is_loopback(),
-      _ => false
+      _ => false,
     }
   }
 }
