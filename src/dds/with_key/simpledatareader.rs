@@ -18,7 +18,10 @@ use mio_08;
 
 use crate::{
   dds::{
-    adapters::with_key::*,
+    adapters::{
+      no_key::{Decode, DefaultDecoder},
+      with_key::*,
+    },
     ddsdata::*,
     key::*,
     pubsub::Subscriber,
@@ -235,11 +238,15 @@ where
     hash_to_key_map.insert(instance_key.hash_key(false), instance_key);
   }
 
-  fn deserialize(
+  fn deserialize_with<S>(
     timestamp: Timestamp,
     cc: &CacheChange,
     hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
-  ) -> ReadResult<DeserializedCacheChange<D>> {
+    decoder: S,
+  ) -> ReadResult<DeserializedCacheChange<D>>
+  where
+    S: Decode<DA::Deserialized>,
+  {
     match cc.data_value {
       DDSData::Data {
         ref serialized_payload,
@@ -249,7 +256,7 @@ where
           .iter()
           .find(|r| **r == serialized_payload.representation_identifier)
         {
-          match DA::from_bytes(&serialized_payload.value, *recognized_rep_id) {
+          match DA::from_bytes_with(&serialized_payload.value, *recognized_rep_id, decoder) {
             // Data update, decoded ok
             Ok(payload) => {
               let p = Sample::Value(payload);
@@ -313,7 +320,19 @@ where
 
   /// Note: Always remember to call .drain_read_notifications() just before
   /// calling this one. Otherwise, new notifications may not appear.
-  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>> {
+  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    DA: DeserializerAdapter<D> + DefaultDecoder<D>,
+  {
+    Self::try_take_one_with(self, DA::DECODER)
+  }
+
+  /// Note: Always remember to call .drain_read_notifications() just before
+  /// calling this one. Otherwise, new notifications may not appear.
+  pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    S: Decode<DA::Deserialized>,
+  {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
       Some(policy::Reliability::Reliable { .. })
@@ -336,7 +355,7 @@ where
       Some((ts, cc)) => (ts, cc),
     };
 
-    match Self::deserialize(timestamp, cc, hash_to_key_map) {
+    match Self::deserialize_with(timestamp, cc, hash_to_key_map, decoder) {
       Ok(dcc) => {
         read_state_ref.latest_instant = max(read_state_ref.latest_instant, timestamp);
         read_state_ref
@@ -367,9 +386,22 @@ where
     &self.my_topic
   }
 
-  pub fn as_async_stream(&self) -> SimpleDataReaderStream<D, DA> {
+  pub fn as_async_stream<S>(&self) -> SimpleDataReaderStream<D, S, DA>
+  where
+    DA: DefaultDecoder<D, Decoder = S>,
+    DA::Decoder: Clone,
+    S: Decode<DA::Deserialized>,
+  {
+    Self::as_async_stream_with(self, DA::DECODER)
+  }
+
+  pub fn as_async_stream_with<S>(&self, decoder: S) -> SimpleDataReaderStream<D, S, DA>
+  where
+    S: Decode<DA::Deserialized> + Clone,
+  {
     SimpleDataReaderStream {
       simple_datareader: self,
+      decoder,
     }
   }
 
@@ -497,26 +529,30 @@ where
 pub struct SimpleDataReaderStream<
   'a,
   D: Keyed + 'static,
+  S: Decode<DA::Deserialized>,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
   simple_datareader: &'a SimpleDataReader<D, DA>,
+  decoder: S,
 }
 
 // ----------------------------------------------
 // ----------------------------------------------
 
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
-impl<'a, D, DA> Unpin for SimpleDataReaderStream<'a, D, DA>
+impl<'a, D, S, DA> Unpin for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
+  S: Decode<DA::Deserialized> + Unpin,
 {
 }
 
-impl<'a, D, DA> Stream for SimpleDataReaderStream<'a, D, DA>
+impl<'a, D, S, DA> Stream for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
+  S: Decode<DA::Deserialized> + Clone,
 {
   type Item = ReadResult<DeserializedCacheChange<D>>;
 
@@ -529,7 +565,10 @@ where
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
-    match self.simple_datareader.try_take_one() {
+    match self
+      .simple_datareader
+      .try_take_one_with(self.decoder.clone())
+    {
       Err(e) =>
       // DDS fails
       {
@@ -547,7 +586,10 @@ where
         // 2. try take_bare again, in case something arrived just now
         // 3. if nothing still, return pending.
         self.simple_datareader.set_waker(Some(cx.waker().clone()));
-        match self.simple_datareader.try_take_one() {
+        match self
+          .simple_datareader
+          .try_take_one_with(self.decoder.clone())
+        {
           Err(e) => Poll::Ready(Some(Err(e))),
           Ok(Some(d)) => Poll::Ready(Some(Ok(d))),
           Ok(None) => Poll::Pending,
@@ -557,10 +599,11 @@ where
   } // fn
 } // impl
 
-impl<'a, D, DA> FusedStream for SimpleDataReaderStream<'a, D, DA>
+impl<'a, D, S, DA> FusedStream for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
+  S: Decode<DA::Deserialized> + Clone,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().

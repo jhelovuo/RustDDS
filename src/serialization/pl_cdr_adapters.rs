@@ -8,6 +8,7 @@ use crate::{
   structure::parameter_id::ParameterId,
   Keyed, RepresentationIdentifier,
 };
+use super::no_key::Decode;
 
 // This is to be implemented by all Discovery message types.
 // .. likely it is not useful for others.
@@ -107,12 +108,41 @@ where
   D: PlCdrDeserialize,
 {
   type Error = PlCdrDeserializeError;
+  type Deserialized = D;
 
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &REPR_IDS
   }
 
-  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D, Self::Error> {
+  fn transform_deserialized(deserialized: Self::Deserialized) -> D {
+    deserialized
+  }
+}
+
+/// A default decoder is available if the target type implements
+/// [`PlCdrDeserialize`].
+impl<D> no_key::DefaultDecoder<D> for PlCdrDeserializerAdapter<D>
+where
+  D: PlCdrDeserialize,
+{
+  type Decoder = PlCdrDeserializer<D>;
+  const DECODER: Self::Decoder = PlCdrDeserializer(PhantomData);
+}
+
+/// Decode type based on [`PlCdrDeserialize`] implementation.
+pub struct PlCdrDeserializer<D>(PhantomData<D>);
+
+impl<D> Decode<D> for PlCdrDeserializer<D>
+where
+  D: PlCdrDeserialize,
+{
+  type Error = PlCdrDeserializeError;
+
+  fn decode_bytes(
+    self,
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> Result<D, Self::Error> {
     match encoding {
       RepresentationIdentifier::PL_CDR_LE | RepresentationIdentifier::PL_CDR_BE => {
         D::from_pl_cdr_bytes(input_bytes, encoding)
@@ -122,6 +152,12 @@ where
         repr_id
       ))),
     }
+  }
+}
+
+impl<D> Clone for PlCdrDeserializer<D> {
+  fn clone(&self) -> Self {
+    Self(self.0)
   }
 }
 

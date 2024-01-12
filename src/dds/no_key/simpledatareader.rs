@@ -1,6 +1,6 @@
 use std::{io, task::Waker};
 
-use futures::stream::{FusedStream, Stream, StreamExt};
+use futures::stream::{FusedStream, StreamExt};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
@@ -49,8 +49,18 @@ where
     self.keyed_simpledatareader.drain_read_notifications();
   }
 
-  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>> {
-    match self.keyed_simpledatareader.try_take_one() {
+  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    DA: DefaultDecoder<D>,
+  {
+    Self::try_take_one_with(self, DA::DECODER)
+  }
+
+  pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    S: Decode<DA::Deserialized>,
+  {
+    match self.keyed_simpledatareader.try_take_one_with(decoder) {
       Err(e) => Err(e),
       Ok(None) => Ok(None),
       Ok(Some(kdcc)) => match DeserializedCacheChange::<D>::from_keyed(kdcc) {
@@ -70,10 +80,23 @@ where
 
   pub fn as_async_stream(
     &self,
-  ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_ {
+  ) -> impl FusedStream<Item = ReadResult<DeserializedCacheChange<D>>> + '_
+  where
+    DA: DefaultDecoder<D>,
+  {
+    Self::as_async_stream_with(self, DA::DECODER)
+  }
+
+  pub fn as_async_stream_with<'a, S>(
+    &'a self,
+    decoder: S,
+  ) -> impl FusedStream<Item = ReadResult<DeserializedCacheChange<D>>> + 'a
+  where
+    S: Decode<DA::Deserialized> + Clone + 'a,
+  {
     self
       .keyed_simpledatareader
-      .as_async_stream()
+      .as_async_stream_with(decoder)
       .filter_map(move |r| async {
         // This is Stream::filter_map, so returning None means just skipping Item.
         match r {

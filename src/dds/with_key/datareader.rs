@@ -14,7 +14,7 @@ use futures::stream::{FusedStream, Stream};
 use super::datasample_cache::DataSampleCache;
 use crate::{
   dds::{
-    adapters::with_key::*,
+    adapters::{no_key::DefaultDecoder, with_key::*},
     key::*,
     qos::*,
     readcondition::*,
@@ -88,7 +88,13 @@ where
       datasample_cache: dsc,
     }
   }
+}
 
+impl<D: 'static, DA> DataReader<D, DA>
+where
+  D: Keyed,
+  DA: DeserializerAdapter<D> + DefaultDecoder<D>,
+{
   // Gets all unseen cache_changes from the TopicCache. Deserializes
   // the serialized payload and stores the DataSamples (the actual data and the
   // samplestate) to local container, datasample_cache.
@@ -894,7 +900,7 @@ where
 impl<D, DA> Stream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D>,
+  DA: DeserializerAdapter<D> + DefaultDecoder<D>,
 {
   type Item = ReadResult<Sample<D, D::K>>;
 
@@ -937,7 +943,7 @@ where
 impl<D, DA> FusedStream for DataReaderStream<D, DA>
 where
   D: Keyed + 'static,
-  DA: DeserializerAdapter<D>,
+  DA: DeserializerAdapter<D> + DefaultDecoder<D>,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().
