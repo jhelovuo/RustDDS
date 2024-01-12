@@ -1,10 +1,6 @@
 use bytes::Bytes;
 use log::debug;
-
-use x509_certificate::{
-  self,
-  KeyAlgorithm,
-};
+use x509_certificate::{self, KeyAlgorithm};
 
 use crate::{
   security::{
@@ -71,9 +67,10 @@ impl TryFrom<x509_certificate::KeyAlgorithm> for CertificateAlgorithm {
   fn try_from(value: KeyAlgorithm) -> Result<Self, Self::Error> {
     match value {
       KeyAlgorithm::Rsa => Ok(CertificateAlgorithm::RSA2048),
-      KeyAlgorithm::Ecdsa(x509_certificate::algorithm::EcdsaCurve::Secp256r1) => 
-        Ok(CertificateAlgorithm::ECPrime256v1),
-      x => Err(security_error!("Unsuppored certificate algorithm: {:?}",x))
+      KeyAlgorithm::Ecdsa(x509_certificate::algorithm::EcdsaCurve::Secp256r1) => {
+        Ok(CertificateAlgorithm::ECPrime256v1)
+      }
+      x => Err(security_error!("Unsuppored certificate algorithm: {:?}", x)),
     }
   }
 }
@@ -290,26 +287,27 @@ pub const ECDH_KAGREE_ALGO_NAME: &str = "ECDH+prime256v1-CEUM";
 
 // Standard values for "signature algorithm"
 // as a byte string accrding to Table 49
-// in DDS Security Spec v1.1 Section "9.3.2.5.1 HandshakeRequestMessageToken objects"
+// in DDS Security Spec v1.1 Section "9.3.2.5.1 HandshakeRequestMessageToken
+// objects"
 pub const RSA_SIGNATURE_ALGO_NAME: &[u8] = b"RSASSA-PSS-SHA256";
 pub const ECDSA_SIGNATURE_ALGO_NAME: &[u8] = b"ECDSA-SHA256";
 
-
 // Recognize standard string constatns and convert to
 // corresponging algorithm identifiers in ring library.
-pub(crate) fn parse_signature_algo_name_to_ring(algo_name:&[u8]) 
-  -> SecurityResult<&'static dyn ring::signature::VerificationAlgorithm> 
-{
+pub(crate) fn parse_signature_algo_name_to_ring(
+  algo_name: &[u8],
+) -> SecurityResult<&'static dyn ring::signature::VerificationAlgorithm> {
   match algo_name {
     RSA_SIGNATURE_ALGO_NAME => Ok(&ring::signature::ECDSA_P256_SHA256_ASN1),
     ECDSA_SIGNATURE_ALGO_NAME => Ok(&ring::signature::RSA_PSS_2048_8192_SHA256),
-    _other => 
-      // TODO: Log the algorithm name, but be careful, 
-      // the name is is arbitrary binary data from an unknown third party.
-      Err(security_error!("Unknown signature algorithm name")),
+    _other =>
+    // TODO: Log the algorithm name, but be careful,
+    // the name is is arbitrary binary data from an unknown third party.
+    {
+      Err(security_error!("Unknown signature algorithm name"))
+    }
   }
 }
-
 
 /// DDS:Auth:PKI-DH HandshakeMessageToken type from section 9.3.2.5 of the
 /// Security specification (v. 1.1)

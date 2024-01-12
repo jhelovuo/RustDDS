@@ -33,8 +33,8 @@ use crate::{
 };
 use super::{
   types::{
-    BuiltinAuthenticatedPeerCredentialToken, BuiltinIdentityToken, DH_MODP_KAGREE_ALGO_NAME,
-    ECDH_KAGREE_ALGO_NAME, parse_signature_algo_name_to_ring
+    parse_signature_algo_name_to_ring, BuiltinAuthenticatedPeerCredentialToken,
+    BuiltinIdentityToken, DH_MODP_KAGREE_ALGO_NAME, ECDH_KAGREE_ALGO_NAME,
   },
   AuthenticationBuiltin, BuiltinHandshakeState, DHKeys, LocalParticipantInfo,
   RemoteParticipantInfo,
@@ -173,18 +173,24 @@ impl Authentication for AuthenticationBuiltin {
     // Section "9.3.2.1 DDS:Auth:PKI-DH IdentityToken"
     // Table 45
     //
-    let certificate_algorithm = identity_certificate.key_algorithm()
-      .ok_or(security_error!("Identity Certificate specifies no public key algorithm"))
+    let certificate_algorithm = identity_certificate
+      .key_algorithm()
+      .ok_or(security_error!(
+        "Identity Certificate specifies no public key algorithm"
+      ))
       .and_then(CertificateAlgorithm::try_from)?;
-    let ca_algorithm = identity_ca.key_algorithm()
-      .ok_or(security_error!("CA Certificate specifies no public key algorithm"))
+    let ca_algorithm = identity_ca
+      .key_algorithm()
+      .ok_or(security_error!(
+        "CA Certificate specifies no public key algorithm"
+      ))
       .and_then(CertificateAlgorithm::try_from)?;
 
     let identity_token = BuiltinIdentityToken {
       certificate_subject: Some(identity_certificate.subject_name().clone().serialize()),
-      certificate_algorithm: Some(certificate_algorithm), 
+      certificate_algorithm: Some(certificate_algorithm),
       ca_subject: Some(identity_ca.subject_name().clone().serialize()),
-      ca_algorithm: Some(ca_algorithm), 
+      ca_algorithm: Some(ca_algorithm),
     };
 
     let local_identity_handle = self.get_new_identity_handle();
@@ -399,7 +405,9 @@ impl Authentication for AuthenticationBuiltin {
 
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
-    let dsign_algo = local_info.identity_certificate.signature_algorithm_identifier()?;
+    let dsign_algo = local_info
+      .identity_certificate
+      .signature_algorithm_identifier()?;
 
     let kagree_algo = Bytes::from(dh_keys.kagree_algo_name_str());
 
@@ -504,7 +512,9 @@ impl Authentication for AuthenticationBuiltin {
 
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
-    let dsign_algo = local_info.identity_certificate.signature_algorithm_identifier()?;
+    let dsign_algo = local_info
+      .identity_certificate
+      .signature_algorithm_identifier()?;
 
     // Check which key agreement algorithm the remote has chosen & generate our own
     // key pair
@@ -847,7 +857,9 @@ impl Authentication for AuthenticationBuiltin {
         // Result is that we do not produce a MassageToken, since this was the final
         // message, but we compute the handshake results (shared secret)
         let handshake_token = BuiltinHandshakeMessageToken::try_from(handshake_message_in)?;
-        let remote_signature_algo_name = handshake_token.c_dsign_algo.clone()
+        let remote_signature_algo_name = handshake_token
+          .c_dsign_algo
+          .clone()
           .ok_or_else(|| security_error!("Final token did not specifiy signature algorithm."))?;
 
         let final_token = handshake_token.extract_final()?;
@@ -906,7 +918,6 @@ impl Authentication for AuthenticationBuiltin {
         // Sign( Hash(C1) | Challenge1 | DH1 | Challenge2 | DH2 | Hash(C2) )
         // see Table 51
 
-
         let cc_final_properties: Vec<BinaryProperty> = vec![
           BinaryProperty::with_propagate("hash_c1", Bytes::copy_from_slice(hash_c1.as_ref())),
           BinaryProperty::with_propagate("challenge1", Bytes::copy_from_slice(challenge1.as_ref())),
@@ -918,7 +929,8 @@ impl Authentication for AuthenticationBuiltin {
 
         // Now we use the remote certificate, which we verified in the previous (request
         // -> reply) step against CA.
-        let remote_signature_algorithm = parse_signature_algo_name_to_ring(&remote_signature_algo_name)?;
+        let remote_signature_algorithm =
+          parse_signature_algo_name_to_ring(&remote_signature_algo_name)?;
 
         remote_id_certificate
           .verify_signed_data_with_algorithm(
