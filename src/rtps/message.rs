@@ -17,6 +17,7 @@ use crate::{
       submessage::WriterSubmessage,
       submessages::{SubmessageKind, *},
     },
+    validity_trait::Validity,
     vendor_id::VendorId,
   },
   rtps::{writer::Writer as RtpsWriter, Submessage, SubmessageBody},
@@ -66,6 +67,9 @@ impl Message {
     // The Header deserializes the same
     let rtps_header =
       Header::read_from_buffer(buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    if ! rtps_header.valid() {
+      return Err(io::Error::new(io::ErrorKind::Other, "Invalid RTPS header"))
+    }
     let mut message = Self::new(rtps_header);
     let mut submessages_left: Bytes = buffer.slice(20..); // header is 20 bytes
                                                           // submessage loop

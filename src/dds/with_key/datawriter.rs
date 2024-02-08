@@ -18,7 +18,6 @@ use log::{debug, error, info, trace, warn};
 use crate::{
   dds::{
     adapters::with_key::SerializerAdapter,
-    dds_entity::DDSEntity,
     ddsdata::DDSData,
     helpers::*,
     pubsub::Publisher,
@@ -944,12 +943,6 @@ where
   }
 }
 
-impl<D, SA> DDSEntity for DataWriter<D, SA>
-where
-  D: Keyed,
-  SA: SerializerAdapter<D>,
-{
-}
 
 //-------------------------------------------------------------------------------
 // async writing implementation

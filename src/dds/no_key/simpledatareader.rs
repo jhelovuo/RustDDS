@@ -1,6 +1,6 @@
 use std::{io, task::Waker};
 
-use futures::stream::{FusedStream, Stream, StreamExt};
+use futures::stream::{FusedStream, StreamExt};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use mio_06::{self, Evented};
@@ -70,7 +70,7 @@ where
 
   pub fn as_async_stream(
     &self,
-  ) -> impl Stream<Item = ReadResult<DeserializedCacheChange<D>>> + FusedStream + '_ {
+  ) -> impl FusedStream<Item = ReadResult<DeserializedCacheChange<D>>> + '_ {
     self
       .keyed_simpledatareader
       .as_async_stream()
