@@ -5,6 +5,34 @@ use std::{
 
 use crate::{qos, security};
 
+pub enum PrivateSigningKey {
+  /// Private key is stored in a regular .pem file. The contents may be
+  /// encrypted with a pasword.
+  Files {
+    /// Where the PEM file is stored
+    file_path: PathBuf,
+    /// Decryption key, if private key file is encrypted
+    file_password: String,
+  },
+  /// The private key is held by a Hardware Security Module, which typically
+  /// refuses to output the key.
+  /// Signing operations are done by the HSM.
+  Pkcs11 {
+    /// Dynamic library file for accessing the HSM, e.g.
+    /// "/usr/lib/softhsm/libsofthsm2.so" Use absolute path.
+    hsm_access_library: PathBuf,
+
+    /// Label of the token to use. See PKCS#11 spec Section "3.2 Slot and token
+    /// types" definition of CK_TOKEN_INFO for the meaning of "label".
+    token_label: String,
+
+    /// Login PIN code to operate the token, if any.
+    /// Despite the name, the PIN is alphanumeric.
+    /// It is used to attempt login as "user" (not Security Officer).
+    token_pin: Option<String>,
+  },
+}
+
 /// This holds the paths to files that configure DDS Security.
 pub struct DomainParticipantSecurityConfigFiles {
   /// CA that is used to validate identities of DomainParticipants
@@ -12,9 +40,7 @@ pub struct DomainParticipantSecurityConfigFiles {
   /// Identity docuemnt for this Participant
   pub participant_identity_certificate: PathBuf,
   /// Private (signing) key for this participant
-  pub participant_identity_private_key: PathBuf,
-  /// Private key password for this participant
-  pub private_key_password: String,
+  pub participant_identity_private_key: PrivateSigningKey,
   /// CA that is used to validate permissions documents. May be the same as
   /// Identity CA above.
   pub permissions_ca_certificate: PathBuf,
@@ -39,8 +65,35 @@ impl DomainParticipantSecurityConfigFiles {
     DomainParticipantSecurityConfigFiles {
       identity_ca_certificate: own_and_append(&d, "identity_ca.cert.pem"),
       participant_identity_certificate: own_and_append(&d, "cert.pem"),
-      participant_identity_private_key: own_and_append(&d, "key.pem"),
-      private_key_password,
+      participant_identity_private_key: PrivateSigningKey::Files {
+        file_path: own_and_append(&d, "key.pem"),
+        file_password: private_key_password,
+      },
+      permissions_ca_certificate: own_and_append(&d, "permissions_ca.cert.pem"),
+      domain_governance_document: own_and_append(&d, "governance.p7s"),
+      participant_permissions_document: own_and_append(&d, "permissions.p7s"),
+      certificate_revocation_list: None, // "crl.pem"
+    }
+  }
+
+  pub fn with_ros_default_names_and_hsm(
+    security_config_dir: impl AsRef<Path>,
+    hsm_access_library: impl AsRef<Path>,
+    token_label: String,
+    token_pin: Option<String>,
+  ) -> Self {
+    let d = security_config_dir;
+
+    // The default names are taken from
+    // https://github.com/ros2/rmw_dds_common/blob/6fae970a99c3d4e0684a6e987edb89505b8ee213/rmw_dds_common/src/security.cpp#L25
+    DomainParticipantSecurityConfigFiles {
+      identity_ca_certificate: own_and_append(&d, "identity_ca.cert.pem"),
+      participant_identity_certificate: own_and_append(&d, "cert.pem"),
+      participant_identity_private_key: PrivateSigningKey::Pkcs11 {
+        hsm_access_library: own_and_append("", hsm_access_library),
+        token_label,
+        token_pin,
+      },
       permissions_ca_certificate: own_and_append(&d, "permissions_ca.cert.pem"),
       domain_governance_document: own_and_append(&d, "governance.p7s"),
       participant_permissions_document: own_and_append(&d, "permissions.p7s"),
@@ -49,31 +102,49 @@ impl DomainParticipantSecurityConfigFiles {
   }
 
   pub fn into_property_policy(self) -> qos::policy::Property {
+    let mut value = vec![
+      mk_file_prop("dds.sec.auth.identity_ca", &self.identity_ca_certificate),
+      mk_file_prop(
+        "dds.sec.auth.identity_certificate",
+        &self.participant_identity_certificate,
+      ),
+      match self.participant_identity_private_key {
+        PrivateSigningKey::Files { ref file_path, .. } => {
+          mk_file_prop("dds.sec.auth.private_key", file_path)
+        }
+        PrivateSigningKey::Pkcs11 {
+          ref token_label,
+          ref token_pin,
+          ..
+        } => {
+          // for example
+          // pkcs11:object=my_private_key_name?pin-value=OpenSesame
+          let mut pkcs11_uri = format!("pkcs11:object={}", token_label);
+          if let Some(pin) = token_pin {
+            pkcs11_uri.push_str(&format!("?pin-value={}", pin));
+          }
+          mk_string_prop("dds.sec.auth.private_key", pkcs11_uri)
+        }
+      },
+      mk_file_prop(
+        "dds.sec.access.permissions_ca",
+        &self.permissions_ca_certificate,
+      ),
+      mk_file_prop(
+        "dds.sec.access.governance",
+        &self.domain_governance_document,
+      ),
+      mk_file_prop(
+        "dds.sec.access.permissions",
+        &self.participant_permissions_document,
+      ),
+    ];
+    if let PrivateSigningKey::Files { file_password, .. } = self.participant_identity_private_key {
+      value.push(mk_string_prop("dds.sec.auth.password", file_password));
+    }
+
     qos::policy::Property {
-      value: vec![
-        mk_file_prop("dds.sec.auth.identity_ca", &self.identity_ca_certificate),
-        mk_file_prop(
-          "dds.sec.auth.identity_certificate",
-          &self.participant_identity_certificate,
-        ),
-        mk_file_prop(
-          "dds.sec.auth.private_key",
-          &self.participant_identity_private_key,
-        ),
-        mk_file_prop(
-          "dds.sec.access.permissions_ca",
-          &self.permissions_ca_certificate,
-        ),
-        mk_file_prop(
-          "dds.sec.access.governance",
-          &self.domain_governance_document,
-        ),
-        mk_file_prop(
-          "dds.sec.access.permissions",
-          &self.participant_permissions_document,
-        ),
-        mk_string_prop("dds.sec.auth.password", self.private_key_password),
-      ],
+      value,
       binary_value: vec![],
     }
   }
