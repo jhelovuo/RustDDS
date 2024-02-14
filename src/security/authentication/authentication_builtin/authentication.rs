@@ -128,16 +128,13 @@ impl Authentication for AuthenticationBuiltin {
     let id_cert_private_key = participant_qos
       .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
       .and_then(|pem_uri| {
-        read_uri(&pem_uri).map_err(|conf_err| {
+        read_uri_to_private_key(&pem_uri).map_err(|conf_err| {
           security_error!(
             "Failed to read the DomainParticipant identity private key from {}: {:?}",
             pem_uri,
             conf_err
           )
         })
-      })
-      .and_then(|private_key_pem| {
-        PrivateKey::from_pem(private_key_pem).map_err(|e| security_error!("{e:?}"))
       })?;
 
     // Verify that CA has signed our identity

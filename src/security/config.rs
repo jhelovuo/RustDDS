@@ -4,7 +4,9 @@ use std::{
 };
 
 use crate::{qos, security};
+use crate::security::certificate::PrivateKey;
 
+/// How to access Certificate's private key for signing.
 pub enum PrivateSigningKey {
   /// Private key is stored in a regular .pem file. The contents may be
   /// encrypted with a pasword.
@@ -14,21 +16,29 @@ pub enum PrivateSigningKey {
     /// Decryption key, if private key file is encrypted
     file_password: String,
   },
-  /// The private key is held by a Hardware Security Module, which typically
+  /// The private key is held by a PKCS11 Hardware Security Module, which typically
   /// refuses to output the key.
   /// Signing operations are done by the HSM.
+  ///
+  /// Note: Currently, we do not implement any mechanism for choosing an object
+  /// within the selected token. We just choose the first suitable object
+  /// within the token. Suitable is recognized by object attributes:
+  /// ObjectClass = PRIVATE_KEY and Sign = true.
+  ///
+  /// Obviously, this does not work for a use case where a single token contains
+  /// several private key objects, and one of those would have to be chosen.
   Pkcs11 {
     /// Dynamic library file for accessing the HSM, e.g.
-    /// "/usr/lib/softhsm/libsofthsm2.so" Use absolute path.
+    /// "/usr/lib/softhsm/libsofthsm2.so". Use absolute path.
     hsm_access_library: PathBuf,
 
-    /// Label of the token to use. See PKCS#11 spec Section "3.2 Slot and token
-    /// types" definition of CK_TOKEN_INFO for the meaning of "label".
+    /// Label of the token to use. Label is defined in PKCS#11 spec Section "3.2 Slot and token
+    /// types" definition of CK_TOKEN_INFO.
     token_label: String,
 
     /// Login PIN code to operate the token, if any.
     /// Despite the name, the PIN is alphanumeric.
-    /// It is used to attempt login as "user" (not Security Officer).
+    /// It is used to attempt a read-only login as "user" (not Security Officer).
     token_pin: Option<String>,
   },
 }
@@ -134,6 +144,8 @@ impl DomainParticipantSecurityConfigFiles {
         "dds.sec.access.governance",
         &self.domain_governance_document,
       ),
+
+      
       mk_file_prop(
         "dds.sec.access.permissions",
         &self.participant_permissions_document,
@@ -191,6 +203,23 @@ pub(crate) fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
     )),
   }
 }
+
+pub(crate) fn read_uri_to_private_key(uri: &str) -> Result<PrivateKey, ConfigError> {
+  match uri.split_once(':') {
+    Some(("data", content)) => PrivateKey::from_pem(Bytes::copy_from_slice(content.as_bytes())),
+    Some(("pkcs11", _path_and_query)) => Err(other_config_error(
+      "Config URI schema 'pkcs11:' not implemented.".to_owned(),
+    )),
+    Some(("file", path)) => std::fs::read(path)
+      .map_err(to_config_error_other(&format!("I/O error reading {path}")))
+      .map(Bytes::from)
+      .and_then(PrivateKey::from_pem) ,
+    _ => Err(parse_config_error(
+      "Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned(),
+    )),
+  }
+}
+
 
 use std::fmt::Debug;
 
