@@ -207,9 +207,10 @@ pub(crate) fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
 pub(crate) fn read_uri_to_private_key(uri: &str) -> Result<PrivateKey, ConfigError> {
   match uri.split_once(':') {
     Some(("data", content)) => PrivateKey::from_pem(Bytes::copy_from_slice(content.as_bytes())),
-    Some(("pkcs11", _path_and_query)) => Err(other_config_error(
-      "Config URI schema 'pkcs11:' not implemented.".to_owned(),
-    )),
+
+    Some(("pkcs11", path_and_query)) =>
+      // These URIs are composed of "pkcs11" ":" path [ "?" query ]
+      PrivateKey::from_pkcs11_uri_path_and_query(path_and_query),
     Some(("file", path)) => std::fs::read(path)
       .map_err(to_config_error_other(&format!("I/O error reading {path}")))
       .map(Bytes::from)

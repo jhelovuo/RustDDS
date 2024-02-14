@@ -174,9 +174,22 @@ impl fmt::Display for DistinguishedName {
   }
 }
 
+
+use cryptoki::{
+  context::{CInitializeArgs, Pkcs11},
+  object::AttributeType,
+  session::UserType,
+  types::AuthPin,
+};
+
 #[derive(Debug)]
-pub struct PrivateKey {
-  priv_key: InMemorySigningKeyPair,
+pub(crate) enum PrivateKey {
+  InMemory {
+    priv_key: InMemorySigningKeyPair,
+  },
+  InHSM {
+    // TODO
+  }
 }
 
 // TODO: decrypt a password protected key
@@ -185,16 +198,26 @@ impl PrivateKey {
     let priv_key = InMemorySigningKeyPair::from_pkcs8_pem(pem_data.as_ref())
       .map_err(to_config_error_parse("Private key parse error"))?;
 
-    Ok(PrivateKey { priv_key })
+    Ok(PrivateKey::InMemory{ priv_key })
+  }
+
+  pub fn from_pkcs11_uri_path_and_query(path_and_query: impl AsRef<[u8]>) -> Result<Self, ConfigError> {
+    todo!()
   }
 
   pub fn sign(&self, msg: &[u8]) -> SecurityResult<Bytes> {
-    self
-      .priv_key
-      .try_sign(msg)
-      .map(|s| Bytes::copy_from_slice(s.as_ref()))
-      .map_err(|e| security_error(&format!("Signature verification failure: {e:?}")))
-  }
+    match self {
+      PrivateKey::InMemory{ priv_key } => { 
+        priv_key
+        .try_sign(msg)
+        .map(|s| Bytes::copy_from_slice(s.as_ref()))
+        .map_err(|e| security_error(&format!("Signature verification failure: {e:?}")))
+      }
+      PrivateKey::InHSM{} => {
+        todo!()
+      }
+    }
+  } // fn
 }
 
 #[cfg(test)]
