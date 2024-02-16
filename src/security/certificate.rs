@@ -16,6 +16,10 @@
 // So this type is to be used to verify both Domain Governance and Domain
 // Permissions documents. The verification of the two can use the same or
 // different Certificate instances.
+use std::collections::BTreeMap;
+
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 
 use bytes::Bytes;
 use x509_certificate::{
@@ -25,9 +29,10 @@ use x509_certificate::{
 use der::Decode;
 use bcder::{encode::Values, Mode};
 
+
 use crate::security::{
   authentication::authentication_builtin::types::{CertificateAlgorithm, RSA_2048_KEY_LENGTH},
-  config::{to_config_error_other, to_config_error_parse, ConfigError},
+  config::{to_config_error_other, to_config_error_parse, ConfigError, parse_config_error},
   types::{security_error, SecurityResult},
 };
 
@@ -177,8 +182,10 @@ impl fmt::Display for DistinguishedName {
 
 use cryptoki::{
   context::{CInitializeArgs, Pkcs11},
-  object::AttributeType,
-  session::UserType,
+  object::{AttributeType,ObjectHandle,Attribute,ObjectClass,},
+  mechanism::Mechanism,
+  session::{Session, UserType,},
+  slot::Slot,
   types::AuthPin,
 };
 
@@ -188,7 +195,13 @@ pub(crate) enum PrivateKey {
     priv_key: InMemorySigningKeyPair,
   },
   InHSM {
-    // TODO
+    // We store context and slot just in case dropping them would close them.
+    #[allow(dead_code)] 
+    context: Pkcs11,
+    #[allow(dead_code)]
+    slot: Slot,
+    session: Session,
+    key_object_handle: ObjectHandle,
   }
 }
 
@@ -201,8 +214,112 @@ impl PrivateKey {
     Ok(PrivateKey::InMemory{ priv_key })
   }
 
-  pub fn from_pkcs11_uri_path_and_query(path_and_query: impl AsRef<[u8]>) -> Result<Self, ConfigError> {
-    todo!()
+
+  // decode object label in path
+  // load HSM library
+  // initialize library
+  // get slots and enumerate
+  // find slot where token is present and matches object label
+  // open RO session to token and login with PIN
+  // find private key objects
+  // check that private key object supports "sign"
+  // store library handle, slot handle, session handle to PrivateKey object
+  // store object handle to PrivateKey
+  // return PrivateKey
+
+  // Note: We do not check the key type (RSA, DSA, EC, etc.) against anything.
+  // We just trust that the specified key is of the correct type.
+
+  pub fn from_pkcs11_uri_path_and_query(path_and_query: &str) -> Result<Self, ConfigError> {
+    let interesting_attributes = vec![
+      AttributeType::Class,
+      AttributeType::Label,
+      AttributeType::KeyType,
+      AttributeType::Sign,
+      AttributeType::Sensitive,
+    ];
+    // decode URI: path and possible query (PIN)
+    //
+    // example path_and_query, which is part of URI after scheme "pkcs11:"
+    //
+    // token=my_token_label?pin-value=1234&module-path=/usr/lib/softhsm/libsofthsm2.so
+    //
+    // The "module-path" is a query-attribute like the PIN, and not a path-attribute like "token", 
+    // which may seem a bit strange choice, but that is what RFC 7512 says.
+    let (path,query) = 
+      path_and_query
+        .split_once('?')
+        .unwrap_or((path_and_query.as_ref(),""));
+    let path_attrs: BTreeMap<&str,&str> = 
+      path.split(';').filter_map(|a| a.split_once('=')).collect();
+    let query_attrs: BTreeMap<&str,&str> = 
+      query.split('&').filter_map(|a| a.split_once('=')).collect();
+
+    let token_label = 
+      path_attrs
+        .get("token")
+        .ok_or( parse_config_error("pkcs11 URI must specify \"token\" (label)".to_string()))?;
+
+    let pin_value_opt = query_attrs.get("pin-value");
+
+    let module_path :&str = query_attrs.get("module-path").map(|a| *a)
+      .unwrap_or("/usr/lib/softhsm/libsofthsm2.so"); // Some semi-reasnoable default value.
+
+    info!("Opening PKCS#11 HSM client library {}", module_path);
+    let context =  Pkcs11::new(module_path)?;
+    context.initialize(CInitializeArgs::OsThreads)?;
+    debug!("PKCS#11 HSM library info: {:?}", context.get_library_info());
+
+    //let expected_key_type = KeyType::RSA;
+
+    let slots = context.get_all_slots()?;
+    debug!("PKCS#11 HSM found {} slots.", slots.len());
+    for (num, slot) in slots.iter().enumerate() {
+      let slot_info = context.get_slot_info(*slot);
+      match slot_info {
+        Ok(si) if si.token_present() => {
+          match context.get_token_info(*slot) {
+            Ok(token_info) => {
+              if token_info.label() == *token_label {
+                info!("Found matching token {} in slot {}.", token_label,  num);
+                let session = context.open_ro_session(*slot)?;
+                let secret_pin_opt : Option<AuthPin> = 
+                  pin_value_opt.map(|p| AuthPin::from_str(p).unwrap());
+                  // unwrap is safe, because error type is Infallible
+                session.login(UserType::User, secret_pin_opt.as_ref())?; // bail on failure
+                info!("Logged into token {} , using PIN = {:?}", token_label, secret_pin_opt.is_some() );
+                for (obj_num, obj) in session.find_objects(&[])?.iter().enumerate() {
+                  let attr = session.get_attributes(*obj, &interesting_attributes)?;
+                  // Check the attributes. Does this look like a private key?
+                  if attr.iter().any(|a| a == &Attribute::Class(ObjectClass::PRIVATE_KEY)) &&
+                     //attr.iter().any(|a| a == &Attribute::KeyType(expected_key_type)) &&
+                     attr.iter().any(|a| a == &Attribute::Sign(true)) {
+                    // Looks like a private key. Exit here.
+                    info!("Object {}: Using as Private Key", obj_num);
+                    return Ok(PrivateKey::InHSM {
+                      context,
+                      slot: *slot, 
+                      session,
+                      key_object_handle: *obj,
+                    })
+                  } else {
+                    debug!("Object {}: Attributes  do not match {:?}", obj_num, attr);
+                  } 
+                } // for objects
+              } else {
+                debug!("Slot {} token label={} . This is not the token we are looking for.", 
+                  num, token_info.label());
+              }
+            }
+            Err(e) => warn!("Slot {} get_token_info error: {:?}", num, e),
+          }
+        }
+        Ok(_) => info!("Slot {} has no token",num),
+        Err(e) => warn!("Slot {} get_slot_info error: {:?}", num, e),
+      }
+    } // for slots
+
+    Err(parse_config_error("Did not find private key in HSM".to_string()))
   }
 
   pub fn sign(&self, msg: &[u8]) -> SecurityResult<Bytes> {
@@ -213,8 +330,10 @@ impl PrivateKey {
         .map(|s| Bytes::copy_from_slice(s.as_ref()))
         .map_err(|e| security_error(&format!("Signature verification failure: {e:?}")))
       }
-      PrivateKey::InHSM{} => {
-        todo!()
+      PrivateKey::InHSM{session, key_object_handle, ..} => {
+        let sign_mechanism = Mechanism::EcdsaSha256; // TODO: Other mechanisms also
+        Ok(session.sign(&sign_mechanism, *key_object_handle, msg)
+            .map(Bytes::from)?)
       }
     }
   } // fn

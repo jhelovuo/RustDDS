@@ -100,6 +100,14 @@ impl From<openssl::error::ErrorStack> for SecurityError {
   }
 }
 
+impl From<cryptoki::error::Error> for SecurityError {
+  fn from(e: cryptoki::error::Error) -> Self {
+    SecurityError {
+      msg: format!("cryptoki (PKCS#11) Error: {e:?}"),
+    }
+  }
+}
+
 #[doc(hidden)]
 #[macro_export]
 macro_rules! security_error {

@@ -208,9 +208,10 @@ pub(crate) fn read_uri_to_private_key(uri: &str) -> Result<PrivateKey, ConfigErr
   match uri.split_once(':') {
     Some(("data", content)) => PrivateKey::from_pem(Bytes::copy_from_slice(content.as_bytes())),
 
-    Some(("pkcs11", path_and_query)) =>
+    Some(("pkcs11", path_and_query)) => {
       // These URIs are composed of "pkcs11" ":" path [ "?" query ]
-      PrivateKey::from_pkcs11_uri_path_and_query(path_and_query),
+      PrivateKey::from_pkcs11_uri_path_and_query(path_and_query)
+    }
     Some(("file", path)) => std::fs::read(path)
       .map_err(to_config_error_other(&format!("I/O error reading {path}")))
       .map(Bytes::from)
@@ -228,6 +229,7 @@ use std::fmt::Debug;
 pub enum ConfigError {
   Parse(String),
   Pkcs7(String),
+  Pkcs11(String),
   Security(String),
   Other(String),
 }
@@ -241,6 +243,12 @@ impl From<glob::PatternError> for ConfigError {
 impl From<serde_xml_rs::Error> for ConfigError {
   fn from(e: serde_xml_rs::Error) -> ConfigError {
     ConfigError::Parse(format!("XML parse error: {e:?}"))
+  }
+}
+
+impl From<cryptoki::error::Error> for ConfigError {
+  fn from(e: cryptoki::error::Error) -> ConfigError {
+    ConfigError::Pkcs11(format!("PKCS11 hardware security module error: {e:?}"))
   }
 }
 
