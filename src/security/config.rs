@@ -125,13 +125,18 @@ impl DomainParticipantSecurityConfigFiles {
         PrivateSigningKey::Pkcs11 {
           ref token_label,
           ref token_pin,
-          ..
+          ref hsm_access_library,
         } => {
           // for example
-          // pkcs11:object=my_private_key_name?pin-value=OpenSesame
+          // pkcs11:object=my_private_key_name?pin-value=OpenSesame&module-path=/usr/lib/
+          // libhsm.so
           let mut pkcs11_uri = format!("pkcs11:object={}", token_label);
           if let Some(pin) = token_pin {
-            pkcs11_uri.push_str(&format!("?pin-value={}", pin));
+            pkcs11_uri.push_str(&format!(
+              "?pin-value={}&module-path={}",
+              pin,
+              hsm_access_library.display()
+            ));
           }
           mk_string_prop("dds.sec.auth.private_key", pkcs11_uri)
         }
