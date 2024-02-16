@@ -3,8 +3,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::{qos, security};
-use crate::security::certificate::PrivateKey;
+use crate::{qos, security, security::certificate::PrivateKey};
 
 /// How to access Certificate's private key for signing.
 pub enum PrivateSigningKey {
@@ -16,8 +15,8 @@ pub enum PrivateSigningKey {
     /// Decryption key, if private key file is encrypted
     file_password: String,
   },
-  /// The private key is held by a PKCS11 Hardware Security Module, which typically
-  /// refuses to output the key.
+  /// The private key is held by a PKCS11 Hardware Security Module, which
+  /// typically refuses to output the key.
   /// Signing operations are done by the HSM.
   ///
   /// Note: Currently, we do not implement any mechanism for choosing an object
@@ -32,13 +31,14 @@ pub enum PrivateSigningKey {
     /// "/usr/lib/softhsm/libsofthsm2.so". Use absolute path.
     hsm_access_library: PathBuf,
 
-    /// Label of the token to use. Label is defined in PKCS#11 spec Section "3.2 Slot and token
-    /// types" definition of CK_TOKEN_INFO.
+    /// Label of the token to use. Label is defined in PKCS#11 spec Section "3.2
+    /// Slot and token types" definition of CK_TOKEN_INFO.
     token_label: String,
 
     /// Login PIN code to operate the token, if any.
     /// Despite the name, the PIN is alphanumeric.
-    /// It is used to attempt a read-only login as "user" (not Security Officer).
+    /// It is used to attempt a read-only login as "user" (not Security
+    /// Officer).
     token_pin: Option<String>,
   },
 }
@@ -144,8 +144,6 @@ impl DomainParticipantSecurityConfigFiles {
         "dds.sec.access.governance",
         &self.domain_governance_document,
       ),
-
-      
       mk_file_prop(
         "dds.sec.access.permissions",
         &self.participant_permissions_document,
@@ -215,13 +213,12 @@ pub(crate) fn read_uri_to_private_key(uri: &str) -> Result<PrivateKey, ConfigErr
     Some(("file", path)) => std::fs::read(path)
       .map_err(to_config_error_other(&format!("I/O error reading {path}")))
       .map(Bytes::from)
-      .and_then(PrivateKey::from_pem) ,
+      .and_then(PrivateKey::from_pem),
     _ => Err(parse_config_error(
       "Config URI must begin with 'file:' , 'data:', or 'pkcs11:'.".to_owned(),
     )),
   }
 }
-
 
 use std::fmt::Debug;
 
