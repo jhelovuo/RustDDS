@@ -212,8 +212,12 @@ pub(crate) fn read_uri_to_private_key(uri: &str) -> Result<PrivateKey, ConfigErr
     Some(("data", content)) => PrivateKey::from_pem(Bytes::copy_from_slice(content.as_bytes())),
 
     Some(("pkcs11", path_and_query)) => {
+      // DEBUG:
+      let pem = std::fs::read(own_and_append("../security_configuration_files", "key.pem"))
+        .map_err(to_config_error_other(&format!("I/O error reading debug test files")))
+        .unwrap();
       // These URIs are composed of "pkcs11" ":" path [ "?" query ]
-      PrivateKey::from_pkcs11_uri_path_and_query(path_and_query)
+      PrivateKey::from_pkcs11_uri_path_and_query(path_and_query, Some(&pem) ) // TEST only!
     }
     Some(("file", path)) => std::fs::read(path)
       .map_err(to_config_error_other(&format!("I/O error reading {path}")))

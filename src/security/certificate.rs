@@ -199,6 +199,7 @@ pub(crate) enum PrivateKey {
     slot: Slot,
     session: Session,
     key_object_handle: ObjectHandle,
+    ref_priv_key: Option<InMemorySigningKeyPair>, // DEBUG only
   },
 }
 
@@ -226,7 +227,17 @@ impl PrivateKey {
   // Note: We do not check the key type (RSA, DSA, EC, etc.) against anything.
   // We just trust that the specified key is of the correct type.
 
-  pub fn from_pkcs11_uri_path_and_query(path_and_query: &str) -> Result<Self, ConfigError> {
+  pub fn from_pkcs11_uri_path_and_query(path_and_query: &str, debug_reference_pem: Option<&[u8]>) 
+    -> Result<Self, ConfigError> 
+  {
+    let ref_priv_key_opt = match debug_reference_pem {
+      None => None,
+      Some(f) => {
+        Some(InMemorySigningKeyPair::from_pkcs8_pem(f)
+          .map_err(to_config_error_parse("Private key parse error"))?)
+      }
+    };
+
     let interesting_attributes = vec![
       AttributeType::AllowedMechanisms,
       AttributeType::Class,
@@ -324,6 +335,7 @@ impl PrivateKey {
                       slot: *slot,
                       session,
                       key_object_handle: *obj,
+                      ref_priv_key: ref_priv_key_opt,
                     });
                   } else {
                     debug!("Object {}: Attributes  do not match {:?}", obj_num, attr);
@@ -355,18 +367,36 @@ impl PrivateKey {
       PrivateKey::InMemory { priv_key } => priv_key
         .try_sign(msg)
         .map(|s| Bytes::copy_from_slice(s.as_ref()))
-        .map_err(|e| security_error(&format!("Signature verification failure: {e:?}"))),
+        .map_err(|e| security_error(&format!("Signing failure: {e:?}"))),
       PrivateKey::InHSM {
         session,
         key_object_handle,
+        ref_priv_key,
         ..
       } => {
-        let sign_mechanism = Mechanism::EcdsaSha256; // TODO: Other mechanisms also
-        Ok(
-          session
+        let sign_mechanism = Mechanism::Ecdsa; // TODO: Other mechanisms also
+        let hsm_signature = session
             .sign(&sign_mechanism, *key_object_handle, msg)
-            .map(Bytes::from)?,
-        )
+            .map(Bytes::from)?;
+
+        // DEBUG:
+        match ref_priv_key {
+          Some(priv_key) => {
+            let pem_signature = priv_key
+              .try_sign(msg)
+              .map(|s| Bytes::copy_from_slice(s.as_ref()))
+              .map_err(|e| security_error(&format!("Signing failure: {e:?}")))?;
+            if pem_signature == hsm_signature {
+              info!("Reference signature matches");
+            } else {
+              error!("Reference signature error !!1!");
+            }
+            //return Ok(pem_signature)
+          }
+          None => {}
+        }
+
+        Ok( hsm_signature )
       }
     }
   } // fn
