@@ -73,12 +73,26 @@ fn main() {
   let dp_builder = DomainParticipantBuilder::new(*domain_id);
   #[cfg(feature = "security")]
   let dp_builder = if let Some(sec_dir_path) = matches.get_one::<String>("security") {
-    dp_builder.builtin_security(
-      DomainParticipantSecurityConfigFiles::with_ros_default_names(
-        Path::new(sec_dir_path),
-        "no_pwd".to_string(),
-      ),
-    )
+    match (matches.get_one::<String>("pkcs11-token"), matches.get_one::<String>("pkcs11-library")) {
+      (Some(token_label), Some(hsm_lib_path)) => {
+        dp_builder.builtin_security(
+          DomainParticipantSecurityConfigFiles::with_ros_default_names_and_hsm(
+            Path::new(sec_dir_path),
+            Path::new(hsm_lib_path),
+            token_label.clone(),
+            matches.get_one::<String>("pkcs11-pin").cloned(),
+          ),
+        )        
+      }
+      (_ , _) => {
+        dp_builder.builtin_security(
+          DomainParticipantSecurityConfigFiles::with_ros_default_names(
+            Path::new(sec_dir_path),
+            "no_pwd".to_string(),
+          ),
+        )        
+      }
+    }
   } else {
     dp_builder
   };
@@ -467,6 +481,34 @@ fn get_matches() -> ArgMatches {
         )
         .long("security")
         .value_name("security"),
+    )
+    .arg(
+      Arg::new("pkcs11-library")
+        .help(
+          "Path to a library implementing PKCS#11 client.",
+        )
+        .long("pkcs11-library")
+        .value_name("pkcs11-library")
+        .requires("pkcs11-token"),
+    )
+    .arg(
+      Arg::new("pkcs11-token")
+        .help(
+          "Token label for PKCS#11",
+        )
+        .long("pkcs11-token")
+        .value_name("pkcs11-token")
+        .requires("security")
+        .requires("pkcs11-library"),
+    )
+    .arg(
+      Arg::new("pkcs11-pin")
+        .help(
+          "PIN to access PKCS#11 token",
+        )
+        .long("pkcs11-pin")
+        .value_name("pkcs11-pin")
+        .requires("pkcs11-token"),
     )
     .get_matches()
 }

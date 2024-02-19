@@ -228,6 +228,7 @@ impl PrivateKey {
 
   pub fn from_pkcs11_uri_path_and_query(path_and_query: &str) -> Result<Self, ConfigError> {
     let interesting_attributes = vec![
+      AttributeType::AllowedMechanisms,
       AttributeType::Class,
       AttributeType::Label,
       AttributeType::KeyType,
@@ -252,8 +253,8 @@ impl PrivateKey {
     let query_attrs: BTreeMap<&str, &str> =
       query.split('&').filter_map(|a| a.split_once('=')).collect();
 
-    let token_label = path_attrs.get("token").ok_or(parse_config_error(
-      "pkcs11 URI must specify \"token\" (label)".to_string(),
+    let token_label = path_attrs.get("object").ok_or(parse_config_error(
+      "pkcs11 URI must specify attribute \"object\" i.e. token label".to_string(),
     ))?;
 
     let pin_value_opt = query_attrs.get("pin-value");
@@ -279,14 +280,14 @@ impl PrivateKey {
           match context.get_token_info(*slot) {
             Ok(token_info) => {
               if token_info.label() == *token_label {
-                info!("Found matching token {} in slot {}.", token_label, num);
+                info!("Found matching token \"{}\" in slot {}.", token_label, num);
                 let session = context.open_ro_session(*slot)?;
                 let secret_pin_opt: Option<AuthPin> =
                   pin_value_opt.map(|p| AuthPin::from_str(p).unwrap());
                 // unwrap is safe, because error type is Infallible
                 session.login(UserType::User, secret_pin_opt.as_ref())?; // bail on failure
                 info!(
-                  "Logged into token {} , using PIN = {:?}",
+                  "Logged into token \"{}\" , using PIN = {:?}",
                   token_label,
                   secret_pin_opt.is_some()
                 );
@@ -298,7 +299,26 @@ impl PrivateKey {
                      attr.iter().any(|a| a == &Attribute::Sign(true))
                   {
                     // Looks like a private key. Exit here.
-                    info!("Object {}: Using as Private Key", obj_num);
+                    let object_label = 
+                      attr.iter().find_map(|a| match a {
+                          Attribute::Label(bytes) => Some(String::from_utf8_lossy(bytes)),
+                          _ => None,
+                        }
+                      );
+                    let allowed_mechanisms = attr.iter().find_map(|a| match a {
+                          Attribute::AllowedMechanisms(am_vec) => Some(am_vec),
+                          _ => None,
+                        }
+                      );
+                    let key_type = attr.iter().find_map(|a| match a {
+                          Attribute::KeyType(kt) => Some(kt),
+                          _ => None,
+                        }
+                      );
+
+                    info!("Object {}: Using as Private Key. label={:?}", obj_num, object_label);
+                    info!("Object {}: AllowedMechanisms {:?}", obj_num, allowed_mechanisms);
+                    info!("Object {}: KeyType {:?}", obj_num, key_type);
                     return Ok(PrivateKey::InHSM {
                       context,
                       slot: *slot,
