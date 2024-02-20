@@ -81,7 +81,7 @@ const-oid = { version = "0.9" , optional = true } # more ASN.1
 openssl = { version = "0.10", optional = true }
 
 [target.'cfg(windows)'.dependencies]
-local-ip-address = "0.5.3"
+local-ip-address = "0.6.0"
 
 [dev-dependencies]
 serde_repr = {version = "0.1" }
