@@ -185,9 +185,7 @@ use cryptoki::{
   slot::Slot,
   types::AuthPin,
 };
-
-//DEBUG:
-use ring::{digest, signature, };
+use ring::digest;
 use der::{asn1, Encode};
 
 #[derive(Debug)]
@@ -203,8 +201,8 @@ pub(crate) enum PrivateKey {
     slot: Slot,
     session: Session,
     key_object_handle: ObjectHandle,
-    ref_priv_key: Option<InMemorySigningKeyPair>, // DEBUG only
-    debug_cert: Certificate, // DEBUG only
+    // ref_priv_key: Option<InMemorySigningKeyPair>, // DEBUG only
+    // debug_cert: Certificate, // DEBUG only
   },
 }
 
@@ -217,6 +215,8 @@ impl PrivateKey {
     Ok(PrivateKey::InMemory { priv_key })
   }
 
+  // Process:
+  //
   // decode object label in path
   // load HSM library
   // initialize library
@@ -232,16 +232,18 @@ impl PrivateKey {
   // Note: We do not check the key type (RSA, DSA, EC, etc.) against anything.
   // We just trust that the specified key is of the correct type.
 
-  pub fn from_pkcs11_uri_path_and_query(path_and_query: &str, debug_reference_pem: Option<&[u8]>, debug_cert: Certificate ) 
-    -> Result<Self, ConfigError> 
-  {
-    let ref_priv_key_opt = match debug_reference_pem {
-      None => None,
-      Some(f) => {
-        Some(InMemorySigningKeyPair::from_pkcs8_pem(f)
-          .map_err(to_config_error_parse("Private key parse error"))?)
-      }
-    };
+  pub fn from_pkcs11_uri_path_and_query(
+    path_and_query: &str,
+    /* debug_reference_pem: Option<&[u8]>, debug_cert: Certificate */
+  ) -> Result<Self, ConfigError> {
+    // // DEBUG only
+    // let ref_priv_key_opt = match debug_reference_pem {
+    //   None => None,
+    //   Some(f) => {
+    //     Some(InMemorySigningKeyPair::from_pkcs8_pem(f)
+    //       .map_err(to_config_error_parse("Private key parse error"))?)
+    //   }
+    // };
 
     let interesting_attributes = vec![
       AttributeType::AllowedMechanisms,
@@ -285,8 +287,6 @@ impl PrivateKey {
     context.initialize(CInitializeArgs::OsThreads)?;
     debug!("PKCS#11 HSM library info: {:?}", context.get_library_info());
 
-    //let expected_key_type = KeyType::RSA;
-
     let slots = context.get_all_slots()?;
     debug!("PKCS#11 HSM found {} slots.", slots.len());
     for (num, slot) in slots.iter().enumerate() {
@@ -307,64 +307,72 @@ impl PrivateKey {
                   token_label,
                   secret_pin_opt.is_some()
                 );
+
+                // Now ,iterate though objects in the token.
                 for (obj_num, obj) in session.find_objects(&[])?.iter().enumerate() {
                   let attr = session.get_attributes(*obj, &interesting_attributes)?;
                   // Check the attributes. Does this look like a private key?
-                  if attr.iter().any(|a| a == &Attribute::Class(ObjectClass::PRIVATE_KEY)) &&
-                     //attr.iter().any(|a| a == &Attribute::KeyType(expected_key_type)) &&
-                     attr.iter().any(|a| a == &Attribute::Sign(true))
+                  if attr
+                    .iter()
+                    .any(|a| a == &Attribute::Class(ObjectClass::PRIVATE_KEY))
+                    && attr.iter().any(|a| a == &Attribute::Sign(true))
                   {
-                    // Looks like a private key. Exit here.
-                    let object_label = 
-                      attr.iter().find_map(|a| match a {
-                          Attribute::Label(bytes) => Some(String::from_utf8_lossy(bytes)),
-                          _ => None,
-                        }
-                      );
-                    let allowed_mechanisms = attr.iter().find_map(|a| match a {
-                          Attribute::AllowedMechanisms(am_vec) => Some(am_vec),
-                          _ => None,
-                        }
-                      );
-                    let key_type = attr.iter().find_map(|a| match a {
-                          Attribute::KeyType(kt) => Some(kt),
-                          _ => None,
-                        }
-                      );
-
-                    info!("Object {}: Using as Private Key. label={:?}", obj_num, object_label);
-                    info!("Object {}: AllowedMechanisms {:?}", obj_num, allowed_mechanisms);
-                    info!("Object {}: KeyType {:?}", obj_num, key_type);
-                    return Ok(PrivateKey::InHSM {
-                      context,
-                      slot: *slot,
-                      session,
-                      key_object_handle: *obj,
-                      ref_priv_key: ref_priv_key_opt,
-                      debug_cert,
+                    // Is a private key and declares to support "sign" operation.
+                    let object_label = attr.iter().find_map(|a| match a {
+                      Attribute::Label(bytes) => Some(String::from_utf8_lossy(bytes)),
+                      _ => None,
                     });
+                    info!(
+                      "Object {}: Found a Private Key. label={:?}",
+                      obj_num, object_label
+                    );
+
+                    // Test that the signing operation works.
+
+                    // TODO: Other mechanisms besides ECDSA also
+                    // DDS Security spec Section "9.3.1.2 Private Key" specifies
+                    // also 2048-bit RSA keys could be used.
+                    let test_signature_result =
+                      session.sign(&Mechanism::Ecdsa, *obj, b"This is just dummy data");
+                    if test_signature_result.is_ok() {
+                      debug!("Object {obj_num}: Test signing success.");
+                      // Object looks like a legit private key, so we'll use that.
+                      return Ok(PrivateKey::InHSM {
+                        context,
+                        slot: *slot,
+                        session,
+                        key_object_handle: *obj,
+                        // ref_priv_key: ref_priv_key_opt,
+                        // debug_cert,
+                      });
+                    } else {
+                      warn!(
+                        "Object {}: Test signing fails: {:?}. Cannot use this as private key.",
+                        obj_num, test_signature_result
+                      );
+                    }
                   } else {
-                    debug!("Object {}: Attributes  do not match {:?}", obj_num, attr);
+                    debug!("Object {}: Attributes do not match {:?}", obj_num, attr);
                   }
                 } // for objects
               } else {
                 debug!(
-                  "Slot {} token label={} . This is not the token we are looking for.",
+                  "Slot {}, token label={}: This is not the token we are looking for.",
                   num,
                   token_info.label()
                 );
               }
             }
-            Err(e) => warn!("Slot {} get_token_info error: {:?}", num, e),
+            Err(e) => warn!("Slot {}: get_token_info() fails: {:?}", num, e),
           }
-        }
+        } // Ok with token_present
         Ok(_) => info!("Slot {} has no token", num),
-        Err(e) => warn!("Slot {} get_slot_info error: {:?}", num, e),
+        Err(e) => warn!("Slot {} get_slot_info() error: {:?}", num, e),
       }
     } // for slots
 
     Err(parse_config_error(
-      "Did not find private key in HSM".to_string(),
+      "Did not find a suitable private key in the HSM".to_string(),
     ))
   }
 
@@ -374,24 +382,50 @@ impl PrivateKey {
         .try_sign(msg)
         .map(|s| Bytes::copy_from_slice(s.as_ref()))
         .map_err(|e| security_error(&format!("Signing failure: {e:?}"))),
+
       PrivateKey::InHSM {
         session,
         key_object_handle,
-        ref_priv_key,
-        debug_cert,
         ..
       } => {
-        let msg_digest = digest::digest(&digest::SHA256,msg);        
+        // DDS Security uses ASN.1-encoded ECDSA-SHA256 signatures.
+        //
+        // PKCS#11 provides fixed-length ECDSA-signatures without SHA256. In order to
+        // use HSM signing, we must first compute the SHA256 digest, then sign
+        // using ECDSA. The result is two 32-byte integers (r,s) concatenated
+        // together. These need to be ASN.1 DER-encoded according to RFC 3279
+        // Section 2.2.3 as
+        // ```
+        // Ecdsa-Sig-Value  ::=  SEQUENCE  {
+        //   r     INTEGER,
+        //   s     INTEGER  }
+        // ```
+
+        let msg_digest = digest::digest(&digest::SHA256, msg);
 
         let sign_mechanism = Mechanism::Ecdsa; // TODO: Other mechanisms also
-        let hsm_signature = session
-            .sign(&sign_mechanism, *key_object_handle, msg_digest.as_ref())?;
+        let hsm_signature_raw =
+          session.sign(&sign_mechanism, *key_object_handle, msg_digest.as_ref())?;
 
-        let (r,s) = hsm_signature.split_at(32);
-        let mut hsm_signature_der = Vec::with_capacity(80);
-        let sequence_of_r_s = vec![asn1::UintRef::new(r).unwrap(), asn1::UintRef::new(s).unwrap()];
+        if hsm_signature_raw.len() != 64 {
+          return Err(security_error(&format!(
+            "Expected signature len=64, got len={}",
+            hsm_signature_raw.len()
+          )));
+        }
+
+        let (r, s) = hsm_signature_raw.split_at(32); // safe, because of the length check above
+        let mut hsm_signature_der = Vec::with_capacity(80); // typically needs about 70..72 bytes
+                                                            // Safety: We expect all the .unwrap() calls below to succeed, becaues the
+                                                            // possible
+                                                            // errors are size overflows, and here the input sizes are fixed.
+        let sequence_of_r_s = vec![
+          asn1::UintRef::new(r).unwrap(),
+          asn1::UintRef::new(s).unwrap(),
+        ];
         sequence_of_r_s.encode(&mut hsm_signature_der).unwrap();
 
+        /*
         // DEBUG:
         match ref_priv_key {
           Some(priv_key) => {
@@ -399,21 +433,21 @@ impl PrivateKey {
               .try_sign(msg)
               .map(|s| Bytes::copy_from_slice(s.as_ref()))
               .map_err(|e| security_error(&format!("Signing failure: {e:?}")))?;
-            info!("HSM DER Signature check = {:?}  len={}", 
+            info!("HSM DER Signature check = {:?}  len={}",
               debug_cert.verify_signed_data_with_algorithm(msg, &hsm_signature_der, &signature::ECDSA_P256_SHA256_ASN1, ),
               hsm_signature_der.len(),
               );
-            info!("Ring Signature check = {:?} len={}", 
+            info!("Ring Signature check = {:?} len={}",
               debug_cert.verify_signed_data_with_algorithm(msg, &pem_signature, &signature::ECDSA_P256_SHA256_ASN1, ),
               pem_signature.len(),
               );
-            
+
             //return Ok(pem_signature)
           }
           None => {}
         }
-
-        Ok( Bytes::from(hsm_signature_der) )
+        */
+        Ok(Bytes::from(hsm_signature_der))
       }
     }
   } // fn
