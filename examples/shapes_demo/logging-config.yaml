@@ -4,7 +4,7 @@ appenders:
   stdout:
     kind: console
 root:
-  level: info
+  level: warn
 #  level: warn
   appenders:
     - stdout

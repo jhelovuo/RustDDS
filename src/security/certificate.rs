@@ -186,6 +186,10 @@ use cryptoki::{
   types::AuthPin,
 };
 
+//DEBUG:
+use ring::{digest, signature, };
+use der::{asn1, Encode};
+
 #[derive(Debug)]
 pub(crate) enum PrivateKey {
   InMemory {
@@ -200,6 +204,7 @@ pub(crate) enum PrivateKey {
     session: Session,
     key_object_handle: ObjectHandle,
     ref_priv_key: Option<InMemorySigningKeyPair>, // DEBUG only
+    debug_cert: Certificate, // DEBUG only
   },
 }
 
@@ -227,7 +232,7 @@ impl PrivateKey {
   // Note: We do not check the key type (RSA, DSA, EC, etc.) against anything.
   // We just trust that the specified key is of the correct type.
 
-  pub fn from_pkcs11_uri_path_and_query(path_and_query: &str, debug_reference_pem: Option<&[u8]>) 
+  pub fn from_pkcs11_uri_path_and_query(path_and_query: &str, debug_reference_pem: Option<&[u8]>, debug_cert: Certificate ) 
     -> Result<Self, ConfigError> 
   {
     let ref_priv_key_opt = match debug_reference_pem {
@@ -336,6 +341,7 @@ impl PrivateKey {
                       session,
                       key_object_handle: *obj,
                       ref_priv_key: ref_priv_key_opt,
+                      debug_cert,
                     });
                   } else {
                     debug!("Object {}: Attributes  do not match {:?}", obj_num, attr);
@@ -372,12 +378,19 @@ impl PrivateKey {
         session,
         key_object_handle,
         ref_priv_key,
+        debug_cert,
         ..
       } => {
+        let msg_digest = digest::digest(&digest::SHA256,msg);        
+
         let sign_mechanism = Mechanism::Ecdsa; // TODO: Other mechanisms also
         let hsm_signature = session
-            .sign(&sign_mechanism, *key_object_handle, msg)
-            .map(Bytes::from)?;
+            .sign(&sign_mechanism, *key_object_handle, msg_digest.as_ref())?;
+
+        let (r,s) = hsm_signature.split_at(32);
+        let mut hsm_signature_der = Vec::with_capacity(80);
+        let sequence_of_r_s = vec![asn1::UintRef::new(r).unwrap(), asn1::UintRef::new(s).unwrap()];
+        sequence_of_r_s.encode(&mut hsm_signature_der).unwrap();
 
         // DEBUG:
         match ref_priv_key {
@@ -386,17 +399,21 @@ impl PrivateKey {
               .try_sign(msg)
               .map(|s| Bytes::copy_from_slice(s.as_ref()))
               .map_err(|e| security_error(&format!("Signing failure: {e:?}")))?;
-            if pem_signature == hsm_signature {
-              info!("Reference signature matches");
-            } else {
-              error!("Reference signature error !!1!");
-            }
+            info!("HSM DER Signature check = {:?}  len={}", 
+              debug_cert.verify_signed_data_with_algorithm(msg, &hsm_signature_der, &signature::ECDSA_P256_SHA256_ASN1, ),
+              hsm_signature_der.len(),
+              );
+            info!("Ring Signature check = {:?} len={}", 
+              debug_cert.verify_signed_data_with_algorithm(msg, &pem_signature, &signature::ECDSA_P256_SHA256_ASN1, ),
+              pem_signature.len(),
+              );
+            
             //return Ok(pem_signature)
           }
           None => {}
         }
 
-        Ok( hsm_signature )
+        Ok( Bytes::from(hsm_signature_der) )
       }
     }
   } // fn
