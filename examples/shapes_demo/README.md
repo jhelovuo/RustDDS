@@ -14,5 +14,11 @@ This shapes demo example is meant to verify and demonstrate compatibility with o
 
     where the `security` argument points in this case to the `examples/security_configuration_files` directory.
 
+    Alternative: Using PKCS#11 Hardware Security Module to store the private key of our identity certificate
+
+    `cargo run --features=security --example=shapes_demo -- -P -t Square --security=../security_configuration_files 
+    --pkcs11-library=/usr/lib/softhsm/libsofthsm2.so --pkcs11-token=example_token --pkcs11-pin=1234`
+
+
 4. To exit shapes demo press  'Ctrl + C' 
 

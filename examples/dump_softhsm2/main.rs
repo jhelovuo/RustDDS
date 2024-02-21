@@ -1,6 +1,9 @@
+#[cfg(feature = "security")]
 use std::str::FromStr;
 
+#[cfg(feature = "security")]
 use anyhow::Result;
+#[cfg(feature = "security")]
 use cryptoki::{
   context::{CInitializeArgs, Pkcs11},
   object::AttributeType,
@@ -8,6 +11,12 @@ use cryptoki::{
   types::AuthPin,
 };
 
+#[cfg(not(feature = "security"))]
+fn main() {
+  println!("This example requires the cargo feature \"security\".");
+}
+
+#[cfg(feature = "security")]
 fn main() -> Result<()> {
   // change here any PKCS#11 library implementation that you are using.
   let pkcs11client = Pkcs11::new("/usr/lib/softhsm/libsofthsm2.so")?;

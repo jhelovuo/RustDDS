@@ -36,6 +36,8 @@ _
 
 # Using Hardware Security Module (PKCS#11 / Cryptoki)
 
+## Provisioning Method 1: Generate keys using OpenSSL on CPU as ususl
+
 Initialize an emulated HSM. We call it `example_token`
 
 `$ softhsm2-util --init-token --free --label example_token --pin 1234 --so-pin 12345`
@@ -72,17 +74,19 @@ Use the `pkcs11-dump` utility to check what we imported:
 ```$ pkcs11-dump dump  /usr/lib/softhsm/libsofthsm2.so 2046880677 1234```
 
 
-# How to create a key pair within token
+## Provisioning Method 2: Generate keys in HSM
 
-## Ask HSM to generate a key pair
+The advantage of this method is that the private key never leaves the HSM.
+
+### Ask HSM to generate a key pair
 
 `$ pkcs11-tool --module /usr/lib/softhsm/libsofthsm2.so --token-label ec_key --pin 1234 --keypairgen --key-type EC:prime256v1 --label id_key --id d00f`
 
-## Extract the public key to a Certificate Signing Request.
+### Extract the public key to a Certificate Signing Request.
 
 TODO (openssl)
 
-## Sign the CSR using Identity CA's cert and private key
+### Sign the CSR using Identity CA's cert and private key
 
 TODO (openssl)
 

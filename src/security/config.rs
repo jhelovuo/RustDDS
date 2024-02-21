@@ -3,7 +3,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::{qos, security, security::certificate::PrivateKey};
+use crate::{qos, security, security::private_key::PrivateKey};
 
 /// How to access Certificate's private key for signing.
 pub enum PrivateSigningKey {
