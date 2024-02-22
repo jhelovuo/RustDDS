@@ -14,7 +14,7 @@ use log::{debug, error, info, trace, warn};
 use mio_08::net::TcpListener;
 #[cfg(not(target_os = "windows"))]
 use socketpair::*;
-use mio_08::{self, net::TcpStream, *};
+use mio_08::{net::TcpStream, *};
 
 // PollEventSource and PollEventSender are an event communication
 // channel. PollEventSource is a mio-0.8 event::Source for Poll,

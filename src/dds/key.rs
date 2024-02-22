@@ -1,6 +1,6 @@
 // This module defines traits to specify a key as defined in DDS specification.
 // See e.g. Figure 2.3 in "2.2.1.2.2 Overall Conceptual Model"
-use std::{convert::TryFrom, hash::Hash};
+use std::hash::Hash;
 
 use byteorder::BigEndian;
 use rand::Rng;

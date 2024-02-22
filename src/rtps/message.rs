@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::BTreeSet, convert::TryInto, io};
+use std::{cmp::min, collections::BTreeSet, io};
 
 #[allow(unused_imports)]
 use log::{debug, error, trace, warn};
@@ -14,8 +14,7 @@ use crate::{
     protocol_version::ProtocolVersion,
     submessages::{
       elements::{parameter::Parameter, parameter_list::ParameterList},
-      submessage::WriterSubmessage,
-      submessages::{SubmessageKind, *},
+      submessages::*,
     },
     validity_trait::Validity,
     vendor_id::VendorId,

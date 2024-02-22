@@ -7,7 +7,6 @@ use crate::{
 use super::{
   domain_governance_document::{DomainRule, TopicRule},
   types::{BuiltinPluginEndpointSecurityAttributes, Entity},
-  AccessControlBuiltin,
 };
 
 impl AccessControlBuiltin {

@@ -1,4 +1,4 @@
-use std::{self, fmt::Display};
+use std::fmt::Display;
 
 use serde::{de, ser};
 

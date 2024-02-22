@@ -7,11 +7,7 @@ use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
 
 use crate::{
-  messages::{
-    protocol_version::ProtocolVersion,
-    submessages::submessages::{WriterSubmessage, *},
-    vendor_id::VendorId,
-  },
+  messages::{protocol_version::ProtocolVersion, submessages::submessages::*, vendor_id::VendorId},
   rtps::{reader::Reader, Message, Submessage, SubmessageBody},
   structure::{
     entity::RTPSEntity,

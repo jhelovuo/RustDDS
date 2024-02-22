@@ -14,7 +14,7 @@ use std::{
 
 use mio_extras::channel as mio_channel;
 use mio_06::{self, Evented};
-use mio_08::{self, Interest, Registry};
+use mio_08::{Interest, Registry};
 use futures::stream::{FusedStream, Stream};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};

@@ -10,7 +10,7 @@ use std::{
 };
 
 use futures::{Future, Stream};
-use mio_06::{self, Evented, Events, PollOpt, Ready, Token};
+use mio_06::{Events, PollOpt, Ready, Token};
 use mio_extras::channel::{self as mio_channel, SendError, TrySendError};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -906,7 +906,7 @@ where
   D: Keyed,
   SA: SerializerAdapter<D>,
 {
-  fn as_status_evented(&mut self) -> &dyn Evented {
+  fn as_status_evented(&mut self) -> &dyn mio_06::Evented {
     self.status_receiver.as_status_evented()
   }
 

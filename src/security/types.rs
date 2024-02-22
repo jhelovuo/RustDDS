@@ -5,7 +5,6 @@ use enumflags2::{bitflags, BitFlags};
 use log::error;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Deserialize, Serialize};
-use openssl;
 
 use crate::{
   dds::qos,
