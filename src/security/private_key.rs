@@ -6,7 +6,7 @@ use bytes::Bytes;
 use x509_certificate::{signing::InMemorySigningKeyPair, Signer};
 use cryptoki::{
   context::{CInitializeArgs, Pkcs11},
-  mechanism::Mechanism,
+  mechanism::{self, Mechanism},
   object::{Attribute, AttributeType, ObjectClass, ObjectHandle},
   session::{Session, UserType},
   slot::Slot,
@@ -16,6 +16,7 @@ use ring::digest;
 use der::{asn1, Encode};
 
 use crate::security::{
+  authentication::authentication_builtin::types::CertificateAlgorithm,
   config::{parse_config_error, to_config_error_parse, ConfigError},
   types::{security_error, SecurityResult},
 };
@@ -32,6 +33,7 @@ pub(crate) enum PrivateKey {
     priv_key: InMemorySigningKeyPair,
   },
   InHSM {
+    key_algorithm: CertificateAlgorithm,
     // We store context and slot just in case dropping them would close them.
     #[allow(dead_code)]
     context: Pkcs11,
@@ -65,10 +67,10 @@ impl PrivateKey {
   // store object handle to PrivateKey
   // return PrivateKey
 
-  // Note: We do not check the key type (RSA, DSA, EC, etc.) against anything.
-  // We just trust that the specified key is of the correct type.
-
-  pub fn from_pkcs11_uri_path_and_query(path_and_query: &str) -> Result<Self, ConfigError> {
+  pub fn from_pkcs11_uri_path_and_query(
+    path_and_query: &str,
+    key_algorithm: CertificateAlgorithm,
+  ) -> Result<Self, ConfigError> {
     let interesting_attributes = vec![
       AttributeType::AllowedMechanisms,
       AttributeType::Class,
@@ -152,16 +154,13 @@ impl PrivateKey {
                     );
 
                     // Test that the signing operation works.
-
-                    // TODO: Other mechanisms besides ECDSA also
-                    // DDS Security spec Section "9.3.1.2 Private Key" specifies
-                    // also 2048-bit RSA keys could be used.
                     let test_signature_result =
-                      session.sign(&Mechanism::Ecdsa, *obj, b"This is just dummy data");
+                      session.sign(&key_algorithm.into(), *obj, b"This is just dummy data");
                     if test_signature_result.is_ok() {
                       debug!("Object {obj_num}: Test signing success.");
                       // Object looks like a legit private key, so we'll use that.
                       return Ok(PrivateKey::InHSM {
+                        key_algorithm,
                         context,
                         slot: *slot,
                         session,
@@ -206,14 +205,17 @@ impl PrivateKey {
         .map_err(|e| security_error(&format!("Signing failure: {e:?}"))),
 
       PrivateKey::InHSM {
+        key_algorithm,
         session,
         key_object_handle,
         ..
       } => {
         // DDS Security uses ASN.1-encoded ECDSA-SHA256 signatures.
         //
-        // PKCS#11 provides fixed-length ECDSA-signatures without SHA256. In order to
-        // use HSM signing, we must first compute the SHA256 digest, then sign
+        // PKCS#11 (HSM) provides fixed-length ECDSA-signatures without SHA256.
+        //
+        // In order to
+        // use HSM signing in DDS, we must first compute the SHA256 digest, then sign
         // using ECDSA. The result is two 32-byte integers (r,s) concatenated
         // together. These need to be ASN.1 DER-encoded according to RFC 3279
         // Section 2.2.3 as
@@ -222,10 +224,16 @@ impl PrivateKey {
         //   r     INTEGER,
         //   s     INTEGER  }
         // ```
+        //
+        // Thanks to the
+        // [ring crate documentation](https://docs.rs/ring/0.17.8/ring/signature/index.html)
+        // for explaining this.
 
+        // First, hash the message to be signed. Then sign the hash, not the message.
         let msg_digest = digest::digest(&digest::SHA256, msg);
 
-        let sign_mechanism = Mechanism::Ecdsa; // TODO: Other mechanisms also
+        // Second, ask HSM to compute the signature
+        let sign_mechanism = Mechanism::from(*key_algorithm);
         let hsm_signature_raw =
           session.sign(&sign_mechanism, *key_object_handle, msg_digest.as_ref())?;
 
@@ -237,6 +245,7 @@ impl PrivateKey {
           )));
         }
 
+        // Third, convert raw signature to ASN.1 with DER
         let (r, s) = hsm_signature_raw.split_at(32); // safe, because of the length check above
         let mut hsm_signature_der = Vec::with_capacity(80); // typically needs about 70..72 bytes
 
@@ -252,6 +261,33 @@ impl PrivateKey {
       }
     }
   } // fn
+}
+
+// Map our internal choice of certificate key algoritm to cryptoki Mechanism
+impl From<CertificateAlgorithm> for Mechanism<'_> {
+  fn from(value: CertificateAlgorithm) -> Self {
+    match value {
+      CertificateAlgorithm::ECPrime256v1 => Mechanism::Ecdsa,
+
+      // DDS Security spec v1.1 Section "9.3.2.5.2 HandshakeReplyMessageToken" says
+      //
+      // "If the Participant Private Key is a RSA key, then [...]
+      //  The digital signature shall be computed using the RSASSA-PSS
+      //  algorithm specified in PKCS #1 (IETF 3447) RSA Cryptography
+      //  Specifications Version 2.1 [44], using SHA256 as hash function, and
+      //  MGF1 with SHA256 (mgf1sha256) as mask generation function."
+      //
+      // TODO: Make sure this is correctly mapped to `PkcsPssParams`
+      CertificateAlgorithm::RSA2048 => Mechanism::Sha256RsaPkcsPss(mechanism::rsa::PkcsPssParams {
+        hash_alg: mechanism::MechanismType::SHA256, // is this correct?
+        mgf: mechanism::rsa::PkcsMgfType::MGF1_SHA256,
+        s_len: 32.into(), /* is this correct?
+                           * s_len is documented as
+                           * "length, in bytes, of the salt value used in the PSS encoding;
+                           * typical values are the length of the message hash and zero" */
+      }),
+    }
+  }
 }
 
 #[cfg(test)]

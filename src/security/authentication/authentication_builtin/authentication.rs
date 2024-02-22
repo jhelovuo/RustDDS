@@ -125,10 +125,14 @@ impl Authentication for AuthenticationBuiltin {
     // TODO: decrypt a password protected private key
     let _password = participant_qos.get_optional_property(QOS_PASSWORD_PROPERTY_NAME);
 
+    let id_cert_algorithm = identity_certificate
+      .algorithm()
+      .ok_or_else(|| security_error!("Cannot recognize identity certificate algorithm."))?;
+
     let id_cert_private_key = participant_qos
       .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
       .and_then(|pem_uri| {
-        read_uri_to_private_key(&pem_uri).map_err(|conf_err| {
+        read_uri_to_private_key(&pem_uri, id_cert_algorithm).map_err(|conf_err| {
           security_error!(
             "Failed to read the DomainParticipant identity private key from {}: {:?}",
             pem_uri,

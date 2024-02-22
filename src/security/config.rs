@@ -3,7 +3,12 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use crate::{qos, security, security::private_key::PrivateKey};
+use crate::{
+  qos, security,
+  security::{
+    authentication::authentication_builtin::types::CertificateAlgorithm, private_key::PrivateKey,
+  },
+};
 
 /// How to access Certificate's private key for signing.
 pub enum PrivateSigningKey {
@@ -209,29 +214,16 @@ pub(crate) fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
 
 //use crate::security::certificate::Certificate;
 
-pub(crate) fn read_uri_to_private_key(uri: &str) -> Result<PrivateKey, ConfigError> {
+pub(in crate::security) fn read_uri_to_private_key(
+  uri: &str,
+  key_algorithm: CertificateAlgorithm,
+) -> Result<PrivateKey, ConfigError> {
   match uri.split_once(':') {
     Some(("data", content)) => PrivateKey::from_pem(Bytes::copy_from_slice(content.as_bytes())),
 
     Some(("pkcs11", path_and_query)) => {
-      // // DEBUG:
-      // let key_pem = std::fs::read(own_and_append("../security_configuration_files",
-      // "key.pem"))   .map_err(to_config_error_other(&format!("I/O error
-      // reading debug test files")))   .unwrap();
-      // // DEBUG:
-      // let cert_pem =
-      // std::fs::read(own_and_append("../security_configuration_files", "cert.pem"))
-      //   .map_err(to_config_error_other(&format!("I/O error reading debug test
-      // cert")))   .unwrap();
-      // //DEBUG:
-      // let cert = Certificate::from_pem(&cert_pem).unwrap();
-
       // These URIs are composed of "pkcs11" ":" path [ "?" query ]
-      PrivateKey::from_pkcs11_uri_path_and_query(
-        path_and_query,
-        // Some(&key_pem),  // TEST only!
-        // cert ) // TEST only!
-      )
+      PrivateKey::from_pkcs11_uri_path_and_query(path_and_query, key_algorithm)
     }
     Some(("file", path)) => std::fs::read(path)
       .map_err(to_config_error_other(&format!("I/O error reading {path}")))
