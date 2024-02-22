@@ -29,7 +29,7 @@ use crate::{
     },
     certificate::*,
     config::*,
-    Authentication, *,
+    *,
   },
   security_error,
   serialization::cdr_serializer::to_bytes,
@@ -41,8 +41,7 @@ use super::{
     BuiltinAuthenticatedPeerCredentialToken, BuiltinIdentityToken, DH_MODP_KAGREE_ALGO_NAME,
     ECDH_KAGREE_ALGO_NAME,
   },
-  AuthenticationBuiltin, BuiltinHandshakeState, DHKeys, LocalParticipantInfo,
-  RemoteParticipantInfo,
+  BuiltinHandshakeState, DHKeys, LocalParticipantInfo, RemoteParticipantInfo,
 };
 
 // DDS Security spec v1.1
@@ -168,7 +167,7 @@ impl Authentication for AuthenticationBuiltin {
     let candidate_guid_hash = Sha256::hash(&candidate_participant_guid.to_bytes());
 
     // slicing will succeed, because digest is longer than 6 bytes
-    let prefix_bytes = [&bytes_from_subject_name, &candidate_guid_hash.as_ref()[..6]].concat();
+    let prefix_bytes = [bytes_from_subject_name, &candidate_guid_hash.as_ref()[..6]].concat();
 
     let adjusted_guid = GUID::new(
       GuidPrefix::new(&prefix_bytes),

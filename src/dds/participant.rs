@@ -14,7 +14,7 @@ use std::{
 
 use mio_extras::channel as mio_channel;
 use mio_06::{self, Evented};
-use mio_08::{self, Interest, Registry};
+use mio_08::{Interest, Registry};
 use futures::stream::{FusedStream, Stream};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -95,20 +95,6 @@ impl DomainParticipantBuilder {
   ) -> &mut DomainParticipantBuilder {
     self.security_plugins = Some(SecurityPlugins::new(auth, access, crypto));
     self.sec_properties = Some(sec_properties);
-    self
-  }
-
-  #[cfg(feature = "security")]
-  /// For development and test use only
-  fn add_builtin_security_test_config(mut self) -> Self {
-    let security_test_configs = security::config::test_config();
-
-    if security_test_configs.security_enabled {
-      let auth = Box::new(security::AuthenticationBuiltin::new());
-      let access = Box::new(security::AccessControlBuiltin::new());
-      let crypto = Box::new(security::CryptographicBuiltin::new());
-      self.security(auth, access, crypto, security_test_configs.properties);
-    }
     self
   }
 
@@ -331,12 +317,6 @@ impl DomainParticipant {
   /// ```
   pub fn new(domain_id: u16) -> CreateResult<Self> {
     let dp_builder = DomainParticipantBuilder::new(domain_id);
-
-    #[cfg(feature = "security")]
-    // Add security if so configured in security configs
-    // This is meant to be included only in the development phase for convenience
-    let dp_builder = dp_builder.add_builtin_security_test_config();
-
     dp_builder.build()
   }
 

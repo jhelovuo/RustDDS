@@ -1,4 +1,3 @@
-pub mod paths;
 use std::{
   borrow::Borrow,
   path::{Path, PathBuf},
@@ -105,96 +104,6 @@ fn mk_string_prop(name: &str, value: String) -> security::types::Property {
   }
 }
 
-pub struct SecurityConfig {
-  pub(crate) security_enabled: bool,
-  pub(crate) properties: qos::policy::Property, // Properties of the DomainParticipantQos
-}
-
-pub fn test_config() -> SecurityConfig {
-  let security_enabled = true;
-
-  let path_start = [
-    "file:".to_string(),
-    paths::EXAMPLE_SECURITY_CONFIGURATION_FILES.to_string(),
-  ]
-  .concat();
-
-  let mut test_participant_name = String::new();
-  File::open("test_participant_name")
-    .and_then(|mut file| file.read_to_string(&mut test_participant_name))
-    .unwrap();
-
-  let properties = vec![
-    // For the authentication plugin
-    security::types::Property {
-      name: "dds.sec.auth.identity_ca".to_string(),
-      value: [
-        path_start.clone(),
-        "identity_ca_certificate.pem".to_string(),
-      ]
-      .concat(),
-      propagate: false,
-    },
-    security::types::Property {
-      name: "dds.sec.auth.private_key".to_string(),
-      value: [
-        path_start.clone(),
-        [
-          test_participant_name.clone(),
-          "_private_key.pem".to_string(),
-        ]
-        .concat(),
-      ]
-      .concat(),
-      propagate: false,
-    },
-    security::types::Property {
-      name: "dds.sec.auth.password".to_string(),
-      value: "password123".to_string(), // TODO: Do we need a "data:" prefix here?
-      propagate: false,
-    },
-    security::types::Property {
-      name: "dds.sec.auth.identity_certificate".to_string(),
-      value: [
-        path_start.clone(),
-        [test_participant_name, "_certificate.pem".to_string()].concat(),
-      ]
-      .concat(),
-      propagate: false,
-    },
-    // For the access control plugin
-    security::types::Property {
-      name: "dds.sec.access.permissions_ca".to_string(),
-      value: [
-        path_start.clone(),
-        "permissions_ca_certificate.pem".to_string(),
-      ]
-      .concat(),
-      propagate: false,
-    },
-    security::types::Property {
-      name: "dds.sec.access.governance".to_string(),
-      value: [path_start.clone(), "test_governance.p7s".to_string()].concat(),
-      propagate: false,
-    },
-    security::types::Property {
-      name: "dds.sec.access.permissions".to_string(),
-      value: [path_start, "test_permissions.p7s".to_string()].concat(),
-      propagate: false,
-    },
-  ];
-
-  let properties = qos::policy::Property {
-    value: properties,
-    binary_value: vec![],
-  };
-
-  SecurityConfig {
-    security_enabled,
-    properties,
-  }
-}
-
 use bytes::Bytes;
 
 pub(crate) fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
@@ -212,7 +121,7 @@ pub(crate) fn read_uri(uri: &str) -> Result<Bytes, ConfigError> {
   }
 }
 
-use std::{fmt::Debug, fs::File, io::Read};
+use std::fmt::Debug;
 
 #[derive(Debug)]
 pub enum ConfigError {

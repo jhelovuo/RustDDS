@@ -7,7 +7,6 @@ mod helpers;
 pub(crate) mod participant;
 pub use participant::DomainParticipant;
 
-pub(crate) mod dds_entity;
 pub(crate) mod ddsdata;
 pub(crate) mod pubsub;
 pub(crate) mod readcondition;

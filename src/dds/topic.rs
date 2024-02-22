@@ -2,7 +2,6 @@ use std::{fmt::Debug, sync::Arc};
 
 use crate::{
   dds::{
-    dds_entity::DDSEntity,
     participant::{DomainParticipant, DomainParticipantWeak},
     qos::{HasQoSPolicy, QosPolicies},
     typedesc::TypeDesc,
@@ -264,5 +263,3 @@ impl HasQoSPolicy for InnerTopic {
     self.my_qos_policies.clone()
   }
 }
-
-impl DDSEntity for InnerTopic {}

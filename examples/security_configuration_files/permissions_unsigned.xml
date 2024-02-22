@@ -17,6 +17,11 @@
                         <topic>Square</topic>
                     </topics>
                 </publish>
+                <subscribe>
+                    <topics>
+                        <topic>Square</topic>
+                    </topics>
+                </subscribe>
                 <relay>
                     <topics>
                         <topic>example_topic</topic>
@@ -35,6 +40,11 @@
                 <domains>
                     <id>0</id>
                 </domains>
+                <publish>
+                    <topics>
+                        <topic>Square</topic>
+                    </topics>
+                </publish>
                 <subscribe>
                     <topics>
                         <topic>Square</topic>

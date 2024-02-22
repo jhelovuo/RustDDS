@@ -31,7 +31,6 @@ use super::{
     BuiltinPermissionsCredentialToken, BuiltinPermissionsToken,
     BuiltinPluginParticipantSecurityAttributes,
   },
-  AccessControlBuiltin,
 };
 
 const QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME: &str = "dds.sec.access.permissions_ca";

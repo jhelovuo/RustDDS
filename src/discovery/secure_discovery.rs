@@ -2009,9 +2009,9 @@ impl SecureDiscovery {
           );
 
         if let Err(e) = set_result {
-          security_error!(
-            "Failed to set remote writer crypto tokens: {}. Remote: {:?}",
-            e,
+          warn!(
+            "Failed to set remote writer {:?} crypto tokens. Storing them & trying again later. \
+             Error message: {e}",
             msg.generic.source_endpoint_guid
           );
           // We need to set the crypto tokens later (after we have registered the remote
@@ -2038,9 +2038,9 @@ impl SecureDiscovery {
             crypto_tokens,
           );
         if let Err(e) = set_result {
-          security_error!(
-            "Failed to set remote reader crypto tokens: {}. Remote: {:?}",
-            e,
+          warn!(
+            "Failed to set remote reader {:?} crypto tokens. Storing them & trying again later. \
+             Error message: {e}",
             msg.generic.source_endpoint_guid
           );
           // We need to set the crypto tokens later (after we have registered the remote
@@ -2062,10 +2062,6 @@ impl SecureDiscovery {
   fn store_received_volatile_message(&mut self, msg: ParticipantVolatileMessageSecure) {
     let local_endpoint_guid = msg.generic.destination_endpoint_guid;
     let remote_endpoint_guid = msg.generic.source_endpoint_guid;
-    debug!(
-      "Storing crypto tokens of remote {:?} for later use.",
-      remote_endpoint_guid
-    );
     self
       .cached_received_key_exchange_messages
       .insert((local_endpoint_guid, remote_endpoint_guid), msg);

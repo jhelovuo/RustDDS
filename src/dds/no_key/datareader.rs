@@ -4,7 +4,6 @@ use std::{
   task::{Context, Poll},
 };
 
-use mio_06::{self, Evented};
 use futures::stream::{FusedStream, Stream};
 
 use crate::{
@@ -427,14 +426,14 @@ where
 
 /// WARNING! UNTESTED
 //  TODO: test
-// This is  not part of DDS spec. We implement mio Evented so that the
+// This is  not part of DDS spec. We implement mio mio_06::Evented so that the
 // application can asynchronously poll DataReader(s).
-impl<D, DA> Evented for DataReader<D, DA>
+impl<D, DA> mio_06::Evented for DataReader<D, DA>
 where
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it
-  // already implements Evented
+  // already implements mio_06::Evented
   fn register(
     &self,
     poll: &mio_06::Poll,
@@ -520,7 +519,7 @@ where
   D: 'static,
   DA: DeserializerAdapter<D>,
 {
-  fn as_status_evented(&mut self) -> &dyn Evented {
+  fn as_status_evented(&mut self) -> &dyn mio_06::Evented {
     self.keyed_datareader.as_status_evented()
   }
 
