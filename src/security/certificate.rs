@@ -19,17 +19,20 @@
 
 use bytes::Bytes;
 use x509_certificate::{
-  certificate::CapturedX509Certificate, signing::InMemorySigningKeyPair, EcdsaCurve, KeyAlgorithm,
-  Signer,
+  self, certificate::CapturedX509Certificate, signing::InMemorySigningKeyPair, EcdsaCurve,
+  KeyAlgorithm, SignatureAlgorithm, Signer,
 };
 use der::Decode;
 use bcder::{encode::Values, Mode};
 
 use crate::security::{
-  authentication::authentication_builtin::types::{CertificateAlgorithm, RSA_2048_KEY_LENGTH},
+  authentication::authentication_builtin::types::{
+    CertificateAlgorithm, ECDSA_SIGNATURE_ALGO_NAME, RSA_2048_KEY_LENGTH, RSA_SIGNATURE_ALGO_NAME,
+  },
   config::{to_config_error_other, to_config_error_parse, ConfigError},
   types::{security_error, SecurityResult},
 };
+//use crate::security_error;
 
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
@@ -55,6 +58,28 @@ impl Certificate {
 
   pub fn to_pem(&self) -> String {
     self.cert.encode_pem()
+  }
+
+  // public key algorithm
+  pub fn key_algorithm(&self) -> Option<x509_certificate::KeyAlgorithm> {
+    self.cert.key_algorithm()
+  }
+
+  // name of the signature algoritm as a byte string accrding to Table 49
+  // in DDS Security Spec v1.1 Section "9.3.2.5.1 HandshakeRequestMessageToken
+  // objects"
+  pub fn signature_algorithm_identifier(&self) -> SecurityResult<Bytes> {
+    match self.cert.signature_algorithm() {
+      None => Err(security_error(
+        "Certificate has no known signature algorithm?!",
+      )),
+      Some(SignatureAlgorithm::RsaSha256) => Ok(Bytes::from_static(RSA_SIGNATURE_ALGO_NAME)),
+      Some(SignatureAlgorithm::EcdsaSha256) => Ok(Bytes::from_static(ECDSA_SIGNATURE_ALGO_NAME)),
+      Some(x) => Err(security_error(&format!(
+        "Certificate has out-of-spec signature algorithm {:?}",
+        x
+      ))),
+    }
   }
 
   pub fn subject_name(&self) -> &DistinguishedName {
