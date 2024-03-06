@@ -28,7 +28,7 @@ security = [
   "dep:tempfile", "dep:newline-converter", 
   "dep:ring", "dep:cms", "dep:der", 
   "dep:bcder", "dep:const-oid",
-  "dep:openssl",
+  "dep:openssl", "dep:cryptoki"
   ]
 
 # If feature "build_openssl" is enabled (along with feature "security"),
@@ -79,6 +79,8 @@ der = { version = "0.7" , optional = true } # ASN.1 DER encoding
 bcder = { version = "0.7" , optional = true } # ASN.1 DER encoding
 const-oid = { version = "0.9" , optional = true } # more ASN.1
 openssl = { version = "0.10", optional = true }
+cryptoki = { version = "0.6", optional = true }
+
 
 [target.'cfg(windows)'.dependencies]
 local-ip-address = "0.5.3"

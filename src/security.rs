@@ -4,6 +4,7 @@ mod certificate;
 pub mod config;
 pub mod cryptographic;
 pub mod logging;
+mod private_key;
 pub mod security_plugins;
 pub mod types;
 

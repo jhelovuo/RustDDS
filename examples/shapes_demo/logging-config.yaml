@@ -4,7 +4,7 @@ appenders:
   stdout:
     kind: console
 root:
-  level: info
+  level: warn
 #  level: warn
   appenders:
     - stdout
@@ -13,6 +13,8 @@ loggers:
 #    level: warn
   mio_extras: 
     level: warn
+  rustdds::security::certificate:
+    level: info
 #  rustdds::dds::qos:
 #    level: trace
 #  rustdds::network::udp_listener:
