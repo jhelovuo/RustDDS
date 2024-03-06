@@ -36,7 +36,7 @@ _
 
 # Using Hardware Security Module (PKCS#11 / Cryptoki)
 
-## Provisioning Method 1: Generate keys using OpenSSL on CPU as ususl
+## Provisioning Method 1: Generate keys using OpenSSL on CPU as usual
 
 Initialize an emulated HSM. We call it `example_token`
 
