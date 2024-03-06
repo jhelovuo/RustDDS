@@ -620,13 +620,15 @@ mod tests {
     // * Boolean literals true/false in all lowercase
     // * field `enable_liveliness_protection` is systematically missing from
     //   `topic_rule`s
+    // * Remove leading spaces in subject_name, since the parsing method in the
+    //   x509_cert crate does not seem to accept them
 
     let domain_participant_permissions_xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <dds xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
   xsi:noNamespaceSchemaLocation="http://www.omg.org/spec/DDS-Security/20170801/omg_shared_ca_permissions.xsd">
   <permissions>
     <grant name="ShapesPermission">
-      <subject_name>emailAddress=cto@acme.com, CN=DDS Shapes Demo, OU=CTO Office, O=ACME Inc., L=Sunnyvale, ST=CA, C=US</subject_name>
+      <subject_name>emailAddress=cto@acme.com,CN=DDS Shapes Demo,OU=CTO Office,O=ACME Inc.,L=Sunnyvale,ST=CA,C=US</subject_name>
       <validity>
         <!-- Format is CCYY-MM-DDThh:mm:ss[Z|(+|-)hh:mm] The time zone may
         be specified as Z (UTC) or (+|-)hh:mm. Time zones that aren't
