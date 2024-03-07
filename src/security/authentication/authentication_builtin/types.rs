@@ -301,8 +301,8 @@ pub(crate) fn parse_signature_algo_name_to_ring(
   algo_name: &[u8],
 ) -> SecurityResult<&'static dyn ring::signature::VerificationAlgorithm> {
   match algo_name {
-    RSA_SIGNATURE_ALGO_NAME => Ok(&ring::signature::ECDSA_P256_SHA256_ASN1),
-    ECDSA_SIGNATURE_ALGO_NAME => Ok(&ring::signature::RSA_PSS_2048_8192_SHA256),
+    RSA_SIGNATURE_ALGO_NAME => Ok(&ring::signature::RSA_PSS_2048_8192_SHA256),
+    ECDSA_SIGNATURE_ALGO_NAME => Ok(&ring::signature::ECDSA_P256_SHA256_ASN1),
     _other =>
     // TODO: Log the algorithm name, but be careful,
     // the name is is arbitrary binary data from an unknown third party.

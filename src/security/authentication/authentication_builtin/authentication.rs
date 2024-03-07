@@ -512,10 +512,6 @@ impl Authentication for AuthenticationBuiltin {
 
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
-    let dsign_algo = local_info
-      .identity_certificate
-      .signature_algorithm_identifier()?;
-
     // Check which key agreement algorithm the remote has chosen & generate our own
     // key pair
     let dh2_keys = if request.c_kagree_algo == *DH_MODP_KAGREE_ALGO_NAME {
@@ -564,12 +560,16 @@ impl Authentication for AuthenticationBuiltin {
     // Compute the DH2 public key that we'll send to the remote
     let dh2_public_key = dh2_keys.public_key_bytes()?;
 
+    let my_dsign_algo = local_info
+      .identity_certificate
+      .signature_algorithm_identifier()?;
+
     // Compute hash(c2)
     let c2_properties: Vec<BinaryProperty> = vec![
       BinaryProperty::with_propagate("c.id", my_id_certificate_text.clone()),
       BinaryProperty::with_propagate("c.perm", my_permissions_doc_text.clone()),
       BinaryProperty::with_propagate("c.pdata", pdata_bytes.clone()),
-      BinaryProperty::with_propagate("c.dsign_algo", dsign_algo.clone()),
+      BinaryProperty::with_propagate("c.dsign_algo", my_dsign_algo.clone()),
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
     let c2_hash = Sha256::hash(
@@ -603,7 +603,7 @@ impl Authentication for AuthenticationBuiltin {
       c_id: Some(my_id_certificate_text),
       c_perm: Some(my_permissions_doc_text),
       c_pdata: Some(pdata_bytes),
-      c_dsign_algo: Some(dsign_algo),
+      c_dsign_algo: Some(my_dsign_algo),
       c_kagree_algo: Some(kagree_algo),
       ocsp_status: None, // Not implemented
       hash_c1: Some(Bytes::copy_from_slice(computed_c1_hash.as_ref())), /* version we computed,
@@ -863,9 +863,6 @@ impl Authentication for AuthenticationBuiltin {
         // Result is that we do not produce a MassageToken, since this was the final
         // message, but we compute the handshake results (shared secret)
         let handshake_token = BuiltinHandshakeMessageToken::try_from(handshake_message_in)?;
-        let remote_signature_algo_name = handshake_token.c_dsign_algo.clone().ok_or_else(|| {
-          create_security_error!("Final token did not specifiy signature algorithm.")
-        })?;
 
         let final_token = handshake_token.extract_final()?;
 
@@ -934,6 +931,7 @@ impl Authentication for AuthenticationBuiltin {
 
         // Now we use the remote certificate, which we verified in the previous (request
         // -> reply) step against CA.
+        let remote_signature_algo_name = remote_id_certificate.signature_algorithm_identifier()?;
         let remote_signature_algorithm =
           parse_signature_algo_name_to_ring(&remote_signature_algo_name)?;
 
