@@ -261,22 +261,33 @@ impl DPEventLoop {
             TokenDecode::FixedToken(fixed_token) => match fixed_token {
               STOP_POLL_TOKEN => {
                 use std::sync::mpsc::TryRecvError;
-                match ev_wrapper.stop_poll_receiver.try_recv() {
-                  Ok(EventLoopCommand::Stop) => {
-                    info!("Stopping dp_event_loop");
-                    return;
-                  }
-                  Ok(EventLoopCommand::PrepareStop) => {
-                    info!("dp_event_loop preparing to stop.");
-                    preparing_to_stop = true;
-                  }
-                  Err(TryRecvError::Empty) => {
-                    warn!("Spurious wake-up from dp_event_loop command channel. Very fishy.");
-                  }
-                  Err(TryRecvError::Disconnected) => {
-                    error!(
-                      "Application thread has exited abnormally. Stopping RustDDS event loop."
-                    );
+                // Read commands from the stop receiver until none left or quitting
+                // It would be nice turn the receiver into an iterator and avoid using the
+                // boolean..
+                let mut try_recv_more = true;
+                while try_recv_more {
+                  match ev_wrapper.stop_poll_receiver.try_recv() {
+                    Ok(EventLoopCommand::PrepareStop) => {
+                      info!("dp_event_loop preparing to stop.");
+                      preparing_to_stop = true;
+                      // There could still be an EventLoopCommand::Stop coming. Keep on receiving.
+                      try_recv_more = true;
+                    }
+                    Ok(EventLoopCommand::Stop) => {
+                      info!("Stopping dp_event_loop");
+                      return;
+                    }
+                    Err(err) => match err {
+                      TryRecvError::Empty => {
+                        try_recv_more = false;
+                      }
+                      TryRecvError::Disconnected => {
+                        error!(
+                          "Application thread has exited abnormally. Stopping RustDDS event loop."
+                        );
+                        return;
+                      }
+                    },
                   }
                 }
               }

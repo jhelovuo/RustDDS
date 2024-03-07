@@ -5,7 +5,6 @@ use enumflags2::{bitflags, BitFlags};
 use log::error;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Deserialize, Serialize};
-use openssl;
 
 use crate::{
   dds::qos,
@@ -96,6 +95,14 @@ impl From<openssl::error::ErrorStack> for SecurityError {
   fn from(e: openssl::error::ErrorStack) -> Self {
     SecurityError {
       msg: format!("openssl Error: {e:?}"),
+    }
+  }
+}
+
+impl From<cryptoki::error::Error> for SecurityError {
+  fn from(e: cryptoki::error::Error) -> Self {
+    SecurityError {
+      msg: format!("cryptoki (PKCS#11) Error: {e:?}"),
     }
   }
 }

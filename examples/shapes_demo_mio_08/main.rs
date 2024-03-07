@@ -12,16 +12,18 @@ use std::{
   },
   time::{Duration, Instant},
 };
+#[cfg(feature = "security")]
+use std::path::Path;
 
-use log::{debug, error, trace, LevelFilter};
+use log::{debug, error, trace, warn, LevelFilter};
 use log4rs::{
   append::console::ConsoleAppender,
   config::{Appender, Root},
   Config,
 };
 use rustdds::{
-  with_key::Sample, DomainParticipant, Keyed, QosPolicyBuilder, StatusEvented, TopicDescription,
-  TopicKind,
+  with_key::Sample, DomainParticipantBuilder, Keyed, QosPolicyBuilder, StatusEvented,
+  TopicDescription, TopicKind,
 };
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
@@ -29,6 +31,8 @@ use serde::{Deserialize, Serialize};
 use clap::{Arg, ArgMatches, Command}; // command line argument processing
 use mio_08::{Events, Interest, Poll, Token}; // non-blocking i/o polling
 use rand::prelude::*;
+#[cfg(feature = "security")]
+use rustdds::DomainParticipantSecurityConfigFiles;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct ShapeType {
@@ -68,7 +72,26 @@ fn main() {
     .cloned()
     .unwrap_or("BLUE".to_owned());
 
-  let domain_participant = DomainParticipant::new(*domain_id)
+  // Build the DomainParticipant
+  let dp_builder = DomainParticipantBuilder::new(*domain_id);
+  #[cfg(feature = "security")]
+  let dp_builder = if let Some(sec_dir_path) = matches.get_one::<String>("security") {
+    dp_builder.builtin_security(
+      DomainParticipantSecurityConfigFiles::with_ros_default_names(
+        Path::new(sec_dir_path),
+        "no_pwd".to_string(),
+      ),
+    )
+  } else {
+    dp_builder
+  };
+  #[cfg(not(feature = "security"))]
+  if matches.contains_id("security") {
+    error!("the security command line option was given, but the security feature is not enabled!");
+  }
+
+  let domain_participant = dp_builder
+    .build()
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {e:?}"));
 
   let mut qos_b = QosPolicyBuilder::new()
@@ -110,17 +133,17 @@ fn main() {
   }
 
   assert!(
-    !matches.get_flag("partition"),
+    !matches.contains_id("partition"),
     "QoS policy Partition is not yet implemented."
   );
 
   assert!(
-    !matches.get_flag("interval"),
+    !matches.contains_id("interval"),
     "QoS policy Time Based Filter is not yet implemented."
   );
 
   assert!(
-    !matches.get_flag("ownership_strength"),
+    !matches.contains_id("ownership_strength"),
     "QoS policy Ownership Strength is not yet implemented."
   );
 
@@ -337,6 +360,7 @@ fn configure_logging() {
   });
 }
 
+#[allow(clippy::too_many_lines)]
 fn get_matches() -> ArgMatches {
   Command::new("RustDDS-interop")
     .version("0.2.2")
@@ -430,6 +454,15 @@ fn get_matches() -> ArgMatches {
         .help("Set ownership strength [-1: SHARED]")
         .short('s')
         .value_name("strength"),
+    )
+    .arg(
+      Arg::new("security")
+        .help(
+          "Path to directory containing security configuration files. Setting this enables \
+           security.",
+        )
+        .long("security")
+        .value_name("security"),
     )
     .get_matches()
 }

@@ -1,4 +1,4 @@
-use std::{convert::From, fmt};
+use std::fmt;
 
 use serde::{Deserialize, Serialize};
 use speedy::{Readable, Writable};

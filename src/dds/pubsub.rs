@@ -41,7 +41,6 @@ use crate::{
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, EntityKind, GUID},
-    topic_kind::TopicKind,
   },
 };
 use super::{

@@ -1082,6 +1082,9 @@ impl Reader {
       writer_proxy.irrelevant_changes_range(gap.gap_start, gap.gap_list.base());
 
       //   2. All the sequence numbers that appear explicitly listed in the gapList.
+      //      Note that gapList.base may or may not be included in gapList; its
+      //      inclusion is determined by the bitmap, as with the other sequence
+      //      numbers
       for seq_num in gap.gap_list.iter() {
         writer_proxy.set_irrelevant_change(seq_num);
       }

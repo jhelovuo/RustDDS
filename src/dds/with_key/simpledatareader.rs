@@ -13,8 +13,6 @@ use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio_06::{self, Evented};
-use mio_08;
 
 use crate::{
   dds::{
@@ -261,6 +259,10 @@ where
             }),
           }
         } else {
+          info!(
+            "Unknown representation id: {:?} data = {:02x?}",
+            serialized_payload.representation_identifier, serialized_payload.value,
+          );
           Err(ReadError::Deserialization {
             reason: format!(
               "Unknown representation id {:?}.",
@@ -380,15 +382,15 @@ where
   }
 }
 
-// This is  not part of DDS spec. We implement mio Evented so that the
+// This is  not part of DDS spec. We implement mio mio_06::Evented so that the
 // application can asynchronously poll DataReader(s).
-impl<D, DA> Evented for SimpleDataReader<D, DA>
+impl<D, DA> mio_06::Evented for SimpleDataReader<D, DA>
 where
   D: Keyed,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it
-  // already implements Evented
+  // already implements mio_06::Evented
   fn register(
     &self,
     poll: &mio_06::Poll,
@@ -456,7 +458,7 @@ where
   D: Keyed,
   DA: DeserializerAdapter<D>,
 {
-  fn as_status_evented(&mut self) -> &dyn Evented {
+  fn as_status_evented(&mut self) -> &dyn mio_06::Evented {
     self.status_receiver.as_status_evented()
   }
 

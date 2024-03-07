@@ -9,11 +9,10 @@ use ring::agreement;
 
 use crate::{
   security::{
-    access_control::PermissionsToken, certificate, security_error, SecurityError, SecurityResult,
+    access_control::PermissionsToken, certificate, private_key, security_error, SecurityError,
+    SecurityResult,
   },
-  security_error,
-  //structure::guid::GuidPrefix,
-  GUID,
+  security_error, GUID,
 };
 use self::types::{DH_MODP_KAGREE_ALGO_NAME, ECDH_KAGREE_ALGO_NAME};
 use super::{
@@ -89,7 +88,7 @@ struct LocalParticipantInfo {
   identity_handle: IdentityHandle,
   identity_token: BuiltinIdentityToken,
   guid: GUID,
-  id_cert_private_key: certificate::PrivateKey, // PrivateKey is actually (private,public) key pair
+  id_cert_private_key: private_key::PrivateKey, // PrivateKey is actually (private,public) key pair
   identity_certificate: certificate::Certificate, // Certificate contains the public key also
   identity_ca: certificate::Certificate,        /* Certification Authority who has signed
                                                  * identity_certificate */

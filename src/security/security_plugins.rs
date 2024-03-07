@@ -31,7 +31,7 @@ use super::{
     ParticipantCryptoHandle, ParticipantCryptoToken,
   },
   types::*,
-  AccessControl, Cryptographic,
+  Cryptographic,
 };
 
 pub(crate) struct SecurityPlugins {

@@ -4,12 +4,7 @@ use byteorder::BigEndian;
 use bytes::Bytes;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use ring::signature;
 
-//use x509_certificate::{
-//algorithm::{EcdsaCurve, KeyAlgorithm},
-//signing::{InMemorySigningKeyPair, Sign},
-//};
 use crate::{
   security::{
     access_control::{
@@ -29,7 +24,7 @@ use crate::{
     },
     certificate::*,
     config::*,
-    Authentication, *,
+    *,
   },
   security_error,
   serialization::cdr_serializer::to_bytes,
@@ -38,11 +33,10 @@ use crate::{
 };
 use super::{
   types::{
-    BuiltinAuthenticatedPeerCredentialToken, BuiltinIdentityToken, DH_MODP_KAGREE_ALGO_NAME,
-    ECDH_KAGREE_ALGO_NAME,
+    parse_signature_algo_name_to_ring, BuiltinAuthenticatedPeerCredentialToken,
+    BuiltinIdentityToken, DH_MODP_KAGREE_ALGO_NAME, ECDH_KAGREE_ALGO_NAME,
   },
-  AuthenticationBuiltin, BuiltinHandshakeState, DHKeys, LocalParticipantInfo,
-  RemoteParticipantInfo,
+  BuiltinHandshakeState, DHKeys, LocalParticipantInfo, RemoteParticipantInfo,
 };
 
 // DDS Security spec v1.1
@@ -125,19 +119,20 @@ impl Authentication for AuthenticationBuiltin {
     // TODO: decrypt a password protected private key
     let _password = participant_qos.get_optional_property(QOS_PASSWORD_PROPERTY_NAME);
 
+    let id_cert_algorithm = identity_certificate
+      .algorithm()
+      .ok_or_else(|| security_error!("Cannot recognize identity certificate algorithm."))?;
+
     let id_cert_private_key = participant_qos
       .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
       .and_then(|pem_uri| {
-        read_uri(&pem_uri).map_err(|conf_err| {
+        read_uri_to_private_key(&pem_uri, id_cert_algorithm).map_err(|conf_err| {
           security_error!(
             "Failed to read the DomainParticipant identity private key from {}: {:?}",
             pem_uri,
             conf_err
           )
         })
-      })
-      .and_then(|private_key_pem| {
-        PrivateKey::from_pem(private_key_pem).map_err(|e| security_error!("{e:?}"))
       })?;
 
     // Verify that CA has signed our identity
@@ -168,7 +163,7 @@ impl Authentication for AuthenticationBuiltin {
     let candidate_guid_hash = Sha256::hash(&candidate_participant_guid.to_bytes());
 
     // slicing will succeed, because digest is longer than 6 bytes
-    let prefix_bytes = [&bytes_from_subject_name, &candidate_guid_hash.as_ref()[..6]].concat();
+    let prefix_bytes = [bytes_from_subject_name, &candidate_guid_hash.as_ref()[..6]].concat();
 
     let adjusted_guid = GUID::new(
       GuidPrefix::new(&prefix_bytes),
@@ -178,12 +173,24 @@ impl Authentication for AuthenticationBuiltin {
     // Section "9.3.2.1 DDS:Auth:PKI-DH IdentityToken"
     // Table 45
     //
-    // TODO: dig out ".algo" values from identity_certificate and identity_ca
+    let certificate_algorithm = identity_certificate
+      .key_algorithm()
+      .ok_or(security_error!(
+        "Identity Certificate specifies no public key algorithm"
+      ))
+      .and_then(CertificateAlgorithm::try_from)?;
+    let ca_algorithm = identity_ca
+      .key_algorithm()
+      .ok_or(security_error!(
+        "CA Certificate specifies no public key algorithm"
+      ))
+      .and_then(CertificateAlgorithm::try_from)?;
+
     let identity_token = BuiltinIdentityToken {
       certificate_subject: Some(identity_certificate.subject_name().clone().serialize()),
-      certificate_algorithm: Some(CertificateAlgorithm::ECPrime256v1), // TODO: hardwired
+      certificate_algorithm: Some(certificate_algorithm),
       ca_subject: Some(identity_ca.subject_name().clone().serialize()),
-      ca_algorithm: Some(CertificateAlgorithm::ECPrime256v1), // TODO: hardwired
+      ca_algorithm: Some(ca_algorithm),
     };
 
     let local_identity_handle = self.get_new_identity_handle();
@@ -398,7 +405,9 @@ impl Authentication for AuthenticationBuiltin {
 
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
-    let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
+    let dsign_algo = local_info
+      .identity_certificate
+      .signature_algorithm_identifier()?;
 
     let kagree_algo = Bytes::from(dh_keys.kagree_algo_name_str());
 
@@ -503,7 +512,9 @@ impl Authentication for AuthenticationBuiltin {
 
     let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
-    let dsign_algo = Bytes::from_static(b"ECDSA-SHA256"); // TODO: do not hardcode this, get from id cert
+    let dsign_algo = local_info
+      .identity_certificate
+      .signature_algorithm_identifier()?;
 
     // Check which key agreement algorithm the remote has chosen & generate our own
     // key pair
@@ -739,6 +750,8 @@ impl Authentication for AuthenticationBuiltin {
           BinaryProperty::with_propagate("hash_c1", Bytes::copy_from_slice(hash_c1.as_ref())),
         ];
 
+        let c2_signature_algorithm = parse_signature_algo_name_to_ring(&reply.c_dsign_algo)?;
+
         // Verify "C2" contents against reply.signature and 2's public key
         cert2.verify_signed_data_with_algorithm(
           to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc2_properties).map_err(|e| {
@@ -747,8 +760,7 @@ impl Authentication for AuthenticationBuiltin {
             }
           })?,
           reply.signature,
-          // TODO: Hardcoded algorithm
-          &signature::ECDSA_P256_SHA256_ASN1,
+          c2_signature_algorithm,
         )?; // verify ok or exit here
 
         // Verify that the key agreement algo in the reply is as we expect
@@ -844,8 +856,13 @@ impl Authentication for AuthenticationBuiltin {
         // We are the responder, and expect the final message.
         // Result is that we do not produce a MassageToken, since this was the final
         // message, but we compute the handshake results (shared secret)
-        let final_token =
-          BuiltinHandshakeMessageToken::try_from(handshake_message_in)?.extract_final()?;
+        let handshake_token = BuiltinHandshakeMessageToken::try_from(handshake_message_in)?;
+        let remote_signature_algo_name = handshake_token
+          .c_dsign_algo
+          .clone()
+          .ok_or_else(|| security_error!("Final token did not specifiy signature algorithm."))?;
+
+        let final_token = handshake_token.extract_final()?;
 
         // This is a sanity check
         if let Some(received_hash_c1) = final_token.hash_c1 {
@@ -912,7 +929,9 @@ impl Authentication for AuthenticationBuiltin {
 
         // Now we use the remote certificate, which we verified in the previous (request
         // -> reply) step against CA.
-        // TODO: Hardcoded algorithm
+        let remote_signature_algorithm =
+          parse_signature_algo_name_to_ring(&remote_signature_algo_name)?;
+
         remote_id_certificate
           .verify_signed_data_with_algorithm(
             to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc_final_properties).map_err(|e| {
@@ -921,7 +940,7 @@ impl Authentication for AuthenticationBuiltin {
               }
             })?,
             final_token.signature,
-            &signature::ECDSA_P256_SHA256_ASN1,
+            remote_signature_algorithm,
           )
           .map_err(|e| {
             security_error!("Signature verification failed in process_handshake: {e:?}")

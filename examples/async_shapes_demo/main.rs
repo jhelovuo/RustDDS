@@ -4,17 +4,19 @@
 #![warn(clippy::pedantic)]
 
 use std::{io, time::Duration};
+#[cfg(feature = "security")]
+use std::path::Path;
 
 #[allow(unused_imports)]
-use log::{debug, error, info, trace, LevelFilter};
+use log::{debug, error, info, trace, warn, LevelFilter};
 use log4rs::{
   append::console::ConsoleAppender,
   config::{Appender, Root},
   Config,
 };
 use rustdds::{
-  with_key::Sample, DomainParticipant, Keyed, QosPolicyBuilder, StatusEvented, TopicDescription,
-  TopicKind,
+  with_key::Sample, DomainParticipantBuilder, Keyed, QosPolicyBuilder, StatusEvented,
+  TopicDescription, TopicKind,
 };
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
@@ -22,7 +24,9 @@ use serde::{Deserialize, Serialize};
 use clap::{Arg, ArgMatches, Command}; // command line argument processing
 use rand::prelude::*;
 use smol::Timer;
-use futures::{stream::StreamExt, FutureExt, TryFutureExt};
+use futures::{pin_mut, stream::StreamExt, FutureExt, TryFutureExt};
+#[cfg(feature = "security")]
+use rustdds::DomainParticipantSecurityConfigFiles;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct ShapeType {
@@ -58,8 +62,26 @@ fn main() {
     .cloned()
     .unwrap_or("BLUE".to_owned());
 
-  // Domain Participant
-  let domain_participant = DomainParticipant::new(*domain_id)
+  // Build the DomainParticipant
+  let dp_builder = DomainParticipantBuilder::new(*domain_id);
+  #[cfg(feature = "security")]
+  let dp_builder = if let Some(sec_dir_path) = matches.get_one::<String>("security") {
+    dp_builder.builtin_security(
+      DomainParticipantSecurityConfigFiles::with_ros_default_names(
+        Path::new(sec_dir_path),
+        "no_pwd".to_string(),
+      ),
+    )
+  } else {
+    dp_builder
+  };
+  #[cfg(not(feature = "security"))]
+  if matches.contains_id("security") {
+    warn!("the security command line option was given, but the security feature is not enabled!");
+  }
+
+  let domain_participant = dp_builder
+    .build()
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {e:?}"));
 
   let mut qos_b = QosPolicyBuilder::new()
@@ -193,7 +215,8 @@ fn main() {
 
   let dp_event_loop = async {
     let mut run = true;
-    let mut stop = stop_receiver.recv().fuse();
+    let stop = stop_receiver.recv().fuse();
+    pin_mut!(stop);
     let dp_status_listener = domain_participant.status_listener();
     let mut dp_status_stream = dp_status_listener.as_async_status_stream();
 
@@ -212,7 +235,8 @@ fn main() {
       None => (),
       Some(datareader) => {
         let mut run = true;
-        let mut stop = stop_receiver.recv().fuse();
+        let stop = stop_receiver.recv().fuse();
+        pin_mut!(stop);
         let mut datareader_stream = datareader.async_sample_stream();
         let mut datareader_event_stream = datareader_stream.async_event_stream();
         while run {
@@ -253,7 +277,8 @@ fn main() {
       None => (),
       Some(datawriter) => {
         let mut run = true;
-        let mut stop = stop_receiver.recv().fuse();
+        let stop = stop_receiver.recv().fuse();
+        pin_mut!(stop);
         let mut tick_stream = futures::StreamExt::fuse(Timer::interval(write_interval));
 
         let mut datawriter_event_stream = datawriter.as_async_status_stream();
@@ -310,6 +335,7 @@ fn configure_logging() {
   });
 }
 
+#[allow(clippy::too_many_lines)]
 fn get_matches() -> ArgMatches {
   Command::new("RustDDS-interop")
     .version("0.2.2")
@@ -407,6 +433,15 @@ fn get_matches() -> ArgMatches {
         .short('s')
         .value_parser(clap::value_parser!(i32))
         .value_name("strength"),
+    )
+    .arg(
+      Arg::new("security")
+        .help(
+          "Path to directory containing security configuration files. Setting this enables \
+           security.",
+        )
+        .long("security")
+        .value_name("security"),
     )
     .get_matches()
 }

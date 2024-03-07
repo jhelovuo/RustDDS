@@ -17,19 +17,23 @@
 // Permissions documents. The verification of the two can use the same or
 // different Certificate instances.
 
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
 use x509_certificate::{
-  certificate::CapturedX509Certificate, signing::InMemorySigningKeyPair, EcdsaCurve, KeyAlgorithm,
-  Signer,
+  self, certificate::CapturedX509Certificate, EcdsaCurve, KeyAlgorithm, SignatureAlgorithm,
 };
 use der::Decode;
 use bcder::{encode::Values, Mode};
 
 use crate::security::{
-  authentication::authentication_builtin::types::{CertificateAlgorithm, RSA_2048_KEY_LENGTH},
+  authentication::authentication_builtin::types::{
+    CertificateAlgorithm, ECDSA_SIGNATURE_ALGO_NAME, RSA_2048_KEY_LENGTH, RSA_SIGNATURE_ALGO_NAME,
+  },
   config::{to_config_error_other, to_config_error_parse, ConfigError},
   types::{security_error, SecurityResult},
 };
+//use crate::security_error;
 
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
@@ -55,6 +59,28 @@ impl Certificate {
 
   pub fn to_pem(&self) -> String {
     self.cert.encode_pem()
+  }
+
+  // public key algorithm
+  pub fn key_algorithm(&self) -> Option<x509_certificate::KeyAlgorithm> {
+    self.cert.key_algorithm()
+  }
+
+  // name of the signature algoritm as a byte string accrding to Table 49
+  // in DDS Security Spec v1.1 Section "9.3.2.5.1 HandshakeRequestMessageToken
+  // objects"
+  pub fn signature_algorithm_identifier(&self) -> SecurityResult<Bytes> {
+    match self.cert.signature_algorithm() {
+      None => Err(security_error(
+        "Certificate has no known signature algorithm?!",
+      )),
+      Some(SignatureAlgorithm::RsaSha256) => Ok(Bytes::from_static(RSA_SIGNATURE_ALGO_NAME)),
+      Some(SignatureAlgorithm::EcdsaSha256) => Ok(Bytes::from_static(ECDSA_SIGNATURE_ALGO_NAME)),
+      Some(x) => Err(security_error(&format!(
+        "Certificate has out-of-spec signature algorithm {:?}",
+        x
+      ))),
+    }
   }
 
   pub fn subject_name(&self) -> &DistinguishedName {
@@ -174,29 +200,6 @@ impl fmt::Display for DistinguishedName {
   }
 }
 
-#[derive(Debug)]
-pub struct PrivateKey {
-  priv_key: InMemorySigningKeyPair,
-}
-
-// TODO: decrypt a password protected key
-impl PrivateKey {
-  pub fn from_pem(pem_data: impl AsRef<[u8]>) -> Result<Self, ConfigError> {
-    let priv_key = InMemorySigningKeyPair::from_pkcs8_pem(pem_data.as_ref())
-      .map_err(to_config_error_parse("Private key parse error"))?;
-
-    Ok(PrivateKey { priv_key })
-  }
-
-  pub fn sign(&self, msg: &[u8]) -> SecurityResult<Bytes> {
-    self
-      .priv_key
-      .try_sign(msg)
-      .map(|s| Bytes::copy_from_slice(s.as_ref()))
-      .map_err(|e| security_error(&format!("Signature verification failure: {e:?}")))
-  }
-}
-
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -217,19 +220,5 @@ iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
     let cert = Certificate::from_pem(cert_pem).unwrap();
 
     println!("{:?}", cert);
-  }
-
-  #[test]
-  pub fn parse_private_key() {
-    let priv_key_pem = r#"-----BEGIN PRIVATE KEY-----
-MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgaPBddesE0rHiP5/c
-+djUjctfNoMAa5tNxOdged9AQtOhRANCAATKbyUP/dWap5kUbXky9qmhBc9ne0hg
-EEJPTyIYWQldbZS8GH/4SOMViyWhL/BcSU48V0RidVPvyKqqiLyVaVmk
------END PRIVATE KEY-----
-"#;
-
-    let key = PrivateKey::from_pem(priv_key_pem).unwrap();
-
-    println!("{:?}", key);
   }
 }

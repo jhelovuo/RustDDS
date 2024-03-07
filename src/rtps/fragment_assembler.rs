@@ -1,4 +1,4 @@
-use std::{collections::BTreeMap, convert::TryInto, fmt, iter};
+use std::{collections::BTreeMap, fmt, iter};
 
 use bit_vec::BitVec;
 use enumflags2::BitFlags;

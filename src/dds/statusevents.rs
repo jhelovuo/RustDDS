@@ -15,9 +15,9 @@ use std::{
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
 use futures::stream::{FusedStream, Stream};
-use mio_06::{self, Evented};
+use mio_06::Evented;
 use mio_extras::channel as mio_channel;
-use mio_08::{self, event, Interest, Registry, Token};
+use mio_08::{event, Interest, Registry, Token};
 use chrono::Utc;
 
 use crate::{

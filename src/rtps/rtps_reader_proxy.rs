@@ -95,8 +95,10 @@ impl RtpsReaderProxy {
     if self.unicast_locator_list != update.unicast_locator_list
       || self.multicast_locator_list != update.multicast_locator_list
     {
-      info!("Upddate changes Locators in ReaderProxy.");
-      self.unicast_locator_list = update.unicast_locator_list.clone();
+      info!("Update changes Locators in ReaderProxy.");
+      let mut unicasts = update.unicast_locator_list.clone();
+      unicasts.retain(Self::not_loopback);
+      self.unicast_locator_list = unicasts;
       self.multicast_locator_list = update.multicast_locator_list.clone();
     }
 
@@ -168,15 +170,28 @@ impl RtpsReaderProxy {
     }
   }
 
+  // OpenDDS seems to advertise also loopback address as its Locator over SPDP,
+  // which is problematic, if we are not on the same host.
+  fn not_loopback(l: &Locator) -> bool {
+    let is_loopback = l.is_loopback();
+    if is_loopback {
+      info!("Ignoring loopback address {:?}", l);
+    }
+
+    !is_loopback
+  }
+
   pub fn from_discovered_reader_data(
     discovered_reader_data: &DiscoveredReaderData,
     default_unicast_locators: &[Locator],
     default_multicast_locators: &[Locator],
   ) -> Self {
-    let unicast_locator_list = Self::discovered_or_default(
+    let mut unicast_locator_list = Self::discovered_or_default(
       &discovered_reader_data.reader_proxy.unicast_locator_list,
       default_unicast_locators,
     );
+    unicast_locator_list.retain(Self::not_loopback);
+
     let multicast_locator_list = Self::discovered_or_default(
       &discovered_reader_data.reader_proxy.multicast_locator_list,
       default_multicast_locators,
