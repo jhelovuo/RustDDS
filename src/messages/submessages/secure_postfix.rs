@@ -9,9 +9,9 @@ use super::{
   submessages::SubmessageHeader,
 };
 use crate::{
+  create_security_error,
   rtps::{Submessage, SubmessageBody},
   security::{SecurityError, SecurityResult},
-  security_error,
 };
 
 /// SecurePostfixSubMsg: section 7.3.6.5 of the Security specification (v. 1.1)
@@ -35,7 +35,7 @@ impl SecurePostfix {
         original_bytes: None,
       })
       .map_err(|e| {
-        security_error!(
+        create_security_error!(
           "Security plugin couldn't write SecurePostfix to bytes. Error: {}",
           e
         )

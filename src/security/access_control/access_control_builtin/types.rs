@@ -5,6 +5,7 @@ use enumflags2::{bitflags, BitFlags};
 use speedy::{Readable, Writable};
 
 use crate::{
+  create_security_error,
   security::{
     access_control::{
       EndpointSecurityAttributes, PermissionsCredentialToken, PermissionsToken,
@@ -16,7 +17,6 @@ use crate::{
     PluginParticipantSecurityAttributesMask, PluginSecurityAttributesMask, Property, SecurityError,
     SecurityResult,
   },
-  security_error,
 };
 
 // 9.4.2.3
@@ -39,7 +39,7 @@ impl TryFrom<PluginParticipantSecurityAttributesMask>
   ) -> Result<Self, Self::Error> {
     BitFlags::<BuiltinPluginParticipantSecurityAttributesMaskFlags>::try_from(value)
       .map_err(|e| {
-        security_error!(
+        create_security_error!(
           "Could not convert to BuiltinPluginParticipantSecurityAttributesMask: {e:?}"
         )
       })
@@ -63,7 +63,7 @@ impl TryFrom<PluginParticipantSecurityAttributesMask>
             ),
           })
         } else {
-          Err(security_error!(
+          Err(create_security_error!(
             "The IsValid flag of BuiltinPluginParticipantSecurityAttributesMask was set to false."
           ))
         }
@@ -143,7 +143,9 @@ impl TryFrom<PluginEndpointSecurityAttributesMask> for BuiltinPluginEndpointSecu
   ) -> Result<Self, Self::Error> {
     BitFlags::<BuiltinPluginEndpointSecurityAttributesMaskFlags>::try_from(value)
       .map_err(|e| {
-        security_error!("Could not convert to BuiltinPluginEndpointSecurityAttributesMask: {e:?}")
+        create_security_error!(
+          "Could not convert to BuiltinPluginEndpointSecurityAttributesMask: {e:?}"
+        )
       })
       .and_then(|mask| {
         if mask.contains(BuiltinPluginEndpointSecurityAttributesMaskFlags::IsValid) {
@@ -157,7 +159,7 @@ impl TryFrom<PluginEndpointSecurityAttributesMask> for BuiltinPluginEndpointSecu
               .contains(BuiltinPluginEndpointSecurityAttributesMaskFlags::IsPayloadEncrypted),
           })
         } else {
-          Err(security_error!(
+          Err(create_security_error!(
             "The IsValid flag of BuiltinPluginEndpointSecurityAttributesMask was set to false."
           ))
         }
