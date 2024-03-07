@@ -175,15 +175,13 @@ impl Authentication for AuthenticationBuiltin {
     //
     let certificate_algorithm = identity_certificate
       .key_algorithm()
-      .ok_or(create_security_error!(
-        "Identity Certificate specifies no public key algorithm"
-      ))
+      .ok_or_else(|| {
+        create_security_error!("Identity Certificate specifies no public key algorithm")
+      })
       .and_then(CertificateAlgorithm::try_from)?;
     let ca_algorithm = identity_ca
       .key_algorithm()
-      .ok_or(create_security_error!(
-        "CA Certificate specifies no public key algorithm"
-      ))
+      .ok_or_else(|| create_security_error!("CA Certificate specifies no public key algorithm"))
       .and_then(CertificateAlgorithm::try_from)?;
 
     let identity_token = BuiltinIdentityToken {
