@@ -11,13 +11,13 @@ mod validate_receiver_specific_macs;
 use std::collections::{HashMap, HashSet};
 
 use crate::{
+  create_security_error,
   security::{
     access_control::types::*,
     authentication::types::*,
     cryptographic::{cryptographic_builtin::types::*, cryptographic_plugin::*, types::*},
     types::*,
   },
-  security_error,
 };
 use self::{builtin_key::*, key_material::*};
 
@@ -117,7 +117,7 @@ impl CryptographicBuiltin {
         self
           .common_encode_key_materials
           .insert(local_entity_crypto_handle, old_key_materials);
-        SecurityResult::Err(security_error!(
+        SecurityResult::Err(create_security_error!(
           "The CryptoHandle {} was already associated with common encode key materials",
           local_entity_crypto_handle
         ))
@@ -132,7 +132,7 @@ impl CryptographicBuiltin {
       .common_encode_key_materials
       .get(local_entity_crypto_handle)
       .ok_or_else(|| {
-        security_error!(
+        create_security_error!(
           "Could not find common encode key materials for the CryptoHandle {}",
           local_entity_crypto_handle
         )
@@ -153,7 +153,7 @@ impl CryptographicBuiltin {
         self
           .receiver_specific_encode_key_materials
           .insert(remote_entity_crypto_handle, old_key_materials);
-        SecurityResult::Err(security_error!(
+        SecurityResult::Err(create_security_error!(
           "The CryptoHandle {} was already associated with receiver-specific encode key materials",
           remote_entity_crypto_handle
         ))
@@ -168,7 +168,7 @@ impl CryptographicBuiltin {
       .receiver_specific_encode_key_materials
       .get(remote_entity_crypto_handle)
       .ok_or_else(|| {
-        security_error!(
+        create_security_error!(
           "Could not find receiver-specific encode key materials for the CryptoHandle {}",
           remote_entity_crypto_handle
         )
@@ -189,7 +189,7 @@ impl CryptographicBuiltin {
         self
           .decode_key_materials
           .insert(remote_entity_crypto_handle, old_key_materials);
-        SecurityResult::Err(security_error!(
+        SecurityResult::Err(create_security_error!(
           "The CryptoHandle {} was already associated with decode key material",
           remote_entity_crypto_handle
         ))
@@ -251,7 +251,7 @@ impl CryptographicBuiltin {
         self
           .participant_encrypt_options
           .insert(participant_crypto_handle, old_attributes);
-        SecurityResult::Err(security_error!(
+        SecurityResult::Err(create_security_error!(
           "The ParticipantCryptoHandle {} was already associated with security attributes",
           participant_crypto_handle
         ))
@@ -273,7 +273,7 @@ impl CryptographicBuiltin {
         self
           .endpoint_encrypt_options
           .insert(endpoint_crypto_handle, old_attributes);
-        SecurityResult::Err(security_error!(
+        SecurityResult::Err(create_security_error!(
           "The EndpointCryptoHandle {} was already associated with security attributes",
           endpoint_crypto_handle
         ))
@@ -346,7 +346,7 @@ impl CryptographicBuiltin {
             receiving_remote_volatile_endpoint_crypto_handle,
           )
         } else {
-          Err(security_error!(
+          Err(create_security_error!(
             "For volatile local endpoint, expected exactly one remote endpoint handle."
           ))
         }?
@@ -433,7 +433,7 @@ impl CryptographicBuiltin {
         initialization_vector,
       )
       .ok_or_else(|| {
-        security_error!(
+        create_security_error!(
           "Could not find decode key materials for the CryptoHandle {}",
           remote_sender_handle
         )

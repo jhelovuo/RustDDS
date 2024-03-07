@@ -3,10 +3,10 @@ use log::debug;
 use x509_certificate::{self, KeyAlgorithm};
 
 use crate::{
+  create_security_error,
   security::{
     authentication::types::*, security_error, DataHolderBuilder, SecurityError, SecurityResult,
   },
-  security_error,
 };
 
 pub const IDENTITY_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
@@ -46,7 +46,7 @@ impl TryFrom<&str> for CertificateAlgorithm {
     match value {
       RSA_2048_ALGO_NAME => Ok(CertificateAlgorithm::RSA2048),
       EC_PRIME_ALGO_NAME => Ok(CertificateAlgorithm::ECPrime256v1),
-      _ => Err(security_error!(
+      _ => Err(create_security_error!(
         "Invalid certificate algorithm value: {}",
         value
       )),
@@ -70,7 +70,10 @@ impl TryFrom<x509_certificate::KeyAlgorithm> for CertificateAlgorithm {
       KeyAlgorithm::Ecdsa(x509_certificate::algorithm::EcdsaCurve::Secp256r1) => {
         Ok(CertificateAlgorithm::ECPrime256v1)
       }
-      x => Err(security_error!("Unsuppored certificate algorithm: {:?}", x)),
+      x => Err(create_security_error!(
+        "Unsuppored certificate algorithm: {:?}",
+        x
+      )),
     }
   }
 }
@@ -94,7 +97,7 @@ impl TryFrom<IdentityToken> for BuiltinIdentityToken {
     let dh = token.data_holder;
     // Verify class id
     if dh.class_id != IDENTITY_TOKEN_CLASS_ID {
-      return Err(security_error!(
+      return Err(create_security_error!(
         "Invalid class ID. Got {}, expected {}",
         dh.class_id,
         IDENTITY_TOKEN_CLASS_ID
@@ -304,7 +307,7 @@ pub(crate) fn parse_signature_algo_name_to_ring(
     // TODO: Log the algorithm name, but be careful,
     // the name is is arbitrary binary data from an unknown third party.
     {
-      Err(security_error!("Unknown signature algorithm name"))
+      Err(create_security_error!("Unknown signature algorithm name"))
     }
   }
 }
@@ -340,25 +343,29 @@ impl BuiltinHandshakeMessageToken {
         std::str::from_utf8(HANDSHAKE_REQUEST_CLASS_ID)
       )));
     }
-    let c_id = self.c_id.ok_or_else(|| security_error!("c_id not found"))?;
+    let c_id = self
+      .c_id
+      .ok_or_else(|| create_security_error!("c_id not found"))?;
     let c_perm = self
       .c_perm
-      .ok_or_else(|| security_error!("c_perm not found"))?;
+      .ok_or_else(|| create_security_error!("c_perm not found"))?;
     let c_pdata = self
       .c_pdata
-      .ok_or_else(|| security_error!("c_pdata not found"))?;
+      .ok_or_else(|| create_security_error!("c_pdata not found"))?;
     let c_dsign_algo = self
       .c_dsign_algo
-      .ok_or_else(|| security_error!("c_dsign_algo not found"))?;
+      .ok_or_else(|| create_security_error!("c_dsign_algo not found"))?;
     let c_kagree_algo = self
       .c_kagree_algo
-      .ok_or_else(|| security_error!("c_kagree_algo not found"))?;
+      .ok_or_else(|| create_security_error!("c_kagree_algo not found"))?;
     let hash_c1 = self.hash_c1.map(|mh| mh.as_ref().try_into()).transpose()?;
     let challenge1 = self
       .challenge1
-      .ok_or_else(|| security_error!("challenge1 not found"))
+      .ok_or_else(|| create_security_error!("challenge1 not found"))
       .and_then(|b| Challenge::try_from(b.as_ref()))?;
-    let dh1 = self.dh1.ok_or_else(|| security_error!("dh1 not found"))?;
+    let dh1 = self
+      .dh1
+      .ok_or_else(|| create_security_error!("dh1 not found"))?;
 
     Ok(HandshakeRequest {
       c_id,
@@ -381,34 +388,40 @@ impl BuiltinHandshakeMessageToken {
         std::str::from_utf8(HANDSHAKE_REPLY_CLASS_ID)
       )));
     }
-    let c_id = self.c_id.ok_or_else(|| security_error!("c_id not found"))?;
+    let c_id = self
+      .c_id
+      .ok_or_else(|| create_security_error!("c_id not found"))?;
     let c_perm = self
       .c_perm
-      .ok_or_else(|| security_error!("c_perm not found"))?;
+      .ok_or_else(|| create_security_error!("c_perm not found"))?;
     let c_pdata = self
       .c_pdata
-      .ok_or_else(|| security_error!("c_pdata not found"))?;
+      .ok_or_else(|| create_security_error!("c_pdata not found"))?;
     let c_dsign_algo = self
       .c_dsign_algo
-      .ok_or_else(|| security_error!("c_dsign_algo not found"))?;
+      .ok_or_else(|| create_security_error!("c_dsign_algo not found"))?;
     let c_kagree_algo = self
       .c_kagree_algo
-      .ok_or_else(|| security_error!("c_kagree_algo not found"))?;
+      .ok_or_else(|| create_security_error!("c_kagree_algo not found"))?;
     let hash_c1 = self.hash_c1.map(|mh| mh.as_ref().try_into()).transpose()?;
     let hash_c2 = self.hash_c2.map(|mh| mh.as_ref().try_into()).transpose()?;
     let challenge1 = self
       .challenge1
-      .ok_or_else(|| security_error!("challenge1 not found"))
+      .ok_or_else(|| create_security_error!("challenge1 not found"))
       .and_then(|b| Challenge::try_from(b.as_ref()))?;
     let challenge2 = self
       .challenge2
-      .ok_or_else(|| security_error!("challenge2 not found"))
+      .ok_or_else(|| create_security_error!("challenge2 not found"))
       .and_then(|b| Challenge::try_from(b.as_ref()))?;
-    let dh1 = self.dh1.ok_or_else(|| security_error!("dh1 not found"))?;
-    let dh2 = self.dh2.ok_or_else(|| security_error!("dh2 not found"))?;
+    let dh1 = self
+      .dh1
+      .ok_or_else(|| create_security_error!("dh1 not found"))?;
+    let dh2 = self
+      .dh2
+      .ok_or_else(|| create_security_error!("dh2 not found"))?;
     let signature = self
       .signature
-      .ok_or_else(|| security_error!("signature not found"))?;
+      .ok_or_else(|| create_security_error!("signature not found"))?;
 
     Ok(HandshakeReply {
       c_id,
@@ -439,17 +452,21 @@ impl BuiltinHandshakeMessageToken {
     let hash_c2 = self.hash_c2.map(|mh| mh.as_ref().try_into()).transpose()?;
     let challenge1 = self
       .challenge1
-      .ok_or_else(|| security_error!("challenge1 not found"))
+      .ok_or_else(|| create_security_error!("challenge1 not found"))
       .and_then(|b| Challenge::try_from(b.as_ref()))?;
     let challenge2 = self
       .challenge2
-      .ok_or_else(|| security_error!("challenge2 not found"))
+      .ok_or_else(|| create_security_error!("challenge2 not found"))
       .and_then(|b| Challenge::try_from(b.as_ref()))?;
-    let dh1 = self.dh1.ok_or_else(|| security_error!("dh1 not found"))?;
-    let dh2 = self.dh2.ok_or_else(|| security_error!("dh2 not found"))?;
+    let dh1 = self
+      .dh1
+      .ok_or_else(|| create_security_error!("dh1 not found"))?;
+    let dh2 = self
+      .dh2
+      .ok_or_else(|| create_security_error!("dh2 not found"))?;
     let signature = self
       .signature
-      .ok_or_else(|| security_error!("signature not found"))?;
+      .ok_or_else(|| create_security_error!("signature not found"))?;
 
     Ok(HandshakeFinal {
       hash_c1,

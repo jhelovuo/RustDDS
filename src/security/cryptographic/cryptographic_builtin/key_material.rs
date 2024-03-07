@@ -3,8 +3,8 @@ use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 
 use crate::{
+  create_security_error,
   security::{SecurityError, SecurityResult},
-  security_error,
   serialization::cdr_serializer::to_bytes,
   CdrDeserializer,
 };
@@ -152,7 +152,7 @@ impl TryFrom<Vec<KeyMaterial_AES_GCM_GMAC>> for KeyMaterial_AES_GCM_GMAC_seq {
         key_material.clone(),
         payload_key_material.clone(),
       )),
-      _ => Err(security_error!(
+      _ => Err(create_security_error!(
         "Expected 1 or 2 key materials in KeyMaterial_AES_GCM_GMAC_seq, received {}",
         value.len()
       )),
@@ -234,27 +234,27 @@ impl KeyMaterial_AES_GCM_GMAC {
     }: &KeyMaterial_AES_GCM_GMAC,
   ) -> SecurityResult<ReceiverSpecificKeyMaterial> {
     if !self.sender_key_id.eq(sender_key_id) {
-      Err(security_error!(
+      Err(create_security_error!(
         "The receiver-specific key material has a wrong sender_key_id: expected {:?}, received \
          {:?}.",
         sender_key_id,
         self.sender_key_id
       ))
     } else if !self.transformation_kind.eq(transformation_kind) {
-      Err(security_error!(
+      Err(create_security_error!(
         "The receiver-specific key material has a wrong transformation_kind: expected {:?}, \
          received {:?}.",
         transformation_kind,
         self.transformation_kind
       ))
     } else if !self.master_sender_key.eq(master_sender_key) {
-      Err(security_error!(
+      Err(create_security_error!(
         "The receiver-specific key has a wrong master_sender_key: expected {:?}, received {:?}.",
         master_sender_key,
         self.master_sender_key
       ))
     } else if !self.master_salt.eq(master_salt) {
-      Err(security_error!(
+      Err(create_security_error!(
         "The receiver-specific key has a wrong master_salt: expected {:?}, received {:?}.",
         master_salt,
         self.master_salt

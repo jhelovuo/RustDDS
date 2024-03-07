@@ -8,6 +8,7 @@ use log::{debug, error, info, trace, warn};
 use mio_extras::channel as mio_channel;
 
 use crate::{
+  create_security_error,
   dds::{
     no_key,
     participant::DomainParticipantWeak,
@@ -35,7 +36,7 @@ use crate::{
     PublicationBuiltinTopicDataSecure, SecurityError, SecurityResult,
     SubscriptionBuiltinTopicDataSecure,
   },
-  security_error, security_info, security_warn,
+  security_info, security_warn,
   serialization::pl_cdr_adapters::PlCdrSerialize,
   structure::{
     entity::RTPSEntity,
@@ -133,19 +134,19 @@ impl SecureDiscovery {
 
     let identity_token = plugins
       .get_identity_token(participant_guid_prefix)
-      .map_err(|e| security_error!("Failed to get IdentityToken: {}", e))?;
+      .map_err(|e| create_security_error!("Failed to get IdentityToken: {}", e))?;
 
     let _identity_status_token = plugins
       .get_identity_status_token(participant_guid_prefix)
-      .map_err(|e| security_error!("Failed to get IdentityStatusToken: {}", e))?;
+      .map_err(|e| create_security_error!("Failed to get IdentityStatusToken: {}", e))?;
 
     let permissions_token = plugins
       .get_permissions_token(participant_guid_prefix)
-      .map_err(|e| security_error!("Failed to get PermissionsToken: {}", e))?;
+      .map_err(|e| create_security_error!("Failed to get PermissionsToken: {}", e))?;
 
     let credential_token = plugins
       .get_permissions_credential_token(participant_guid_prefix)
-      .map_err(|e| security_error!("Failed to get PermissionsCredentialToken: {}", e))?;
+      .map_err(|e| create_security_error!("Failed to get PermissionsCredentialToken: {}", e))?;
 
     plugins
       .set_permissions_credential_and_token(
@@ -153,11 +154,11 @@ impl SecureDiscovery {
         credential_token,
         permissions_token.clone(),
       )
-      .map_err(|e| security_error!("Failed to set permission tokens: {}", e))?;
+      .map_err(|e| create_security_error!("Failed to set permission tokens: {}", e))?;
 
     let security_attributes = plugins
       .get_participant_sec_attributes(participant_guid_prefix)
-      .map_err(|e| security_error!("Failed to get ParticipantSecurityAttributes: {}", e))?;
+      .map_err(|e| create_security_error!("Failed to get ParticipantSecurityAttributes: {}", e))?;
 
     drop(plugins); // Drop plugins so that register_remote_to_crypto can use them
 
@@ -169,7 +170,7 @@ impl SecureDiscovery {
       &security_plugins,
     )
     .map_err(|e| {
-      security_error!(
+      create_security_error!(
         "Failed to register local participant as remote to crypto plugin: {}",
         e
       )
@@ -187,7 +188,7 @@ impl SecureDiscovery {
         plugins.set_remote_participant_crypto_tokens(participant_guid_prefix, tokens)
       })
       .map_err(|e| {
-        security_error!(
+        create_security_error!(
           "Failed to set local participant crypto tokens as remote tokens: {}",
           e
         )
@@ -207,7 +208,7 @@ impl SecureDiscovery {
             plugins.set_remote_writer_crypto_tokens(local_writer_guid, local_reader_guid, tokens)
           })
           .map_err(|e| {
-            security_error!(
+            create_security_error!(
               "Failed to set local writer {:?} crypto tokens as remote tokens: {}.",
               writer_eid,
               e
@@ -221,7 +222,7 @@ impl SecureDiscovery {
             plugins.set_remote_reader_crypto_tokens(local_reader_guid, local_writer_guid, tokens)
           })
           .map_err(|e| {
-            security_error!(
+            create_security_error!(
               "Failed to set local reader {:?} crypto tokens as remote tokens: {}.",
               reader_eid,
               e
@@ -436,7 +437,7 @@ impl SecureDiscovery {
     {
       Ok(attr) => attr,
       Err(e) => {
-        security_error!(
+        create_security_error!(
           "Failed to get topic security attributes: {}. Topic: {topic_name}",
           e
         );
@@ -517,7 +518,7 @@ impl SecureDiscovery {
                   }
                 }
                 Err(e) => {
-                  security_error!(
+                  create_security_error!(
                     "Something went wrong in checking permissions of a remote datareader: {}. \
                      Topic: {topic_name}",
                     e
@@ -608,7 +609,7 @@ impl SecureDiscovery {
     {
       Ok(attr) => attr,
       Err(e) => {
-        security_error!(
+        create_security_error!(
           "Failed to get topic security attributes: {}. Topic: {topic_name}",
           e
         );
@@ -682,7 +683,7 @@ impl SecureDiscovery {
                   }
                 }
                 Err(e) => {
-                  security_error!(
+                  create_security_error!(
                     "Something went wrong in checking permissions of a remote DataWriter: {}. \
                      Topic: {topic_name}",
                     e
@@ -787,7 +788,7 @@ impl SecureDiscovery {
             }
           }
           Err(e) => {
-            security_error!(
+            create_security_error!(
               "Something went wrong in checking remote permissions for topic {}: {:?}",
               disc_topic.topic_data.name,
               e
@@ -1012,7 +1013,7 @@ impl SecureDiscovery {
     {
       Ok(attr) => attr,
       Err(e) => {
-        security_error!(
+        create_security_error!(
           "Failed to get topic security attributes: {}. Topic: {topic_name}",
           e
         );
@@ -1058,7 +1059,7 @@ impl SecureDiscovery {
               }
             }
             Err(e) => {
-              security_error!(
+              create_security_error!(
                 "Something went wrong in checking permissions of a remote datareader: {}. Topic: \
                  {topic_name}",
                 e
@@ -1135,7 +1136,7 @@ impl SecureDiscovery {
     {
       Ok(attr) => attr,
       Err(e) => {
-        security_error!(
+        create_security_error!(
           "Failed to get topic security attributes: {}. Topic: {topic_name}",
           e
         );
@@ -1171,7 +1172,7 @@ impl SecureDiscovery {
               }
             }
             Err(e) => {
-              security_error!(
+              create_security_error!(
                 "Something went wrong in checking permissions of a remote DataWriter: {}. Topic: \
                  {topic_name}",
                 e
@@ -1306,7 +1307,7 @@ impl SecureDiscovery {
     let remote_identity_token = match participant_data.identity_token.as_ref() {
       Some(token) => token.clone(),
       None => {
-        security_error!("SpdpDiscoveredParticipantData is missing the Identity token");
+        create_security_error!("SpdpDiscoveredParticipantData is missing the Identity token");
         return AuthenticationStatus::Rejected;
       }
     };
@@ -1446,7 +1447,7 @@ impl SecureDiscovery {
 
     if validation_outcome != ValidationOutcome::PendingHandshakeMessage {
       // PendingHandshakeMessage is the only expected validation outcome
-      return Err(security_error!(
+      return Err(create_security_error!(
         "Received an unexpected validation outcome from begin_handshake_request. Outcome: {:?}",
         validation_outcome
       ));
@@ -1556,7 +1557,7 @@ impl SecureDiscovery {
           );
         }
         Err(e) => {
-          security_error!(
+          create_security_error!(
             "Failed again to send some crypto keys to {:?}: {e}",
             msg.generic.destination_participant_guid
           );
@@ -1982,7 +1983,7 @@ impl SecureDiscovery {
           .get_plugins()
           .set_remote_participant_crypto_tokens(remote_participant_guidp, crypto_tokens)
         {
-          security_error!(
+          create_security_error!(
             "Failed to set remote participant crypto tokens: {}. Remote: {:?}",
             e,
             remote_participant_guidp
@@ -2132,7 +2133,7 @@ impl SecureDiscovery {
         }
         Err(e) => {
           // Something went wrong in checking permissions
-          security_error!(
+          create_security_error!(
             "Something went wrong in checking remote participant permissions: {}. Rejecting the \
              remote {:?}.",
             e,
@@ -2155,7 +2156,7 @@ impl SecureDiscovery {
       remote_guid_prefix,
       &self.security_plugins,
     ) {
-      security_error!(
+      create_security_error!(
         "Failed to register remote participant {:?} to crypto plugin: {}. Rejecting remote",
         remote_guid_prefix,
         e,
@@ -2211,7 +2212,7 @@ impl SecureDiscovery {
       .create_local_participant_crypto_tokens(remote_guid_prefix); // Release lock
     match crypto_tokens_res {
       Err(e) => {
-        security_error!(
+        create_security_error!(
           "Failed to create participant crypto tokens: {e }. Remote: {remote_guid_prefix:?}"
         );
       }
@@ -2225,7 +2226,7 @@ impl SecureDiscovery {
           &tokens,
         );
         if let Err(e) = self.send_key_exchange_message(key_exchange_writer, &message) {
-          security_error!(
+          create_security_error!(
             "Failed to send participant crypto tokens to {remote_guid_prefix:?}: {e}. Trying \
              again later."
           );
@@ -2252,7 +2253,7 @@ impl SecureDiscovery {
 
         match crypto_tokens_res {
           Err(e) => {
-            security_error!(
+            create_security_error!(
               "Failed to create local writer crypto tokens: {e}. Remote: {remote_guid_prefix:?}"
             );
           }
@@ -2266,7 +2267,7 @@ impl SecureDiscovery {
               &tokens,
             );
             if let Err(e) = self.send_key_exchange_message(key_exchange_writer, &message) {
-              security_error!(
+              create_security_error!(
                 "Failed to send local writer {writer_eid:?} crypto tokens to \
                  {remote_reader_guid:?}: {e}. Trying again later."
               );
@@ -2298,7 +2299,7 @@ impl SecureDiscovery {
 
         match crypto_tokens_res {
           Err(e) => {
-            security_error!(
+            create_security_error!(
               "Failed to create local reader crypto tokens: {e}. Remote: {remote_guid_prefix:?}"
             );
           }
@@ -2312,7 +2313,7 @@ impl SecureDiscovery {
               &tokens,
             );
             if let Err(e) = self.send_key_exchange_message(key_exchange_writer, &message) {
-              security_error!(
+              create_security_error!(
                 "Failed to send local reader {reader_eid:?} crypto tokens to \
                  {remote_writer_guid:?}: {e}. Trying again later."
               );
@@ -2358,7 +2359,7 @@ impl SecureDiscovery {
     };
 
     if let Err(e) = register_result {
-      security_error!(
+      create_security_error!(
         "Failed to register remote endpoint {:?} to crypto plugin: {}",
         remote_endpoint_guid,
         e,
@@ -2395,7 +2396,7 @@ impl SecureDiscovery {
       };
 
       if let Err(e) = set_res {
-        security_error!(
+        create_security_error!(
           "Failed to set stored remote reader crypto tokens: {}. Remote: {:?}",
           e,
           remote_endpoint_guid
@@ -2434,7 +2435,7 @@ impl SecureDiscovery {
     let sec_attr = match sec_info_opt.flatten() {
       Some(info) => EndpointSecurityAttributes::from(info),
       None => {
-        security_error!(
+        create_security_error!(
           "Could not find EndpointSecurityAttributes for remote {:?}",
           remote_endpoint_guid,
         );
@@ -2487,7 +2488,7 @@ impl SecureDiscovery {
     let crypto_tokens = match crypto_tokens_res {
       Ok(tokens) => tokens,
       Err(e) => {
-        security_error!(
+        create_security_error!(
           "Failed to create CryptoTokens: {}. Local endpoint: {:?}",
           e,
           local_endpoint_guid,
@@ -2513,7 +2514,7 @@ impl SecureDiscovery {
       };
 
       if let Err(e) = set_res {
-        security_error!(
+        create_security_error!(
           "Failed to set our own crypto tokens as remote tokens: {}. Guid: {:?}",
           e,
           remote_endpoint_guid
@@ -2551,7 +2552,7 @@ impl SecureDiscovery {
         )
       };
       if let Err(e) = self.send_key_exchange_message(key_exchange_writer, &vol_msg) {
-        security_error!(
+        create_security_error!(
           "Failed to send local endpoint {:?} crypto tokens to {:?}: {e}. Trying again later.",
           local_endpoint_guid.entity_id,
           remote_endpoint_guid
@@ -2689,7 +2690,7 @@ impl SecureDiscovery {
       .find_participant_proxy(self.local_participant_guid.prefix)
       .expect("My own participant data disappeared from DiscoveryDB")
       .to_pl_cdr_bytes(RepresentationIdentifier::PL_CDR_BE)
-      .map_err(|e| security_error!("Serializing participant data failed: {e}"))?;
+      .map_err(|e| create_security_error!("Serializing participant data failed: {e}"))?;
 
     Ok(my_ser_data.to_vec())
   }
@@ -2788,7 +2789,7 @@ fn register_remote_to_crypto(
         .register_matched_remote_participant(remote_guidp, shared_secret)
     })
     .map_err(|e| {
-      security_error!(
+      create_security_error!(
         "Failed to register remote participant with the crypto plugin: {}. Remote: {:?}",
         e,
         remote_guidp
@@ -2808,7 +2809,7 @@ fn register_remote_to_crypto(
       .get_plugins()
       .register_matched_remote_reader_if_not_already(remote_reader_guid, local_writer_guid, false)
       .map_err(|e| {
-        security_error!(
+        create_security_error!(
           "Failed to register remote built-in reader {:?} to crypto plugin: {}",
           remote_reader_guid,
           e,
@@ -2829,7 +2830,7 @@ fn register_remote_to_crypto(
       .get_plugins()
       .register_matched_remote_writer_if_not_already(remote_writer_guid, local_reader_guid)
       .map_err(|e| {
-        security_error!(
+        create_security_error!(
           "Failed to register remote built-in writer {:?} to crypto plugin: {}",
           remote_writer_guid,
           e,

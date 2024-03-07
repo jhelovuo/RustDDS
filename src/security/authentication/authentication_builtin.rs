@@ -8,11 +8,12 @@ use openssl::{bn::BigNum, pkey::Private};
 use ring::agreement;
 
 use crate::{
+  create_security_error,
   security::{
     access_control::PermissionsToken, certificate, private_key, security_error, SecurityError,
     SecurityResult,
   },
-  security_error, GUID,
+  GUID,
 };
 use self::types::{DH_MODP_KAGREE_ALGO_NAME, ECDH_KAGREE_ALGO_NAME};
 use super::{
@@ -225,13 +226,17 @@ impl AuthenticationBuiltin {
 
   fn get_local_participant_info(&self) -> SecurityResult<&LocalParticipantInfo> {
     self.local_participant_info.as_ref().ok_or_else(|| {
-      security_error!("Local participant info not found. Has the local identity been validated?")
+      create_security_error!(
+        "Local participant info not found. Has the local identity been validated?"
+      )
     })
   }
 
   fn get_local_participant_info_mutable(&mut self) -> SecurityResult<&mut LocalParticipantInfo> {
     self.local_participant_info.as_mut().ok_or_else(|| {
-      security_error!("Local participant info not found. Has the local identity been validated?")
+      create_security_error!(
+        "Local participant info not found. Has the local identity been validated?"
+      )
     })
   }
 
@@ -243,7 +248,7 @@ impl AuthenticationBuiltin {
     self
       .remote_participant_infos
       .get(identity_handle)
-      .ok_or_else(|| security_error!("Remote participant info not found"))
+      .ok_or_else(|| create_security_error!("Remote participant info not found"))
   }
 
   // Returns mutable info
@@ -254,7 +259,7 @@ impl AuthenticationBuiltin {
     self
       .remote_participant_infos
       .get_mut(identity_handle)
-      .ok_or_else(|| security_error!("Remote participant info not found"))
+      .ok_or_else(|| create_security_error!("Remote participant info not found"))
   }
 
   fn handshake_handle_to_identity_handle(
@@ -264,7 +269,7 @@ impl AuthenticationBuiltin {
     self
       .handshake_to_identity_handle_map
       .get(hs_handle)
-      .ok_or_else(|| security_error!("Identity handle not found with handshake handle"))
+      .ok_or_else(|| create_security_error!("Identity handle not found with handshake handle"))
   }
 
   fn generate_random_32_bytes(&self) -> SecurityResult<[u8; 32]> {

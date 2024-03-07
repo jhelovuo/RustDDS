@@ -2,9 +2,9 @@ use enumflags2::BitFlags;
 use speedy::{Readable, Writable};
 
 use crate::{
+  create_security_error,
   rtps::{Submessage, SubmessageBody},
   security::{SecurityError, SecurityResult},
-  security_error,
 };
 use super::{
   elements::crypto_header::CryptoHeader,
@@ -36,7 +36,7 @@ impl SecurePrefix {
         original_bytes: None,
       })
       .map_err(|e| {
-        security_error!(
+        create_security_error!(
           "Security plugin couldn't write SecurePrefix to bytes. Error: {}",
           e
         )

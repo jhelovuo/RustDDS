@@ -27,6 +27,7 @@ use der::{Decode, Encode};
 use ring::{digest, signature};
 
 use crate::{
+  create_security_error,
   security::{
     certificate::Certificate,
     config::{
@@ -36,7 +37,6 @@ use crate::{
     types::SecurityResult,
     SecurityError,
   },
-  security_error,
 };
 
 #[derive(Debug)]
@@ -186,8 +186,10 @@ impl SignedDocument {
     {
       ECDSA_WITH_SHA256_OID => &signature::ECDSA_P256_SHA256_ASN1,
       //TODO for some reason this is not  working, even though the basic RSA does
-      RSA_PKCS1 => Err(security_error!("RSA-PSS not yet supported."))?, /* &signature::RSA_PSS_2048_8192_SHA256, */
-      other => Err(security_error!("Unknown signature algorithm oid: {other}"))?,
+      RSA_PKCS1 => Err(create_security_error!("RSA-PSS not yet supported."))?, /* &signature::RSA_PSS_2048_8192_SHA256, */
+      other => Err(create_security_error!(
+        "Unknown signature algorithm oid: {other}"
+      ))?,
     };
 
     certificate.verify_signed_data_with_algorithm(
