@@ -46,7 +46,7 @@ bool ShapePublisher::init(bool with_security)
     if (with_security)
     {
         using namespace std;
-        string example_security_configuration_path = "file://../../example_security_configuration_files/";
+        string example_security_configuration_path = "file://../../examples/security_configuration_files/";
         string dds_sec = "dds.sec.";
         string auth = dds_sec + "auth.";
         string auth_plugin = "builtin.PKI-DH";
@@ -62,12 +62,12 @@ bool ShapePublisher::init(bool with_security)
             pair<string, string>(auth + plugin, auth_plugin),
             pair<string, string>(access + plugin, access_plugin),
             pair<string, string>(crypto + plugin, crypto_plugin),
-            pair<string, string>(auth_prefix + "identity_ca", example_security_configuration_path + "identity_ca_certificate.pem"),
-            pair<string, string>(auth_prefix + "identity_certificate", example_security_configuration_path + "participant1_certificate.pem"),
-            pair<string, string>(auth_prefix + "private_key", example_security_configuration_path + "participant1_private_key.pem"),
-            pair<string, string>(access_prefix + "permissions_ca", example_security_configuration_path + "permissions_ca_certificate.pem"),
-            pair<string, string>(access_prefix + "governance", example_security_configuration_path + "test_governance.p7s"),
-            pair<string, string>(access_prefix + "permissions", example_security_configuration_path + "test_permissions.p7s"),
+            pair<string, string>(auth_prefix + "identity_ca", example_security_configuration_path + "identity_ca.cert.pem"),
+            pair<string, string>(auth_prefix + "identity_certificate", example_security_configuration_path + "cert.pem"),
+            pair<string, string>(auth_prefix + "private_key", example_security_configuration_path + "key.pem"),
+            pair<string, string>(access_prefix + "permissions_ca", example_security_configuration_path + "permissions_ca.cert.pem"),
+            pair<string, string>(access_prefix + "governance", example_security_configuration_path + "governance.p7s"),
+            pair<string, string>(access_prefix + "permissions", example_security_configuration_path + "permissions.p7s"),
         };
 
         for (pair<string, string> property : security_properties)
