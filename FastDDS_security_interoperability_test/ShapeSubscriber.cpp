@@ -9,6 +9,7 @@
 
 #include <unistd.h>
 #include <signal.h>
+#include <thread>
 
 using namespace eprosima::fastdds::dds;
 
