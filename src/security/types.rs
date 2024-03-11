@@ -452,10 +452,6 @@ impl DataHolder {
     }
   }
 
-  pub(super) fn get_property(&self, property_name: &str) -> SecurityResult<String> {
-    get_property(&self.properties, property_name)
-  }
-
   pub(super) fn get_binary_property(&self, binary_property_name: &str) -> SecurityResult<Bytes> {
     get_binary_property(&self.binary_properties, binary_property_name)
   }
