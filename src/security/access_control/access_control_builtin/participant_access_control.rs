@@ -29,13 +29,10 @@ use super::{
   s_mime_config_parser::SignedDocument,
   types::{
     BuiltinPermissionsCredentialToken, BuiltinPermissionsToken,
-    BuiltinPluginParticipantSecurityAttributes,
+    BuiltinPluginParticipantSecurityAttributes, QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME,
+    QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME, QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
   },
 };
-
-const QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME: &str = "dds.sec.access.permissions_ca";
-const QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME: &str = "dds.sec.access.governance";
-const QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME: &str = "dds.sec.access.permissions";
 
 impl AccessControlBuiltin {
   fn check_participant(

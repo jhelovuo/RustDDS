@@ -35,17 +35,11 @@ use super::{
   types::{
     parse_signature_algo_name_to_ring, BuiltinAuthenticatedPeerCredentialToken,
     BuiltinIdentityToken, DH_MODP_KAGREE_ALGO_NAME, ECDH_KAGREE_ALGO_NAME,
+    QOS_IDENTITY_CA_PROPERTY_NAME, QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME,
+    QOS_PASSWORD_PROPERTY_NAME, QOS_PRIVATE_KEY_PROPERTY_NAME,
   },
   BuiltinHandshakeState, DHKeys, LocalParticipantInfo, RemoteParticipantInfo,
 };
-
-// DDS Security spec v1.1
-// Section "9.3.1 Configuration" , Table 44
-
-const QOS_IDENTITY_CA_PROPERTY_NAME: &str = "dds.sec.auth.identity_ca";
-const QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME: &str = "dds.sec.auth.identity_certificate";
-const QOS_PRIVATE_KEY_PROPERTY_NAME: &str = "dds.sec.auth.private_key";
-const QOS_PASSWORD_PROPERTY_NAME: &str = "dds.sec.auth.password";
 
 impl Authentication for AuthenticationBuiltin {
   fn validate_local_identity(
