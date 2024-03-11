@@ -9,6 +9,16 @@ use crate::{
     authentication::authentication_builtin::types::CertificateAlgorithm, private_key::PrivateKey,
   },
 };
+use super::{
+  access_control::access_control_builtin::types::{
+    QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME, QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME,
+    QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
+  },
+  authentication::authentication_builtin::types::{
+    QOS_IDENTITY_CA_PROPERTY_NAME, QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME,
+    QOS_PASSWORD_PROPERTY_NAME, QOS_PRIVATE_KEY_PROPERTY_NAME,
+  },
+};
 
 /// How to access Certificate's private key for signing.
 pub enum PrivateSigningKey {
@@ -118,14 +128,14 @@ impl DomainParticipantSecurityConfigFiles {
 
   pub fn into_property_policy(self) -> qos::policy::Property {
     let mut value = vec![
-      mk_file_prop("dds.sec.auth.identity_ca", &self.identity_ca_certificate),
+      mk_file_prop(QOS_IDENTITY_CA_PROPERTY_NAME, &self.identity_ca_certificate),
       mk_file_prop(
-        "dds.sec.auth.identity_certificate",
+        QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME,
         &self.participant_identity_certificate,
       ),
       match self.participant_identity_private_key {
         PrivateSigningKey::Files { ref file_path, .. } => {
-          mk_file_prop("dds.sec.auth.private_key", file_path)
+          mk_file_prop(QOS_PRIVATE_KEY_PROPERTY_NAME, file_path)
         }
         PrivateSigningKey::Pkcs11 {
           ref token_label,
@@ -143,24 +153,24 @@ impl DomainParticipantSecurityConfigFiles {
               hsm_access_library.display()
             ));
           }
-          mk_string_prop("dds.sec.auth.private_key", pkcs11_uri)
+          mk_string_prop(QOS_PRIVATE_KEY_PROPERTY_NAME, pkcs11_uri)
         }
       },
       mk_file_prop(
-        "dds.sec.access.permissions_ca",
+        QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME,
         &self.permissions_ca_certificate,
       ),
       mk_file_prop(
-        "dds.sec.access.governance",
+        QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME,
         &self.domain_governance_document,
       ),
       mk_file_prop(
-        "dds.sec.access.permissions",
+        QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
         &self.participant_permissions_document,
       ),
     ];
     if let PrivateSigningKey::Files { file_password, .. } = self.participant_identity_private_key {
-      value.push(mk_string_prop("dds.sec.auth.password", file_password));
+      value.push(mk_string_prop(QOS_PASSWORD_PROPERTY_NAME, file_password));
     }
 
     qos::policy::Property {

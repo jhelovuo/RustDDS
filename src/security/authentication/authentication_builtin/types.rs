@@ -11,6 +11,13 @@ use crate::{
 
 pub const IDENTITY_TOKEN_CLASS_ID: &str = "DDS:Auth:PKI-DH:1.0";
 
+// Section "9.3.1 Configuration" , Table 44
+pub(in crate::security) const QOS_IDENTITY_CA_PROPERTY_NAME: &str = "dds.sec.auth.identity_ca";
+pub(in crate::security) const QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME: &str =
+  "dds.sec.auth.identity_certificate";
+pub(in crate::security) const QOS_PRIVATE_KEY_PROPERTY_NAME: &str = "dds.sec.auth.private_key";
+pub(in crate::security) const QOS_PASSWORD_PROPERTY_NAME: &str = "dds.sec.auth.password";
+
 // Expected property names in IdentityToken
 pub(in crate::security) const CERT_SN_PROPERTY_NAME: &str = "dds.cert.sn";
 const CERT_ALGO_PROPERTY_NAME: &str = "dds.cert.algo";

@@ -233,6 +233,14 @@ impl EndpointSecurityAttributes {
 const PERMISSIONS_TOKEN_CLASS_ID: &str = "DDS:Access:Permissions:1.0";
 const PERMISSIONS_TOKEN_SUBJECT_NAME_PROPERTY_NAME: &str = "dds.perm_ca.sn";
 const PERMISSIONS_TOKEN_ALGORITHM_PROPERTY_NAME: &str = "dds.perm_ca.algo";
+
+pub(in crate::security) const QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME: &str =
+  "dds.sec.access.permissions_ca";
+pub(in crate::security) const QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME: &str =
+  "dds.sec.access.governance";
+pub(in crate::security) const QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME: &str =
+  "dds.sec.access.permissions";
+
 // 9.4.2.2
 pub(super) struct BuiltinPermissionsToken {
   pub permissions_ca_subject_name: Option<DistinguishedName>,
