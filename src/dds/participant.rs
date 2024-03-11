@@ -1097,6 +1097,7 @@ impl DomainParticipantInner {
     };
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let dds_cache_clone = Arc::clone(&dds_cache);
 
     let (discovery_db_event_sender, discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(1);
@@ -1118,6 +1119,7 @@ impl DomainParticipantInner {
       .spawn(move || {
         let dp_event_loop = DPEventLoop::new(
           domain_info,
+          dds_cache_clone,
           listeners,
           disc_db_clone,
           participant_guid.prefix,

@@ -86,6 +86,17 @@ impl DDSCache {
       self.topic_caches.remove(topic_name);
     }
   }
+
+  pub fn garbage_collect(&mut self) {
+    for tc in self.topic_caches.values_mut() {
+      let mut tc = tc.lock().unwrap();
+      if let Some((last_timestamp,_)) = tc.changes.iter().next_back() {
+        if *last_timestamp > tc.changes_reallocated_up_to {
+          tc.remove_changes_before(Timestamp::ZERO);
+        }
+      }
+    }
+  }
 }
 
 #[derive(Debug)]
