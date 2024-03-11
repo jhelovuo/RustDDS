@@ -15,7 +15,8 @@ use crate::{
     authentication::{
       authentication_builtin::types::{
         AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME,
-        AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME, CERT_SN_PROPERTY_NAME,
+        AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
+        QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME,
       },
       *,
     },
@@ -67,7 +68,7 @@ impl AccessControlBuiltin {
 impl ParticipantAccessControl for AccessControlBuiltin {
   fn validate_local_permissions(
     &mut self,
-    auth_plugin: &dyn Authentication,
+    _auth_plugin: &dyn Authentication,
     identity_handle: IdentityHandle,
     domain_id: u16,
     participant_qos: &QosPolicies,
@@ -116,17 +117,6 @@ impl ParticipantAccessControl for AccessControlBuiltin {
           .cloned()
       })?;
 
-    let subject_name: DistinguishedName = auth_plugin
-      .get_identity_token(identity_handle)
-      .and_then(|identity_token| {
-        identity_token
-          .data_holder
-          .get_property(CERT_SN_PROPERTY_NAME)
-      })
-      .and_then(|name| {
-        DistinguishedName::parse(&name).map_err(|e| create_security_error!("{e:?}"))
-      })?;
-
     let signed_permissions = participant_qos
       .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|permissions_uri| {
@@ -148,12 +138,30 @@ impl ParticipantAccessControl for AccessControlBuiltin {
 
     // Check the subject name in the identity certificate matches the one from the
     // permissions document.
+    // First get the subject name from the certificate
+    let subject_name: DistinguishedName = participant_qos
+      .get_property(QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME)
+      .and_then(|certificate_uri| {
+        read_uri(&certificate_uri).map_err(|conf_err| {
+          create_security_error!(
+            "Failed to read the identity certificate from {}: {:?}",
+            certificate_uri,
+            conf_err
+          )
+        })
+      })
+      .and_then(|certificate_contents_pem| {
+        Certificate::from_pem(certificate_contents_pem).map_err(|e| create_security_error!("{e:?}"))
+      })
+      .map(|cert| cert.subject_name().clone())?;
+
+    // Then verify that we have permissions for this subject name
     if domain_participant_permissions
       .find_grant(&subject_name, &Utc::now())
       .is_none()
     {
       Err(create_security_error!(
-        "No valid grants with the subject name {:?} found",
+        "The subject name '{}' from the ID certificate not found in the permissions document",
         subject_name
       ))?;
     }
