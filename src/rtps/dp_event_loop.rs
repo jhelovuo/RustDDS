@@ -21,6 +21,7 @@ use crate::{
   },
   messages::submessages::submessages::AckSubmessage,
   network::{udp_listener::UDPListener, udp_sender::UDPSender},
+  polling::new_simple_timer,
   qos::HasQoSPolicy,
   rtps::{
     constant::*,
@@ -227,16 +228,11 @@ impl DPEventLoop {
 
   pub fn event_loop(self) {
     let mut events = Events::with_capacity(16); // too small capacity just delays events to next poll
-    let mut acknack_timer = mio_extras::timer::Builder::default()
-      .num_slots(2)
-      .capacity(2)
-      .build();
+
+    let mut acknack_timer = new_simple_timer();
     acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
 
-    let mut cache_gc_timer  = mio_extras::timer::Builder::default()
-      .num_slots(2)
-      .capacity(2)
-      .build();
+    let mut cache_gc_timer  = new_simple_timer();
     cache_gc_timer.set_timeout(CACHE_CLEAN_PERIOD, ());
 
     self
@@ -386,7 +382,7 @@ impl DPEventLoop {
                 acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
               }
               DPEV_CACHE_CLEAN_TIMER_TOKEN => {
-                info!("Clean DDSCache on timer");
+                debug!("Clean DDSCache on timer");
                 ev_wrapper.dds_cache.write().unwrap().garbage_collect();
                 cache_gc_timer.set_timeout(CACHE_CLEAN_PERIOD, ());
               }
@@ -847,7 +843,7 @@ impl DPEventLoop {
   }
 
   fn add_local_reader(&mut self, reader_ing: ReaderIngredients) {
-    let timer = mio_extras::timer::Builder::default().num_slots(8).build();
+    let timer = new_simple_timer();
     self
       .poll
       .register(
@@ -910,7 +906,7 @@ impl DPEventLoop {
   }
 
   fn add_local_writer(&mut self, writer_ing: WriterIngredients) {
-    let timer = mio_extras::timer::Builder::default().num_slots(8).build();
+    let timer = new_simple_timer();
     self
       .poll
       .register(
@@ -1106,6 +1102,7 @@ mod tests {
       sync_status_channel(16).unwrap();
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let dds_cache_clone = Arc::clone(&dds_cache);
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
 
@@ -1127,6 +1124,7 @@ mod tests {
     let child = thread::spawn(move || {
       let dp_event_loop = DPEventLoop::new(
         domain_info,
+        dds_cache_clone,
         HashMap::new(),
         discovery_db,
         GuidPrefix::default(),
