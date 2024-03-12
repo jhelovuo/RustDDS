@@ -1,7 +1,7 @@
 use bytes::Bytes;
 use enumflags2::BitFlags;
 use speedy::{Readable, Writable};
-use log::{info, warn};
+use log::{debug, warn};
 
 use crate::{
   create_security_error,
@@ -734,7 +734,7 @@ impl CryptoTransform for CryptographicBuiltin {
       }
 
       SubmessageBody::Interpreter(interpreter_submessage) => {
-        info!(
+        debug!(
           "Interpreter submessage after successful submessage decryption. This is not in the \
            specification, but we accept for compatibility as we also accept unprotected \
            interpreter submessages."
