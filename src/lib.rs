@@ -173,7 +173,6 @@ mod messages;
 mod network;
 mod rtps;
 
-
 #[cfg(feature = "security")]
 mod security;
 #[cfg(feature = "security")]

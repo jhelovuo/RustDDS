@@ -90,7 +90,7 @@ impl DDSCache {
   pub fn garbage_collect(&mut self) {
     for tc in self.topic_caches.values_mut() {
       let mut tc = tc.lock().unwrap();
-      if let Some((last_timestamp,_)) = tc.changes.iter().next_back() {
+      if let Some((last_timestamp, _)) = tc.changes.iter().next_back() {
         if *last_timestamp > tc.changes_reallocated_up_to {
           tc.remove_changes_before(Timestamp::ZERO);
         }
@@ -229,10 +229,13 @@ impl TopicCache {
       // Got duplicate DATA for a SN that we already have. It should be discarded.
       trace!(
         "add_change: discarding duplicate {:?} from {:?}. old timestamp = {:?}, new = {:?}",
-        cache_change.sequence_number, cache_change.writer_guid, old_instant, instant,
+        cache_change.sequence_number,
+        cache_change.writer_guid,
+        old_instant,
+        instant,
       );
-      // We are keeping this quiet, because e.g. FastDDS Discoery keeps sending the same
-      // SequenceNumber in periodic updates.
+      // We are keeping this quiet, because e.g. FastDDS Discoery keeps sending the
+      // same SequenceNumber in periodic updates.
       None
     } else {
       // This is a new (to us) SequenceNumber, this is the default processing path.
@@ -398,9 +401,13 @@ impl TopicCache {
     let now = Timestamp::now();
     let reallocate_limit = now - reallocate_timeout;
 
-    self.changes
-      .range_mut( (Excluded(self.changes_reallocated_up_to) , Included(reallocate_limit)) )
-      .for_each(|(_,cc)| cc.reallocate() );
+    self
+      .changes
+      .range_mut((
+        Excluded(self.changes_reallocated_up_to),
+        Included(reallocate_limit),
+      ))
+      .for_each(|(_, cc)| cc.reallocate());
 
     self.changes_reallocated_up_to = reallocate_limit;
   }

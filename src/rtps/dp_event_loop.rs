@@ -232,7 +232,7 @@ impl DPEventLoop {
     let mut acknack_timer = new_simple_timer();
     acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
 
-    let mut cache_gc_timer  = new_simple_timer();
+    let mut cache_gc_timer = new_simple_timer();
     cache_gc_timer.set_timeout(CACHE_CLEAN_PERIOD, ());
 
     self

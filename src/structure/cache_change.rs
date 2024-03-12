@@ -1,5 +1,5 @@
 #[allow(unused_imports)]
-use log::{warn, debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{ddsdata::DDSData, with_key::datawriter::WriteOptions},

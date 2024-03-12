@@ -34,7 +34,6 @@ use crate::security::{
   types::{security_error, SecurityResult},
 };
 
-
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
 // so that we can keep track of what operations we use.

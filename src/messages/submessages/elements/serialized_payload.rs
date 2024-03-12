@@ -50,7 +50,7 @@ impl SerializedPayload {
   }
 
   pub(crate) fn reallocate(&mut self) {
-    self.value = Bytes::copy_from_slice( &self.value );
+    self.value = Bytes::copy_from_slice(&self.value);
   }
 
   /// serialized size in bytes

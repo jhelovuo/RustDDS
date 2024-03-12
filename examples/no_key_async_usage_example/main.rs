@@ -5,8 +5,7 @@ use log4rs::{
   config::{Appender, Root},
   Config,
 };
-use log::{LevelFilter};
-
+use log::LevelFilter;
 use futures::StreamExt;
 use rustdds::*;
 use serde::{Deserialize, Serialize};
@@ -122,8 +121,6 @@ fn main() {
     })
   }
 }
-
-
 
 fn configure_logging() {
   // initialize logging, preferably from config file
