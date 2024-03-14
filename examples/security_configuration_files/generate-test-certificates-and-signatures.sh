@@ -7,8 +7,8 @@ openssl ecparam -name prime256v1 -out ec_parameters.pem
 openssl req -x509 -newkey param:ec_parameters.pem -keyout permissions_ca_private_key.pem -passout file:password  -out permissions_ca.cert.pem -days 999999 -subj "/O=Example Organization/CN=permissions_ca_common_name"
 
 # Sign the configuration documents
-openssl smime -sign -in governance_unsigned.xml -out governance.p7s -signer permissions_ca.cert.pem -inkey permissions_ca_private_key.pem -passin file:password
-openssl smime -sign -in permissions_unsigned.xml -out permissions.p7s -signer permissions_ca.cert.pem -inkey permissions_ca_private_key.pem -passin file:password
+openssl smime -sign -in governance_unsigned.xml -text -out governance.p7s -signer permissions_ca.cert.pem -inkey permissions_ca_private_key.pem -passin file:password
+openssl smime -sign -in permissions_unsigned.xml -text -out permissions.p7s -signer permissions_ca.cert.pem -inkey permissions_ca_private_key.pem -passin file:password
 
 
 # Create the identity CA
