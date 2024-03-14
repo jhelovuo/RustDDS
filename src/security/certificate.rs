@@ -21,7 +21,7 @@
 use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
 use x509_certificate::{
-  self, certificate::CapturedX509Certificate, EcdsaCurve, KeyAlgorithm, SignatureAlgorithm,
+  certificate::CapturedX509Certificate, EcdsaCurve, KeyAlgorithm, SignatureAlgorithm,
 };
 use der::Decode;
 use bcder::{encode::Values, Mode};
@@ -33,7 +33,6 @@ use crate::security::{
   config::{to_config_error_other, to_config_error_parse, ConfigError},
   types::{security_error, SecurityResult},
 };
-//use crate::security_error;
 
 #[cfg(feature = "security_in_fastdds_compatibility_mode")]
 fn rfc4514_to_openssl_oneline(dn_rfc4514: &str) -> String {

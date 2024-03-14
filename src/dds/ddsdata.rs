@@ -60,6 +60,14 @@ impl DDSData {
     }
   }
 
+  pub(crate) fn reallocate(&mut self) {
+    match self {
+      DDSData::Data { serialized_payload } => serialized_payload.reallocate(),
+      DDSData::DisposeByKey { key, .. } => key.reallocate(),
+      DDSData::DisposeByKeyHash { .. } => {}
+    }
+  }
+
   #[cfg(test)]
   pub fn data(&self) -> Bytes {
     self.payload_bytes()

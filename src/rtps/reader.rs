@@ -46,6 +46,7 @@ use crate::{
   structure::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::TopicCache,
+    duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -134,6 +135,7 @@ pub(crate) struct Reader {
   received_heartbeat_count: i32,
 
   fragment_assemblers: BTreeMap<GUID, FragmentAssembler>,
+  last_fragment_garbage_collect: Timestamp,
   matched_writers: BTreeMap<GUID, RtpsWriterProxy>,
   writer_match_count_total: i32, // total count, never decreases
 
@@ -150,6 +152,12 @@ pub(crate) struct Reader {
   #[allow(dead_code)] // to avoid warning if no security feature
   security_plugins: Option<SecurityPluginsHandle>,
 }
+
+// If we are assembling a fragment, but it does not receive any updates
+// for this time, the AssemblyBuffer is just dropped.
+const FRAGMENT_ASSEMBLY_TIMEOUT: Duration = Duration::from_secs(10);
+// minimum interval (max frequency) of AssemblyBuffer GC
+const MIN_FRAGMENT_GC_INTERVAL: Duration = Duration::from_secs(2);
 
 impl Reader {
   pub(crate) fn new(
@@ -193,6 +201,7 @@ impl Reader {
       heartbeat_suppression_duration: StdDuration::new(0, 0),
       received_heartbeat_count: 0,
       fragment_assemblers: BTreeMap::new(),
+      last_fragment_garbage_collect: Timestamp::now(),
       matched_writers: BTreeMap::new(),
       writer_match_count_total: 0,
       requested_deadline_missed_count: 0,
@@ -644,12 +653,26 @@ impl Reader {
   }
 
   fn garbage_collect_fragments(&mut self) {
-    // TODO: On most calls, do nothing.
-    //
     // If GC time/packet limit has been exceeded, iterate through
     // fragment assemblers and discard those assembly buffers whose
     // creation / modification timestamps look like it is no longer receiving
     // data and can therefore be discarded.
+    let now = Timestamp::now();
+    if now - self.last_fragment_garbage_collect > MIN_FRAGMENT_GC_INTERVAL {
+      self.last_fragment_garbage_collect = now;
+
+      let expire_before = now - FRAGMENT_ASSEMBLY_TIMEOUT;
+
+      self
+        .fragment_assemblers
+        .iter_mut()
+        .for_each(|(writer, fa)| {
+          debug!("AssemblyBuffer GC writer {:?}", writer);
+          fa.garbage_collect_before(expire_before);
+        });
+    } else {
+      trace!("Not yet AssemblyBuffer GC time.");
+    }
   }
 
   fn missing_frags_for(

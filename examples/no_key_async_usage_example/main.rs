@@ -1,5 +1,11 @@
 use std::{io, time};
 
+use log4rs::{
+  append::console::ConsoleAppender,
+  config::{Appender, Root},
+  Config,
+};
+use log::LevelFilter;
 use futures::StreamExt;
 use rustdds::*;
 use serde::{Deserialize, Serialize};
@@ -8,6 +14,8 @@ use smol::Timer;
 const SECOND: time::Duration = time::Duration::from_millis(1000);
 
 fn main() {
+  configure_logging();
+
   // DomainParticipant is always necessary
   let domain_participant = DomainParticipant::new(0).unwrap();
 
@@ -112,4 +120,29 @@ fn main() {
       }
     })
   }
+}
+
+fn configure_logging() {
+  // initialize logging, preferably from config file
+  log4rs::init_file(
+    "logging-config.yaml",
+    log4rs::config::Deserializers::default(),
+  )
+  .unwrap_or_else(|e| {
+    match e.downcast_ref::<io::Error>() {
+      // Config file did not work. If it is a simple "No such file or directory", then
+      // substitute some default config.
+      Some(os_err) if os_err.kind() == io::ErrorKind::NotFound => {
+        println!("No config file found in current working directory.");
+        let stdout = ConsoleAppender::builder().build();
+        let conf = Config::builder()
+          .appender(Appender::builder().build("stdout", Box::new(stdout)))
+          .build(Root::builder().appender("stdout").build(LevelFilter::Error))
+          .unwrap();
+        log4rs::init_config(conf).unwrap();
+      }
+      // Give up.
+      other_error => panic!("Config problem: {other_error:?}"),
+    }
+  });
 }

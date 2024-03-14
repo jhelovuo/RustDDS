@@ -21,6 +21,7 @@ use crate::{
   },
   messages::submessages::submessages::AckSubmessage,
   network::{udp_listener::UDPListener, udp_sender::UDPSender},
+  polling::new_simple_timer,
   qos::HasQoSPolicy,
   rtps::{
     constant::*,
@@ -31,6 +32,7 @@ use crate::{
     writer::{Writer, WriterIngredients},
   },
   structure::{
+    dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
   },
@@ -58,6 +60,7 @@ pub(crate) enum EventLoopCommand {
 pub struct DPEventLoop {
   domain_info: DomainInfo,
   poll: Poll,
+  dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
   udp_listeners: HashMap<Token, UDPListener>,
   message_receiver: MessageReceiver, // This contains our Readers
@@ -93,6 +96,7 @@ impl DPEventLoop {
   #[allow(clippy::too_many_arguments, clippy::needless_pass_by_value)]
   pub(crate) fn new(
     domain_info: DomainInfo,
+    dds_cache: Arc<RwLock<DDSCache>>,
     udp_listeners: HashMap<Token, UDPListener>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     participant_guid_prefix: GuidPrefix,
@@ -196,6 +200,7 @@ impl DPEventLoop {
     Self {
       domain_info,
       poll,
+      dds_cache,
       discovery_db,
       udp_listeners,
       udp_sender: Rc::new(udp_sender),
@@ -223,14 +228,27 @@ impl DPEventLoop {
 
   pub fn event_loop(self) {
     let mut events = Events::with_capacity(16); // too small capacity just delays events to next poll
-    let mut acknack_timer = mio_extras::timer::Timer::default();
+
+    let mut acknack_timer = new_simple_timer();
     acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
+
+    let mut cache_gc_timer = new_simple_timer();
+    cache_gc_timer.set_timeout(CACHE_CLEAN_PERIOD, ());
 
     self
       .poll
       .register(
         &acknack_timer,
         DPEV_ACKNACK_TIMER_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .unwrap();
+    self
+      .poll
+      .register(
+        &cache_gc_timer,
+        DPEV_CACHE_CLEAN_TIMER_TOKEN,
         Ready::readable(),
         PollOpt::edge(),
       )
@@ -362,6 +380,11 @@ impl DPEventLoop {
               DPEV_ACKNACK_TIMER_TOKEN => {
                 ev_wrapper.message_receiver.send_preemptive_acknacks();
                 acknack_timer.set_timeout(PREEMPTIVE_ACKNACK_PERIOD, ());
+              }
+              DPEV_CACHE_CLEAN_TIMER_TOKEN => {
+                debug!("Clean DDSCache on timer");
+                ev_wrapper.dds_cache.write().unwrap().garbage_collect();
+                cache_gc_timer.set_timeout(CACHE_CLEAN_PERIOD, ());
               }
 
               fixed_unknown => {
@@ -820,7 +843,7 @@ impl DPEventLoop {
   }
 
   fn add_local_reader(&mut self, reader_ing: ReaderIngredients) {
-    let timer = mio_extras::timer::Builder::default().num_slots(8).build();
+    let timer = new_simple_timer();
     self
       .poll
       .register(
@@ -883,7 +906,7 @@ impl DPEventLoop {
   }
 
   fn add_local_writer(&mut self, writer_ing: WriterIngredients) {
-    let timer = mio_extras::timer::Builder::default().num_slots(8).build();
+    let timer = new_simple_timer();
     self
       .poll
       .register(
@@ -1079,6 +1102,7 @@ mod tests {
       sync_status_channel(16).unwrap();
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let dds_cache_clone = Arc::clone(&dds_cache);
     let (discovery_db_event_sender, _discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(4);
 
@@ -1100,6 +1124,7 @@ mod tests {
     let child = thread::spawn(move || {
       let dp_event_loop = DPEventLoop::new(
         domain_info,
+        dds_cache_clone,
         HashMap::new(),
         discovery_db,
         GuidPrefix::default(),

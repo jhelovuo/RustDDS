@@ -6,7 +6,7 @@ use std::{
 };
 
 #[allow(unused_imports)]
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 
 use crate::{
   create_error_internal,
@@ -86,6 +86,17 @@ impl DDSCache {
       self.topic_caches.remove(topic_name);
     }
   }
+
+  pub fn garbage_collect(&mut self) {
+    for tc in self.topic_caches.values_mut() {
+      let mut tc = tc.lock().unwrap();
+      if let Some((last_timestamp, _)) = tc.changes.iter().next_back() {
+        if *last_timestamp > tc.changes_reallocated_up_to {
+          tc.remove_changes_before(Timestamp::ZERO);
+        }
+      }
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -100,9 +111,15 @@ pub(crate) struct TopicCache {
   max_keep_samples: i32, // from QoS, for quick, repeated access
   // TODO: Change this to Option<u32>, where None means "no limit".
 
-  // Tha main content of the cache is in this map.
+  // The main content of the cache is in this map.
   // Timestamp is assumed to be unique id over all the CacheChanges.
   changes: BTreeMap<Timestamp, CacheChange>,
+
+  // The underlying Bytes buffers are reallocated after some time (once for each) in
+  // order to release the original receive buffer. The idea behind this is that if a CacheChange
+  // persists in the TopicCaceh for some time, it should no longer hold onto the receive buffer,
+  // so we can recycle the buffers. Otherwise, we (practically) leak memory.
+  changes_reallocated_up_to: Timestamp,
 
   // sequence_numbers is an index to "changes" by GUID and SN
   sequence_numbers: BTreeMap<GUID, BTreeMap<SequenceNumber, Timestamp>>,
@@ -125,6 +142,7 @@ impl TopicCache {
                                                          * this */
       max_keep_samples: 1, // dummy value, next call will overwrite this
       changes: BTreeMap::new(),
+      changes_reallocated_up_to: Timestamp::ZERO,
       sequence_numbers: BTreeMap::new(),
       received_reliably_before: BTreeMap::new(),
     };
@@ -147,8 +165,10 @@ impl TopicCache {
     let max_keep_samples = qos
       .resource_limits()
       .unwrap_or(ResourceLimits {
-        max_samples: 1024,
-        max_instances: 1024,
+        // This is some default limits out of the hat, if there was no QoS specification.
+        // The purpose of these limits is to prevent excessive memory usage.
+        max_samples: 64,
+        max_instances: 64,
         max_samples_per_instance: 64,
       })
       .max_samples;
@@ -178,7 +198,7 @@ impl TopicCache {
     self
       .add_change_internal(instant, cache_change)
       .map(|cc_back| {
-        debug!(
+        warn!(
           "DDSCache insert failed topic={:?} cache_change={:?}",
           self.topic_name, cc_back
         );
@@ -193,10 +213,10 @@ impl TopicCache {
     // First, do garbage collection.
     // But not at every insert, just to save time and effort.
     // Some heuristic to decide if we should collect now.
-    let payload_size = max(1, cache_change.data_value.payload_size());
+    // let payload_size = max(1, cache_change.data_value.payload_size());
     let semi_random_number = i64::from(cache_change.sequence_number) as usize;
-    let fairly_large_constant = 0xffff;
-    let modulus = fairly_large_constant / payload_size;
+    // let fairly_large_constant = 0xffff;
+    let modulus = 64;
     if modulus == 0 || semi_random_number % modulus == 0 {
       debug!("Garbage collecting topic {}", self.topic_name);
       self.remove_changes_before(Timestamp::ZERO);
@@ -207,11 +227,16 @@ impl TopicCache {
     // Now to the actual adding business.
     if let Some(old_instant) = self.find_by_sn(&cache_change) {
       // Got duplicate DATA for a SN that we already have. It should be discarded.
-      debug!(
+      trace!(
         "add_change: discarding duplicate {:?} from {:?}. old timestamp = {:?}, new = {:?}",
-        cache_change.sequence_number, cache_change.writer_guid, old_instant, instant,
+        cache_change.sequence_number,
+        cache_change.writer_guid,
+        old_instant,
+        instant,
       );
-      Some(cache_change)
+      // We are keeping this quiet, because e.g. FastDDS Discoery keeps sending the
+      // same SequenceNumber in periodic updates.
+      None
     } else {
       // This is a new (to us) SequenceNumber, this is the default processing path.
       self.insert_sn(*instant, &cache_change);
@@ -311,44 +336,80 @@ impl TopicCache {
     }
   }
 
-  /// remove changes before given Timestamp, but keep at least
-  /// min_keep_samples.
-  /// We must always keep below max_keep_samples.
+  /// Garbarge collection:
+  ///
+  /// Remove changes before given Timestamp, but keep at least
+  /// `self.min_keep_samples`.
+  ///
+  /// If we are over `self.max_keep_samples`, then remove the oldest samples
+  /// until `max_keep_samples` is reached, regardless of `remove_before`.
   pub fn remove_changes_before(&mut self, remove_before: Timestamp) {
-    let min_remove_count = max(
-      0,
-      self
-        .changes
-        .len()
-        .wrapping_sub(self.max_keep_samples as usize),
-    );
+    // TODO: Currently, TopicCache does not know about Keys is Samples/CacheChanges,
+    // because they are opaque binary blobs at this point. Therefore, we cannot
+    // distinguish between instances, so cannot observe max instance counts.
+    // We have to do just with min/max sample counts.
 
-    let max_remove_count = min_remove_count;
-    // Only observe max cache size
-    // TODO: Can we do better without being able to distinguish between instances?
+    let sample_count = self.changes.len();
 
-    // Find the first key that is to be retained, i.e. enumerate
-    // one past the items to be removed.
-    let split_key = *self
+    // We must remove at least enough to stay within max limit,
+    // must_remove_count = sample_count - max_keep_samples
+    let must_remove_count = sample_count.saturating_sub(self.max_keep_samples as usize);
+    // Saturating sub takes care that this does not underflow below zero.
+
+    let may_remove_count = match self.min_keep_samples {
+      // We are erquested to KeepAll, so do not remove more than absolutely required.
+      History::KeepAll => must_remove_count,
+
+      // We are requested to keep some depth, so we may remove up to that.
+      History::KeepLast { depth } => max(
+        sample_count.saturating_sub(depth as usize),
+        must_remove_count,
+      ),
+    };
+
+    let oldest_timestamp_to_retain_opt: Option<Timestamp> = self
       .changes
       .keys()
-      .take(max_remove_count)
       .enumerate()
-      .skip_while(|(i, ts)| {
-        *i < min_remove_count || (**ts < remove_before && *i < max_remove_count)
-      })
+      .skip_while(|(i, ts)|
+        // Skip samples to be removed. Force "must" count, and then remove until
+        // either limit timestamp or "may" count stops us
+        *i < must_remove_count
+        || (**ts < remove_before && *i < may_remove_count))
       .map(|(_, ts)| ts) // un-enumerate
       .next() // the next element would be the first to retain
-      .unwrap_or(&Timestamp::ZERO); // if there is no next, then everything from ZERO onwards
+      .copied();
 
-    // split_off: Returns everything after the given key, including the key.
-    let to_retain = self.changes.split_off(&split_key);
+    // In case `.next()` is `None`, then we just decided to to discard everything,
+    // or, as a special case, the cache was empty to begin with, but the end
+    // result is the same.
+
+    let to_retain = if let Some(split_key) = oldest_timestamp_to_retain_opt {
+      // split_off: Returns everything after the given key, including the key.
+      self.changes.split_off(&split_key)
+    } else {
+      BTreeMap::new()
+    };
+
     let to_remove = std::mem::replace(&mut self.changes, to_retain);
 
     // update also SequenceNumber map
-    for r in to_remove.values() {
-      self.remove_sn(r);
-    }
+    to_remove.values().for_each(|r| self.remove_sn(r));
+
+    // Now, reallocate old cache changes
+    let reallocate_timeout = crate::Duration::from_secs(5);
+    let now = Timestamp::now();
+    let reallocate_limit = now - reallocate_timeout;
+
+    self
+      .changes
+      .range_mut((
+        Excluded(self.changes_reallocated_up_to),
+        Included(reallocate_limit),
+      ))
+      .for_each(|(_, cc)| cc.reallocate());
+
+    self.changes_reallocated_up_to = reallocate_limit;
   }
 
   pub fn topic_name(&self) -> String {

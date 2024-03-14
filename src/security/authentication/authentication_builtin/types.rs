@@ -1,6 +1,6 @@
 use bytes::Bytes;
 use log::debug;
-use x509_certificate::{self, KeyAlgorithm};
+use x509_certificate::KeyAlgorithm;
 
 use crate::{
   create_security_error,

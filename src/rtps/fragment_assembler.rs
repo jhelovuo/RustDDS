@@ -209,6 +209,16 @@ impl FragmentAssembler {
     }
   }
 
+  pub fn garbage_collect_before(&mut self, expire_before: Timestamp) {
+    self.assembly_buffers.retain(|sn, ab| {
+      let retain = ab.modified_time >= expire_before;
+      if !retain {
+        info!("AssemblyBuffer dropping {sn:?}");
+      }
+      retain
+    });
+  }
+
   // pub fn partially_received_sequence_numbers_iterator(&self) -> Box<dyn
   // Iterator<Item=SequenceNumber>> {   // Since we should only know about SNs
   // via DATAFRAG messages   // and AssemblyBuffers are removed immediately on
