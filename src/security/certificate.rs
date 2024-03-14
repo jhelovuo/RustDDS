@@ -35,9 +35,10 @@ use crate::security::{
 };
 //use crate::security_error;
 
+#[cfg(feature = "security_in_fastdds_compatibility_mode")]
 fn rfc4514_to_openssl_oneline(dn_rfc4514: &str) -> String {
   // This function converts a RFC 4514 string representation of a Distinguished
-  // Name to the format produced by the deprecated OpenSSL function
+  // Name to the format produced by the legacy OpenSSL function
   // x509_name_oneline, which FastDDS uses. The conversion is needed for
   // interoperability.
   // The fuction
@@ -240,7 +241,14 @@ impl DistinguishedName {
 
   pub fn serialize(&self) -> String {
     let rfc4514_string = self.0.to_string();
-    rfc4514_to_openssl_oneline(&rfc4514_string)
+    #[cfg(not(feature = "security_in_fastdds_compatibility_mode"))]
+    {
+      rfc4514_string
+    }
+    #[cfg(feature = "security_in_fastdds_compatibility_mode")]
+    {
+      rfc4514_to_openssl_oneline(&rfc4514_string)
+    }
   }
 
   // TODO is this a too strict equivalence?
