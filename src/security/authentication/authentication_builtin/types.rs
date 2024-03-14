@@ -26,12 +26,16 @@ const CA_ALGO_PROPERTY_NAME: &str = "dds.ca.algo";
 
 // Algorithm identifiers used in IdentityToken and PermissionsToken
 // Correct identifiers from the spec:
-// const RSA_2048_ALGO_NAME: &str = "RSA-2048";
-// const EC_PRIME_ALGO_NAME: &str = "EC-prime256v1";
+#[cfg(not(feature = "security_in_fastdds_compatibility_mode"))]
+const RSA_2048_ALGO_NAME: &str = "RSA-2048";
+#[cfg(not(feature = "security_in_fastdds_compatibility_mode"))]
+const EC_PRIME_ALGO_NAME: &str = "EC-prime256v1";
 
 // Identifiers that FastDDS expects (the same as the signature algorithm
 // identifiers in the spec):
+#[cfg(feature = "security_in_fastdds_compatibility_mode")]
 const RSA_2048_ALGO_NAME: &str = "RSASSA-PSS-SHA256";
+#[cfg(feature = "security_in_fastdds_compatibility_mode")]
 const EC_PRIME_ALGO_NAME: &str = "ECDSA-SHA256";
 
 pub(in crate::security) const RSA_2048_KEY_LENGTH: usize = 256;
