@@ -32,6 +32,7 @@ use crate::{
     },
     spdp_participant_data::{Participant_GUID, SpdpDiscoveredParticipantData},
   },
+  polling::new_simple_timer,
   rtps::constant::*,
   serialization::{
     cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter,
@@ -383,7 +384,7 @@ impl Discovery {
           .register(&reader, $reader_token, Ready::readable(), PollOpt::edge())
           .expect("Failed to register a discovery reader to poll.");
 
-        let mut timer: Timer<()> = Timer::default();
+        let mut timer: Timer<()> = new_simple_timer();
         if let Some((timeout_value, timer_token)) = $timeout_and_timer_token_opt {
           timer.set_timeout(timeout_value, ());
           poll
@@ -433,7 +434,7 @@ impl Discovery {
     );
 
     // create lease duration check timer
-    let mut participant_cleanup_timer: Timer<()> = Timer::default();
+    let mut participant_cleanup_timer: Timer<()> = new_simple_timer();
     participant_cleanup_timer.set_timeout(Self::PARTICIPANT_CLEANUP_PERIOD, ());
     try_construct!(
       poll.register(
@@ -492,7 +493,7 @@ impl Discovery {
     );
 
     // create lease duration check timer
-    let mut topic_cleanup_timer: Timer<()> = Timer::default();
+    let mut topic_cleanup_timer: Timer<()> = new_simple_timer();
     topic_cleanup_timer.set_timeout(Self::TOPIC_CLEANUP_PERIOD, ());
     try_construct!(
       poll.register(
@@ -626,7 +627,7 @@ impl Discovery {
     // (authentication, key exchange) messages
     #[cfg(feature = "security")]
     let secure_message_resend_timer = {
-      let mut secure_message_resend_timer: Timer<()> = Timer::default();
+      let mut secure_message_resend_timer: Timer<()> = new_simple_timer();
       secure_message_resend_timer
         .set_timeout(Self::CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_PERIOD, ());
       try_construct!(

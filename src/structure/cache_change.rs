@@ -1,3 +1,6 @@
+#[allow(unused_imports)]
+use log::{debug, error, info, trace, warn};
+
 use crate::{
   dds::{ddsdata::DDSData, with_key::datawriter::WriteOptions},
   structure::{guid::GUID, sequence_number::SequenceNumber},
@@ -41,6 +44,10 @@ impl CacheChange {
       write_options,
       data_value,
     }
+  }
+
+  pub(crate) fn reallocate(&mut self) {
+    self.data_value.reallocate();
   }
 
   // Not needed?

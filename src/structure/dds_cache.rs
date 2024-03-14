@@ -6,7 +6,7 @@ use std::{
 };
 
 #[allow(unused_imports)]
-use log::{debug, error, info, trace};
+use log::{debug, error, info, trace, warn};
 
 use crate::{
   create_error_internal,
@@ -86,6 +86,17 @@ impl DDSCache {
       self.topic_caches.remove(topic_name);
     }
   }
+
+  pub fn garbage_collect(&mut self) {
+    for tc in self.topic_caches.values_mut() {
+      let mut tc = tc.lock().unwrap();
+      if let Some((last_timestamp, _)) = tc.changes.iter().next_back() {
+        if *last_timestamp > tc.changes_reallocated_up_to {
+          tc.remove_changes_before(Timestamp::ZERO);
+        }
+      }
+    }
+  }
 }
 
 #[derive(Debug)]
@@ -100,9 +111,15 @@ pub(crate) struct TopicCache {
   max_keep_samples: i32, // from QoS, for quick, repeated access
   // TODO: Change this to Option<u32>, where None means "no limit".
 
-  // Tha main content of the cache is in this map.
+  // The main content of the cache is in this map.
   // Timestamp is assumed to be unique id over all the CacheChanges.
   changes: BTreeMap<Timestamp, CacheChange>,
+
+  // The underlying Bytes buffers are reallocated after some time (once for each) in
+  // order to release the original receive buffer. The idea behind this is that if a CacheChange
+  // persists in the TopicCaceh for some time, it should no longer hold onto the receive buffer,
+  // so we can recycle the buffers. Otherwise, we (practically) leak memory.
+  changes_reallocated_up_to: Timestamp,
 
   // sequence_numbers is an index to "changes" by GUID and SN
   sequence_numbers: BTreeMap<GUID, BTreeMap<SequenceNumber, Timestamp>>,
@@ -125,6 +142,7 @@ impl TopicCache {
                                                          * this */
       max_keep_samples: 1, // dummy value, next call will overwrite this
       changes: BTreeMap::new(),
+      changes_reallocated_up_to: Timestamp::ZERO,
       sequence_numbers: BTreeMap::new(),
       received_reliably_before: BTreeMap::new(),
     };
@@ -180,7 +198,7 @@ impl TopicCache {
     self
       .add_change_internal(instant, cache_change)
       .map(|cc_back| {
-        debug!(
+        warn!(
           "DDSCache insert failed topic={:?} cache_change={:?}",
           self.topic_name, cc_back
         );
@@ -195,10 +213,10 @@ impl TopicCache {
     // First, do garbage collection.
     // But not at every insert, just to save time and effort.
     // Some heuristic to decide if we should collect now.
-    let payload_size = max(1, cache_change.data_value.payload_size());
+    // let payload_size = max(1, cache_change.data_value.payload_size());
     let semi_random_number = i64::from(cache_change.sequence_number) as usize;
-    let fairly_large_constant = 0xffff;
-    let modulus = fairly_large_constant / payload_size;
+    // let fairly_large_constant = 0xffff;
+    let modulus = 64;
     if modulus == 0 || semi_random_number % modulus == 0 {
       debug!("Garbage collecting topic {}", self.topic_name);
       self.remove_changes_before(Timestamp::ZERO);
@@ -209,11 +227,16 @@ impl TopicCache {
     // Now to the actual adding business.
     if let Some(old_instant) = self.find_by_sn(&cache_change) {
       // Got duplicate DATA for a SN that we already have. It should be discarded.
-      debug!(
+      trace!(
         "add_change: discarding duplicate {:?} from {:?}. old timestamp = {:?}, new = {:?}",
-        cache_change.sequence_number, cache_change.writer_guid, old_instant, instant,
+        cache_change.sequence_number,
+        cache_change.writer_guid,
+        old_instant,
+        instant,
       );
-      Some(cache_change)
+      // We are keeping this quiet, because e.g. FastDDS Discoery keeps sending the
+      // same SequenceNumber in periodic updates.
+      None
     } else {
       // This is a new (to us) SequenceNumber, this is the default processing path.
       self.insert_sn(*instant, &cache_change);
@@ -372,6 +395,21 @@ impl TopicCache {
 
     // update also SequenceNumber map
     to_remove.values().for_each(|r| self.remove_sn(r));
+
+    // Now, reallocate old cache changes
+    let reallocate_timeout = crate::Duration::from_secs(5);
+    let now = Timestamp::now();
+    let reallocate_limit = now - reallocate_timeout;
+
+    self
+      .changes
+      .range_mut((
+        Excluded(self.changes_reallocated_up_to),
+        Included(reallocate_limit),
+      ))
+      .for_each(|(_, cc)| cc.reallocate());
+
+    self.changes_reallocated_up_to = reallocate_limit;
   }
 
   pub fn topic_name(&self) -> String {
