@@ -147,8 +147,10 @@ impl TopicCache {
     let max_keep_samples = qos
       .resource_limits()
       .unwrap_or(ResourceLimits {
-        max_samples: 1024,
-        max_instances: 1024,
+        // This is some default limits out of the hat, if there was no QoS specification.
+        // The purpose of these limits is to prevent excessive memory usage.
+        max_samples: 64,
+        max_instances: 64,
         max_samples_per_instance: 64,
       })
       .max_samples;
@@ -311,44 +313,65 @@ impl TopicCache {
     }
   }
 
-  /// remove changes before given Timestamp, but keep at least
-  /// min_keep_samples.
-  /// We must always keep below max_keep_samples.
+  
+  /// Garbarge collection:
+  ///
+  /// Remove changes before given Timestamp, but keep at least
+  /// `self.min_keep_samples`.
+  ///
+  /// If we are over `self.max_keep_samples`, then remove the oldest samples until 
+  /// `max_keep_samples` is reached, regardless of `remove_before`.
   pub fn remove_changes_before(&mut self, remove_before: Timestamp) {
-    let min_remove_count = max(
-      0,
-      self
-        .changes
-        .len()
-        .wrapping_sub(self.max_keep_samples as usize),
-    );
+    // TODO: Currently, TopicCache does not know about Keys is Samples/CacheChanges,
+    // because they are opaque binary blobs at this point. Therefore, we cannot
+    // distinguish between instances, so cannot observe max instance counts.
+    // We have to do just with min/max sample counts.
 
-    let max_remove_count = min_remove_count;
-    // Only observe max cache size
-    // TODO: Can we do better without being able to distinguish between instances?
+    let sample_count = self.changes.len();
 
-    // Find the first key that is to be retained, i.e. enumerate
-    // one past the items to be removed.
-    let split_key = *self
+    // We must remove at least enough to stay within max limit,
+    // must_remove_count = sample_count - max_keep_samples
+    let must_remove_count = sample_count.saturating_sub(self.max_keep_samples as usize);
+    // Saturating sub takes care that this does not underflow below zero.
+
+
+    let may_remove_count = match self.min_keep_samples {
+      // We are erquested to KeepAll, so do not remove more than absolutely required.
+      History::KeepAll => must_remove_count, 
+
+      // We are requested to keep some depth, so we may remove up to that.
+      History::KeepLast { depth } => 
+        max( sample_count.saturating_sub( depth as usize ) , must_remove_count),
+    };
+
+    let oldest_timestamp_to_retain_opt : Option<Timestamp> = self
       .changes
       .keys()
-      .take(max_remove_count)
       .enumerate()
-      .skip_while(|(i, ts)| {
-        *i < min_remove_count || (**ts < remove_before && *i < max_remove_count)
-      })
+      .skip_while(|(i, ts)|  
+        // Skip samples to be removed. Force "must" count, and then remove until
+        // either limit timestamp or "may" count stops us
+        *i < must_remove_count 
+        || (**ts < remove_before && *i < may_remove_count))
       .map(|(_, ts)| ts) // un-enumerate
       .next() // the next element would be the first to retain
-      .unwrap_or(&Timestamp::ZERO); // if there is no next, then everything from ZERO onwards
+      .copied(); 
 
-    // split_off: Returns everything after the given key, including the key.
-    let to_retain = self.changes.split_off(&split_key);
+    // In case `.next()` is `None`, then we just decided to to discard everything, or,
+    // as a special case, the cache was empty to begin with, but the end result is the same.
+
+    let to_retain = 
+      if let Some(split_key) = oldest_timestamp_to_retain_opt {
+        // split_off: Returns everything after the given key, including the key.
+        self.changes.split_off(&split_key)
+      } else {
+        BTreeMap::new()
+      };
+
     let to_remove = std::mem::replace(&mut self.changes, to_retain);
-
+    
     // update also SequenceNumber map
-    for r in to_remove.values() {
-      self.remove_sn(r);
-    }
+    to_remove.values().for_each(|r| self.remove_sn(r));
   }
 
   pub fn topic_name(&self) -> String {
