@@ -313,14 +313,13 @@ impl TopicCache {
     }
   }
 
-  
   /// Garbarge collection:
   ///
   /// Remove changes before given Timestamp, but keep at least
   /// `self.min_keep_samples`.
   ///
-  /// If we are over `self.max_keep_samples`, then remove the oldest samples until 
-  /// `max_keep_samples` is reached, regardless of `remove_before`.
+  /// If we are over `self.max_keep_samples`, then remove the oldest samples
+  /// until `max_keep_samples` is reached, regardless of `remove_before`.
   pub fn remove_changes_before(&mut self, remove_before: Timestamp) {
     // TODO: Currently, TopicCache does not know about Keys is Samples/CacheChanges,
     // because they are opaque binary blobs at this point. Therefore, we cannot
@@ -334,42 +333,43 @@ impl TopicCache {
     let must_remove_count = sample_count.saturating_sub(self.max_keep_samples as usize);
     // Saturating sub takes care that this does not underflow below zero.
 
-
     let may_remove_count = match self.min_keep_samples {
       // We are erquested to KeepAll, so do not remove more than absolutely required.
-      History::KeepAll => must_remove_count, 
+      History::KeepAll => must_remove_count,
 
       // We are requested to keep some depth, so we may remove up to that.
-      History::KeepLast { depth } => 
-        max( sample_count.saturating_sub( depth as usize ) , must_remove_count),
+      History::KeepLast { depth } => max(
+        sample_count.saturating_sub(depth as usize),
+        must_remove_count,
+      ),
     };
 
-    let oldest_timestamp_to_retain_opt : Option<Timestamp> = self
+    let oldest_timestamp_to_retain_opt: Option<Timestamp> = self
       .changes
       .keys()
       .enumerate()
-      .skip_while(|(i, ts)|  
+      .skip_while(|(i, ts)|
         // Skip samples to be removed. Force "must" count, and then remove until
         // either limit timestamp or "may" count stops us
-        *i < must_remove_count 
+        *i < must_remove_count
         || (**ts < remove_before && *i < may_remove_count))
       .map(|(_, ts)| ts) // un-enumerate
       .next() // the next element would be the first to retain
-      .copied(); 
+      .copied();
 
-    // In case `.next()` is `None`, then we just decided to to discard everything, or,
-    // as a special case, the cache was empty to begin with, but the end result is the same.
+    // In case `.next()` is `None`, then we just decided to to discard everything,
+    // or, as a special case, the cache was empty to begin with, but the end
+    // result is the same.
 
-    let to_retain = 
-      if let Some(split_key) = oldest_timestamp_to_retain_opt {
-        // split_off: Returns everything after the given key, including the key.
-        self.changes.split_off(&split_key)
-      } else {
-        BTreeMap::new()
-      };
+    let to_retain = if let Some(split_key) = oldest_timestamp_to_retain_opt {
+      // split_off: Returns everything after the given key, including the key.
+      self.changes.split_off(&split_key)
+    } else {
+      BTreeMap::new()
+    };
 
     let to_remove = std::mem::replace(&mut self.changes, to_retain);
-    
+
     // update also SequenceNumber map
     to_remove.values().for_each(|r| self.remove_sn(r));
   }
