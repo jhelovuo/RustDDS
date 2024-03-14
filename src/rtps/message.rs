@@ -447,18 +447,16 @@ impl MessageBuilder {
   ) -> Self {
     match (irrelevant_sns.first(), irrelevant_sns.last()) {
       (Some(&gap_start), Some(&_last_sn)) => {
-        // Determine the contiguous range (starting from gap_start) of irrelevant
-        // seqnums
-        let mut range_end = gap_start;
-        while irrelevant_sns.contains(&range_end.plus_1()) {
-          range_end = range_end.plus_1();
+        // Determine the contiguous range of irrelevant seqnums starting from gap_start.
+        // Do this by finding the first seqnum which is larger than gap_start but is not
+        // included in irrelevant_sns. That is, find the
+        // exclusive endpoint of the contiguous range.
+        let mut range_endpoint_excl = gap_start.plus_1();
+        while irrelevant_sns.contains(&range_endpoint_excl) {
+          range_endpoint_excl = range_endpoint_excl.plus_1();
         }
-        // range_end is now the last seqnum in the contiguous range.
-        // Note that when receiving a GAP, the interpreted range is
-        // (gap_start .. gapList.base -1). But since gapList.base is included in the
-        // gapList, gapList.base is also always interpred as irrelevant, hence
-        // completing the range
-        let list_base = range_end;
+        // Set gapList.base as this exclusive endpoint of the range
+        let list_base = range_endpoint_excl;
         let list_set = irrelevant_sns.clone().split_off(&list_base);
         let gap_list = SequenceNumberSet::from_base_and_set(list_base, &list_set);
 
