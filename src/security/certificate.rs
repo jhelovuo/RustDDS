@@ -21,7 +21,7 @@
 use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
 use x509_certificate::{
-  self, certificate::CapturedX509Certificate, EcdsaCurve, KeyAlgorithm, SignatureAlgorithm,
+  certificate::CapturedX509Certificate, EcdsaCurve, KeyAlgorithm, SignatureAlgorithm,
 };
 use der::Decode;
 use bcder::{encode::Values, Mode};
