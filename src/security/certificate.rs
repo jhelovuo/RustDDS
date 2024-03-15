@@ -35,70 +35,6 @@ use crate::security::{
 };
 //use crate::security_error;
 
-#[cfg(feature = "security_in_fastdds_compatibility_mode")]
-fn rfc4514_to_openssl_oneline(dn_rfc4514: &str) -> String {
-  // This function converts a RFC 4514 string representation of a Distinguished
-  // Name to the format produced by the legacy OpenSSL function
-  // x509_name_oneline, which FastDDS uses. The conversion is needed for
-  // interoperability.
-  // The fuction
-  //  - unescapes characters according to RFC 4514
-  //  - reverses the RDNs order
-  //  - use '/' as a separator instead of comma
-  // The conversion isn't perfect, but works in simple cases which hopeafully is
-  // enough.
-
-  let mut result = String::new();
-  let mut chars = dn_rfc4514.chars().peekable();
-
-  while let Some(c) = chars.next() {
-    match c {
-      ',' => {
-        // Check if the comma is escaped (preceded by a backslash)
-        if result.ends_with('\\') {
-          // Remove the escape character and append the comma
-          result.pop();
-          result.push(',');
-        } else {
-          // Otherwise, it's an RDN separator, so append a slash
-          result.push('/');
-        }
-      }
-      '\\' => {
-        // Check for the next character after the escape
-        if let Some(&next_char) = chars.peek() {
-          match next_char {
-            // Include only the escaped character in the result
-            ',' | '+' | '\"' | '\\' | '<' | '>' | ';' => {
-              chars.next(); // Consume the escaped character
-              result.push(next_char);
-            }
-            // If the escaped character is not one of the above, include the backslash
-            _ => result.push('\\'),
-          }
-        }
-      }
-      _ => result.push(c), // All other characters are included as-is
-    }
-  }
-
-  // Reverse the RDNs since OpenSSL one-line format lists RDNs in reverse order
-  let rdns: Vec<&str> = result.split('/').rev().collect();
-  result = rdns.join("/");
-
-  // Prepend a leading slash if the result is not empty
-  if !result.is_empty() {
-    result.insert(0, '/');
-  }
-
-  // Special handling for the EMAIL attribute
-  if result.contains("EMAIL=") {
-    result = result.replace("EMAIL=", "emailAddress=");
-  }
-
-  result
-}
-
 // This is mostly a wrapper around
 // x509_certificate::certificate::CapturedX509Certificate
 // so that we can keep track of what operations we use.
@@ -240,15 +176,8 @@ impl DistinguishedName {
   }
 
   pub fn serialize(&self) -> String {
-    let rfc4514_string = self.0.to_string();
-    #[cfg(not(feature = "security_in_fastdds_compatibility_mode"))]
-    {
-      rfc4514_string
-    }
-    #[cfg(feature = "security_in_fastdds_compatibility_mode")]
-    {
-      rfc4514_to_openssl_oneline(&rfc4514_string)
-    }
+    // This returns the RFC 4514 Distinguished Name string representation
+    self.0.to_string()
   }
 
   // TODO is this a too strict equivalence?
