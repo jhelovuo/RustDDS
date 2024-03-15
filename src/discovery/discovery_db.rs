@@ -176,7 +176,7 @@ impl DiscoveryDB {
     // }
 
     let mut new_participant = false;
-    if self.participant_proxies.get(&guid.prefix).is_none() {
+    if !self.participant_proxies.contains_key(&guid.prefix) {
       info!("New remote participant: {:?}", &data);
       new_participant = true;
       if guid == self.my_guid {

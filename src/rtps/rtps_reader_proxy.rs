@@ -99,7 +99,9 @@ impl RtpsReaderProxy {
       let mut unicasts = update.unicast_locator_list.clone();
       unicasts.retain(Self::not_loopback);
       self.unicast_locator_list = unicasts;
-      self.multicast_locator_list = update.multicast_locator_list.clone();
+      self
+        .multicast_locator_list
+        .clone_from(&update.multicast_locator_list);
     }
 
     self.expects_in_line_qos = update.expects_in_line_qos;

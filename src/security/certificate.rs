@@ -175,6 +175,7 @@ impl DistinguishedName {
   }
 
   pub fn serialize(&self) -> String {
+    // This returns the RFC 4514 Distinguished Name string representation
     self.0.to_string()
   }
 
