@@ -110,11 +110,19 @@ impl SpdpDiscoveredParticipantData {
     );
 
     if !is_metatraffic {
-      proxy.multicast_locator_list = self.default_multicast_locators.clone();
-      proxy.unicast_locator_list = self.default_unicast_locators.clone();
+      proxy
+        .multicast_locator_list
+        .clone_from(&self.default_multicast_locators);
+      proxy
+        .unicast_locator_list
+        .clone_from(&self.default_unicast_locators);
     } else {
-      proxy.multicast_locator_list = self.metatraffic_multicast_locators.clone();
-      proxy.unicast_locator_list = self.metatraffic_unicast_locators.clone();
+      proxy
+        .multicast_locator_list
+        .clone_from(&self.metatraffic_multicast_locators);
+      proxy
+        .unicast_locator_list
+        .clone_from(&self.metatraffic_unicast_locators);
     }
 
     proxy
@@ -142,10 +150,14 @@ impl SpdpDiscoveredParticipantData {
 
     if is_metatraffic {
       // TODO: possible multicast addresses
-      proxy.unicast_locator_list = self.metatraffic_unicast_locators.clone();
+      proxy
+        .unicast_locator_list
+        .clone_from(&self.metatraffic_unicast_locators);
     } else {
       // TODO: possible multicast addresses
-      proxy.unicast_locator_list = self.default_unicast_locators.clone();
+      proxy
+        .unicast_locator_list
+        .clone_from(&self.default_unicast_locators);
     }
 
     proxy
