@@ -318,10 +318,14 @@ impl ParticipantAccessControl for AccessControlBuiltin {
   fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken> {
     self
       .get_permissions_ca_certificate(&handle)
-      .map(|certificate| {
+      .map(|_certificate| {
+        // The CA subject name and algorithm identifier are optional properties
+        // according to the spec. We do not set values for them, since this has
+        // caused interoperability issues with FastDDS. In RustDDS we do not
+        // use them for anything, since they don't provide any additional security.
         BuiltinPermissionsToken {
-          permissions_ca_subject_name: Some(certificate.subject_name().clone()),
-          permissions_ca_algorithm: certificate.algorithm(),
+          permissions_ca_subject_name: None,
+          permissions_ca_algorithm: None,
         }
         .into()
       })

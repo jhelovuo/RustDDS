@@ -31,11 +31,6 @@ security = [
   "dep:openssl", "dep:cryptoki"
   ]
 
-# If feature "security_in_fastdds_compatibility_mode" is enabled,
-# the DDS Security implementation is adjusted so that RustDDS interoperates with FastDDS.
-# This means doing some things against the spec. For more info, see the security readme.
-security_in_fastdds_compatibility_mode = ["security"]
-
 # If feature "build_openssl" is enabled (along with feature "security"),
 # a local copy of OpenSSL will be built.
 # Otherwise, we try to use the system installation of OpenSSL.
