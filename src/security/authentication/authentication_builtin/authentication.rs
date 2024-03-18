@@ -6,7 +6,7 @@ use bytes::Bytes;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  create_security_error,
+  create_security_error, discovery,
   security::{
     access_control::{
       //access_control_builtin::s_mime_config_parser::SignedDocument,
@@ -27,9 +27,9 @@ use crate::{
     config::*,
     *,
   },
-  serialization::cdr_serializer::to_bytes,
+  serialization::{cdr_serializer::to_bytes, pl_cdr_adapters::PlCdrDeserialize},
   structure::guid::GuidPrefix,
-  QosPolicies, GUID,
+  QosPolicies, RepresentationIdentifier, GUID,
 };
 use super::{
   types::{
@@ -40,6 +40,47 @@ use super::{
   },
   BuiltinHandshakeState, DHKeys, LocalParticipantInfo, RemoteParticipantInfo,
 };
+
+// GUID start from certificate subject name, as dictated in DDS Security spec
+// v1.1 Section "9.3.3 DDS:Auth:PKI-DH plugin behavior", Table 52
+fn guid_start_from_certificate(identity_cert: &Certificate) -> SecurityResult<[u8; 6]> {
+  let subject_name_der = identity_cert.subject_name_der()?;
+  let subject_name_der_hash = Sha256::hash(&subject_name_der);
+
+  // slice and unwrap will succeed, because input size is static
+  // Procedure: Take beginning (8 bytes) from subject name DER hash, convert to
+  // big-endian u64, so first byte is MSB. Shift u64 right 1 bit and force first
+  // bit to one. Now the first bit is one and the following bits are beginning
+  // of the SHA256 digest. Truncate this to 48 bites (6 bytes).
+  let bytes_from_subject_name =
+    &((u64::from_be_bytes(subject_name_der_hash.as_ref()[0..8].try_into().unwrap()) >> 1)
+      | 0x8000_0000_0000_0000u64)
+      .to_be_bytes()[0..6];
+
+  let mut guid_start = [0u8; 6];
+  guid_start.copy_from_slice(&bytes_from_subject_name[..6]);
+
+  Ok(guid_start)
+}
+
+fn validate_remote_guid(
+  remote_guid: GUID,
+  remote_identity_cert: &Certificate,
+) -> SecurityResult<()> {
+  let actual_guid_start = &remote_guid.prefix.as_ref()[0..6];
+  let expected_guid_start = guid_start_from_certificate(remote_identity_cert)
+    .map_err(|e| create_security_error!("Could not determine the expected GUID start: {e}"))?;
+
+  if actual_guid_start == expected_guid_start {
+    Ok(())
+  } else {
+    Err(create_security_error!(
+      "GUID start {:?} is not the expected {:?}",
+      actual_guid_start,
+      expected_guid_start
+    ))
+  }
+}
 
 impl Authentication for AuthenticationBuiltin {
   fn validate_local_identity(
@@ -138,26 +179,13 @@ impl Authentication for AuthenticationBuiltin {
 
     // TODO: Check (somehow) that my identity has not been revoked.
 
-    // Compute the new adjusted GUID
-    // DDS Security spec v1.1 Section "9.3.3 DDS:Auth:PKI-DH plugin behavior", Table
-    // 52
-    let subject_name_der = identity_certificate.subject_name_der()?;
-    let subject_name_der_hash = Sha256::hash(&subject_name_der);
-
-    // slice and unwrap will succeed, because input size is static
-    // Procedure: Take beginning (8 bytes) from subject name DER hash, convert to
-    // big-endian u64, so first byte is MSB. Shift u64 right 1 bit and force first
-    // bit to one. Now the first bit is one and the following bits are beginning
-    // of the SHA256 digest. Truncate this to 48 bites (6 bytes).
-    let bytes_from_subject_name =
-      &((u64::from_be_bytes(subject_name_der_hash.as_ref()[0..8].try_into().unwrap()) >> 1)
-        | 0x8000_0000_0000_0000u64)
-        .to_be_bytes()[0..6];
-
+    // Compute the new adjusted GUID. The start is computed from the hash of the
+    // Subject Name in the identity certificate.
+    let guid_start = guid_start_from_certificate(&identity_certificate)?;
     let candidate_guid_hash = Sha256::hash(&candidate_participant_guid.to_bytes());
 
     // slicing will succeed, because digest is longer than 6 bytes
-    let prefix_bytes = [bytes_from_subject_name, &candidate_guid_hash.as_ref()[..6]].concat();
+    let prefix_bytes = [&guid_start, &candidate_guid_hash.as_ref()[..6]].concat();
 
     let adjusted_guid = GUID::new(
       GuidPrefix::new(&prefix_bytes),
@@ -504,7 +532,20 @@ impl Authentication for AuthenticationBuiltin {
     // Verify that 1's identity cert checks out against CA.
     cert1.verify_signed_by_certificate(&local_info.identity_ca)?;
 
-    let pdata_bytes = Bytes::from(serialized_local_participant_data);
+    // Verify that the remote GUID is as specified by the spec
+    let remote_pdata =
+      discovery::spdp_participant_data::SpdpDiscoveredParticipantData::from_pl_cdr_bytes(
+        &request.c_pdata,
+        RepresentationIdentifier::CDR_BE,
+      )
+      .map_err(|e| {
+        create_security_error!(
+          "Failed to deserialize SpdpDiscoveredParticipantData from remote: {e}"
+        )
+      })?;
+
+    validate_remote_guid(remote_pdata.participant_guid, &cert1)
+      .map_err(|e| create_security_error!("Remote GUID does not comply with the spec: {e}"))?;
 
     // Check which key agreement algorithm the remote has chosen & generate our own
     // key pair
@@ -557,6 +598,8 @@ impl Authentication for AuthenticationBuiltin {
     let my_dsign_algo = local_info
       .identity_certificate
       .signature_algorithm_identifier()?;
+
+    let pdata_bytes = Bytes::from(serialized_local_participant_data);
 
     // Compute hash(c2)
     let c2_properties: Vec<BinaryProperty> = vec![
@@ -677,6 +720,24 @@ impl Authentication for AuthenticationBuiltin {
 
         // Verify that 2's identity cert checks out against CA.
         cert2.verify_signed_by_certificate(&local_info.identity_ca)?;
+
+        // Verify that the remote GUID is as specified by the spec.
+        // Note that spec does say that this check needs to be done here. But it seems
+        // that it has just been forgotten, since otherwise only the other
+        // participant would check the other's guid (in begin_handshake_reply)
+        let remote_pdata =
+          discovery::spdp_participant_data::SpdpDiscoveredParticipantData::from_pl_cdr_bytes(
+            &reply.c_pdata,
+            RepresentationIdentifier::CDR_BE,
+          )
+          .map_err(|e| {
+            create_security_error!(
+              "Failed to deserialize SpdpDiscoveredParticipantData from remote: {e}"
+            )
+          })?;
+
+        validate_remote_guid(remote_pdata.participant_guid, &cert2)
+          .map_err(|e| create_security_error!("Remote GUID does not comply with the spec: {e}"))?;
 
         // TODO: verify ocsp_status / status of IdentityCredential
 
@@ -1034,5 +1095,35 @@ impl Authentication for AuthenticationBuiltin {
     Err(create_security_error!(
       "set_listener not supported. Use status events in DataReader/DataWriter instead."
     ))
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::structure::guid::EntityKind;
+  use super::*;
+
+  #[test]
+  pub fn validating_invalid_remote_guid_fails() {
+    let cert_pem = r#"-----BEGIN CERTIFICATE-----
+MIIBOzCB4qADAgECAhR361786/qVPfJWWDw4Wg5cmJUwBTAKBggqhkjOPQQDAjAS
+MRAwDgYDVQQDDAdzcm9zMkNBMB4XDTIzMDcyMzA4MjgzNloXDTMzMDcyMTA4Mjgz
+NlowEjEQMA4GA1UEAwwHc3JvczJDQTBZMBMGByqGSM49AgEGCCqGSM49AwEHA0IA
+BMpvJQ/91ZqnmRRteTL2qaEFz2d7SGAQQk9PIhhZCV1tlLwYf/hI4xWLJaEv8FxJ
+TjxXRGJ1U+/IqqqIvJVpWaSjFjAUMBIGA1UdEwEB/wQIMAYBAf8CAQEwCgYIKoZI
+zj0EAwIDSAAwRQIgEiyVGRc664+/TE/HImA4WNwsSi/alHqPYB58BWINj34CIQDD
+iHhbVPRB9Uxts9CwglxYgZoUdGUAxreYIIaLO4yLqw==
+-----END CERTIFICATE-----
+"#;
+
+    let invalid_guid = GUID::dummy_test_guid(EntityKind::PARTICIPANT_BUILT_IN);
+    let some_certificate = Certificate::from_pem(cert_pem).unwrap();
+
+    let validation_res = validate_remote_guid(invalid_guid, &some_certificate);
+
+    assert!(
+      validation_res.is_err(),
+      "Validating an invalid GUID passed!"
+    );
   }
 }
