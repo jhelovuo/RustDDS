@@ -83,7 +83,7 @@ cryptoki = { version = "0.6", optional = true }
 
 
 [target.'cfg(windows)'.dependencies]
-local-ip-address = "0.5.3"
+local-ip-address = "0.6.1"
 
 [dev-dependencies]
 serde_repr = {version = "0.1" }

@@ -15,13 +15,13 @@ use crate::{
     nack_frag::NackFrag,
     submessage::{ReaderSubmessage, WriterSubmessage},
     submessage_flag::{
-      endianness_flag, ACKNACK_Flags, DATAFRAG_Flags, DATA_Flags, GAP_Flags, HEARTBEAT_Flags,
-      INFODESTINATION_Flags, INFOREPLY_Flags, INFOSOURCE_Flags, INFOTIMESTAMP_Flags,
-      NACKFRAG_Flags,
+      endianness_flag, ACKNACK_Flags, DATAFRAG_Flags, DATA_Flags, GAP_Flags, HEARTBEATFRAG_Flags,
+      HEARTBEAT_Flags, INFODESTINATION_Flags, INFOREPLY_Flags, INFOSOURCE_Flags,
+      INFOTIMESTAMP_Flags, NACKFRAG_Flags,
     },
     submessage_header::SubmessageHeader,
     submessage_kind::SubmessageKind,
-    submessages::{Data, DataFrag, Gap, InfoReply, InterpreterSubmessage},
+    submessages::{Data, DataFrag, Gap, HeartbeatFrag, InfoReply, InterpreterSubmessage},
   },
   Timestamp,
 };
@@ -181,6 +181,14 @@ impl Submessage {
         let f = BitFlags::<HEARTBEAT_Flags>::from_bits_truncate(sub_header.flags);
         mk_w_subm(WriterSubmessage::Heartbeat(
           Heartbeat::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+
+      SubmessageKind::HEARTBEAT_FRAG => {
+        let f = BitFlags::<HEARTBEATFRAG_Flags>::from_bits_truncate(sub_header.flags);
+        mk_w_subm(WriterSubmessage::HeartbeatFrag(
+          HeartbeatFrag::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
           f,
         ))
       }
