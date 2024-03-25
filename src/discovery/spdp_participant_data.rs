@@ -602,7 +602,6 @@ mod tests {
     messages::submessages::submessages::WriterSubmessage,
     rtps::{submessage::*, Message},
     test::test_data::*,
-    RepresentationIdentifier,
   };
 
   #[test]

@@ -1984,18 +1984,15 @@ mod tests {
   use std::net::SocketAddr;
 
   use chrono::Utc;
-  use mio_06::Token;
   use speedy::{Endianness, Writable};
 
   use super::*;
   use crate::{
-    dds::{adapters::no_key::DeserializerAdapter, participant::DomainParticipant},
+    dds::adapters::no_key::DeserializerAdapter,
     discovery::sedp_messages::TopicBuiltinTopicData,
     messages::submessages::submessages::{InterpreterSubmessage, WriterSubmessage},
     network::{constant::*, udp_listener::UDPListener, udp_sender::UDPSender},
     rtps::submessage::*,
-    serialization::cdr_deserializer::CDRDeserializerAdapter,
-    structure::{entity::RTPSEntity, locator::Locator},
     test::{
       shape_type::ShapeType,
       test_data::{

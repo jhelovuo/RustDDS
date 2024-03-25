@@ -627,7 +627,6 @@ impl fmt::Debug for GUID {
 #[cfg(test)]
 mod tests {
   use speedy::Endianness;
-  use mio_06::Token;
   use log::info;
   use byteorder::BigEndian;
 

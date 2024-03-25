@@ -102,10 +102,7 @@ use crate::{
   },
   messages::{
     header::Header,
-    submessages::{
-      elements::serialized_payload::SerializedPayload,
-      submessages::{Data, SubmessageHeader, SubmessageKind, WriterSubmessage, *},
-    },
+    submessages::{elements::serialized_payload::SerializedPayload, submessages::*},
   },
   rtps::{Message, Submessage, SubmessageBody},
   serialization::pl_cdr_adapters::*,
@@ -115,7 +112,6 @@ use crate::{
     locator::Locator,
     sequence_number::SequenceNumber,
   },
-  RepresentationIdentifier,
 };
 
 pub(crate) fn spdp_participant_msg() -> Message {

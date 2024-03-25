@@ -161,7 +161,7 @@ pub(crate) mod repr {
 mod tests {
   use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
-  use speedy::{self, Endianness, Readable, Writable};
+  use speedy::{Endianness, Readable, Writable};
   use test_case::test_case;
 
   use super::{repr, Locator};

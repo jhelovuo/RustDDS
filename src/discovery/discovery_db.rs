@@ -788,10 +788,7 @@ impl DiscoveryDB {
 
 #[cfg(test)]
 mod tests {
-  use std::{
-    sync::{Arc, Mutex},
-    time::Duration as StdDuration,
-  };
+  use std::{sync::Mutex, time::Duration as StdDuration};
 
   use byteorder::LittleEndian;
   use mio_extras::channel as mio_channel;

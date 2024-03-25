@@ -1454,14 +1454,11 @@ mod tests {
   use crate::{
     dds::{qos::QosPolicies, topic::TopicKind},
     messages::{
-      header::Header,
-      protocol_id::ProtocolId,
-      protocol_version::ProtocolVersion,
-      submessages::submessages::{AckNack, SubmessageHeader, SubmessageKind, *},
-      vendor_id::VendorId,
+      header::Header, protocol_id::ProtocolId, protocol_version::ProtocolVersion,
+      submessages::submessages::*, vendor_id::VendorId,
     },
     network::{constant::user_traffic_unicast_port, udp_sender::UDPSender},
-    rtps::{submessage::*, Message, Submessage},
+    rtps::{submessage::*, Message},
     serialization::cdr_serializer::CDRSerializerAdapter,
     structure::{
       guid::{EntityId, GUID},

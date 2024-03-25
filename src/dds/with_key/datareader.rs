@@ -1006,13 +1006,13 @@ mod tests {
       message_receiver::*,
       reader::{Reader, ReaderIngredients},
     },
-    serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes},
+    serialization::cdr_serializer::to_bytes,
     structure::{
       guid::{EntityId, EntityKind, GuidPrefix},
       sequence_number::SequenceNumber,
     },
     test::random_data::*,
-    Keyed, RepresentationIdentifier,
+    RepresentationIdentifier,
   };
 
   #[test]

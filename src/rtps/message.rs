@@ -528,7 +528,6 @@ impl MessageBuilder {
 #[allow(non_snake_case)]
 mod tests {
   use log::info;
-  use speedy::Writable;
 
   use super::*;
 

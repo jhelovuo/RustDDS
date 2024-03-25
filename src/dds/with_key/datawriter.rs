@@ -1228,11 +1228,7 @@ mod tests {
 
   use super::*;
   use crate::{
-    dds::{
-      key::{Key, Keyed},
-      participant::DomainParticipant,
-    },
-    serialization::cdr_serializer::CDRSerializerAdapter,
+    dds::{key::Key, participant::DomainParticipant},
     structure::topic_kind::TopicKind,
     test::random_data::*,
   };

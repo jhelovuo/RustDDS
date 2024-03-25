@@ -331,13 +331,9 @@ impl<C: Context> Writable<C> for Submessage {
 
 #[cfg(test)]
 mod tests {
-  use bytes::Bytes;
-  use enumflags2::BitFlags;
   use log::info;
-  use speedy::{Readable, Writable};
   use hex_literal::hex;
 
-  use super::Submessage;
   use crate::{messages::submessages::submessages::*, rtps::submessage::*};
 
   #[test]

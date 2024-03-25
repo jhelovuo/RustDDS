@@ -1437,17 +1437,9 @@ mod tests {
   use std::sync::RwLock;
 
   use crate::{
-    dds::{
-      qos::policy::Reliability,
-      statusevents::{sync_status_channel, DataReaderStatus},
-      typedesc::TypeDesc,
-      with_key::datawriter::WriteOptions,
-    },
-    structure::{
-      dds_cache::DDSCache,
-      guid::{EntityId, EntityKind, GUID},
-    },
-    Duration, QosPolicyBuilder,
+    dds::{qos::policy::Reliability, statusevents::sync_status_channel, typedesc::TypeDesc},
+    structure::{dds_cache::DDSCache, guid::EntityKind},
+    QosPolicyBuilder,
   };
   use super::*;
 

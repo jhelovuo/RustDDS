@@ -1275,7 +1275,6 @@ impl Key for ParticipantMessageDataKey {}
 #[cfg(test)]
 mod tests {
   use byteorder::LittleEndian;
-  use bytes::Bytes;
   use log::info;
   use test_log::test; // to capture logging macros run by test cases
 
@@ -1290,7 +1289,6 @@ mod tests {
       content_filter_data, publication_builtin_topic_data, reader_proxy_data,
       subscription_builtin_topic_data, topic_data, writer_proxy_data,
     },
-    RepresentationIdentifier,
   };
 
   /* do not test separate ser/deser of components, as these are never seen on wire individually

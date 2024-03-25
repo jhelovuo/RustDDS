@@ -1054,13 +1054,8 @@ fn check_are_endpoints_securities_compatible(
 
 #[cfg(test)]
 mod tests {
-  use std::{
-    sync::{Arc, Mutex},
-    thread,
-    time::Duration,
-  };
+  use std::{sync::Mutex, thread};
 
-  use mio_06::{PollOpt, Ready};
   use mio_extras::channel as mio_channel;
 
   use super::*;
@@ -1072,7 +1067,6 @@ mod tests {
       with_key::simpledatareader::ReaderCommand,
     },
     mio_source,
-    structure::dds_cache::DDSCache,
   };
 
   //#[test]
