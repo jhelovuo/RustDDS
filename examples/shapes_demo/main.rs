@@ -552,7 +552,6 @@ fn get_matches() -> ArgMatches {
         )
         .value_parser(["1", "2"])
         .short('x')
-        .default_value("1")
         .value_name("representation"),
     )
     .get_matches()
