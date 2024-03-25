@@ -64,6 +64,8 @@ impl AssemblyBuffer {
 
   pub fn insert_frags(&mut self, datafrag: &DataFrag, frag_size: u16) {
     // TODO: Sanity checks? E.g. datafrag.fragment_size == frag_size
+    // Or is this even guaranteed? Can Writer vary fragment size?
+
     let frag_size = usize::from(frag_size); // - payload_header;
     let frags_in_submessage = usize::from(datafrag.fragments_in_submessage);
     let fragment_starting_num: usize = u32::from(datafrag.fragment_starting_num)
@@ -102,17 +104,19 @@ impl AssemblyBuffer {
 
     // sanity check data size
     // Last fragment may be smaller than frags_in_submessage * frag_size
-    if fragment_starting_num < self.fragment_count
+    let last_frag_in_submessage = start_frag_from_0 + frags_in_submessage;
+    if last_frag_in_submessage < self.fragment_count
       && datafrag.serialized_payload.len() < frags_in_submessage * frag_size
     {
       error!(
         "Received DATAFRAG too small. fragment_starting_num={} out of fragment_count={}, \
-         frags_in_submessage={}, frag_size={} but payload length ={}",
+         frags_in_submessage={}, frag_size={} but payload length = {}. Original data_size={}",
         fragment_starting_num,
         self.fragment_count,
         frags_in_submessage,
         frag_size,
         datafrag.serialized_payload.len(),
+        datafrag.data_size,
       );
     }
 
