@@ -68,12 +68,8 @@ fn main() {
     .get_one::<String>("color")
     .cloned()
     .unwrap_or("BLUE".to_owned());
-<<<<<<< HEAD
-  let is_auto_test = std::env::var("auto_test").is_ok();
-=======
   // Change some logging to make automatic tests work
   let is_auto_test = std::env::var("auto_test").is_ok(); 
->>>>>>> cafd480a428e83971d25af7066884e2e4d988f67
 
   // Build the DomainParticipant
   let dp_builder = DomainParticipantBuilder::new(*domain_id);
