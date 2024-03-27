@@ -186,8 +186,11 @@ impl TopicCache {
     self.max_keep_samples = max(max_keep_samples, self.max_keep_samples);
   }
 
-  pub fn mark_reliably_received_before(&mut self, writer: GUID, sn: SequenceNumber) {
-    self.received_reliably_before.insert(writer, sn);
+  // Returns true if the "reliably_received_before"-marker was actually moved forward
+  // and false if not.
+  pub fn mark_reliably_received_before(&mut self, writer: GUID, sn: SequenceNumber) -> bool {
+    let prev_sn = self.received_reliably_before.insert(writer, sn);
+    prev_sn.unwrap_or(SequenceNumber::new(1)) < sn
   }
 
   pub fn get_change(&self, instant: &Timestamp) -> Option<&CacheChange> {

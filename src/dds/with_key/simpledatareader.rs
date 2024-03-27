@@ -327,6 +327,8 @@ where
     let mut read_state_ref = self.read_state.lock().unwrap();
     let latest_instant = read_state_ref.latest_instant;
     let (last_read_sn, hash_to_key_map) = read_state_ref.get_sn_map_and_hash_map();
+
+    // loop in case we get a sample that should be ignored, so we try next.
     loop {
       let (timestamp, cc) = match Self::try_take_undecoded(
         is_reliable,
@@ -357,6 +359,15 @@ where
         read_state_ref
           .last_read_sn
           .insert(writer_guid, sequence_number);
+
+        // // Debug sanity check:
+        // use crate::Duration;
+        // if Timestamp::now().duration_since(timestamp) > Duration::from_secs(1) {
+        //   error!("Sample delayed by {:?} , Topic = {} {:?}",
+        //     Timestamp::now().duration_since(timestamp), self.topic().name(),
+        //     sequence_number,
+        //      );
+        // }
 
         return result.map(Some)
       }
@@ -554,6 +565,12 @@ where
         // 1. synchronously store waker to background thread (must rendezvous)
         // 2. try take_bare again, in case something arrived just now
         // 3. if nothing still, return pending.
+
+        // // DEBUG
+        // if self.simple_datareader.guid().entity_id.entity_kind.is_user_defined() {
+        //   error!("Setting waker for {:?}", self.simple_datareader.topic().name());
+        // }
+        // // DEBUG
         self.simple_datareader.set_waker(Some(cx.waker().clone()));
         match self.simple_datareader.try_take_one() {
           Err(e) => Poll::Ready(Some(Err(e))),
