@@ -17,12 +17,15 @@ use crate::{
   },
 };
 #[cfg(feature = "security")]
-use crate::security::{
-  cryptographic::{DecodeOutcome, DecodedSubmessage},
-  security_plugins::SecurityPluginsHandle,
+use crate::{
+  create_security_error,
+  messages::submessages::secure_prefix::SecurePrefix,
+  security::{
+    cryptographic::{DecodeOutcome, DecodedSubmessage, EndpointCryptoHandle},
+    security_plugins::SecurityPluginsHandle,
+    SecurityError, SecurityResult,
+  },
 };
-#[cfg(feature = "security")]
-use crate::messages::submessages::{secure_postfix::SecurePostfix, secure_prefix::SecurePrefix};
 #[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
 #[cfg(test)]
@@ -42,28 +45,61 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 // If the submessage sequence does not follow either of these, we fail and reset
 // to [None].
 //
-#[cfg(not(feature = "security"))]
-#[derive(Clone, Eq, PartialEq, Debug)]
-struct SecureReceiverState {}
-
 #[cfg(feature = "security")]
 #[derive(Clone, Eq, PartialEq, Debug)]
 enum SecureReceiverState {
+  None,
   // SecurePrefix received
   Prefix(SecurePrefix),
   // Submessage after SecurePrefix
   SecureSubmessage(SecurePrefix, Submessage),
 }
 
-// This type identifies what kind of security wrapper was unwrapped from a
-// resulting submessage. There may be several layers, such as entire RTPS
-// message was secured, or individual submessage was secured, or both. The
-// purpose is to communicate the wrapping to Readers and Writers.
-#[cfg(feature = "security")]
-#[derive(Clone, Debug)]
-pub struct SecureWrapping {
-  // TODO
+// Describes allowed endpoints for an unprotected submessage from security
+// perspective
+#[derive(PartialEq)]
+enum AllowedEndpoints {
+  WithNoSubmessageProtection,
+  #[cfg(feature = "security")]
+  WithCryptoHandles(Vec<EndpointCryptoHandle>),
 }
+
+enum UnprotectedSubmessage {
+  Interpreter(InterpreterSubmessage),
+  Writer(WriterSubmessage, AllowedEndpoints),
+  Reader(ReaderSubmessage, AllowedEndpoints),
+}
+
+#[cfg(not(feature = "security"))]
+impl From<Submessage> for UnprotectedSubmessage {
+  fn from(submsg: Submessage) -> Self {
+    match submsg.body {
+      SubmessageBody::Interpreter(msg) => UnprotectedSubmessage::Interpreter(msg),
+      SubmessageBody::Writer(msg) => {
+        UnprotectedSubmessage::Writer(msg, AllowedEndpoints::WithNoSubmessageProtection)
+      }
+      SubmessageBody::Reader(msg) => {
+        UnprotectedSubmessage::Reader(msg, AllowedEndpoints::WithNoSubmessageProtection)
+      }
+    }
+  }
+}
+
+#[cfg(feature = "security")]
+impl From<DecodedSubmessage> for UnprotectedSubmessage {
+  fn from(decoded: DecodedSubmessage) -> Self {
+    match decoded {
+      DecodedSubmessage::Interpreter(msg) => UnprotectedSubmessage::Interpreter(msg),
+      DecodedSubmessage::Writer(msg, handles) => {
+        UnprotectedSubmessage::Writer(msg, AllowedEndpoints::WithCryptoHandles(handles))
+      }
+      DecodedSubmessage::Reader(msg, handles) => {
+        UnprotectedSubmessage::Reader(msg, AllowedEndpoints::WithCryptoHandles(handles))
+      }
+    }
+  }
+}
+
 // This is partial receiver state to be sent to Reader or Writer
 #[derive(Debug, Clone)]
 pub struct MessageReceiverState {
@@ -71,8 +107,6 @@ pub struct MessageReceiverState {
   pub unicast_reply_locator_list: Vec<Locator>,
   pub multicast_reply_locator_list: Vec<Locator>,
   pub source_timestamp: Option<Timestamp>,
-  #[cfg(feature = "security")]
-  pub secure_rtps_wrapped: Option<SecureWrapping>,
 }
 
 impl Default for MessageReceiverState {
@@ -82,8 +116,6 @@ impl Default for MessageReceiverState {
       unicast_reply_locator_list: Vec::default(),
       multicast_reply_locator_list: Vec::default(),
       source_timestamp: Some(Timestamp::INVALID),
-      #[cfg(feature = "security")]
-      secure_rtps_wrapped: None,
     }
   }
 }
@@ -116,9 +148,6 @@ pub(crate) struct MessageReceiver {
   pub source_timestamp: Option<Timestamp>,
 
   submessage_count: usize, // Used in tests and error messages only?
-  secure_receiver_state: Option<SecureReceiverState>,
-  #[cfg(feature = "security")]
-  secure_rtps_wrapped: Option<SecureWrapping>,
   #[cfg(feature = "security")]
   // For certain topics we have to allow unprotected rtps messages even if the domain is
   // rtps-protected
@@ -148,11 +177,7 @@ impl MessageReceiver {
       source_timestamp: None,
 
       submessage_count: 0,
-      secure_receiver_state: None,
       #[cfg(feature = "security")]
-      secure_rtps_wrapped: None,
-      #[cfg(feature = "security")]
-      // Protection on by default
       must_be_rtps_protection_special_case: true,
     }
   }
@@ -167,13 +192,6 @@ impl MessageReceiver {
     self.source_timestamp = None;
 
     self.submessage_count = 0;
-
-    self.secure_receiver_state = None; // This exists regardless of security
-
-    #[cfg(feature = "security")]
-    {
-      self.secure_rtps_wrapped = None;
-    }
   }
 
   fn clone_partial_message_receiver_state(&self) -> MessageReceiverState {
@@ -182,8 +200,6 @@ impl MessageReceiver {
       unicast_reply_locator_list: self.unicast_reply_locator_list.clone(),
       multicast_reply_locator_list: self.multicast_reply_locator_list.clone(),
       source_timestamp: self.source_timestamp,
-      #[cfg(feature = "security")]
-      secure_rtps_wrapped: self.secure_rtps_wrapped.clone(),
     }
   }
 
@@ -247,13 +263,51 @@ impl MessageReceiver {
     self.source_vendor_id = rtps_message.header.vendor_id;
 
     #[cfg(not(feature = "security"))]
-    let decoded_message = rtps_message;
+    let unprotected_submessages: Vec<UnprotectedSubmessage> = rtps_message
+      .submessages
+      .into_iter()
+      .map(UnprotectedSubmessage::from)
+      .collect();
 
     #[cfg(feature = "security")]
-    let decoded_message = match &self.security_plugins {
+    // Decode the possible RTPS and submessage level protections
+    // Note that unlike the normal processing of (unprotected) submessages,
+    // the functions called here do not alter the state of the MessageReceiver
+    let unprotected_submessages = {
+      let rtps_decoded_message = match self.decode_rtps_level_protection(rtps_message) {
+        Ok((msg, must_be_rtps_protection_special_case)) => {
+          self.must_be_rtps_protection_special_case = must_be_rtps_protection_special_case;
+          msg
+        }
+        Err(e) => {
+          warn!("Could not decode RTPS-level protection: {e}");
+          return;
+        }
+      };
+      self.decode_submessage_level_protection(rtps_decoded_message)
+    };
+
+    // Process the submessages
+    for submessage in unprotected_submessages {
+      self.handle_unprotected_submessage(submessage);
+      self.submessage_count += 1;
+    }
+  }
+
+  #[cfg(feature = "security")]
+  fn decode_rtps_level_protection(&self, rtps_message: Message) -> SecurityResult<(Message, bool)> {
+    // Decode RTPS-level protection on a message if it is protected
+
+    let dest_guid_prefix = self.own_guid_prefix;
+    let source_guid_prefix = rtps_message.header.guid_prefix;
+
+    let must_be_rtps_protection_special_case: bool;
+
+    match &self.security_plugins {
       None => {
-        self.must_be_rtps_protection_special_case = false; // No plugins, no protection
-        rtps_message
+        // No plugins, no protection
+        must_be_rtps_protection_special_case = false;
+        Ok((rtps_message, must_be_rtps_protection_special_case))
       }
 
       Some(security_plugins_handle) => {
@@ -266,35 +320,34 @@ impl MessageReceiver {
           ..
         }) = rtps_message.submessages.first()
         {
-          match security_plugins.decode_rtps_message(rtps_message, &self.source_guid_prefix) {
+          match security_plugins.decode_rtps_message(rtps_message, &source_guid_prefix) {
             Ok(DecodeOutcome::Success(message)) => {
-              self.must_be_rtps_protection_special_case = false; // Message was protected
-              message
+              must_be_rtps_protection_special_case = false; // Message was protected
+              Ok((message, must_be_rtps_protection_special_case))
             }
-            Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
-              return trace!(
-                "No matching message decode keys found for the key id {:?} for the remote \
-                 participant {:?}",
-                header_key_id,
-                self.source_guid_prefix
-              )
-            }
-            Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed) => {
-              return trace!("Failed to validate the receiver-specif MAC for the rtps message.");
-            }
+            Ok(DecodeOutcome::KeysNotFound(header_key_id)) => Err(create_security_error!(
+              "No matching message decode keys found for the key id {:?} for the remote \
+               participant {:?}",
+              header_key_id,
+              source_guid_prefix
+            )),
+            Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed) => Err(create_security_error!(
+              "Failed to validate the receiver-specif MAC for the rtps message."
+            )),
             Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(guid_prefix)) => {
-              return trace!(
+              Err(create_security_error!(
                 "No participant crypto handle found for the participant {:?} for rtps message \
                  decoding.",
                 guid_prefix
-              )
+              ))
             }
-            Err(e) => return error!("{e:?}"),
+            Err(e) => Err(create_security_error!("{e:?}")),
           }
         } else {
-          if security_plugins.rtps_not_protected(&self.dest_guid_prefix) {
-            // The domain is not rtps-protected, the additional check does not apply
-            self.must_be_rtps_protection_special_case = false;
+          // No SecureRTPSPrefix. Should there be?
+          if security_plugins.rtps_not_protected(&dest_guid_prefix) {
+            // The domain is not rtps-protected
+            must_be_rtps_protection_special_case = false;
           } else {
             // The messages in a rtps-protected domain are expected to start
             // with SecureRTPSPrefix. The only exception is if the
@@ -303,221 +356,295 @@ impl MessageReceiver {
             // DCPSParticipantStatelessMessage,
             // DCPSParticipantVolatileMessageSecure
             // (8.4.2.4, table 27).
-            self.must_be_rtps_protection_special_case = true;
+            must_be_rtps_protection_special_case = true;
           }
-          rtps_message
+          Ok((rtps_message, must_be_rtps_protection_special_case))
         }
       }
-    };
-
-    // Process the submessages
-    for submessage in decoded_message.submessages {
-      self.handle_submessage(submessage);
-      self.submessage_count += 1;
     }
   }
 
-  fn handle_submessage(&mut self, submessage: Submessage) {
-    match self.secure_receiver_state.take() {
-      // Note that .take() always resets the state to "None", so we must
-      // set it in every branch where it should remain in some other value.
-      None => {
-        // Just normal, non-security processing
+  #[cfg(feature = "security")]
+  fn decode_submessage_level_protection(
+    &self,
+    rtps_message: Message,
+  ) -> Vec<UnprotectedSubmessage> {
+    let mut source_guid_prefix = rtps_message.header.guid_prefix;
+    let mut dest_guid_prefix = self.own_guid_prefix;
+
+    let mut unprotected_submessages: Vec<UnprotectedSubmessage> = vec![];
+
+    let mut secure_receiver_state = SecureReceiverState::None;
+
+    for submessage in rtps_message.submessages.into_iter() {
+      if let SecureReceiverState::Prefix(prefix) = secure_receiver_state {
+        // If we have a SecurePrefix stored, the new submessage is always stored in
+        // secure receiving state
+        secure_receiver_state = SecureReceiverState::SecureSubmessage(prefix, submessage);
+      } else {
         match submessage.body {
-          SubmessageBody::Interpreter(m) => self.handle_interpreter_submessage(m),
-          SubmessageBody::Writer(submessage) => {
-            let security_plugins_clone = self.security_plugins.clone();
-            let receiver_entity_id = submessage.receiver_entity_id();
-
-            // For writer submessages, if the receiver entity ID is unknown, we have to try
-            // to give it to all matched readers. When security is enabled, we do this for
-            // topics that have no submessage protection
-            if receiver_entity_id == EntityId::UNKNOWN {
-              let sending_writer_entity_id = submessage.sender_entity_id();
-
-              let available_target_entity_ids: Vec<EntityId> = self
-                .available_readers
-                .values()
-                .filter(|target_reader| {
-                  // Reader must contain the writer
-                  target_reader.contains_writer(sending_writer_entity_id)
-                    // But there are two exceptions:
-                    // 1. SPDP reader must read from unknown SPDP writers
-                    //  TODO: This logic here is uglyish. Can we just inject a
-                    //  presupposed writer (proxy) to the built-in reader as it is created?
-                    || (sending_writer_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
-                      && target_reader.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_READER)
-                    // 2. ParticipantStatelessReader does not contain any writers, since it is stateless
-                    || (sending_writer_entity_id == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER
-                      && target_reader.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER)
-                })
-                .map(Reader::entity_id).collect();
-
-              match security_plugins_clone {
-                None => {
-                  for target_entity_id in available_target_entity_ids {
-                    self.handle_writer_submessage(target_entity_id, submessage.clone());
-                  }
-                }
-
-                #[cfg(not(feature = "security"))]
-                Some(_) => {}
-
-                #[cfg(feature = "security")]
-                Some(plugins_handle) => {
-                  for target_entity_id in available_target_entity_ids {
-                    let destination_guid = GUID {
-                      prefix: self.dest_guid_prefix,
-                      entity_id: target_entity_id,
-                    };
-                    if plugins_handle
-                      .get_plugins()
-                      .submessage_not_protected(&destination_guid)
-                    {
-                      self.handle_writer_submessage(target_entity_id, submessage.clone());
-                    }
-                  }
-                }
+          SubmessageBody::Interpreter(msg) => {
+            // Plain interpreter submessage. Save source/destination if present, since these
+            // affect how protected messages need to be decoded
+            match msg {
+              InterpreterSubmessage::InfoSource(info_src, _flags) => {
+                source_guid_prefix = info_src.guid_prefix;
               }
-            } else {
-              match security_plugins_clone {
-                None => self.handle_writer_submessage(receiver_entity_id, submessage),
-
-                #[cfg(not(feature = "security"))]
-                Some(_) => {}
-
-                #[cfg(feature = "security")]
-                Some(plugins_handle) => {
-                  let destination_guid = GUID {
-                    prefix: self.dest_guid_prefix,
-                    entity_id: receiver_entity_id,
-                  };
-                  if plugins_handle
-                    .get_plugins()
-                    .submessage_not_protected(&destination_guid)
-                  {
-                    self.handle_writer_submessage(receiver_entity_id, submessage);
-                  } else {
-                    error!(
-                      "No reader with unprotected submessages found for the GUID {:?}",
-                      destination_guid
-                    );
-                  }
-                }
-              }
-            }
-          }
-
-          SubmessageBody::Reader(submessage) => {
-            #[cfg(not(feature = "security"))]
-            {
-              self.handle_reader_submessage(submessage);
-            }
-            #[cfg(feature = "security")]
-            match self
-              .security_plugins
-              .as_ref()
-              .map(SecurityPluginsHandle::get_plugins)
-            {
-              None => self.handle_reader_submessage(submessage),
-              Some(plugins) => {
-                let destination_guid = GUID {
-                  prefix: self.dest_guid_prefix,
-                  entity_id: submessage.receiver_entity_id(),
-                };
-                #[cfg(feature = "security")]
-                // This match branch can only be taken with security feature
-                if plugins.submessage_not_protected(&destination_guid) {
-                  self.handle_reader_submessage(submessage);
+              InterpreterSubmessage::InfoDestination(ref info_dest, _flags) => {
+                dest_guid_prefix = if info_dest.guid_prefix != GUID::GUID_UNKNOWN.prefix {
+                  self.own_guid_prefix
                 } else {
-                  error!(
-                    "No writer with unprotected submessages found for the GUID {:?}",
-                    destination_guid
-                  );
-                }
+                  info_dest.guid_prefix
+                };
               }
+              _ => {}
             }
+            unprotected_submessages.push(UnprotectedSubmessage::Interpreter(msg));
           }
+          SubmessageBody::Writer(msg) => {
+            // Plain Writer submessage. Only readers with no submessage protection are
+            // allowed no process the message
+            unprotected_submessages.push(UnprotectedSubmessage::Writer(
+              msg,
+              AllowedEndpoints::WithNoSubmessageProtection,
+            ));
+          }
+          SubmessageBody::Reader(msg) => {
+            // Plain Reader submessage. Only writers with no submessage protection are
+            // allowed no process the message
+            unprotected_submessages.push(UnprotectedSubmessage::Reader(
+              msg,
+              AllowedEndpoints::WithNoSubmessageProtection,
+            ));
+          }
+          SubmessageBody::Security(ref sec_submsg) => {
+            // Security submessage
+            // Check if we have security enabled
+            let sec_plugins_handle = match self.security_plugins.as_ref() {
+              Some(handle) => handle,
+              None => {
+                warn!(
+                  "Received a Secure submessage, but Security hasn't been enabled. Discarding the \
+                   submessage."
+                );
+                continue;
+              }
+            };
 
-          #[cfg(feature = "security")]
-          SubmessageBody::Security(m) => {
-            if self.dest_guid_prefix != self.own_guid_prefix
-              && self.dest_guid_prefix != GuidPrefix::UNKNOWN
+            // Check if this could be meant for us
+            if !(dest_guid_prefix == self.own_guid_prefix
+              || dest_guid_prefix == GuidPrefix::UNKNOWN)
             {
               trace!(
-                "Message is not for this participant. Dropping. dest_guid_prefix={:?} participant \
-                 guid={:?}",
-                self.dest_guid_prefix,
+                "Secure submessage is not for this participant. Dropping. dest_guid_prefix={:?} \
+                 participant guid={:?}",
+                dest_guid_prefix,
                 self.own_guid_prefix
               );
-            } else {
-              match m {
-                SecuritySubmessage::SecureBody(_sec_body, _sec_body_flags) => {
-                  warn!("SecureBody submessage without SecurePrefix. Discarding.");
-                }
-                SecuritySubmessage::SecurePrefix(sec_prefix, _) => {
-                  // just store secure prefix
-                  self.secure_receiver_state = Some(SecureReceiverState::Prefix(sec_prefix));
-                }
-                SecuritySubmessage::SecurePostfix(_sec_postfix, _sec_postfix_flags) => {
-                  warn!("SecurePostfix submessage out of sequence. Discarding.");
-                }
-                SecuritySubmessage::SecureRTPSPrefix(..) => {
-                  // DDS Security spec Section "7.3.6.6.3 Validity" requires that this is the
-                  // first submessage in a message, in which case it has been taken care of by
-                  // decode_rtps_message
-                  warn!(
-                    "SecureRTPSPrefix is only allowed at the start of the message, now received \
-                     at count={}.",
-                    self.submessage_count
-                  );
-                }
-                SecuritySubmessage::SecureRTPSPostfix(
-                  _sec_rtps_postfix,
-                  _sec_rtps_postfix_flags,
-                ) => {
-                  warn!("SecureRTPSPostfix submessage out of sequence. Discarding.");
-                }
-              } // match
-            } // if
-          }
-        } // match submessage kind
-      } // state None
+              continue;
+            }
 
-      #[cfg(not(feature = "security"))]
-      Some(_) => {}
-      // No security feature => secure_receiver_state is always None.
-      #[cfg(feature = "security")]
-      Some(SecureReceiverState::Prefix(sec_prefix)) => {
-        self.secure_receiver_state = Some(SecureReceiverState::SecureSubmessage(
-          sec_prefix, submessage,
-        ));
-      } // state Prefix
+            // Security submessages should arrive in a (prefix, submsg, postfix) sequence.
+            // The variable secure_receiver_state holds the receiving state.
+            match sec_submsg {
+              SecuritySubmessage::SecurePrefix(prefix, _prefix_flags) => {
+                // Received a SecurePrefix. This should start a new (prefix, submsg, postfix)
+                // sequence.
+                match secure_receiver_state {
+                  SecureReceiverState::None => {
+                    secure_receiver_state = SecureReceiverState::Prefix(prefix.clone());
+                  }
+                  SecureReceiverState::Prefix(_existing_prefix) => {
+                    warn!(
+                      "Received another SecurePrefix while one was already in store. Discarding \
+                       the first one."
+                    );
+                    secure_receiver_state = SecureReceiverState::Prefix(prefix.clone());
+                  }
+                  SecureReceiverState::SecureSubmessage(_prefix, _submsg) => {
+                    warn!(
+                      "Received SecurePrefix while waiting for SecurePostfix. Keeping only the \
+                       new prefix."
+                    );
+                    secure_receiver_state = SecureReceiverState::Prefix(prefix.clone());
+                  }
+                }
+              }
+              SecuritySubmessage::SecureBody(_body, _body_flags) => {
+                // Received a SecureBody. We should have received a SecurePrefix just before
+                // this.
+                match secure_receiver_state {
+                  SecureReceiverState::None => {
+                    warn!("Received a SecureBody without a preceding SecurePrefix. Discarding.");
+                  }
+                  SecureReceiverState::Prefix(prefix) => {
+                    secure_receiver_state =
+                      SecureReceiverState::SecureSubmessage(prefix, submessage);
+                  }
+                  SecureReceiverState::SecureSubmessage(_prefix, _submsg) => {
+                    warn!(
+                      "Received a SecureBody while waiting for a SecurePostfix. Discarding the \
+                       secure submessages"
+                    );
+                    secure_receiver_state = SecureReceiverState::None;
+                  }
+                }
+              }
+              SecuritySubmessage::SecurePostfix(postfix, _postfix_flags) => {
+                // Received a SecurePostfix. We should have received a SecurePrefix & submsg
+                // just before this.
+                match secure_receiver_state {
+                  SecureReceiverState::None => {
+                    warn!(
+                      "Received a SecurePostfix without preceding SecurePrefix & submsg. \
+                       Discarding."
+                    );
+                  }
+                  SecureReceiverState::Prefix(_prefix) => {
+                    warn!("Received a SecurePostfix while waiting a submsg. Discarding.");
+                    secure_receiver_state = SecureReceiverState::None;
+                  }
+                  SecureReceiverState::SecureSubmessage(prefix, submsg) => {
+                    // Now we have the full (prefix, submsg, postfix) sequence.
+                    // Attempt to decode it.
+                    let decode_result = sec_plugins_handle
+                      .get_plugins()
+                      .decode_submessage((prefix, submsg, postfix.clone()), &source_guid_prefix);
 
-      #[cfg(feature = "security")]
-      Some(SecureReceiverState::SecureSubmessage(sec_prefix, sec_submessage)) => {
-        // Secure prefix and a single other submessage received.
-        // Now expecting postfix, and only that.
-        match submessage.body {
-          SubmessageBody::Security(SecuritySubmessage::SecurePostfix(sec_postfix, _)) => {
-            self.handle_secure_submessage(&sec_prefix, &sec_submessage, &sec_postfix);
-          }
-          other => {
-            warn!(
-              "Expected SecurePostfix submessage after SecurePrefix and payload submessage. \
-               Discarding."
-            );
-            debug!("Unexpected submessage instead: {other:?}");
+                    // Reset secure receiving state
+                    secure_receiver_state = SecureReceiverState::None;
+
+                    match decode_result {
+                      Err(e) => {
+                        warn!(
+                          "Decoding a secure submessage from participant {source_guid_prefix:?} \
+                           failed: {e:?}"
+                        );
+                      }
+                      Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
+                        warn!(
+                          "No matching submessage decode keys found for the key id {:?} for the \
+                           remote participant {:?}",
+                          header_key_id, source_guid_prefix
+                        );
+                      }
+                      Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed) => {
+                        warn!(
+                          "No endpoints passed the receiver-specific MAC validation for the \
+                           submessage. Remote participant: {source_guid_prefix:?}"
+                        );
+                      }
+                      Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(guid_prefix)) => {
+                        warn!(
+                          "No participant crypto handle found for the participant {:?} for \
+                           submessage decoding.",
+                          guid_prefix
+                        );
+                      }
+                      Ok(DecodeOutcome::Success(decoded_msg)) => {
+                        // Decoding successful
+                        if let DecodedSubmessage::Interpreter(interpreter_submsg) = &decoded_msg {
+                          // Decoded an interpreter submessage. Save source/destination if
+                          // present, since these affect how protected
+                          // messages need to be decoded
+                          match interpreter_submsg {
+                            InterpreterSubmessage::InfoSource(info_src, _flags) => {
+                              source_guid_prefix = info_src.guid_prefix;
+                            }
+                            InterpreterSubmessage::InfoDestination(info_dest, _flags) => {
+                              dest_guid_prefix =
+                                if info_dest.guid_prefix != GUID::GUID_UNKNOWN.prefix {
+                                  self.own_guid_prefix
+                                } else {
+                                  info_dest.guid_prefix
+                                };
+                            }
+                            _ => {}
+                          }
+                        }
+                        unprotected_submessages.push(UnprotectedSubmessage::from(decoded_msg));
+                      }
+                    } // decode_result
+                  }
+                }
+              }
+              SecuritySubmessage::SecureRTPSPrefix(..)
+              | SecuritySubmessage::SecureRTPSPostfix(..) => {
+                // SecureRTPSPrefix and SecureRTPSPostfix should have been removed when decoding
+                // RTPS-level protection
+                warn!("Unexpected SecureRTPSPrefix/SecureRTPSPostfix submessage. Discarding.");
+              }
+            } // match sec_submsg
           }
         }
-      } // state SecureSubmessage
-    } // match secure_submessage_state
-  } // fn
+      }
+    }
+    unprotected_submessages
+  }
+
+  fn handle_unprotected_submessage(&mut self, submessage: UnprotectedSubmessage) {
+    match submessage {
+      UnprotectedSubmessage::Interpreter(submsg) => {
+        self.handle_interpreter_submessage(submsg);
+      }
+      UnprotectedSubmessage::Writer(writer_submsg, allowed_endpoints) => {
+        let receiver_entity_id = writer_submsg.receiver_entity_id();
+
+        let potential_reader_entity_ids = match receiver_entity_id {
+          EntityId::UNKNOWN => {
+            // We have to find which local readers are matched to this writer
+            let sending_writer_entity_id = writer_submsg.sender_entity_id();
+            self
+            .available_readers
+            .values()
+            .filter(|target_reader| {
+              // Reader must contain the writer
+              target_reader.contains_writer(sending_writer_entity_id)
+                // But there are two exceptions:
+                // 1. SPDP reader must read from unknown SPDP writers
+                //  TODO: This logic here is uglyish. Can we just inject a
+                //  presupposed writer (proxy) to the built-in reader as it is created?
+                || (sending_writer_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
+                  && target_reader.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_READER)
+                // 2. ParticipantStatelessReader does not contain any writers, since it is stateless
+                || (sending_writer_entity_id == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER
+                  && target_reader.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER)
+            })
+            .map(Reader::entity_id).collect()
+          }
+          other => vec![other],
+        };
+
+        match potential_reader_entity_ids.as_slice() {
+          &[reader_entity_id] => {
+            // Just one reader, avoid cloning the writer submessage
+            self.handle_writer_submessage(reader_entity_id, writer_submsg, &allowed_endpoints);
+          }
+          _ => {
+            // Could be multiple readers. Clone the submessage for each one
+            for reader_entity_id in potential_reader_entity_ids {
+              self.handle_writer_submessage(
+                reader_entity_id,
+                writer_submsg.clone(),
+                &allowed_endpoints,
+              );
+            }
+          }
+        }
+      }
+      UnprotectedSubmessage::Reader(submsg, allowed_endpoints) => {
+        self.handle_reader_submessage(submsg, &allowed_endpoints);
+      }
+    }
+  }
 
   fn handle_writer_submessage(
     &mut self,
     target_reader_entity_id: EntityId,
     submessage: WriterSubmessage,
+    // The use of conditional compilation here is clumsy. How to do it better?
+    #[cfg(not(feature = "security"))] _allowed_target_readers: &AllowedEndpoints,
+    #[cfg(feature = "security")] allowed_target_readers: &AllowedEndpoints,
   ) {
     if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
     {
@@ -529,21 +656,63 @@ impl MessageReceiver {
       return;
     }
 
+    // Check can we give the submessage to the reader, security-wise
+    #[cfg(not(feature = "security"))]
+    let allowed_for_this_reader = true;
+
     #[cfg(feature = "security")]
-    if self.must_be_rtps_protection_special_case {
-      match target_reader_entity_id {
-        // These submessages are the special case
-        EntityId::SPDP_BUILTIN_PARTICIPANT_READER
-        | EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER
-        | EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER => (),
-        // Otherwise we have to reject
-        other => {
-          return error!(
-            "Received an unprotected message containing a writer submessage for the reader \
-             {other:?} in an rtps-protected domain."
-          )
+    let allowed_for_this_reader = {
+      // Check that both RTPS protection and submessage protection are OK
+
+      let rtps_protection_ok = if self.must_be_rtps_protection_special_case {
+        // RTPS protection is enabled, but the WriterSubmessage is from a non-protected
+        // RTPS message. The reader needs to be one of those built-in readers
+        // that are allowed accept data from non-protected RTPS messages.
+        [
+          EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
+          EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER,
+          EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_READER,
+        ]
+        .contains(&target_reader_entity_id)
+      } else {
+        true
+      };
+
+      let reader_guid =
+        GUID::new_with_prefix_and_id(self.dest_guid_prefix, target_reader_entity_id);
+
+      let submessage_protection_ok = match allowed_target_readers {
+        AllowedEndpoints::WithNoSubmessageProtection => {
+          match self.security_plugins.as_ref() {
+            None => true, // Security not enabled, always allow
+            Some(plugins_handle) => {
+              // The reader's topic cannot be submessage-protected
+              plugins_handle
+                .get_plugins()
+                .submessage_not_protected(&reader_guid)
+            }
+          }
         }
-      }
+        AllowedEndpoints::WithCryptoHandles(handles) => {
+          // Verify that one of the crypto handles is the reader's
+          match self.security_plugins.as_ref() {
+            None => false, // Should not be possible
+            Some(plugins_handle) => plugins_handle
+              .get_plugins()
+              .confirm_local_endpoint_guid(handles, &reader_guid),
+          }
+        }
+      };
+
+      rtps_protection_ok && submessage_protection_ok
+    };
+
+    if !allowed_for_this_reader {
+      warn!(
+        "Cannot give a WriterSubmessage to reader with id {:?} because of security concerns",
+        target_reader_entity_id
+      );
+      return;
     }
 
     let mr_state = self.clone_partial_message_receiver_state();
@@ -777,7 +946,13 @@ impl MessageReceiver {
     });
   }
 
-  fn handle_reader_submessage(&self, submessage: ReaderSubmessage) {
+  fn handle_reader_submessage(
+    &self,
+    submessage: ReaderSubmessage,
+    // The use of conditional compilation here is clumsy. How to do it better?
+    #[cfg(not(feature = "security"))] _allowed_target_writers: &AllowedEndpoints,
+    #[cfg(feature = "security")] allowed_target_writers: &AllowedEndpoints,
+  ) {
     if self.dest_guid_prefix != self.own_guid_prefix && self.dest_guid_prefix != GuidPrefix::UNKNOWN
     {
       debug!(
@@ -788,21 +963,63 @@ impl MessageReceiver {
       return;
     }
 
+    let writer_guid =
+      GUID::new_with_prefix_and_id(self.dest_guid_prefix, submessage.receiver_entity_id());
+
+    // Check can we are allowed to process this message, security-wise
+    #[cfg(not(feature = "security"))]
+    let allowed_to_process = true;
+
     #[cfg(feature = "security")]
-    if self.must_be_rtps_protection_special_case {
-      match submessage.receiver_entity_id() {
-        // These submessages are the special case
-        EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
-        | EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER
-        | EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER => (),
-        // Otherwise we have to reject
-        other => {
-          return error!(
-            "Received an unprotected message containing a reader submessage for the writer \
-             {other:?} in an rtps-protected domain."
-          )
+    let allowed_to_process = {
+      // Check that both RTPS protection and submessage protection are OK
+
+      let rtps_protection_ok = if self.must_be_rtps_protection_special_case {
+        // RTPS protection is enabled, but the ReaderSubmessage is from a non-protected
+        // RTPS message. The writer needs to be one of those built-in writers
+        // that are allowed accept data from non-protected RTPS messages.
+        [
+          EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
+          EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER,
+          EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER,
+        ]
+        .contains(&writer_guid.entity_id)
+      } else {
+        true
+      };
+
+      let submessage_protection_ok = match allowed_target_writers {
+        AllowedEndpoints::WithNoSubmessageProtection => {
+          match self.security_plugins.as_ref() {
+            None => true, // Security not enabled, always allow
+            Some(plugins_handle) => {
+              // The writer's topic cannot be submessage-protected
+              plugins_handle
+                .get_plugins()
+                .submessage_not_protected(&writer_guid)
+            }
+          }
         }
-      }
+        AllowedEndpoints::WithCryptoHandles(handles) => {
+          // Verify that one of the crypto handles is the writer's
+          match self.security_plugins.as_ref() {
+            None => false, // Should not be possible
+            Some(plugins_handle) => plugins_handle
+              .get_plugins()
+              .confirm_local_endpoint_guid(handles, &writer_guid),
+          }
+        }
+      };
+
+      rtps_protection_ok && submessage_protection_ok
+    };
+
+    if !allowed_to_process {
+      warn!(
+        "Cannot process a ReaderSubmessage sent to {:?} because of security concerns",
+        writer_guid
+      );
+      return;
     }
 
     match submessage {
@@ -825,135 +1042,6 @@ impl MessageReceiver {
         // TODO: Implement NackFrag handling
       }
     }
-  }
-
-  #[cfg(feature = "security")]
-  fn handle_secure_submessage(
-    &mut self,
-    sec_prefix: &SecurePrefix,
-    encoded_submessage: &Submessage,
-    sec_postfix: &SecurePostfix,
-  ) {
-    let security_plugins = self.security_plugins.clone();
-    match security_plugins {
-      None => {
-        warn!("Cannot handle secure submessage: No security plugins configured.");
-      }
-      Some(ref security_plugins_handle) => {
-        // Call 8.5.1.9.6 Operation: preprocess_secure_submsg to determine what
-        // the submessage contains and then proceed to decode and process accordingly.
-
-        let decode_result = security_plugins_handle.get_plugins().decode_submessage(
-          (
-            sec_prefix.clone(),
-            encoded_submessage.clone(),
-            sec_postfix.clone(),
-          ),
-          &self.source_guid_prefix,
-        );
-        match decode_result {
-          Err(e) => {
-            error!("Submessage decoding failed: {e:?}");
-          }
-          Ok(DecodeOutcome::Success(DecodedSubmessage::Writer(
-            decoded_writer_submessage,
-            approved_receiving_datareader_crypto_handles,
-          ))) => {
-            let receiver_entity_id = decoded_writer_submessage.receiver_entity_id();
-
-            // If the receiver entity ID is unknown, we try to find the correct id based on
-            // whether it matches the crypto handle
-            if receiver_entity_id == EntityId::UNKNOWN {
-              let sending_writer_entity_id = decoded_writer_submessage.sender_entity_id();
-
-              if let Some(target_reader)=self.available_readers.values().find(|target_reader| {
-                (
-                // Reader must contain the writer
-                target_reader.contains_writer(sending_writer_entity_id)
-                    // But there are two exceptions:
-                    // 1. SPDP reader must read from unknown SPDP writers
-                    //  TODO: This logic here is uglyish. Can we just inject a
-                    //  presupposed writer (proxy) to the built-in reader as it is created?
-                    || (sending_writer_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER
-                      && target_reader.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_READER)
-                    // 2. ParticipantStatelessReader does not contain any writers, since it is stateless
-                    || (sending_writer_entity_id == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_WRITER
-                      && target_reader.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_STATELESS_READER)
-                    )
-                    &&
-                    security_plugins_handle.get_plugins()
-                    .confirm_local_endpoint_guid(&approved_receiving_datareader_crypto_handles,
-                      &GUID { prefix: self.dest_guid_prefix,entity_id: target_reader.entity_id() })
-              }){
-                self.handle_writer_submessage(target_reader.entity_id(), decoded_writer_submessage);
-              }else{
-                error!("No reader matching the CryptoHandle found");
-              }
-            } else {
-              let receiver_guid = GUID {
-                prefix: self.dest_guid_prefix,
-                entity_id: receiver_entity_id,
-              };
-              if security_plugins_handle
-                .get_plugins()
-                .confirm_local_endpoint_guid(
-                  &approved_receiving_datareader_crypto_handles,
-                  &receiver_guid,
-                )
-              {
-                self.handle_writer_submessage(receiver_entity_id, decoded_writer_submessage);
-              } else {
-                error!("Destination GUID did not match the handle used for decoding.");
-              }
-            }
-          }
-          Ok(DecodeOutcome::Success(DecodedSubmessage::Reader(
-            decoded_reader_submessage,
-            approved_receiving_datawriter_crypto_handles,
-          ))) => {
-            let receiver_entity_id = decoded_reader_submessage.receiver_entity_id();
-            let receiver_guid = GUID {
-              prefix: self.dest_guid_prefix,
-              entity_id: receiver_entity_id,
-            };
-            if security_plugins_handle
-              .get_plugins()
-              .confirm_local_endpoint_guid(
-                &approved_receiving_datawriter_crypto_handles,
-                &receiver_guid,
-              )
-            {
-              self.handle_reader_submessage(decoded_reader_submessage);
-            } else {
-              error!("Destination GUID did not match the handle used for decoding.");
-            }
-          }
-          Ok(DecodeOutcome::Success(DecodedSubmessage::Interpreter(interpreter_submessage))) => {
-            // This is not defined in the specification, but we accept for compatibility, as
-            // we would also accept unprotected ones.
-            self.handle_interpreter_submessage(interpreter_submessage);
-          }
-          Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
-            trace!(
-              "No matching submessage decode keys found for the key id {:?} for the remote \
-               participant {:?}",
-              header_key_id,
-              self.source_guid_prefix
-            );
-          }
-          Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed) => {
-            trace!("No endpoints passed the receiver-specific MAC validation for the submessage.");
-          }
-          Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(guid_prefix)) => {
-            trace!(
-              "No participant crypto handle found for the participant {:?} for submessage \
-               decoding.",
-              guid_prefix
-            );
-          }
-        }
-      }
-    };
   }
 
   fn handle_interpreter_submessage(&mut self, interpreter_submessage: InterpreterSubmessage)

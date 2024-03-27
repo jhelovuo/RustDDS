@@ -109,6 +109,14 @@ impl From<cryptoki::error::Error> for SecurityError {
 
 #[doc(hidden)]
 #[macro_export]
+macro_rules! create_security_error {
+  ($($arg:tt)*) => (
+      {
+        SecurityError{ msg: format!($($arg)*) }
+      }
+    )
+}
+#[macro_export]
 macro_rules! create_security_error_and_log {
   ($($arg:tt)*) => (
       { log::error!($($arg)*);  // Note: this needs to be security-specific logging
