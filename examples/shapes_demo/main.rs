@@ -17,8 +17,8 @@ use log4rs::{
   Config,
 };
 use rustdds::{
-  with_key::Sample, DomainParticipantBuilder, Keyed, QosPolicyBuilder, StatusEvented,
-  TopicDescription, TopicKind, dds::statusevents
+  dds::statusevents, with_key::Sample, DomainParticipantBuilder, Keyed, QosPolicyBuilder,
+  StatusEvented, TopicDescription, TopicKind,
 };
 use rustdds::policy::{Deadline, Durability, History, Reliability}; /* import all QoS
                                                                      * policies directly */
@@ -68,7 +68,7 @@ fn main() {
     .get_one::<String>("color")
     .cloned()
     .unwrap_or("BLUE".to_owned());
-  let is_auto_test = std::env::var("auto_test").is_ok(); 
+  let is_auto_test = std::env::var("auto_test").is_ok();
 
   // Build the DomainParticipant
   let dp_builder = DomainParticipantBuilder::new(*domain_id);
@@ -186,7 +186,6 @@ fn main() {
       topic.get_type().name()
     );
   }
-
 
   // Set Ctrl-C handler
   let (stop_sender, stop_receiver) = channel::channel();
@@ -316,16 +315,20 @@ fn main() {
           Some(ref mut reader) => {
             while let Some(status) = reader.try_recv_status() {
               if is_auto_test {
-                match status { // These prints make dds-rtps automation tests happy
-                  statusevents::DataReaderStatus::SubscriptionMatched {..} => 
-                    println!("on_subscription_matched()"),
-                  statusevents::DataReaderStatus::LivelinessChanged {..} => 
-                    println!("on_liveliness_changed()"),
-                  statusevents::DataReaderStatus::RequestedDeadlineMissed {..} => 
-                    println!("on_requested_deadline_missed()"),
-                  statusevents::DataReaderStatus::RequestedIncompatibleQos {..} => 
-                    println!("on_requested_incompatible_qos()"),
-                  statusevents::DataReaderStatus::SampleLost {..} => {},
+                match status {
+                  // These prints make dds-rtps automation tests happy
+                  statusevents::DataReaderStatus::SubscriptionMatched { .. } => {
+                    println!("on_subscription_matched()");
+                  }
+                  statusevents::DataReaderStatus::LivelinessChanged { .. } => {
+                    println!("on_liveliness_changed()");
+                  }
+                  statusevents::DataReaderStatus::RequestedDeadlineMissed { .. } => {
+                    println!("on_requested_deadline_missed()");
+                  }
+                  statusevents::DataReaderStatus::RequestedIncompatibleQos { .. } => {
+                    println!("on_requested_incompatible_qos()");
+                  }
                   _ => {}
                 }
               } else {
@@ -342,15 +345,20 @@ fn main() {
           Some(ref mut writer) => {
             while let Some(status) = writer.try_recv_status() {
               if is_auto_test {
-                match status { // These prints make dds-rtps automation tests happy
-                  statusevents::DataWriterStatus::LivelinessLost {..} => 
-                  println!("on_liveliness_lost()"),
-                  statusevents::DataWriterStatus::OfferedDeadlineMissed {..} => 
-                  println!("on_offered_deadline_missed()"),
-                  statusevents::DataWriterStatus::OfferedIncompatibleQos {..} => 
-                  println!("on_offered_incompatible_qos()"),
-                  statusevents::DataWriterStatus::PublicationMatched {..} => 
-                  println!("on_publication_matched()"),
+                match status {
+                  // These prints make dds-rtps automation tests happy
+                  statusevents::DataWriterStatus::LivelinessLost { .. } => {
+                    println!("on_liveliness_lost()");
+                  }
+                  statusevents::DataWriterStatus::OfferedDeadlineMissed { .. } => {
+                    println!("on_offered_deadline_missed()");
+                  }
+                  statusevents::DataWriterStatus::OfferedIncompatibleQos { .. } => {
+                    println!("on_offered_incompatible_qos()");
+                  }
+                  statusevents::DataWriterStatus::PublicationMatched { .. } => {
+                    println!("on_publication_matched()");
+                  }
                 }
               } else {
                 println!("DataWriter status: {status:?}");
@@ -547,9 +555,7 @@ fn get_matches() -> ArgMatches {
     )
     .arg(
       Arg::new("representation")
-        .help(
-          "Data representation type [1: XCDR, 2: XCDR2]",
-        )
+        .help("Data representation type [1: XCDR, 2: XCDR2]")
         .value_parser(["1", "2"])
         .short('x')
         .value_name("representation"),
