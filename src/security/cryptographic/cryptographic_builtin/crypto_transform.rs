@@ -4,7 +4,7 @@ use speedy::{Readable, Writable};
 use log::{debug, warn};
 
 use crate::{
-  create_security_error,
+  create_security_error_and_log,
   messages::submessages::{
     elements::{
       crypto_content::CryptoContent, crypto_footer::CryptoFooter, crypto_header::CryptoHeader,
@@ -41,7 +41,7 @@ impl CryptographicBuiltin {
     // TODO: Do we respect RTPS endianness here? I.e. used and flagged encodings
     // match?
     let plaintext = plain_rtps_submessage.write_to_vec().map_err(|err| {
-      create_security_error!("Error converting Submessage to byte vector: {}", err)
+      create_security_error_and_log!("Error converting Submessage to byte vector: {}", err)
     })?;
 
     // Get the key material for encoding
@@ -156,7 +156,10 @@ impl CryptoTransform for CryptographicBuiltin {
           CryptoContent { data: ciphertext }
             .write_to_vec()
             .map_err(|err| {
-              create_security_error!("Error converting CryptoContent to byte vector: {}", err)
+              create_security_error_and_log!(
+                "Error converting CryptoContent to byte vector: {}",
+                err
+              )
             })?,
           BuiltinCryptoFooter::only_common_mac(mac),
         )
@@ -164,7 +167,7 @@ impl CryptoTransform for CryptographicBuiltin {
     };
 
     let header_vec = CryptoHeader::from(header).write_to_vec().map_err(|err| {
-      create_security_error!("Error converting CryptoHeader to byte vector: {}", err)
+      create_security_error_and_log!("Error converting CryptoHeader to byte vector: {}", err)
     })?;
     let footer_vec = Vec::<u8>::try_from(footer)?;
     Ok((
@@ -225,7 +228,7 @@ impl CryptoTransform for CryptographicBuiltin {
         .iter()
         .map(|submessage| {
           submessage.write_to_vec().map_err(|err| {
-            create_security_error!("Error converting Submessage to byte vector: {}", err)
+            create_security_error_and_log!("Error converting Submessage to byte vector: {}", err)
           })
         }),
     )? // Deal with errors
@@ -248,7 +251,7 @@ impl CryptoTransform for CryptographicBuiltin {
     // Compute encoded submessages and footer
     let (encoded_submessages, crypto_footer) = match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        return Err(create_security_error!(
+        return Err(create_security_error_and_log!(
           "encode_rtps_message called when transformation kind is NONE."
         ));
       }
@@ -351,14 +354,14 @@ impl CryptoTransform for CryptographicBuiltin {
 
       // Check that the key id matches the header
       if transformation_key_id != decode_key_material.key_id {
-        Err(create_security_error!(
+        Err(create_security_error_and_log!(
           "The key IDs don't match. The key material has sender_key_id {}, while the header has \
            transformation_key_id {}",
           decode_key_material.key_id,
           transformation_key_id
         ))?;
       } else if header_transformation_kind != decode_key_material.transformation_kind {
-        Err(create_security_error!(
+        Err(create_security_error_and_log!(
           "The transformation_kind don't match. The key material has {:?}, while the header has \
            {:?}",
           decode_key_material.transformation_kind,
@@ -380,7 +383,7 @@ impl CryptoTransform for CryptographicBuiltin {
           {
             Ok((Vec::from(submessages), *info_source))
           } else {
-            Err(create_security_error!("Expected the first submessage to be InfoSource."))
+            Err(create_security_error_and_log!("Expected the first submessage to be InfoSource."))
           }
         }
         BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GMAC
@@ -408,7 +411,7 @@ impl CryptoTransform for CryptographicBuiltin {
               // If the MACs are ok, return content. 
               .map( |_| (Vec::from(submessages), *info_source))
           } else {
-            Err(create_security_error!("Expected the first submessage to be InfoSource."))
+            Err(create_security_error_and_log!("Expected the first submessage to be InfoSource."))
           }
         }
         BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
@@ -432,17 +435,17 @@ impl CryptoTransform for CryptographicBuiltin {
               if let Some(Submessage {body: SubmessageBody::Interpreter(
                     InterpreterSubmessage::InfoSource(info_source, _)), .. })
                   = Submessage::read_from_buffer(&mut plaintext)
-                      .map_err(|e| create_security_error!("Failed to deserialize the plaintext: {e}"))?
+                      .map_err(|e| create_security_error_and_log!("Failed to deserialize the plaintext: {e}"))?
               {
                 info_source
               } else {
-                Err(create_security_error!("Expected the first decrypted submessage to be InfoSource."))?
+                Err(create_security_error_and_log!("Expected the first decrypted submessage to be InfoSource."))?
               };
 
             let mut submessages = Vec::<Submessage>::new();
             while !plaintext.is_empty() {
               if let Some(submessage) = Submessage::read_from_buffer(&mut plaintext)
-                .map_err(|e| create_security_error!("Failed to deserialize the plaintext: {e}"))?
+                .map_err(|e| create_security_error_and_log!("Failed to deserialize the plaintext: {e}"))?
               {
                 submessages.push(submessage);
               }
@@ -450,7 +453,7 @@ impl CryptoTransform for CryptographicBuiltin {
 
             Ok((submessages, info_source))
           } else {
-            Err(create_security_error!("Expected only a SecureBody submessage."))
+            Err(create_security_error_and_log!("Expected only a SecureBody submessage."))
           }
         }
       }
@@ -458,13 +461,13 @@ impl CryptoTransform for CryptographicBuiltin {
         if InfoSource::from(rtps_header) == info_source {
           Ok(DecodeOutcome::Success(Message { header: rtps_header, submessages }))
         } else {
-          Err(create_security_error!(
+          Err(create_security_error_and_log!(
             "The RTPS header did not match the encoded InfoSource: {:?} expected to match {:?}",
             info_source, rtps_header))
         }
       })
     } else {
-      Err(create_security_error!(
+      Err(create_security_error_and_log!(
         "Expected the first submessage to be SecureRTPSPrefix and the last SecureRTPSPostfix"
       ))
     }
@@ -499,7 +502,7 @@ impl CryptoTransform for CryptographicBuiltin {
       .participant_to_endpoint_info
       .get(&sending_remote_participant_crypto_handle)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find registered entities for the sending_remote_participant_crypto_handle {}",
           sending_remote_participant_crypto_handle
         )
@@ -534,7 +537,7 @@ impl CryptoTransform for CryptographicBuiltin {
           if transformation_kind.eq(&header_transformation_kind) {
             Ok(session_key)
           } else {
-            Err(create_security_error!(
+            Err(create_security_error_and_log!(
               "Transformation kind of the submessage header does not match the key: expected \
                {:?}, received {:?}.",
               transformation_kind,
@@ -550,7 +553,7 @@ impl CryptoTransform for CryptographicBuiltin {
             if acc_session_key.eq(current_session_key) {
               Ok(acc_session_key)
             } else {
-              Err(create_security_error!(
+              Err(create_security_error_and_log!(
                 "Multiple different matching decode keys found for the key id {:?} for the remote \
                  participant {}",
                 header_key_id,
@@ -605,7 +608,9 @@ impl CryptoTransform for CryptographicBuiltin {
 
           (encoded_submessage.body, sending_endpoint_infos)
         } else {
-          Err(create_security_error!("Submessage bytes are missing."))?
+          Err(create_security_error_and_log!(
+            "Submessage bytes are missing."
+          ))?
         }
       }
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_AES128_GCM
@@ -645,18 +650,19 @@ impl CryptoTransform for CryptographicBuiltin {
           )?);
 
           // Deserialize (submessage deserialization is a bit funky atm)
-          let decoded_submessage = match Submessage::read_from_buffer(&mut plaintext)
-            .map_err(|e| create_security_error!("Failed to deserialize the plaintext: {}", e))?
-          {
-            Some(Submessage { body, .. }) => body,
-            None => Err(create_security_error!(
-              "Failed to deserialize the plaintext into a submessage. It could have been PAD or \
-               vendor-specific or otherwise unrecognized submessage kind."
-            ))?,
-          };
+          let decoded_submessage =
+            match Submessage::read_from_buffer(&mut plaintext).map_err(|e| {
+              create_security_error_and_log!("Failed to deserialize the plaintext: {}", e)
+            })? {
+              Some(Submessage { body, .. }) => body,
+              None => Err(create_security_error_and_log!(
+                "Failed to deserialize the plaintext into a submessage. It could have been PAD or \
+                 vendor-specific or otherwise unrecognized submessage kind."
+              ))?,
+            };
           (decoded_submessage, sending_endpoint_infos)
         } else {
-          Err(create_security_error!(
+          Err(create_security_error_and_log!(
             "When transformation kind is GCM, decode_datawriter_submessage expects a SecureBody, \
              received {:?}",
             encoded_submessage.header.kind
@@ -679,7 +685,7 @@ impl CryptoTransform for CryptographicBuiltin {
                   .get(remote_endpoint_crypto_handle)
                   .copied()
                   .ok_or_else(|| {
-                    create_security_error!(
+                    create_security_error_and_log!(
                       "The local reader matched to the remote writer crypto handle {} is missing.",
                       remote_endpoint_crypto_handle
                     )
@@ -712,7 +718,7 @@ impl CryptoTransform for CryptographicBuiltin {
                   .get(remote_endpoint_crypto_handle)
                   .copied()
                   .ok_or_else(|| {
-                    create_security_error!(
+                    create_security_error_and_log!(
                       "The local writer matched to the remote reader crypto handle {} is missing.",
                       remote_endpoint_crypto_handle
                     )
@@ -743,7 +749,7 @@ impl CryptoTransform for CryptographicBuiltin {
           interpreter_submessage,
         )))
       }
-      SubmessageBody::Security(_) => Err(create_security_error!(
+      SubmessageBody::Security(_) => Err(create_security_error_and_log!(
         "Security submessage after successful submessage decryption."
       )),
     }
@@ -809,7 +815,7 @@ impl CryptoTransform for CryptographicBuiltin {
 
     // Check that the transformation kind stays consistent
     if decode_key_material.transformation_kind != transformation_kind {
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "Mismatched transformation kinds: the decoded CryptoHeader has {:?}, but the key material \
          associated with the sending datawriter {} has {:?}.",
         transformation_kind,
@@ -822,7 +828,7 @@ impl CryptoTransform for CryptographicBuiltin {
 
     match transformation_kind {
       BuiltinCryptoTransformationKind::CRYPTO_TRANSFORMATION_KIND_NONE => {
-        Err(create_security_error!(
+        Err(create_security_error_and_log!(
           "Transformation kind NONE found in decode_serialized_payload. If the transformation \
            kind is NONE, this method should not have been called."
         ))

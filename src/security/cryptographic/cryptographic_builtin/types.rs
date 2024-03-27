@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use speedy::Readable;
 
 use crate::{
-  create_security_error,
+  create_security_error_and_log,
   messages::submessages::elements::{
     //crypto_content::CryptoContent,
     crypto_footer::CryptoFooter,
@@ -279,7 +279,7 @@ impl TryFrom<PluginCryptoHeaderExtra> for BuiltinCryptoHeaderExtra {
     // Convert to fixed-length array
     BuiltinInitializationVector::try_from_slice(data)
       .map_err(|_| {
-        create_security_error!(
+        create_security_error_and_log!(
           "plugin_crypto_header_extra was of length {}. Expected {}.",
           plugin_crypto_header_length,
           INITIALIZATION_VECTOR_LENGTH

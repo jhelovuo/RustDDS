@@ -1,7 +1,7 @@
 use ring::{digest, hmac};
 
 use crate::{
-  create_security_error,
+  create_security_error_and_log,
   security::{
     access_control::{
       access_control_builtin::types::{
@@ -315,7 +315,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
       .and_then(
         |common_encode_key_materials| match common_encode_key_materials {
           CommonEncodeKeyMaterials::Some(value) => Ok(value),
-          CommonEncodeKeyMaterials::Volatile(_) => Err(create_security_error!(
+          CommonEncodeKeyMaterials::Volatile(_) => Err(create_security_error_and_log!(
             "The local_participant_crypto_handle {} points to volatile, but a participant cannot \
              be volatile",
             local_participant_crypto_handle
@@ -327,7 +327,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
       .participant_encrypt_options
       .get(&local_participant_crypto_handle)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Participant encrypt options not found for the ParticipantCryptoHandle {}",
           local_participant_crypto_handle
         )
@@ -465,7 +465,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
           .endpoint_encrypt_options
           .get(&local_datawriter_crypto_handle)
           .ok_or_else(|| {
-            create_security_error!(
+            create_security_error_and_log!(
               "Datawriter encrypt options not found for the DatawriterCryptoHandle {}",
               local_datawriter_crypto_handle
             )
@@ -601,7 +601,7 @@ impl CryptoKeyFactory for CryptographicBuiltin {
           .endpoint_encrypt_options
           .get(&local_datareader_crypto_handle)
           .ok_or_else(|| {
-            create_security_error!(
+            create_security_error_and_log!(
               "Datareader encrypt options not found for the handle {}",
               local_datareader_crypto_handle
             )
