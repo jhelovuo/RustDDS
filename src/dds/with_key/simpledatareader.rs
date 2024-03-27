@@ -233,7 +233,8 @@ where
     hash_to_key_map.insert(instance_key.hash_key(false), instance_key);
   }
 
-  fn deserialize(&self,
+  fn deserialize(
+    &self,
     timestamp: Timestamp,
     cc: &CacheChange,
     hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
@@ -255,20 +256,27 @@ where
               Ok(DeserializedCacheChange::new(timestamp, cc, p))
             }
             Err(e) => Err(ReadError::Deserialization {
-              reason: format!("Failed to deserialize sample bytes: {}, , Topic = {}, Type = {:?}",
-                e, self.my_topic.name(), self.my_topic.get_type())
+              reason: format!(
+                "Failed to deserialize sample bytes: {}, , Topic = {}, Type = {:?}",
+                e,
+                self.my_topic.name(),
+                self.my_topic.get_type()
+              ),
             }),
           }
         } else {
           info!(
             "Unknown representation id: {:?} , Topic = {}, Type = {:?} data = {:02x?}",
-            serialized_payload.representation_identifier, self.my_topic.name(),
-            self.my_topic.get_type(), serialized_payload.value,
+            serialized_payload.representation_identifier,
+            self.my_topic.name(),
+            self.my_topic.get_type(),
+            serialized_payload.value,
           );
           Err(ReadError::Deserialization {
             reason: format!(
               "Unknown representation id {:?} , Topic = {}, Type = {:?}",
-              serialized_payload.representation_identifier, self.my_topic.name(),
+              serialized_payload.representation_identifier,
+              self.my_topic.name(),
               self.my_topic.get_type()
             ),
           })
@@ -289,8 +297,12 @@ where
             Ok(DeserializedCacheChange::new(timestamp, cc, k))
           }
           Err(e) => Err(ReadError::Deserialization {
-            reason: format!("Failed to deserialize key {}, Topic = {}, Type = {:?}",
-                e, self.my_topic.name(), self.my_topic.get_type()),
+            reason: format!(
+              "Failed to deserialize key {}, Topic = {}, Type = {:?}",
+              e,
+              self.my_topic.name(),
+              self.my_topic.get_type()
+            ),
           }),
         }
       }
@@ -306,8 +318,12 @@ where
           ))
         } else {
           Err(ReadError::UnknownKey {
-            details: format!("Received dispose with unknown key hash: {:x?}, Topic = {}, Type = {:?}", 
-              key_hash, self.my_topic.name(), self.my_topic.get_type()),
+            details: format!(
+              "Received dispose with unknown key hash: {:x?}, Topic = {}, Type = {:?}",
+              key_hash,
+              self.my_topic.name(),
+              self.my_topic.get_type()
+            ),
           })
         }
       }
@@ -330,23 +346,17 @@ where
 
     // loop in case we get a sample that should be ignored, so we try next.
     loop {
-      let (timestamp, cc) = match Self::try_take_undecoded(
-        is_reliable,
-        &topic_cache,
-        latest_instant,
-        last_read_sn,
-      )
-      .next()
-      {
-        None => return Ok(None), // no more data available right now
-        Some((ts, cc)) => (ts, cc),
-      };
+      let (timestamp, cc) =
+        match Self::try_take_undecoded(is_reliable, &topic_cache, latest_instant, last_read_sn)
+          .next()
+        {
+          None => return Ok(None), // no more data available right now
+          Some((ts, cc)) => (ts, cc),
+        };
 
+      let result = self.deserialize(timestamp, cc, hash_to_key_map);
 
-      let result =
-        self.deserialize(timestamp, cc, hash_to_key_map);
-
-      if let Err(ReadError::UnknownKey{..}) = result {
+      if let Err(ReadError::UnknownKey { .. }) = result {
         // ignore unknown key hash, continue looping
       } else {
         // return with this result
@@ -369,7 +379,7 @@ where
         //      );
         // }
 
-        return result.map(Some)
+        return result.map(Some);
       }
     }
   }

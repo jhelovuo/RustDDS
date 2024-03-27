@@ -186,8 +186,8 @@ impl TopicCache {
     self.max_keep_samples = max(max_keep_samples, self.max_keep_samples);
   }
 
-  // Returns true if the "reliably_received_before"-marker was actually moved forward
-  // and false if not.
+  // Returns true if the "reliably_received_before"-marker was actually moved
+  // forward and false if not.
   pub fn mark_reliably_received_before(&mut self, writer: GUID, sn: SequenceNumber) -> bool {
     let prev_sn = self.received_reliably_before.insert(writer, sn);
     prev_sn.unwrap_or(SequenceNumber::new(1)) < sn

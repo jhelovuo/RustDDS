@@ -917,11 +917,11 @@ impl Reader {
         // remove changes until first_sn.
         writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
 
-        let marker_moved = 
-          this.acquire_the_topic_cache_guard()
-            .mark_reliably_received_before(writer_guid, writer_proxy.all_ackable_before());
+        let marker_moved = this
+          .acquire_the_topic_cache_guard()
+          .mark_reliably_received_before(writer_guid, writer_proxy.all_ackable_before());
         if marker_moved {
-          this.notify_cache_change(); 
+          this.notify_cache_change();
         }
 
         // let received_before = writer_proxy.all_ackable_before();
@@ -1120,14 +1120,15 @@ impl Reader {
     }
 
     // Get the topic cache and mark progress
-    let marker_moved = self.acquire_the_topic_cache_guard()
+    let marker_moved = self
+      .acquire_the_topic_cache_guard()
       .mark_reliably_received_before(writer_guid, all_ackable_before);
 
     // Receiving a GAP could make a Reliable stream.
     // E.g. we had #2, but were missing #1. Now GAP says that #1 does not exist.
-    // Then a Reliable Datareader 
+    // Then a Reliable Datareader
     if marker_moved {
-      self.notify_cache_change(); 
+      self.notify_cache_change();
     }
     // able to move forward, i.e. hand over data to application, if
     // we now know that nothing is missng from the past.
@@ -1214,7 +1215,7 @@ impl Reader {
       .lock()
       .unwrap() // TODO: unwrap
       .take() // Take to nullify the reference
-      .map(|w| w.wake_by_ref() ); // If Some, call wake_by_ref
+      .map(|w| w.wake_by_ref()); // If Some, call wake_by_ref
 
     // mio-0.8 notify
     self.poll_event_sender.send();
