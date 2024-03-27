@@ -3,7 +3,7 @@ use speedy::{Readable, Writable};
 use ring::digest;
 
 use crate::{
-  create_security_error,
+  create_security_error_and_log,
   security::{types::DataHolder, SecurityError, SecurityResult},
 };
 
@@ -82,7 +82,7 @@ impl TryFrom<&[u8]> for Sha256 {
   type Error = SecurityError;
   fn try_from(v: &[u8]) -> SecurityResult<Sha256> {
     v.try_into()
-      .map_err(|e| create_security_error!("Cannot read SHA-256 hash: {e:?}"))
+      .map_err(|e| create_security_error_and_log!("Cannot read SHA-256 hash: {e:?}"))
       .map(Sha256)
   }
 }
@@ -126,7 +126,7 @@ impl TryFrom<&[u8]> for SharedSecret {
   type Error = SecurityError;
   fn try_from(v: &[u8]) -> SecurityResult<SharedSecret> {
     v.try_into()
-      .map_err(|e| create_security_error!("Cannot read SharedSecret: {e:?}"))
+      .map_err(|e| create_security_error_and_log!("Cannot read SharedSecret: {e:?}"))
       .map(SharedSecret)
   }
 }
@@ -163,7 +163,7 @@ impl TryFrom<&[u8]> for Challenge {
   type Error = SecurityError;
   fn try_from(v: &[u8]) -> SecurityResult<Challenge> {
     v.try_into()
-      .map_err(|e| create_security_error!("Cannot read Challenge: {e:?}"))
+      .map_err(|e| create_security_error_and_log!("Cannot read Challenge: {e:?}"))
       .map(Challenge)
   }
 }
