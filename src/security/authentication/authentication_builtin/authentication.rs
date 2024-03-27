@@ -6,7 +6,7 @@ use bytes::Bytes;
 use log::{debug, error, info, trace, warn};
 
 use crate::{
-  create_security_error, discovery,
+  create_security_error_and_log, discovery,
   security::{
     access_control::{
       //access_control_builtin::s_mime_config_parser::SignedDocument,
@@ -68,13 +68,14 @@ fn validate_remote_guid(
   remote_identity_cert: &Certificate,
 ) -> SecurityResult<()> {
   let actual_guid_start = &remote_guid.prefix.as_ref()[0..6];
-  let expected_guid_start = guid_start_from_certificate(remote_identity_cert)
-    .map_err(|e| create_security_error!("Could not determine the expected GUID start: {e}"))?;
+  let expected_guid_start = guid_start_from_certificate(remote_identity_cert).map_err(|e| {
+    create_security_error_and_log!("Could not determine the expected GUID start: {e}")
+  })?;
 
   if actual_guid_start == expected_guid_start {
     Ok(())
   } else {
-    Err(create_security_error!(
+    Err(create_security_error_and_log!(
       "GUID start {:?} is not the expected {:?}",
       actual_guid_start,
       expected_guid_start
@@ -125,7 +126,7 @@ impl Authentication for AuthenticationBuiltin {
       .get_property(QOS_IDENTITY_CA_PROPERTY_NAME)
       .and_then(|certificate_uri| {
         read_uri(&certificate_uri).map_err(|conf_err| {
-          create_security_error!(
+          create_security_error_and_log!(
             "Failed to read the identity CA certificate from {}: {:?}",
             certificate_uri,
             conf_err
@@ -133,14 +134,15 @@ impl Authentication for AuthenticationBuiltin {
         })
       })
       .and_then(|certificate_contents_pem| {
-        Certificate::from_pem(certificate_contents_pem).map_err(|e| create_security_error!("{e:?}"))
+        Certificate::from_pem(certificate_contents_pem)
+          .map_err(|e| create_security_error_and_log!("{e:?}"))
       })?;
 
     let identity_certificate = participant_qos
       .get_property(QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME)
       .and_then(|certificate_uri| {
         read_uri(&certificate_uri).map_err(|conf_err| {
-          create_security_error!(
+          create_security_error_and_log!(
             "Failed to read the DomainParticipant identity certificate from {}: {:?}",
             certificate_uri,
             conf_err
@@ -148,21 +150,22 @@ impl Authentication for AuthenticationBuiltin {
         })
       })
       .and_then(|certificate_contents_pem| {
-        Certificate::from_pem(certificate_contents_pem).map_err(|e| create_security_error!("{e:?}"))
+        Certificate::from_pem(certificate_contents_pem)
+          .map_err(|e| create_security_error_and_log!("{e:?}"))
       })?;
 
     // TODO: decrypt a password protected private key
     let _password = participant_qos.get_optional_property(QOS_PASSWORD_PROPERTY_NAME);
 
-    let id_cert_algorithm = identity_certificate
-      .algorithm()
-      .ok_or_else(|| create_security_error!("Cannot recognize identity certificate algorithm."))?;
+    let id_cert_algorithm = identity_certificate.algorithm().ok_or_else(|| {
+      create_security_error_and_log!("Cannot recognize identity certificate algorithm.")
+    })?;
 
     let id_cert_private_key = participant_qos
       .get_property(QOS_PRIVATE_KEY_PROPERTY_NAME)
       .and_then(|pem_uri| {
         read_uri_to_private_key(&pem_uri, id_cert_algorithm).map_err(|conf_err| {
-          create_security_error!(
+          create_security_error_and_log!(
             "Failed to read the DomainParticipant identity private key from {}: {:?}",
             pem_uri,
             conf_err
@@ -174,7 +177,9 @@ impl Authentication for AuthenticationBuiltin {
     identity_certificate
       .verify_signed_by_certificate(&identity_ca)
       .map_err(|_e| {
-        create_security_error!("My own identity certificate does not verify against identity CA.")
+        create_security_error_and_log!(
+          "My own identity certificate does not verify against identity CA."
+        )
       })?;
 
     // TODO: Check (somehow) that my identity has not been revoked.
@@ -198,12 +203,14 @@ impl Authentication for AuthenticationBuiltin {
     let certificate_algorithm = identity_certificate
       .key_algorithm()
       .ok_or_else(|| {
-        create_security_error!("Identity Certificate specifies no public key algorithm")
+        create_security_error_and_log!("Identity Certificate specifies no public key algorithm")
       })
       .and_then(CertificateAlgorithm::try_from)?;
     let ca_algorithm = identity_ca
       .key_algorithm()
-      .ok_or_else(|| create_security_error!("CA Certificate specifies no public key algorithm"))
+      .ok_or_else(|| {
+        create_security_error_and_log!("CA Certificate specifies no public key algorithm")
+      })
       .and_then(CertificateAlgorithm::try_from)?;
 
     let identity_token = BuiltinIdentityToken {
@@ -260,7 +267,7 @@ impl Authentication for AuthenticationBuiltin {
 
     // Parameter handle needs to correspond to the handle of the local participant
     if handle != local_info.identity_handle {
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "The given handle does not correspond to the local identity handle"
       ));
     }
@@ -288,7 +295,7 @@ impl Authentication for AuthenticationBuiltin {
     let local_info = self.get_local_participant_info_mutable()?;
     // Make sure local_identity_handle is actually ours
     if handle != local_info.identity_handle {
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "The parameter local_identity_handle is not the correct local handle"
       ));
     }
@@ -322,7 +329,7 @@ impl Authentication for AuthenticationBuiltin {
     let local_info = self.get_local_participant_info()?;
     // Make sure local_identity_handle is actually ours
     if local_identity_handle != local_info.identity_handle {
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "The parameter local_identity_handle is not the correct local handle"
       ));
     }
@@ -332,7 +339,7 @@ impl Authentication for AuthenticationBuiltin {
     if remote_identity_token.class_id() != IDENTITY_TOKEN_CLASS_ID {
       // TODO: We are really supposed to ignore differences is MinorVersion of
       // class_id string. But now we require exact match.
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "Remote identity class_id is {:?}",
         remote_identity_token.class_id()
       ));
@@ -363,7 +370,7 @@ impl Authentication for AuthenticationBuiltin {
         }
         Ordering::Equal => {
           // This is an error, comparing with ourself.
-          return Err(create_security_error!(
+          return Err(create_security_error_and_log!(
             "Remote GUID is equal to the local GUID"
           ));
         }
@@ -402,7 +409,7 @@ impl Authentication for AuthenticationBuiltin {
     // Make sure initiator_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
     if initiator_identity_handle != local_info.identity_handle {
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "The parameter initiator_identity_handle is not the correct local handle"
       ));
     }
@@ -415,7 +422,7 @@ impl Authentication for AuthenticationBuiltin {
     if let BuiltinHandshakeState::PendingRequestSend = remote_info.handshake.state {
       // Yes, this is what we expect. No action here.
     } else {
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "We are not expecting to send a handshake request. Handshake state: {:?}",
         remote_info.handshake.state
       ));
@@ -504,7 +511,7 @@ impl Authentication for AuthenticationBuiltin {
     // Make sure replier_identity_handle is actually ours
     let local_info = self.get_local_participant_info()?;
     if replier_identity_handle != local_info.identity_handle {
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "The parameter replier_identity_handle is not the correct local handle"
       ));
     }
@@ -516,7 +523,7 @@ impl Authentication for AuthenticationBuiltin {
     if let BuiltinHandshakeState::PendingRequestMessage = remote_info.handshake.state {
       // Nothing to see here. Carry on.
     } else {
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "We are not expecting to receive a handshake request. Handshake state: {:?}",
         remote_info.handshake.state
       ));
@@ -539,13 +546,14 @@ impl Authentication for AuthenticationBuiltin {
         RepresentationIdentifier::CDR_BE,
       )
       .map_err(|e| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Failed to deserialize SpdpDiscoveredParticipantData from remote: {e}"
         )
       })?;
 
-    validate_remote_guid(remote_pdata.participant_guid, &cert1)
-      .map_err(|e| create_security_error!("Remote GUID does not comply with the spec: {e}"))?;
+    validate_remote_guid(remote_pdata.participant_guid, &cert1).map_err(|e| {
+      create_security_error_and_log!("Remote GUID does not comply with the spec: {e}")
+    })?;
 
     // Check which key agreement algorithm the remote has chosen & generate our own
     // key pair
@@ -554,7 +562,7 @@ impl Authentication for AuthenticationBuiltin {
     } else if request.c_kagree_algo == *ECDH_KAGREE_ALGO_NAME {
       DHKeys::new_ec_keys(&self.secure_random_generator)?
     } else {
-      return Err(create_security_error!(
+      return Err(create_security_error_and_log!(
         "Unexpected c_kagree_algo in handshake request: {:?}",
         request.c_kagree_algo
       ));
@@ -580,7 +588,7 @@ impl Authentication for AuthenticationBuiltin {
       if received_hash_c1 == computed_c1_hash {
         // hashes match, safe to proceed
       } else {
-        return Err(create_security_error!(
+        return Err(create_security_error_and_log!(
           "begin_handshake_reply: hash_c1 mismatch"
         ));
       }
@@ -731,25 +739,26 @@ impl Authentication for AuthenticationBuiltin {
             RepresentationIdentifier::CDR_BE,
           )
           .map_err(|e| {
-            create_security_error!(
+            create_security_error_and_log!(
               "Failed to deserialize SpdpDiscoveredParticipantData from remote: {e}"
             )
           })?;
 
-        validate_remote_guid(remote_pdata.participant_guid, &cert2)
-          .map_err(|e| create_security_error!("Remote GUID does not comply with the spec: {e}"))?;
+        validate_remote_guid(remote_pdata.participant_guid, &cert2).map_err(|e| {
+          create_security_error_and_log!("Remote GUID does not comply with the spec: {e}")
+        })?;
 
         // TODO: verify ocsp_status / status of IdentityCredential
 
         if challenge1 != reply.challenge1 {
-          return Err(create_security_error!(
+          return Err(create_security_error_and_log!(
             "Challenge 1 mismatch on authentication reply"
           ));
         }
 
         if let Some(received_hash_c1) = reply.hash_c1 {
           if hash_c1 != received_hash_c1 {
-            return Err(create_security_error!(
+            return Err(create_security_error_and_log!(
               "Hash C1 mismatch on authentication reply"
             ));
           } else { /* ok */
@@ -778,7 +787,7 @@ impl Authentication for AuthenticationBuiltin {
           if received_hash_c2.as_ref() == c2_hash_recomputed.as_ref() {
             // hashes match, safe to proceed
           } else {
-            return Err(create_security_error!(
+            return Err(create_security_error_and_log!(
               "process_handshake: hash_c2 mismatch"
             ));
           }
@@ -828,7 +837,7 @@ impl Authentication for AuthenticationBuiltin {
         let kagree_algo_in_reply = reply.c_kagree_algo;
         let expected_kagree_algo = dh1.kagree_algo_name_str();
         if kagree_algo_in_reply != expected_kagree_algo {
-          return Err(create_security_error!(
+          return Err(create_security_error_and_log!(
             "Unexpected key agreement algorithm: {kagree_algo_in_reply:?} in \
              HandshakeReplyMessageToken. Expected {expected_kagree_algo}"
           ));
@@ -924,7 +933,7 @@ impl Authentication for AuthenticationBuiltin {
         // This is a sanity check
         if let Some(received_hash_c1) = final_token.hash_c1 {
           if hash_c1 != received_hash_c1 {
-            return Err(create_security_error!(
+            return Err(create_security_error_and_log!(
               "Hash C1 mismatch on authentication final receive"
             ));
           }
@@ -933,7 +942,7 @@ impl Authentication for AuthenticationBuiltin {
         // This is a sanity check 2
         if let Some(received_hash_c2) = final_token.hash_c2 {
           if hash_c2 != received_hash_c2 {
-            return Err(create_security_error!(
+            return Err(create_security_error_and_log!(
               "Hash C2 mismatch on authentication final receive"
             ));
           }
@@ -941,7 +950,7 @@ impl Authentication for AuthenticationBuiltin {
 
         // sanity check
         if dh1_public != final_token.dh1 {
-          return Err(create_security_error!(
+          return Err(create_security_error_and_log!(
             "Diffie-Hellman parameter DH1 mismatch on authentication final receive"
           ));
         }
@@ -949,7 +958,7 @@ impl Authentication for AuthenticationBuiltin {
         // sanity check
         let dh2_public_key = dh2.public_key_bytes()?;
         if dh2_public_key.as_ref() != final_token.dh2.as_ref() {
-          return Err(create_security_error!(
+          return Err(create_security_error_and_log!(
             "Diffie-Hellman parameter DH2 mismatch on authentication final receive"
           ));
         }
@@ -957,13 +966,13 @@ impl Authentication for AuthenticationBuiltin {
         // "The operation shall check that the challenge1 and challenge2 match the ones
         // that were sent on the HandshakeReplyMessageToken."
         if challenge1 != final_token.challenge1 {
-          return Err(create_security_error!(
+          return Err(create_security_error_and_log!(
             "process_handshake: Final token challenge1 mismatch"
           ));
         }
         if challenge2 != final_token.challenge2 {
           //
-          return Err(create_security_error!(
+          return Err(create_security_error_and_log!(
             "process_handshake: Final token challenge2 mismatch"
           ));
         }
@@ -1001,7 +1010,9 @@ impl Authentication for AuthenticationBuiltin {
             remote_signature_algorithm,
           )
           .map_err(|e| {
-            create_security_error!("Signature verification failed in process_handshake: {e:?}")
+            create_security_error_and_log!(
+              "Signature verification failed in process_handshake: {e:?}"
+            )
           })?;
 
         // Compute the shared secret
@@ -1017,7 +1028,7 @@ impl Authentication for AuthenticationBuiltin {
 
         Ok((ValidationOutcome::Ok, None))
       }
-      other_state => Err(create_security_error!(
+      other_state => Err(create_security_error_and_log!(
         "Unexpected handshake state: {:?}",
         other_state
       )),
@@ -1051,7 +1062,7 @@ impl Authentication for AuthenticationBuiltin {
         challenge2: challenge2.clone(),
         shared_secret: shared_secret.clone(),
       }),
-      wrong_state => Err(create_security_error!(
+      wrong_state => Err(create_security_error_and_log!(
         "get_shared_secret called with wrong state {wrong_state:?}"
       )),
     }
@@ -1092,7 +1103,7 @@ impl Authentication for AuthenticationBuiltin {
   }
 
   fn set_listener(&self) -> SecurityResult<()> {
-    Err(create_security_error!(
+    Err(create_security_error_and_log!(
       "set_listener not supported. Use status events in DataReader/DataWriter instead."
     ))
   }

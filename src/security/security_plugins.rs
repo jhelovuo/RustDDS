@@ -8,7 +8,7 @@ use bytes::Bytes;
 use log::{debug, error};
 
 use crate::{
-  create_security_error,
+  create_security_error_and_log,
   discovery::{DiscoveredReaderData, DiscoveredWriterData, TopicBuiltinTopicData},
   messages::submessages::{
     elements::{crypto_header::CryptoHeader, parameter_list::ParameterList},
@@ -84,7 +84,7 @@ impl SecurityPlugins {
       .identity_handle_cache
       .get(guidp)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find an IdentityHandle for the GUID prefix {:?}",
           guidp
         )
@@ -97,7 +97,7 @@ impl SecurityPlugins {
       .permissions_handle_cache
       .get(guidp)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find a PermissionsHandle for the GUID prefix {:?}",
           guidp
         )
@@ -110,7 +110,7 @@ impl SecurityPlugins {
       .handshake_handle_cache
       .get(remote_guidp)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find a HandshakeHandle for the GUID prefix {:?}",
           remote_guidp
         )
@@ -140,7 +140,7 @@ impl SecurityPlugins {
       .remote_participant_crypto_handle_cache
       .get(guid_prefix)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find a ParticipantCryptoHandle for the GuidPrefix {:?}",
           guid_prefix
         )
@@ -169,7 +169,7 @@ impl SecurityPlugins {
       .local_endpoint_crypto_handle_cache
       .get(guid)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find a local EndpointCryptoHandle for the GUID {:?}",
           guid
         )
@@ -263,7 +263,7 @@ impl SecurityPlugins {
       .remote_endpoint_crypto_handle_cache
       .get(&local_and_proxy_guid_pair)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find a remote EndpointCryptoHandle for the (local_endpoint_guid, proxy_guid) \
            pair {:?}",
           local_and_proxy_guid_pair
@@ -342,7 +342,7 @@ impl SecurityPlugins {
     } else {
       // If the builtin authentication does not fail, it should produce only OK
       // outcome. If some other outcome was produced, return an error
-      Err(create_security_error!(
+      Err(create_security_error_and_log!(
         "Validating local identity produced an unexpected outcome"
       ))
     }
@@ -1106,10 +1106,10 @@ impl SecurityPlugins {
         )
       }
       SubmessageBody::Interpreter(_) => Ok(EncodedSubmessage::Unencoded(plain_submessage)),
-      SubmessageBody::Reader(_) => Err(create_security_error!(
+      SubmessageBody::Reader(_) => Err(create_security_error_and_log!(
         "encode_datawriter_submessage called for a reader submessage"
       )),
-      SubmessageBody::Security(_) => Err(create_security_error!(
+      SubmessageBody::Security(_) => Err(create_security_error_and_log!(
         "encode_datawriter_submessage called for a security submessage"
       )),
     }
@@ -1145,10 +1145,10 @@ impl SecurityPlugins {
         )
       }
       SubmessageBody::Interpreter(_) => Ok(EncodedSubmessage::Unencoded(plain_submessage)),
-      SubmessageBody::Writer(_) => Err(create_security_error!(
+      SubmessageBody::Writer(_) => Err(create_security_error_and_log!(
         "encode_datareader_submessage called for a writer submessage"
       )),
-      SubmessageBody::Security(_) => Err(create_security_error!(
+      SubmessageBody::Security(_) => Err(create_security_error_and_log!(
         "encode_datareader_submessage called for a security submessage"
       )),
     }
@@ -1371,7 +1371,7 @@ impl SecurityPluginsHandle {
           std::thread::sleep(std::time::Duration::from_millis(100));
         }
         Err(poisoned) => {
-          create_security_error!("Security plugins are poisoned! {poisoned:?}");
+          create_security_error_and_log!("Security plugins are poisoned! {poisoned:?}");
           panic!("Security plugins are poisoned!");
         }
       }

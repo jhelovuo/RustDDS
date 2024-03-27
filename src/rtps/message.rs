@@ -31,7 +31,7 @@ use crate::{
 };
 #[cfg(feature = "security")]
 use crate::{
-  create_security_error,
+  create_security_error_and_log,
   security::{security_plugins::SecurityPluginsHandle, SecurityError},
 };
 #[cfg(not(feature = "security"))]
@@ -236,7 +236,7 @@ impl MessageBuilder {
         serialized_payload
           // Serialize
           .write_to_vec()
-          .map_err(|e| create_security_error!("{e:?}"))
+          .map_err(|e| create_security_error_and_log!("{e:?}"))
           .and_then(|serialized_payload| {
             match security_plugins.map(SecurityPluginsHandle::get_plugins) {
               Some(security_plugins) => {

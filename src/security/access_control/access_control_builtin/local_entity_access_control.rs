@@ -1,5 +1,5 @@
 use crate::{
-  create_security_error,
+  create_security_error_and_log,
   dds::qos::QosPolicies,
   rtps::constant::builtin_topic_names,
   security::{access_control::*, *},
@@ -83,7 +83,9 @@ impl AccessControlBuiltin {
         .get_domain_rule(&permissions_handle)
         .and_then(|domain_rule| {
           domain_rule.find_topic_rule(topic_name).ok_or_else(|| {
-            create_security_error!("Could not find a topic rule for the topic_name {topic_name}")
+            create_security_error_and_log!(
+              "Could not find a topic rule for the topic_name {topic_name}"
+            )
           })
         })
         .map(

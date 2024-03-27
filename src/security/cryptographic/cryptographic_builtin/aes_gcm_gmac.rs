@@ -1,7 +1,7 @@
 use ring::{aead::*, error::Unspecified};
 
 use crate::{
-  create_security_error,
+  create_security_error_and_log,
   security::{SecurityError, SecurityResult},
 };
 use super::{
@@ -43,7 +43,7 @@ pub(super) fn keygen(key_length: KeyLength) -> BuiltinKey {
 #[allow(non_snake_case)]
 fn to_unbound_AES_GCM_key(key: &BuiltinKey) -> SecurityResult<UnboundKey> {
   match key {
-    BuiltinKey::None => Err(create_security_error!(
+    BuiltinKey::None => Err(create_security_error_and_log!(
       "Attempted to call a cryptographic function with an empty key."
     )),
     // unwraps should be safe, because builtin key lengths always match expected length

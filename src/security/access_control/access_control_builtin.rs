@@ -4,7 +4,7 @@ use bytes::Bytes;
 use chrono::Utc;
 
 use crate::{
-  create_security_error,
+  create_security_error_and_log,
   rtps::constant::builtin_topic_names,
   security::{
     authentication::IdentityHandle,
@@ -63,7 +63,7 @@ impl AccessControlBuiltin {
 
   fn get_domain_rule(&self, permissions_handle: &PermissionsHandle) -> SecurityResult<&DomainRule> {
     self.domain_rules.get(permissions_handle).ok_or_else(|| {
-      create_security_error!(
+      create_security_error_and_log!(
         "Could not find a domain rule for the PermissionsHandle {}",
         permissions_handle
       )
@@ -78,7 +78,7 @@ impl AccessControlBuiltin {
       .domain_participant_permissions
       .get(permissions_handle)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find a permissions document for the PermissionsHandle {}",
           permissions_handle
         )
@@ -91,7 +91,7 @@ impl AccessControlBuiltin {
         permissions_document
           .find_grant(subject_name, &Utc::now())
           .ok_or_else(|| {
-            create_security_error!(
+            create_security_error_and_log!(
               "Could not find a valid grant for the PermissionsHandle {}",
               permissions_handle
             )
@@ -108,7 +108,7 @@ impl AccessControlBuiltin {
       .signed_permissions_documents
       .get(permissions_handle)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find a valid signed permissions document for the PermissionsHandle {}",
           permissions_handle
         )
@@ -123,7 +123,7 @@ impl AccessControlBuiltin {
       .permissions_ca_certificates
       .get(permissions_handle)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find a permissions CA certificate for the PermissionsHandle {}",
           permissions_handle
         )
@@ -138,7 +138,7 @@ impl AccessControlBuiltin {
       .identity_to_permissions
       .get(identity_handle)
       .ok_or_else(|| {
-        create_security_error!(
+        create_security_error_and_log!(
           "Could not find a PermissionsHandle for the IdentityHandle {}",
           identity_handle
         )
