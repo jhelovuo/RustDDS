@@ -28,6 +28,8 @@ use crate::{
 };
 #[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
+#[cfg(feature = "rtps_proxy")]
+use crate::rtps_proxy::{ProxyData, ProxyDataChannelSender};
 #[cfg(test)]
 use crate::dds::ddsdata::DDSData;
 #[cfg(test)]
@@ -152,6 +154,9 @@ pub(crate) struct MessageReceiver {
   // For certain topics we have to allow unprotected rtps messages even if the domain is
   // rtps-protected
   must_be_rtps_protection_special_case: bool,
+
+  #[cfg(feature = "rtps_proxy")]
+  proxy_data_sender: ProxyDataChannelSender<ProxyData>,
 }
 
 impl MessageReceiver {
@@ -160,6 +165,7 @@ impl MessageReceiver {
     acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins: Option<SecurityPluginsHandle>,
+    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender<ProxyData>,
   ) -> Self {
     Self {
       available_readers: BTreeMap::new(),
@@ -179,6 +185,8 @@ impl MessageReceiver {
       submessage_count: 0,
       #[cfg(feature = "security")]
       must_be_rtps_protection_special_case: true,
+      #[cfg(feature = "rtps_proxy")]
+      proxy_data_sender,
     }
   }
 
@@ -1172,6 +1180,8 @@ mod tests {
     structure::{dds_cache::DDSCache, guid::EntityKind},
   };
   use super::*;
+  #[cfg(feature = "rtps_proxy")]
+  use crate::rtps_proxy::sync_proxy_data_channel;
 
   #[test]
 
@@ -1204,6 +1214,9 @@ mod tests {
       EntityId::create_custom_entity_id([0, 0, 1], EntityKind::WRITER_WITH_KEY_USER_DEFINED),
     );
 
+    #[cfg(feature = "rtps_proxy")]
+    let (proxy_data_sender, _proxy_data_receiver) = sync_proxy_data_channel(16).unwrap();
+
     // Create a message receiver
     let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
@@ -1213,6 +1226,8 @@ mod tests {
       acknack_sender,
       spdp_liveness_sender,
       None,
+      #[cfg(feature = "rtps_proxy")]
+      proxy_data_sender,
     );
 
     // Create a reader to process the message
@@ -1338,8 +1353,18 @@ mod tests {
     let (acknack_sender, _acknack_receiver) =
       mio_channel::sync_channel::<(GuidPrefix, AckSubmessage)>(10);
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
-    let mut message_receiver =
-      MessageReceiver::new(guid_new.prefix, acknack_sender, spdp_liveness_sender, None);
+
+    #[cfg(feature = "rtps_proxy")]
+    let (proxy_data_sender, _proxy_data_receiver) = sync_proxy_data_channel(16).unwrap();
+
+    let mut message_receiver = MessageReceiver::new(
+      guid_new.prefix,
+      acknack_sender,
+      spdp_liveness_sender,
+      None,
+      #[cfg(feature = "rtps_proxy")]
+      proxy_data_sender,
+    );
 
     message_receiver.handle_received_packet(&udp_bits1);
     assert_eq!(message_receiver.submessage_count, 4);

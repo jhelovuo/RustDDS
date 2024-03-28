@@ -181,6 +181,9 @@ pub use security::config::DomainParticipantSecurityConfigFiles;
 #[cfg(not(feature = "security"))]
 mod no_security;
 
+#[cfg(feature = "rtps_proxy")]
+pub mod rtps_proxy;
+
 pub(crate) mod structure;
 
 #[cfg(test)]

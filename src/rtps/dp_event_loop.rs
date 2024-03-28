@@ -45,6 +45,8 @@ use crate::{
 };
 #[cfg(not(feature = "security"))]
 use crate::no_security::security_plugins::SecurityPluginsHandle;
+#[cfg(feature = "rtps_proxy")]
+use crate::rtps_proxy::{ProxyData, ProxyDataChannelSender};
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,
@@ -110,6 +112,7 @@ impl DPEventLoop {
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
+    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender<ProxyData>,
   ) -> Self {
     #[cfg(not(feature = "security"))]
     let _dummy = _discovery_command_sender;
@@ -197,6 +200,15 @@ impl DPEventLoop {
     #[cfg(not(feature = "security"))]
     let security_plugins_opt = security_plugins_opt.and(None); // make sure it is None an consume value
 
+    let message_receiver = MessageReceiver::new(
+      participant_guid_prefix,
+      acknack_sender,
+      spdp_liveness_sender,
+      security_plugins_opt.clone(),
+      #[cfg(feature = "rtps_proxy")]
+      proxy_data_sender,
+    );
+
     Self {
       domain_info,
       poll,
@@ -204,12 +216,7 @@ impl DPEventLoop {
       discovery_db,
       udp_listeners,
       udp_sender: Rc::new(udp_sender),
-      message_receiver: MessageReceiver::new(
-        participant_guid_prefix,
-        acknack_sender,
-        spdp_liveness_sender,
-        security_plugins_opt.clone(),
-      ),
+      message_receiver,
       #[cfg(feature = "security")]
       security_plugins_opt,
       add_reader_receiver,
@@ -1068,6 +1075,8 @@ mod tests {
     },
     mio_source,
   };
+  #[cfg(feature = "rtps_proxy")]
+  use crate::rtps_proxy::sync_proxy_data_channel;
 
   //#[test]
   // TODO: Investigate why this fails in the github CI pipeline
@@ -1094,6 +1103,9 @@ mod tests {
     let (spdp_liveness_sender, _spdp_liveness_receiver) = mio_channel::sync_channel(8);
     let (participant_status_sender, _participant_status_receiver) =
       sync_status_channel(16).unwrap();
+
+    #[cfg(feature = "rtps_proxy")]
+    let (proxy_data_sender, _proxy_data_receiver) = sync_proxy_data_channel(16).unwrap();
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let dds_cache_clone = Arc::clone(&dds_cache);
@@ -1144,6 +1156,8 @@ mod tests {
         spdp_liveness_sender,
         participant_status_sender,
         None,
+        #[cfg(feature = "rtps_proxy")]
+        proxy_data_sender,
       );
       dp_event_loop
         .poll

@@ -55,6 +55,8 @@ use crate::{
 };
 #[cfg(not(feature = "security"))]
 use crate::no_security::*;
+#[cfg(feature = "rtps_proxy")]
+use crate::rtps_proxy::{ProxyData, ProxyDataChannelSender};
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum DiscoveryCommand {
@@ -258,6 +260,9 @@ pub(crate) struct Discovery {
 
   #[cfg(feature = "security")]
   cached_secure_discovery_messages_resend_timer: Timer<()>,
+
+  #[cfg(feature = "rtps_proxy")]
+  proxy_data_sender: ProxyDataChannelSender<ProxyData>,
 }
 
 impl Discovery {
@@ -298,6 +303,7 @@ impl Discovery {
     self_locators: HashMap<Token, Vec<Locator>>,
     participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
+    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender<ProxyData>,
   ) -> CreateResult<Self> {
     // helper macro to handle initialization failures.
     macro_rules! try_construct {
@@ -695,6 +701,8 @@ impl Discovery {
       dcps_participant_volatile_message_secure,
       #[cfg(feature = "security")]
       cached_secure_discovery_messages_resend_timer: secure_message_resend_timer,
+      #[cfg(feature = "rtps_proxy")]
+      proxy_data_sender,
     })
   }
 

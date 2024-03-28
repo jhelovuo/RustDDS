@@ -36,6 +36,9 @@ security = [
 # Otherwise, we try to use the system installation of OpenSSL.
 build_openssl = ["openssl?/vendored"]
 
+# TODO: description of rtps_proxy feature
+rtps_proxy = []
+
 [dependencies]
 mio_06 = { package = "mio" , version ="^0.6.23" } 
 mio-extras = "2.0.6"
