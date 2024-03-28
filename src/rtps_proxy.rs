@@ -22,15 +22,15 @@ pub trait ProxyEvented {
 }
 
 #[derive(Clone)]
-pub struct ProxyDataChannelSender<T> {
-  actual_sender: mio_channel::SyncSender<T>,
+pub struct ProxyDataChannelSender {
+  actual_sender: mio_channel::SyncSender<ProxyData>,
 }
 
-pub struct ProxyDataChannelReceiver<T> {
-  actual_receiver: Mutex<mio_channel::Receiver<T>>,
+pub struct ProxyDataChannelReceiver {
+  actual_receiver: Mutex<mio_channel::Receiver<ProxyData>>,
 }
 
-impl<T> mio_06::Evented for ProxyDataChannelReceiver<T> {
+impl mio_06::Evented for ProxyDataChannelReceiver {
   // Call the trait methods of the mio channel which implements Evented
   fn register(
     &self,
@@ -65,15 +65,15 @@ impl<T> mio_06::Evented for ProxyDataChannelReceiver<T> {
   }
 }
 
-impl<T> ProxyEvented for ProxyDataChannelReceiver<T> {
+impl ProxyEvented for ProxyDataChannelReceiver {
   fn as_proxy_evented(&mut self) -> &dyn Evented {
     self
   }
 }
 
-pub(crate) fn sync_proxy_data_channel<T>(
+pub(crate) fn sync_proxy_data_channel(
   capacity: usize,
-) -> io::Result<(ProxyDataChannelSender<T>, ProxyDataChannelReceiver<T>)> {
+) -> io::Result<(ProxyDataChannelSender, ProxyDataChannelReceiver)> {
   let (actual_sender, actual_receiver) = mio_channel::sync_channel(capacity);
   Ok((
     ProxyDataChannelSender { actual_sender },

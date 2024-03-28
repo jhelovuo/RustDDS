@@ -786,8 +786,8 @@ impl DomainParticipantDisc {
     status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender<ProxyData>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_receiver: ProxyDataChannelReceiver<ProxyData>,
+    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender,
+    #[cfg(feature = "rtps_proxy")] proxy_data_receiver: ProxyDataChannelReceiver,
   ) -> CreateResult<Self> {
     let dpi = DomainParticipantInner::new(
       domain_id,
@@ -915,7 +915,7 @@ impl DomainParticipantDisc {
     self.dpi.status_channel_receiver_mut()
   }
   #[cfg(feature = "rtps_proxy")]
-  pub(crate) fn proxy_channel_receiver_mut(&mut self) -> &mut ProxyDataChannelReceiver<ProxyData> {
+  pub(crate) fn proxy_channel_receiver_mut(&mut self) -> &mut ProxyDataChannelReceiver {
     self.dpi.proxy_channel_receiver_mut()
   }
 }
@@ -987,7 +987,7 @@ pub(crate) struct DomainParticipantInner {
   security_plugins_handle: Option<SecurityPluginsHandle>,
 
   #[cfg(feature = "rtps_proxy")]
-  proxy_data_receiver: ProxyDataChannelReceiver<ProxyData>,
+  proxy_data_receiver: ProxyDataChannelReceiver,
 }
 
 impl Drop for DomainParticipantInner {
@@ -1026,8 +1026,8 @@ impl DomainParticipantInner {
     status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender<ProxyData>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_receiver: ProxyDataChannelReceiver<ProxyData>,
+    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender,
+    #[cfg(feature = "rtps_proxy")] proxy_data_receiver: ProxyDataChannelReceiver,
   ) -> CreateResult<Self> {
     #[cfg(not(feature = "security"))]
     let _dummy = _qos_policies; // to make clippy happy
@@ -1453,7 +1453,7 @@ impl DomainParticipantInner {
     &mut self.status_receiver
   }
   #[cfg(feature = "rtps_proxy")]
-  pub(crate) fn proxy_channel_receiver_mut(&mut self) -> &mut ProxyDataChannelReceiver<ProxyData> {
+  pub(crate) fn proxy_channel_receiver_mut(&mut self) -> &mut ProxyDataChannelReceiver {
     &mut self.proxy_data_receiver
   }
 } // impl

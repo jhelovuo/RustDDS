@@ -112,7 +112,7 @@ impl DPEventLoop {
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender<ProxyData>,
+    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender,
   ) -> Self {
     #[cfg(not(feature = "security"))]
     let _dummy = _discovery_command_sender;

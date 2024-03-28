@@ -156,7 +156,7 @@ pub(crate) struct MessageReceiver {
   must_be_rtps_protection_special_case: bool,
 
   #[cfg(feature = "rtps_proxy")]
-  proxy_data_sender: ProxyDataChannelSender<ProxyData>,
+  proxy_data_sender: ProxyDataChannelSender,
 }
 
 impl MessageReceiver {
@@ -165,7 +165,7 @@ impl MessageReceiver {
     acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender<ProxyData>,
+    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender,
   ) -> Self {
     Self {
       available_readers: BTreeMap::new(),

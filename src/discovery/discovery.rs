@@ -262,7 +262,7 @@ pub(crate) struct Discovery {
   cached_secure_discovery_messages_resend_timer: Timer<()>,
 
   #[cfg(feature = "rtps_proxy")]
-  proxy_data_sender: ProxyDataChannelSender<ProxyData>,
+  proxy_data_sender: ProxyDataChannelSender,
 }
 
 impl Discovery {
@@ -303,7 +303,7 @@ impl Discovery {
     self_locators: HashMap<Token, Vec<Locator>>,
     participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender<ProxyData>,
+    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender,
   ) -> CreateResult<Self> {
     // helper macro to handle initialization failures.
     macro_rules! try_construct {
