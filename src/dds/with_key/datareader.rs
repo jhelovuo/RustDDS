@@ -1,7 +1,7 @@
 use std::{
   io,
   pin::Pin,
-  sync::{Arc, Mutex},
+  sync::{Arc, Mutex, MutexGuard},
   task::{Context, Poll},
 };
 
@@ -881,6 +881,16 @@ where
   }
 }
 
+trait SafeAcquire<T> {
+    fn safe_lock(&self) -> MutexGuard<T>;
+}
+
+impl<T> SafeAcquire<T> for Mutex<T> {
+    fn safe_lock(&self) -> MutexGuard<T> {
+        self.lock().expect("failed to acquire lock during process")
+    }
+}
+
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
 impl<D, DA> Unpin for DataReaderStream<D, DA>
 where
@@ -898,7 +908,7 @@ where
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
-    let mut datareader = self.datareader.lock().unwrap();
+    let mut datareader = self.datareader.safe_lock();
     match datareader.take_bare(1, ReadCondition::not_read()) {
       Err(e) =>
       // DDS fails
@@ -960,7 +970,7 @@ where
   type Item = DataReaderStatus;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    let datareader = self.datareader.lock().unwrap();
+    let datareader = self.datareader.safe_lock();
     Pin::new(&mut datareader.simple_data_reader.as_async_status_stream()).poll_next(cx)
   }
 }
