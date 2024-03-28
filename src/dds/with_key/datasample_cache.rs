@@ -235,7 +235,9 @@ where
       .iter()
       .filter_map(|(ts, dsm)| {
         let key = dsm.key();
-        if self.sample_selector(&rc, self.instance_map.get(&key).unwrap(), dsm) {
+        // Instance meta wouldn't be cleaned with samples belongs to it.
+        let instance_meta = self.instance_map.get(&key).unwrap();
+        if self.sample_selector(&rc, instance_meta, dsm) {
           Some((*ts, key))
         } else {
           None
@@ -356,24 +358,31 @@ where
     }
   }
 
+  // Perform presence check in debug mode.
+  fn check_keys(&self, keys: &[(Timestamp, D::K)]) {
+    debug_assert!(keys.iter().all(|(_, k)| self.instance_map.contains_key(k)));
+    debug_assert!(keys.iter().all(|(ts, _)| self.datasamples.contains_key(ts)));
+    debug_assert!(!self.datasamples.is_empty());
+  }
+
   // read methods perform actual read or take. They must be called with key
   // vectors obtained from select_*_for_access -methods above, or their
   // subvectors.
   //
   // There are two versions of both read and take: Return DataSample<D> (incl.
   // metadata) and "bare" versions without metadata.
-
-  pub fn read_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<&D>> {
+  pub(in crate::dds::with_key) fn read_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<&D>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
 
     if len == 0 {
       return result;
     }
-
+    self.check_keys(keys);
     let mut instance_generations: HashMap<D::K, NotAliveGenerationCounts> = HashMap::new();
     let mrsic_total = self
       .instance_map
+       // Keys are guaranteed to be nonempty.
       .get(&keys.last().unwrap().1)
       .unwrap()
       .latest_generation_available
@@ -425,7 +434,7 @@ where
     result
   }
 
-  pub fn take_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<D>> {
+  pub(in crate::dds::with_key) fn take_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<DataSample<D>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
 
@@ -433,6 +442,7 @@ where
       return result;
     }
 
+    self.check_keys(keys);
     let mut instance_generations: HashMap<D::K, NotAliveGenerationCounts> = HashMap::new();
     let mrsic_total = self
       .instance_map
@@ -467,7 +477,7 @@ where
     result
   }
 
-  pub fn read_bare_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<Sample<&D, D::K>> {
+  pub(in crate::dds::with_key) fn read_bare_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<Sample<&D, D::K>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
 
@@ -475,6 +485,7 @@ where
       return result;
     }
 
+    self.check_keys(keys);
     let mut instance_generations: HashMap<D::K, NotAliveGenerationCounts> = HashMap::new();
 
     // construct SampleInfos and record read/viewed
@@ -502,7 +513,7 @@ where
     result
   }
 
-  pub fn take_bare_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<Sample<D, D::K>> {
+  pub(in crate::dds::with_key) fn take_bare_by_keys(&mut self, keys: &[(Timestamp, D::K)]) -> Vec<Sample<D, D::K>> {
     let len = keys.len();
     let mut result = Vec::with_capacity(len);
 
@@ -510,6 +521,7 @@ where
       return result;
     }
 
+    self.check_keys(keys);
     let mut instance_generations: HashMap<D::K, NotAliveGenerationCounts> = HashMap::new();
 
     for (ts, key) in keys.iter() {
@@ -528,7 +540,7 @@ where
     result
   }
 
-  pub fn next_key(&self, key: &D::K) -> Option<D::K> {
+  pub(in crate::dds::with_key) fn next_key(&self, key: &D::K) -> Option<D::K> {
     self
       .instance_map
       .range((Bound::Excluded(key), Bound::Unbounded))
