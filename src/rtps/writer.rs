@@ -913,14 +913,17 @@ impl Writer {
 
         if let Some(reader_proxy) = self.lookup_reader_proxy_mut(reader_guid) {
           // Mark requested SNs as "unsent changes"
+
+          //TODO: We should drop SNs in "pending gap" from unsent changes
           reader_proxy.handle_ack_nack(ack_submessage, last_seq);
 
           let reader_guid = reader_proxy.remote_reader_guid; // copy to avoid double mut borrow
-                                                             // Sanity Check: if the reader asked for something we did not even advertise
-                                                             // yet. TODO: This
-                                                             // checks the stored unset_changes, not presently received ACKNACK.
-          if let Some(high) = reader_proxy.unsent_changes_iter().next_back() {
-            if high > last_seq {
+                                                             
+          // Sanity Check: if the reader asked for something we did not even advertise
+          // yet. TODO: This
+          // checks the stored unset_changes, not presently received ACKNACK.
+          if let Some(req_high) = reader_proxy.unsent_changes_iter().next_back() {
+            if req_high > last_seq {
               warn!(
                 "ReaderProxy {:?} thinks we need to send {:?} but I have only up to {:?}",
                 reader_proxy.remote_reader_guid,
@@ -930,7 +933,7 @@ impl Writer {
             }
           }
           // Sanity Check
-          if an.reader_sn_state.base() > last_seq + SequenceNumber::from(1i64) {
+          if an.reader_sn_state.base() > last_seq.plus_1() {
             // more sanity
             warn!(
               "ACKNACK from {:?} acks {:?}, but I have only up to {:?} count={:?} topic={:?}",
@@ -1001,6 +1004,8 @@ impl Writer {
     }
   }
 
+  // Application may be waiting that remote Readers ACK what we are sending.
+  // Notify application that the event they have been waiting for is here.
   fn update_ack_waiters(&mut self, guid: GUID, acked_before: Option<SequenceNumber>) {
     let completed = self
       .ack_waiter
@@ -1039,6 +1044,7 @@ impl Writer {
         .readers
         .insert(reader_proxy.remote_reader_guid, reader_proxy)
       {
+        // This should really not happen.
         error!("Reader proxy was duplicated somehow??? {:?}", rp);
       }
     }
@@ -1079,11 +1085,27 @@ impl Writer {
     if let Some(unsent_sn) = reader_proxy.first_unsent_change() {
       // There are unsent changes.
       let mut no_longer_relevant: BTreeSet<SequenceNumber> = BTreeSet::new();
+      let mut all_irrelevant_before = None;
 
       // If we have set the reader as pending GAP for the unsent sequence number,
-      // just send a GAP message
+      // just send a GAP message, not DATA.
       let pending_gaps = reader_proxy.get_pending_gap();
-      if pending_gaps.contains(&unsent_sn) {
+
+      // Check what we actually have in store
+      let topic_cache_guard = self.acquire_the_topic_cache_guard();
+      if let Some(first_available) = topic_cache_guard.writers_smallest_sn_in_cache(self.my_guid) {
+        if unsent_sn < first_available {
+          all_irrelevant_before = Some(first_available);
+        }
+      } else {
+        // We do not have any samples to send!
+        all_irrelevant_before = Some(unsent_sn);
+      }
+      std::mem::drop(topic_cache_guard);
+
+      // If all_irrelevant_before is still None, then TopicCache has SNs that are
+      // less than equal to the requested "unsent_sn". But might not have that exact SN.
+      if pending_gaps.contains(&unsent_sn) || all_irrelevant_before.is_some() {
         no_longer_relevant.extend(pending_gaps);
       } else {
         // Reader not pending gap on unsent_sn. Get the cache change from topic cache
@@ -1110,6 +1132,8 @@ impl Writer {
               },
             );
           }
+          // mark as sent
+          reader_proxy.mark_change_sent(unsent_sn);
         } else {
           // Did not find a cache change for the sequence number
           no_longer_relevant.insert(unsent_sn);
@@ -1127,33 +1151,45 @@ impl Writer {
           } else {
             // we are running out of excuses
             error!(
-              "handle_repair_data_send_worker {:?} seq.number {:?} missing from instant map",
-              self.my_guid, unsent_sn
+              "handle_repair_data_send_worker {:?} seq.number {:?} missing. Instant map = {:?} first_change={:?}",
+              self.my_guid, unsent_sn, self.sequence_number_to_instant(unsent_sn), 
+              self.first_change_sequence_number
             );
           }
         }
       }
 
       // Send a GAP if we marked a sequence number as no longer relevant
-      if !no_longer_relevant.is_empty() {
-        let gap_msg = MessageBuilder::new()
-          .dst_submessage(self.endianness, reader_guid.prefix)
-          .gap_msg(
+      if !no_longer_relevant.is_empty() || all_irrelevant_before.is_some() {
+        let mut gap_msg = MessageBuilder::new()
+          .dst_submessage(self.endianness, reader_guid.prefix);
+        if let Some(all_irrelevant_before) = all_irrelevant_before {
+          gap_msg = gap_msg.gap_msg_before(
+            all_irrelevant_before,
+            self.entity_id(),
+            self.endianness,
+            reader_guid,
+          );
+          reader_proxy.mark_all_changes_sent_before(all_irrelevant_before);
+        }
+        if !no_longer_relevant.is_empty() {
+          gap_msg = gap_msg.gap_msg(
             &no_longer_relevant,
             self.entity_id(),
             self.endianness,
             reader_guid,
-          )
-          .add_header_and_build(self.my_guid.prefix);
+          );
+          no_longer_relevant.iter()
+            .for_each(|sn| reader_proxy.mark_change_sent(*sn));
+        }
+        let gap_msg = gap_msg.add_header_and_build(self.my_guid.prefix);
+
         self.send_message_to_readers(
           DeliveryMode::Unicast,
           gap_msg,
           &mut std::iter::once(&*reader_proxy),
         );
-      }
-
-      // Data or GAP was sent => remove from unsent list.
-      reader_proxy.mark_change_sent(unsent_sn);
+      } // if sending GAP
     } else {
       // Unsent list is empty. Switch off repair mode.
       reader_proxy.repair_mode = false;

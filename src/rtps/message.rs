@@ -476,6 +476,29 @@ impl MessageBuilder {
     self
   }
 
+  // GAP for range 1 <= SN < irrelevant_sns_before
+  pub fn gap_msg_before(
+    mut self,
+    irrelevant_sns_before: SequenceNumber,
+    writer_entity_id: EntityId,
+    writer_endianness: Endianness,
+    reader_guid: GUID,
+  ) -> Self {
+    let gap_list = SequenceNumberSet::new_empty(irrelevant_sns_before);
+    let gap = Gap {
+      reader_id: reader_guid.entity_id,
+      writer_id: writer_entity_id,
+      gap_start:  SequenceNumber::from(1),
+      gap_list,
+    };
+
+    let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer_endianness);
+    gap
+      .create_submessage(gap_flags)
+      .map(|s| self.submessages.push(s));
+    self    
+  }
+
   pub fn heartbeat_msg(
     mut self,
     writer: &RtpsWriter,
