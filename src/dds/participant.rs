@@ -915,6 +915,10 @@ impl DomainParticipantDisc {
     self.dpi.status_channel_receiver_mut()
   }
   #[cfg(feature = "rtps_proxy")]
+  pub(crate) fn proxy_channel_receiver(&self) -> &ProxyDataChannelReceiver {
+    self.dpi.proxy_channel_receiver()
+  }
+  #[cfg(feature = "rtps_proxy")]
   pub(crate) fn proxy_channel_receiver_mut(&mut self) -> &mut ProxyDataChannelReceiver {
     self.dpi.proxy_channel_receiver_mut()
   }
@@ -1451,6 +1455,10 @@ impl DomainParticipantInner {
     &mut self,
   ) -> &mut StatusChannelReceiver<DomainParticipantStatusEvent> {
     &mut self.status_receiver
+  }
+  #[cfg(feature = "rtps_proxy")]
+  pub(crate) fn proxy_channel_receiver(&self) -> &ProxyDataChannelReceiver {
+    &self.proxy_data_receiver
   }
   #[cfg(feature = "rtps_proxy")]
   pub(crate) fn proxy_channel_receiver_mut(&mut self) -> &mut ProxyDataChannelReceiver {

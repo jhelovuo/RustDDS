@@ -19,6 +19,7 @@ use crate::security::{
 
 pub trait ProxyEvented {
   fn as_proxy_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
+  fn try_recv_data(&self) -> Option<ProxyData>;
 }
 
 #[derive(Clone)]
@@ -69,6 +70,9 @@ impl ProxyEvented for ProxyDataChannelReceiver {
   fn as_proxy_evented(&mut self) -> &dyn Evented {
     self
   }
+  fn try_recv_data(&self) -> Option<ProxyData> {
+    self.actual_receiver.lock().unwrap().try_recv().ok()
+  }
 }
 
 pub(crate) fn sync_proxy_data_channel(
@@ -110,6 +114,14 @@ pub struct ProxyDataListener {
 impl ProxyEvented for ProxyDataListener {
   fn as_proxy_evented(&mut self) -> &dyn Evented {
     self
+  }
+  fn try_recv_data(&self) -> Option<ProxyData> {
+    self
+      .dp_disc
+      .lock()
+      .unwrap()
+      .proxy_channel_receiver()
+      .try_recv_data()
   }
 }
 
