@@ -1127,7 +1127,7 @@ impl Writer {
           } else {
             // we are running out of excuses
             error!(
-              "handle ack_nack writer {:?} seq.number {:?} missing from instant map",
+              "handle_repair_data_send_worker {:?} seq.number {:?} missing from instant map",
               self.my_guid, unsent_sn
             );
           }
