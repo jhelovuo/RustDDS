@@ -60,8 +60,7 @@ use crate::{
 use crate::no_security::SecurityPluginsHandle;
 #[cfg(feature = "rtps_proxy")]
 use crate::rtps_proxy::{
-  sync_proxy_data_channel, ProxyData, ProxyDataChannelReceiver, ProxyDataChannelSender,
-  ProxyDataListener,
+  sync_proxy_data_channel, ProxyDataChannelReceiver, ProxyDataChannelSender, ProxyDataListener,
 };
 
 pub struct DomainParticipantBuilder {

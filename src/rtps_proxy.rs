@@ -7,9 +7,10 @@ use mio_06::event::Evented;
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::participant::DomainParticipantDisc,
+  dds::{participant::DomainParticipantDisc, with_key::Sample},
   discovery::{DiscoveredReaderData, DiscoveredWriterData, SpdpDiscoveredParticipantData},
   rtps::Message,
+  Keyed,
 };
 #[cfg(feature = "security")]
 use crate::security::{
@@ -25,6 +26,12 @@ pub trait ProxyEvented {
 #[derive(Clone)]
 pub struct ProxyDataChannelSender {
   actual_sender: mio_channel::SyncSender<ProxyData>,
+}
+
+impl ProxyDataChannelSender {
+  pub fn try_send(&self, data: ProxyData) -> Result<(), mio_channel::TrySendError<ProxyData>> {
+    self.actual_sender.try_send(data)
+  }
 }
 
 pub struct ProxyDataChannelReceiver {
@@ -87,24 +94,31 @@ pub(crate) fn sync_proxy_data_channel(
   ))
 }
 
-#[derive(Clone)]
-pub enum DiscoveryDataWithLocator {
-  Participant(SpdpDiscoveredParticipantData),
-  Subscription(DiscoveredReaderData),
-  Publication(DiscoveredWriterData),
+#[derive(Clone, Debug)]
+// Samples of discovery data that contains locators
+pub enum DiscoverySample {
+  Participant(Sample<SpdpDiscoveredParticipantData, <SpdpDiscoveredParticipantData as Keyed>::K>),
+  Subscription(Sample<DiscoveredReaderData, <DiscoveredReaderData as Keyed>::K>),
+  Publication(Sample<DiscoveredWriterData, <DiscoveredWriterData as Keyed>::K>),
   #[cfg(feature = "security")]
-  ParticipantSecure(ParticipantBuiltinTopicDataSecure),
+  ParticipantSecure(
+    Sample<ParticipantBuiltinTopicDataSecure, <ParticipantBuiltinTopicDataSecure as Keyed>::K>,
+  ),
   #[cfg(feature = "security")]
-  SubscriptionSecure(SubscriptionBuiltinTopicDataSecure),
+  SubscriptionSecure(
+    Sample<SubscriptionBuiltinTopicDataSecure, <SubscriptionBuiltinTopicDataSecure as Keyed>::K>,
+  ),
   #[cfg(feature = "security")]
-  PublicationSecure(PublicationBuiltinTopicDataSecure),
+  PublicationSecure(
+    Sample<PublicationBuiltinTopicDataSecure, <PublicationBuiltinTopicDataSecure as Keyed>::K>,
+  ),
 }
 
 #[allow(clippy::large_enum_variant)] // Temporary, for dev only
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ProxyData {
   RTPSMessage(Message),
-  Discovery(DiscoveryDataWithLocator),
+  Discovery(DiscoverySample),
 }
 
 pub struct ProxyDataListener {

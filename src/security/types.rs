@@ -863,7 +863,7 @@ impl PlCdrSerialize for ParticipantBuiltinTopicDataSecure {
 
 // PublicationBuiltinTopicDataSecure from section 7.4.1.7 of the Security
 // specification
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PublicationBuiltinTopicDataSecure {
   pub discovered_writer_data: discovery::sedp_messages::DiscoveredWriterData,
   // data_tags in optional, since some DDS implementations do not send it
@@ -936,7 +936,7 @@ impl PlCdrSerialize for PublicationBuiltinTopicDataSecure {
 
 // SubscriptionBuiltinTopicDataSecure from section 7.4.1.8 of the Security
 // specification
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SubscriptionBuiltinTopicDataSecure {
   pub discovered_reader_data: discovery::sedp_messages::DiscoveredReaderData,
   // data_tags in optional, since some DDS implementations do not send it

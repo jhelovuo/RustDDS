@@ -56,7 +56,7 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::*;
 #[cfg(feature = "rtps_proxy")]
-use crate::rtps_proxy::{ProxyData, ProxyDataChannelSender};
+use crate::rtps_proxy::{self, ProxyData, ProxyDataChannelSender};
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum DiscoveryCommand {
@@ -942,6 +942,16 @@ impl Discovery {
       debug!("handle_participant_reader read {:?}", &s);
       match s {
         Ok(Some(ds)) => {
+          // If working in RTPS proxy mode, send a clone of the sample to the proxy
+          #[cfg(feature = "rtps_proxy")]
+          {
+            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
+              rtps_proxy::DiscoverySample::Participant(ds.value().clone()),
+            )) {
+              error!("RTPS proxy: Failed to send Participant sample: {e}");
+            }
+          }
+
           #[cfg(not(feature = "security"))]
           let permission = NormalDiscoveryPermission::Allow;
 
@@ -1076,10 +1086,21 @@ impl Discovery {
   }
 
   // Check if there are messages about new Readers
+  #[allow(clippy::map_identity)]
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let drds: Vec<Sample<DiscoveredReaderData, GUID>> =
       match self.dcps_subscription.reader.into_iterator() {
         Ok(ds) => ds
+          .map(|sample| {
+            // If working in RTPS proxy mode, send a clone of the sample to the proxy
+            #[cfg(feature = "rtps_proxy")]
+            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
+              rtps_proxy::DiscoverySample::Subscription(sample.clone()),
+            )) {
+              error!("RTPS proxy: Failed to send Subscription sample: {e}");
+            }
+            sample
+          })
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
           .filter(|d|
               // If a participant was specified, we must match its GUID prefix.
@@ -1145,6 +1166,7 @@ impl Discovery {
     } // loop
   }
 
+  #[allow(clippy::map_identity)]
   pub fn handle_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
     let dwds: Vec<Sample<DiscoveredWriterData, GUID>> =
       match self.dcps_publication.reader.into_iterator() {
@@ -1152,6 +1174,16 @@ impl Discovery {
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
         Ok(ds) => ds
+          .map(|sample| {
+            // If working in RTPS proxy mode, send a clone of the sample to the proxy
+            #[cfg(feature = "rtps_proxy")]
+            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
+              rtps_proxy::DiscoverySample::Publication(sample.clone()),
+            )) {
+              error!("RTPS proxy: Failed to send Publication sample: {e}");
+            }
+            sample
+          })
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
           // If a participant was specified, we must match its GUID prefix.
           .filter(|d| match (read_history, d) {
@@ -1526,6 +1558,16 @@ impl Discovery {
     };
 
     for sample in sample_iter {
+      // If working in RTPS proxy mode, send a clone of the sample to the proxy
+      #[cfg(feature = "rtps_proxy")]
+      {
+        if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
+          rtps_proxy::DiscoverySample::ParticipantSecure(sample.clone()),
+        )) {
+          error!("RTPS proxy: Failed to send ParticipantSecure sample: {e}");
+        }
+      }
+
       let permission = if let Some(security) = self.security_opt.as_mut() {
         security.secure_participant_read(
           &sample,
@@ -1553,10 +1595,21 @@ impl Discovery {
   }
 
   #[cfg(feature = "security")]
+  #[allow(clippy::map_identity)]
   pub fn handle_secure_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let sec_subs: Vec<Sample<SubscriptionBuiltinTopicDataSecure, GUID>> =
       match self.dcps_subscriptions_secure.reader.into_iterator() {
         Ok(ds) => ds
+          .map(|sample| {
+            // If working in RTPS proxy mode, send a clone of the sample to the proxy
+            #[cfg(feature = "rtps_proxy")]
+            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
+              rtps_proxy::DiscoverySample::SubscriptionSecure(sample.clone()),
+            )) {
+              error!("RTPS proxy: Failed to send SubscriptionSecure sample: {e}");
+            }
+            sample
+          })
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
           .filter(|d|
               // If a participant was specified, we must match its GUID prefix.
@@ -1607,10 +1660,21 @@ impl Discovery {
   }
 
   #[cfg(feature = "security")]
+  #[allow(clippy::map_identity)]
   pub fn handle_secure_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
     let sec_pubs: Vec<Sample<PublicationBuiltinTopicDataSecure, GUID>> =
       match self.dcps_publications_secure.reader.into_iterator() {
         Ok(ds) => ds
+          .map(|sample| {
+            // If working in RTPS proxy mode, send a clone of the sample to the proxy
+            #[cfg(feature = "rtps_proxy")]
+            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
+              rtps_proxy::DiscoverySample::PublicationSecure(sample.clone()),
+            )) {
+              error!("RTPS proxy: Failed to send PublicationSecure sample: {e}");
+            }
+            sample
+          })
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
           // If a participant was specified, we must match its GUID prefix.
           .filter(|d| match (read_history, d) {
