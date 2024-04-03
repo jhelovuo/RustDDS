@@ -23,10 +23,20 @@ use crate::{
 };
 use super::cache_change::CacheChange;
 
-/// DDSCache contains all cacheChanges that are produced by participant or
-/// received by participant. Each topic that has been published or subscribed to
+/// DDSCache contains all cacheChanges that are
+/// received by this participant. It is for serving local Readers. Local
+/// Writers each contain a HistoryBuffer to CacheChanges written by themselves.
+///
+/// Readers and Writers need separate caches, because the garbage collection
+/// algorithms must be different. DDS spec 1.4 table at pp. 99-100 defines the
+/// QoS History to be scoped over each Writer (individually), whereas History
+/// for Readers is scoped over the entire Topic (or Instances in it). This leads
+/// to situations where some sample would be garbage collected by a Reader's
+/// History policy, but must be preserved by a Writer's History Policy.
+
+/// Each topic that has been subscribed to
 /// is contained in a separate TopicCache. One TopicCache contains
-/// only DDSCacheChanges of one serialized IDL datatype. -> all cache changes in
+/// only CacheChanges of one serialized IDL datatype. -> all cache changes in
 /// same TopicCache can be serialized/deserialized same way. Topic/TopicCache is
 /// identified by its name, which must be unique in the whole Domain.
 ///
@@ -306,15 +316,6 @@ impl TopicCache {
         }) // we get iterator of Timestamp
         .filter_map(|(_sn, t)| self.get_change(t).map(|cc| (*t, cc))),
     )
-  }
-
-  pub fn writers_smallest_sn_in_cache(&self, writer_guid: GUID) -> Option<SequenceNumber> {
-    self
-      .sequence_numbers
-      .get(&writer_guid)
-      .and_then(|sn_to_ts| sn_to_ts.first_key_value())
-      .map(|(sn, _ts)| sn)
-      .copied()
   }
 
   fn reliable_before(&self, writer: GUID) -> SequenceNumber {
