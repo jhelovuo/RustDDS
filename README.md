@@ -20,10 +20,13 @@ Currently, the implementation is complete enough to do data exchange with [ROS2]
 
 The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talking to ROS components. The `ros2` module within RustDDS should not be used anymore.
 
+## Version 0.9.2
+* Redesign internal caching to resolve bugs in connecting.
+
 ## Version 0.9.1
 * Numerous bug fixes
- * Memory leak in DDSCache
- * Reliable receiver could get stuck
+  * Memory leak in DDSCache
+  * Reliable receiver could get stuck
 * DDS Security interoperability with FastDDS improved
 * New security features, e.g. PKCS#11 support, RSA authentication support
 
@@ -32,8 +35,8 @@ The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talki
 * DDS Security is under interoperability testing.
 * Support for DomainParticipnnt status events, mostly Discovery-related.
 * Small API changes
- * Simplify naming
- * QoS objects are now serializable
+  * Simplify naming
+  * QoS objects are now serializable
 * Protocol bug fixes with Realible connections.
 
 ## Version 0.8.6
@@ -103,7 +106,7 @@ This release breaks compatibility with 0.4.0. Differences are
 * Deadline and Latency budget QoS
 * Sample fragmentation (large object exchange) ✅
 * `wait_for_acknowledgments` ✅
-* Listener (or equivalent) for DomainParticipants
+* Listener (or equivalent) for DomainParticipants ✅
 * Listener (or equivalent) for Topics
 * Alternative API using Rust `async` tasks ✅
 * Shared-memory transport for local connections
