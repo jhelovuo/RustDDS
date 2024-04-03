@@ -19,10 +19,9 @@ use crate::{
     validity_trait::Validity,
     vendor_id::VendorId,
   },
-  rtps::{writer::Writer as RtpsWriter, Submessage, SubmessageBody},
+  rtps::{Submessage, SubmessageBody},
   structure::{
     cache_change::CacheChange,
-    entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     parameter_id::ParameterId,
     sequence_number::{FragmentNumber, SequenceNumber, SequenceNumberSet},
@@ -488,7 +487,7 @@ impl MessageBuilder {
     let gap = Gap {
       reader_id: reader_guid.entity_id,
       writer_id: writer_entity_id,
-      gap_start:  SequenceNumber::from(1),
+      gap_start: SequenceNumber::from(1),
       gap_list,
     };
 
@@ -496,12 +495,12 @@ impl MessageBuilder {
     gap
       .create_submessage(gap_flags)
       .map(|s| self.submessages.push(s));
-    self    
+    self
   }
 
+  #[allow(clippy::too_many_arguments)] // Heartbeat just is complicated.
   pub fn heartbeat_msg(
     mut self,
-    //writer: &RtpsWriter,
     writer_entity_id: EntityId,
     first: SequenceNumber,
     last: SequenceNumber,
@@ -511,7 +510,6 @@ impl MessageBuilder {
     set_final_flag: bool,
     set_liveliness_flag: bool,
   ) -> Self {
-
     let heartbeat = Heartbeat {
       reader_id: reader_entity_id,
       writer_id: writer_entity_id,

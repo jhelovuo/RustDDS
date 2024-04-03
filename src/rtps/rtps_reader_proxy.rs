@@ -232,8 +232,10 @@ impl RtpsReaderProxy {
         let new_all_acked_before = acknack.reader_sn_state.base();
         // sanity check:
         if new_all_acked_before < self.all_acked_before {
-          error!("all_acked_before updated backwards! old={:?} new={:?}",
-            self.all_acked_before, new_all_acked_before);
+          error!(
+            "all_acked_before updated backwards! old={:?} new={:?}",
+            self.all_acked_before, new_all_acked_before
+          );
         }
         self.remove_from_unsent_set_all_before(new_all_acked_before); // update anyway
         self.all_acked_before = new_all_acked_before;
@@ -247,7 +249,8 @@ impl RtpsReaderProxy {
         if let Some(&high) = self.unsent_changes.iter().next_back() {
           if high > last_available {
             warn!(
-              "ReaderProxy {:?} asks for {:?} but I have only up to {:?}. Truncating request. ACKNACK = {:?}",
+              "ReaderProxy {:?} asks for {:?} but I have only up to {:?}. Truncating request. \
+               ACKNACK = {:?}",
               self.remote_reader_guid, self.unsent_changes, last_available, acknack
             );
             // Requesting something which is not yet available is unreasonable.

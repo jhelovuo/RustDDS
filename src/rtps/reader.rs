@@ -556,14 +556,6 @@ impl Reader {
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, data.writer_id);
     let writer_seq_num = data.writer_sn; // for borrow checker
 
-    // DEBUG
-    if self.my_guid.entity_id == EntityId::SEDP_BUILTIN_PUBLICATIONS_READER 
-      && writer_guid.prefix != self.my_guid.prefix {
-      info!("Publications Reader got DATA {:?}  topic={}", 
-        writer_seq_num, self.topic_name);
-    }
-    // DEBUG
-
     match self.data_to_dds_data(data, data_flags) {
       Ok(dds_data) => self.process_received_data(
         dds_data,
@@ -905,7 +897,6 @@ impl Reader {
       );
     }
 
-    let topic_name = self.topic_name().clone(); // debug
     self
       .with_mutable_writer_proxy(writer_guid, |this, writer_proxy| {
         // Note: This is worker closure. Use `this` instead of `self`.
@@ -950,14 +941,6 @@ impl Reader {
 
         if !missing_seqnums.is_empty() || !final_flag_set {
           let mut partially_received = Vec::new();
-
-          // DEBUG
-          if reader_id == EntityId::SEDP_BUILTIN_PUBLICATIONS_READER 
-            && writer_guid.prefix != this.my_guid.prefix {
-            info!("Publications Reader missing {:?} topic={}",missing_seqnums, topic_name);
-          }
-          // DEBUG
-
           // report of what we have.
           // We claim to have received all SNs before "base" and produce a set of missing
           // sequence numbers that are >= base.
@@ -1080,14 +1063,6 @@ impl Reader {
 
     let writer_guid = GUID::new_with_prefix_and_id(mr_state.source_guid_prefix, gap.writer_id);
 
-    // DEBUG
-    if self.my_guid.entity_id == EntityId::SEDP_BUILTIN_PUBLICATIONS_READER 
-      && writer_guid.prefix != self.my_guid.prefix {
-      info!("Publications Reader got GAP {:?} {:?} topic={}", 
-        gap.gap_start, gap.gap_list, self.topic_name);
-    }
-    // DEBUG
-
     if self.like_stateless {
       debug!(
         "GAP from {:?}, but reader is stateless. Ignoring. topic={:?} reader={:?}",
@@ -1151,7 +1126,7 @@ impl Reader {
 
     // Receiving a GAP could make a Reliable stream.
     // E.g. we had #2, but were missing #1. Now GAP says that #1 does not exist.
-    // Then a Reliable Datareader 
+    // Then a Reliable Datareader
     if marker_moved {
       self.notify_cache_change();
     }

@@ -1,9 +1,9 @@
 use std::{
-  cmp::{min, max},
-  collections::{BTreeMap, BTreeSet, HashSet},
+  cmp::{max, min},
+  collections::{BTreeMap, BTreeSet},
   ops::Bound::Included,
   rc::Rc,
-  sync::{Arc, Mutex, MutexGuard, atomic},
+  sync::{atomic, Arc, Mutex},
 };
 use core::task::Waker;
 
@@ -124,16 +124,16 @@ impl AckWaiter {
 // helper struct for Writer
 struct HistoryBuffer {
   first_seq: SequenceNumber, // oldest not removed. Default is 1.
-  last_seq: SequenceNumber, // latest added. Default is 0.
+  last_seq: SequenceNumber,  // latest added. Default is 0.
 
   /// Maps this writers local sequence numbers to DDSHistoryCache instants.
   /// Useful when negative acknack is received.
   sequence_number_to_instant: BTreeMap<SequenceNumber, Timestamp>,
 
   /// History biffer for serving late-joining Readers nad ACKNACKs.
-  /// Maintains as many samples as QoS policies History and Resource Limits specifiy.
-  history_buffer: BTreeMap<Timestamp,CacheChange>,
-
+  /// Maintains as many samples as QoS policies History and Resource Limits
+  /// specifiy.
+  history_buffer: BTreeMap<Timestamp, CacheChange>,
 }
 
 impl HistoryBuffer {
@@ -161,13 +161,14 @@ impl HistoryBuffer {
     self.first_seq
   }
 
-
   fn get_change(&self, ts: Timestamp) -> Option<&CacheChange> {
     self.history_buffer.get(&ts)
   }
 
   fn get_by_sn(&self, sn: SequenceNumber) -> Option<&CacheChange> {
-    self.sequence_number_to_instant.get(&sn)
+    self
+      .sequence_number_to_instant
+      .get(&sn)
       .and_then(|ts| self.get_change(*ts))
   }
 
@@ -178,35 +179,42 @@ impl HistoryBuffer {
     let had_already_same = self.history_buffer.insert(timestamp, new_cache_change);
     if had_already_same.is_some() {
       // This should really not happen.
-      error!("HistoryBuffer: Tried to insert CacheChange with duplicate key. Discarding old sample.")
+      error!(
+        "HistoryBuffer: Tried to insert CacheChange with duplicate key. Discarding old sample."
+      );
     }
     // also update SeqNo map
-    self
-      .sequence_number_to_instant
-      .insert(new_seq, timestamp);
+    self.sequence_number_to_instant.insert(new_seq, timestamp);
 
     if new_seq > self.last_change_sequence_number() {
       self.last_seq = new_seq;
     } else {
-      error!("HistoryBuffer: Tried to add changes out of SequenceNumber order.")
+      error!("HistoryBuffer: Tried to add changes out of SequenceNumber order.");
     }
   }
 
   fn remove_changes_before(&mut self, remove_before_seq: SequenceNumber) {
     if let Some(remove_before) = self.sequence_number_to_instant.get(&remove_before_seq) {
       self.history_buffer = self.history_buffer.split_off(remove_before);
-      self.sequence_number_to_instant = self.sequence_number_to_instant.split_off(&remove_before_seq);
+      self.sequence_number_to_instant = self
+        .sequence_number_to_instant
+        .split_off(&remove_before_seq);
 
       if remove_before_seq >= self.first_seq {
         self.first_seq = remove_before_seq; // update
       } else {
-        error!("HistoryBuffer: Trying to remove before the first SequenceNumber. But how did we find it in the sequence_number_to_instant map? Looks like a bug.");
+        error!(
+          "HistoryBuffer: Trying to remove before the first SequenceNumber. But how did we find \
+           it in the sequence_number_to_instant map? Looks like a bug."
+        );
       }
     } else {
-      error!("HistoryBuffer: remove_changes_before. Cannot find {:?}", remove_before_seq)
+      error!(
+        "HistoryBuffer: remove_changes_before. Cannot find {:?}",
+        remove_before_seq
+      );
     }
   }
-
 }
 
 pub(crate) struct Writer {
@@ -282,8 +290,6 @@ pub(crate) struct Writer {
   // Stateless, and therefore does not process GAP messages at all.
   like_stateless: bool,
 
-  // Writer can read/write to one topic only, and it stores a pointer to a mutex on the topic cache
-  topic_cache: Arc<Mutex<TopicCache>>,
   /// Writer can only read/write to this topic DDSHistoryCache.
   my_topic_name: String,
 
@@ -305,7 +311,6 @@ pub(crate) struct Writer {
 
   security_plugins: Option<SecurityPluginsHandle>,
 }
-
 
 pub enum WriterCommand {
   // TODO: try to make this more private, like pub(crate)
@@ -397,7 +402,6 @@ impl Writer {
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
       udp_sender,
-      topic_cache: i.topic_cache_handle,
       my_topic_name: i.topic_name,
       history_buffer: HistoryBuffer::new(),
       timed_event_timer,
@@ -506,7 +510,7 @@ impl Writer {
 
   /// This is called by dp_wrapper every time cacheCleaning message is received.
   fn handle_cache_cleaning(&mut self) {
-    let resource_limit = 32; 
+    let resource_limit = 32;
     // TODO: This limit should be obtained
     // from Topic and Writer QoS. There should be some reasonable default limit
     // in case some supplied QoS setting does not specify a larger value.
@@ -521,7 +525,7 @@ impl Writer {
         self.remove_all_acked_changes_but_keep_depth(resource_limit);
       }
       Some(History::KeepLast { depth: d }) => {
-        self.remove_all_acked_changes_but_keep_depth( min(d as usize, resource_limit) );
+        self.remove_all_acked_changes_but_keep_depth(min(d as usize, resource_limit));
       }
     }
   }
@@ -561,7 +565,6 @@ impl Writer {
           // Insert data to local HistoryBuffer
           let timestamp =
             self.insert_to_history_buffer(dds_data, write_options.clone(), sequence_number);
-
 
           // If not acting stateless-like, notify reader proxies that there is a new
           // sample
@@ -605,8 +608,9 @@ impl Writer {
                 self.next_heartbeat_count(),
                 self.endianness,
                 EntityId::UNKNOWN, // to Reader
-                final_flag, 
-                liveliness_flag)
+                final_flag,
+                liveliness_flag,
+              )
               .add_header_and_build(self.my_guid.prefix);
             self.send_message_to_readers(
               DeliveryMode::Multicast,
@@ -746,16 +750,16 @@ impl Writer {
         let final_flag = false; // false = request that readers acknowledge with ACKNACK.
         let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
                                      // writing new data.
-        message_builder =
-          message_builder 
-            .heartbeat_msg(self.entity_id(), // from Writer
-                self.history_buffer.first_change_sequence_number(),
-                self.history_buffer.last_change_sequence_number(),
-                self.next_heartbeat_count(),
-                self.endianness,
-                reader_entity_id, // to Reader
-                final_flag, 
-                liveliness_flag);
+        message_builder = message_builder.heartbeat_msg(
+          self.entity_id(), // from Writer
+          self.history_buffer.first_change_sequence_number(),
+          self.history_buffer.last_change_sequence_number(),
+          self.next_heartbeat_count(),
+          self.endianness,
+          reader_entity_id, // to Reader
+          final_flag,
+          liveliness_flag,
+        );
       }
 
       let data_message = message_builder.add_header_and_build(self.my_guid.prefix);
@@ -820,14 +824,15 @@ impl Writer {
                                      // writing new data.
         let hb_msg = MessageBuilder::new()
           .heartbeat_msg(
-                self.entity_id(), // from Writer
-                self.history_buffer.first_change_sequence_number(),
-                self.history_buffer.last_change_sequence_number(),
-                self.next_heartbeat_count(),
-                self.endianness,
-                reader_entity_id, // to Reader
-                final_flag, 
-                liveliness_flag)
+            self.entity_id(), // from Writer
+            self.history_buffer.first_change_sequence_number(),
+            self.history_buffer.last_change_sequence_number(),
+            self.next_heartbeat_count(),
+            self.endianness,
+            reader_entity_id, // to Reader
+            final_flag,
+            liveliness_flag,
+          )
           .add_header_and_build(self.my_guid.prefix);
         messages_to_send.push(hb_msg);
       }
@@ -911,7 +916,6 @@ impl Writer {
     {
       trace!("heartbeat tick: all readers have all available data.");
     } else {
-
       // the interface to .heartbeat_msg is silly: we give ref to ourself
       // and that function then queries us.
       let hb_message = MessageBuilder::new()
@@ -923,8 +927,9 @@ impl Writer {
           self.next_heartbeat_count(),
           self.endianness,
           EntityId::UNKNOWN, // to Reader
-          final_flag, 
-          liveliness_flag)
+          final_flag,
+          liveliness_flag,
+        )
         .add_header_and_build(self.my_guid.prefix);
 
       debug!(
@@ -1001,7 +1006,7 @@ impl Writer {
           reader_proxy.handle_ack_nack(ack_submessage, last_seq);
 
           let reader_guid = reader_proxy.remote_reader_guid; // copy to avoid double mut borrow
-                                                             
+
           // Sanity Check: if the reader asked for something we did not even advertise
           // yet. TODO: This
           // checks the stored unset_changes, not presently received ACKNACK.
@@ -1176,28 +1181,28 @@ impl Writer {
       let pending_gaps = reader_proxy.get_pending_gap();
 
       // Check what we actually have in store
-      let first_available = self.history_buffer.first_change_sequence_number(); 
+      let first_available = self.history_buffer.first_change_sequence_number();
       if unsent_sn < first_available {
-        // Reader is requesting older than what we actually have. Notify that they are gone.
+        // Reader is requesting older than what we actually have. Notify that they are
+        // gone.
         all_irrelevant_before = Some(first_available);
       }
 
       // If all_irrelevant_before is still None, then TopicCache has SNs that are
-      // less than equal to the requested "unsent_sn". But might not have that exact SN.
+      // less than equal to the requested "unsent_sn". But might not have that exact
+      // SN.
       if pending_gaps.contains(&unsent_sn) || all_irrelevant_before.is_some() {
         no_longer_relevant.extend(pending_gaps);
       } else {
         // Reader not pending gap on unsent_sn. Get the cache change from topic cache
-        if let Some(cc) = self.history_buffer.get_by_sn(unsent_sn)
-        {
-          // DEBUG
-          if self.my_guid.entity_id == EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER 
-            && reader_proxy.remote_reader_guid.prefix != self.my_guid.prefix {
-            info!("Publications Writer sends repair DATA {:?}", 
-              unsent_sn);
-          }
-          // DEBUG
-
+        if let Some(cc) = self.history_buffer.get_by_sn(unsent_sn) {
+          // // DEBUG
+          // if self.my_guid.entity_id == EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER
+          //   && reader_proxy.remote_reader_guid.prefix != self.my_guid.prefix
+          // {
+          //   info!("Publications Writer sends repair DATA {:?}", unsent_sn);
+          // }
+          // // DEBUG
 
           // The cache change was found. Send it to the reader
           let data_was_fragmented = self.send_cache_change(cc, false, Some(reader_proxy));
@@ -1231,8 +1236,7 @@ impl Writer {
             // we are running out of excuses
             error!(
               "handle_repair_data_send_worker {:?} seq.number {:?} missing. first_change={:?}",
-              self.my_guid, unsent_sn,
-              first_available
+              self.my_guid, unsent_sn, first_available
             );
           }
         }
@@ -1240,14 +1244,6 @@ impl Writer {
 
       // Send a GAP if we marked a sequence number as no longer relevant
       if !no_longer_relevant.is_empty() || all_irrelevant_before.is_some() {
-        // DEBUG
-        if self.my_guid.entity_id == EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER 
-          && reader_proxy.remote_reader_guid.prefix != self.my_guid.prefix {
-          info!("Publications Writer sends repair GAP {:?} and all_before={:?}", 
-            no_longer_relevant, all_irrelevant_before);
-        }
-        // DEBUG
-
         let mut gap_msg = MessageBuilder::new()
           .dst_submessage(self.endianness, reader_guid.prefix);
         if let Some(all_irrelevant_before) = all_irrelevant_before {
@@ -1266,7 +1262,8 @@ impl Writer {
             self.endianness,
             reader_guid,
           );
-          no_longer_relevant.iter()
+          no_longer_relevant
+            .iter()
             .for_each(|sn| reader_proxy.mark_change_sent(*sn));
         }
         let gap_msg = gap_msg.add_header_and_build(self.my_guid.prefix);
@@ -1379,11 +1376,13 @@ impl Writer {
     };
 
     // actual cleaning
-    self.history_buffer.remove_changes_before( first_keeper );
+    self.history_buffer.remove_changes_before(first_keeper);
   }
 
   pub(crate) fn next_heartbeat_count(&self) -> i32 {
-    self.heartbeat_message_counter.fetch_add(1, atomic::Ordering::SeqCst)
+    self
+      .heartbeat_message_counter
+      .fetch_add(1, atomic::Ordering::SeqCst)
   }
 
   #[cfg(feature = "security")]
@@ -1667,15 +1666,6 @@ impl Writer {
 
   pub fn topic_name(&self) -> &String {
     &self.my_topic_name
-  }
-
-  fn acquire_the_topic_cache_guard(&self) -> MutexGuard<TopicCache> {
-    self.topic_cache.lock().unwrap_or_else(|e| {
-      panic!(
-        "The topic cache of topic {} is poisoned. Error: {}",
-        &self.my_topic_name, e
-      )
-    })
   }
 
   fn send_participant_status(&self, event: DomainParticipantStatusEvent) {
