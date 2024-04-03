@@ -229,7 +229,7 @@ impl DomainParticipantBuilder {
 
     #[cfg(feature = "rtps_proxy")]
     // Channel used to send RTPS-proxy data to DomainParticipant
-    let (proxy_data_sender, proxy_data_receiver) = sync_proxy_data_channel(16)?;
+    let (proxy_data_sender, proxy_data_receiver) = sync_proxy_data_channel(128)?;
 
     #[cfg(not(feature = "security"))]
     let security_plugins_handle = None;
