@@ -1240,6 +1240,14 @@ impl Writer {
 
       // Send a GAP if we marked a sequence number as no longer relevant
       if !no_longer_relevant.is_empty() || all_irrelevant_before.is_some() {
+        // DEBUG
+        if self.my_guid.entity_id == EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER 
+          && reader_proxy.remote_reader_guid.prefix != self.my_guid.prefix {
+          info!("Publications Writer sends repair GAP {:?} and all_before={:?}", 
+            no_longer_relevant, all_irrelevant_before);
+        }
+        // DEBUG
+
         let mut gap_msg = MessageBuilder::new()
           .dst_submessage(self.endianness, reader_guid.prefix);
         if let Some(all_irrelevant_before) = all_irrelevant_before {
