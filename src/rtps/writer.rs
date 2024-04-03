@@ -38,7 +38,6 @@ use crate::{
   },
   structure::{
     cache_change::CacheChange,
-    dds_cache::TopicCache,
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
@@ -76,8 +75,6 @@ pub(crate) struct WriterIngredients {
   pub writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   pub writer_command_receiver_waker: Arc<Mutex<Option<Waker>>>,
   pub topic_name: String,
-  pub(crate) topic_cache_handle: Arc<Mutex<TopicCache>>, /* A handle to the topic cache in DDS
-                                                          * cache */
   pub(crate) like_stateless: bool, // Usually false (see like_stateless attribute of Writer)
   pub qos_policies: QosPolicies,
   pub status_sender: StatusChannelSender<DataWriterStatus>,
@@ -332,15 +329,6 @@ impl Writer {
     mut timed_event_timer: Timer<TimedEvent>,
     participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
   ) -> Self {
-    // Verify that the topic cache corresponds to the topic of the Reader
-    let topic_cache_name = i.topic_cache_handle.lock().unwrap().topic_name();
-    if i.topic_name != topic_cache_name {
-      panic!(
-        "Topic name = {} and topic cache name = {} not equal when creating a Writer",
-        i.topic_name, topic_cache_name
-      );
-    }
-
     // If writer should behave statelessly, only BestEffort QoS is currently
     // supported
     if i.like_stateless && i.qos_policies.is_reliable() {
@@ -1244,8 +1232,7 @@ impl Writer {
 
       // Send a GAP if we marked a sequence number as no longer relevant
       if !no_longer_relevant.is_empty() || all_irrelevant_before.is_some() {
-        let mut gap_msg = MessageBuilder::new()
-          .dst_submessage(self.endianness, reader_guid.prefix);
+        let mut gap_msg = MessageBuilder::new().dst_submessage(self.endianness, reader_guid.prefix);
         if let Some(all_irrelevant_before) = all_irrelevant_before {
           gap_msg = gap_msg.gap_msg_before(
             all_irrelevant_before,
