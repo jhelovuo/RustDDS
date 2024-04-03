@@ -1,9 +1,9 @@
 use std::{
-  cmp::max,
+  cmp::{min, max},
   collections::{BTreeMap, BTreeSet, HashSet},
   ops::Bound::Included,
   rc::Rc,
-  sync::{Arc, Mutex, MutexGuard},
+  sync::{Arc, Mutex, MutexGuard, atomic},
 };
 use core::task::Waker;
 
@@ -121,9 +121,97 @@ impl AckWaiter {
   }
 }
 
+// helper struct for Writer
+struct HistoryBuffer {
+  first_seq: SequenceNumber, // oldest not removed. Default is 1.
+  last_seq: SequenceNumber, // latest added. Default is 0.
+
+  /// Maps this writers local sequence numbers to DDSHistoryCache instants.
+  /// Useful when negative acknack is received.
+  sequence_number_to_instant: BTreeMap<SequenceNumber, Timestamp>,
+
+  /// History biffer for serving late-joining Readers nad ACKNACKs.
+  /// Maintains as many samples as QoS policies History and Resource Limits specifiy.
+  history_buffer: BTreeMap<Timestamp,CacheChange>,
+
+}
+
+impl HistoryBuffer {
+  fn new() -> Self {
+    HistoryBuffer {
+      first_seq: SequenceNumber::new(1),
+      last_seq: SequenceNumber::new(0), // Indicates that we have nothing yet
+      sequence_number_to_instant: BTreeMap::new(),
+      history_buffer: BTreeMap::new(),
+    }
+  }
+
+  /// Internal counter used to assign
+  /// increasing sequence number to
+  /// each change made by the Writer
+  fn last_change_sequence_number(&self) -> SequenceNumber {
+    self.last_seq
+  }
+
+  /// If samples are available in the Writer, identifies the first (lowest)
+  /// sequence number that is available in the Writer.
+  /// If no samples are available in the Writer, identifies the lowest
+  /// sequence number that is yet to be written by the Writer
+  fn first_change_sequence_number(&self) -> SequenceNumber {
+    self.first_seq
+  }
+
+
+  fn get_change(&self, ts: Timestamp) -> Option<&CacheChange> {
+    self.history_buffer.get(&ts)
+  }
+
+  fn get_by_sn(&self, sn: SequenceNumber) -> Option<&CacheChange> {
+    self.sequence_number_to_instant.get(&sn)
+      .and_then(|ts| self.get_change(*ts))
+  }
+
+  fn add_change(&mut self, timestamp: Timestamp, new_cache_change: CacheChange) {
+    let new_seq = new_cache_change.sequence_number;
+
+    // actual insert
+    let had_already_same = self.history_buffer.insert(timestamp, new_cache_change);
+    if had_already_same.is_some() {
+      // This should really not happen.
+      error!("HistoryBuffer: Tried to insert CacheChange with duplicate key. Discarding old sample.")
+    }
+    // also update SeqNo map
+    self
+      .sequence_number_to_instant
+      .insert(new_seq, timestamp);
+
+    if new_seq > self.last_change_sequence_number() {
+      self.last_seq = new_seq;
+    } else {
+      error!("HistoryBuffer: Tried to add changes out of SequenceNumber order.")
+    }
+  }
+
+  fn remove_changes_before(&mut self, remove_before_seq: SequenceNumber) {
+    if let Some(remove_before) = self.sequence_number_to_instant.get(&remove_before_seq) {
+      self.history_buffer = self.history_buffer.split_off(remove_before);
+      self.sequence_number_to_instant = self.sequence_number_to_instant.split_off(&remove_before_seq);
+
+      if remove_before_seq >= self.first_seq {
+        self.first_seq = remove_before_seq; // update
+      } else {
+        error!("HistoryBuffer: Trying to remove before the first SequenceNumber. But how did we find it in the sequence_number_to_instant map? Looks like a bug.");
+      }
+    } else {
+      error!("HistoryBuffer: remove_changes_before. Cannot find {:?}", remove_before_seq)
+    }
+  }
+
+}
+
 pub(crate) struct Writer {
   pub endianness: Endianness,
-  pub heartbeat_message_counter: i32,
+  pub heartbeat_message_counter: atomic::AtomicI32,
   /// Configures the mode in which the
   /// Writer operates. If
   /// pushMode==true, then the Writer
@@ -158,15 +246,6 @@ pub(crate) struct Writer {
   // TODO: use this
   #[allow(dead_code)]
   pub nack_suppression_duration: std::time::Duration,
-  /// Internal counter used to assign
-  /// increasing sequence number to
-  /// each change made by the Writer
-  pub last_change_sequence_number: SequenceNumber,
-  /// If samples are available in the Writer, identifies the first (lowest)
-  /// sequence number that is available in the Writer.
-  /// If no samples are available in the Writer, identifies the lowest
-  /// sequence number that is yet to be written by the Writer
-  pub first_change_sequence_number: SequenceNumber,
 
   /// The maximum size of any
   /// SerializedPayload that may be sent by the Writer.
@@ -181,12 +260,14 @@ pub(crate) struct Writer {
   my_guid: GUID,
   pub(crate) writer_command_receiver: mio_channel::Receiver<WriterCommand>,
   writer_command_receiver_waker: Arc<Mutex<Option<Waker>>>,
+
   /// The RTPS ReaderProxy class represents the information an RTPS
   /// StatefulWriter maintains on each matched RTPS Reader
   readers: BTreeMap<GUID, RtpsReaderProxy>,
-  matched_readers_count_total: i32, // all matches, never decremented
-  requested_incompatible_qos_count: i32, // how many times a Reader requested incompatible QoS
-  // message: Option<Message>,
+  matched_readers_count_total: i32, // all matches ever, never decremented
+  requested_incompatible_qos_count: i32, // how many times some Reader requested incompatible QoS
+
+  // Sending mechanism
   udp_sender: Rc<UDPSender>,
 
   // By default, this writer is a StatefulWriter (see RTPS spec section 8.4.9)
@@ -206,24 +287,8 @@ pub(crate) struct Writer {
   /// Writer can only read/write to this topic DDSHistoryCache.
   my_topic_name: String,
 
-  /// Maps this writers local sequence numbers to DDSHistoryCache instants.
-  /// Useful when negative acknack is received.
-  sequence_number_to_instant: BTreeMap<SequenceNumber, Timestamp>,
+  history_buffer: HistoryBuffer,
 
-  /// Maps this writers local sequence numbers to DDSHistoryCache instants.
-  /// Useful when datawriter dispose is received.
-  // key_to_instant: HashMap<u128, Timestamp>,  // unused?
-
-  /// Set of disposed samples.
-  /// Useful when reader requires some sample with acknack.
-  // TODO: Apparently, this is never updated.
-  disposed_sequence_numbers: HashSet<SequenceNumber>,
-
-  // When dataWriter sends cacheChange message with cacheKind is NotAliveDisposed
-  // this is set true. If Datawriter after disposing sends new cacheChanges this flag is then
-  // turned true.
-  // When writer is in disposed state it needs to send StatusInfo_t (PID_STATUS_INFO) with
-  // DisposedFlag pub writer_is_disposed: bool,
   /// Contains timer that needs to be set to timeout with duration of
   /// self.heartbeat_period timed_event_handler sends notification when timer
   /// is up via mio channel to poll in Dp_eventWrapper this also handles
@@ -240,7 +305,8 @@ pub(crate) struct Writer {
 
   security_plugins: Option<SecurityPluginsHandle>,
 }
-//#[derive(Clone)]
+
+
 pub enum WriterCommand {
   // TODO: try to make this more private, like pub(crate)
   DDSData {
@@ -313,7 +379,7 @@ impl Writer {
 
     Self {
       endianness: Endianness::LittleEndian,
-      heartbeat_message_counter: 1,
+      heartbeat_message_counter: atomic::AtomicI32::new(1),
       push_mode: true,
       heartbeat_period,
       cache_cleaning_period,
@@ -321,8 +387,6 @@ impl Writer {
       nackfrag_response_delay: NACK_RESPONSE_DELAY, // default value from dp_event_loop
       repairfrags_continue_delay: std::time::Duration::from_millis(1),
       nack_suppression_duration: NACK_SUPPRESSION_DURATION,
-      first_change_sequence_number: SequenceNumber::from(1), // first = 1, last = 0
-      last_change_sequence_number: SequenceNumber::from(0),  // means we have nothing to write
       data_max_size_serialized: 1024,
       // ^^ TODO: Maybe a smarter selection would be in order.
       // We should get the minimum over all outgoing interfaces.
@@ -335,8 +399,7 @@ impl Writer {
       udp_sender,
       topic_cache: i.topic_cache_handle,
       my_topic_name: i.topic_name,
-      sequence_number_to_instant: BTreeMap::new(),
-      disposed_sequence_numbers: HashSet::new(),
+      history_buffer: HistoryBuffer::new(),
       timed_event_timer,
       like_stateless: i.like_stateless,
       qos_policies: i.qos_policies,
@@ -358,6 +421,8 @@ impl Writer {
     self.qos_policies.is_reliable()
   }
 
+  /// Lists the known local (same DomainParticipant) ReaderProxies
+  /// Note that local non-matching Readers are not here.
   pub fn local_readers(&self) -> Vec<EntityId> {
     let min = GUID::new_with_prefix_and_id(self.my_guid.prefix, EntityId::MIN);
     let max = GUID::new_with_prefix_and_id(self.my_guid.prefix, EntityId::MAX);
@@ -441,20 +506,22 @@ impl Writer {
 
   /// This is called by dp_wrapper every time cacheCleaning message is received.
   fn handle_cache_cleaning(&mut self) {
-    let resource_limit = 32; // TODO: This limit should be obtained
-                             // from Topic and Writer QoS. There should be some reasonable default limit
-                             // in case some supplied QoS setting does not specify a larger value.
-                             // In any case, there has to be some limit to avoid memory leak.
+    let resource_limit = 32; 
+    // TODO: This limit should be obtained
+    // from Topic and Writer QoS. There should be some reasonable default limit
+    // in case some supplied QoS setting does not specify a larger value.
+    // In any case, there has to be some limit to avoid memory leak.
 
     match self.qos_policies.history {
       None => {
+        // DDS Specification says this is the default History policy
         self.remove_all_acked_changes_but_keep_depth(1);
       }
       Some(History::KeepAll) => {
         self.remove_all_acked_changes_but_keep_depth(resource_limit);
       }
       Some(History::KeepLast { depth: d }) => {
-        self.remove_all_acked_changes_but_keep_depth(d as usize);
+        self.remove_all_acked_changes_but_keep_depth( min(d as usize, resource_limit) );
       }
     }
   }
@@ -491,9 +558,10 @@ impl Writer {
               .map(|w| w.wake_by_ref());
           }
 
-          // Insert data to DDS / history cache
+          // Insert data to local HistoryBuffer
           let timestamp =
-            self.insert_to_history_cache(dds_data, write_options.clone(), sequence_number);
+            self.insert_to_history_buffer(dds_data, write_options.clone(), sequence_number);
+
 
           // If not acting stateless-like, notify reader proxies that there is a new
           // sample
@@ -510,11 +578,10 @@ impl Writer {
               }
             }
           }
-          self.increase_heartbeat_counter();
 
           if self.push_mode {
             // Send data (DATA or DATAFRAGs) and a Heartbeat
-            if let Some(cc) = self.acquire_the_topic_cache_guard().get_change(&timestamp) {
+            if let Some(cc) = self.history_buffer.get_change(timestamp) {
               let target_reader_opt = match write_options.to_single_reader() {
                 Some(guid) => self.readers.get(&guid), // Sending only to this reader
                 None => None,                          // Sending to all matched readers
@@ -531,7 +598,15 @@ impl Writer {
             let final_flag = false; // false = request that readers acknowledge with ACKNACK.
             let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
             let hb_message = MessageBuilder::new()
-              .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
+              .heartbeat_msg(
+                self.entity_id(), // from Writer
+                self.history_buffer.first_change_sequence_number(),
+                self.history_buffer.last_change_sequence_number(),
+                self.next_heartbeat_count(),
+                self.endianness,
+                EntityId::UNKNOWN, // to Reader
+                final_flag, 
+                liveliness_flag)
               .add_header_and_build(self.my_guid.prefix);
             self.send_message_to_readers(
               DeliveryMode::Multicast,
@@ -555,7 +630,7 @@ impl Writer {
             return;
           }
 
-          let wait_until = self.last_change_sequence_number;
+          let wait_until = self.history_buffer.last_change_sequence_number();
           let readers_pending: BTreeSet<_> = self
             .readers
             .iter()
@@ -672,7 +747,15 @@ impl Writer {
         let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
                                      // writing new data.
         message_builder =
-          message_builder.heartbeat_msg(self, reader_entity_id, final_flag, liveliness_flag);
+          message_builder 
+            .heartbeat_msg(self.entity_id(), // from Writer
+                self.history_buffer.first_change_sequence_number(),
+                self.history_buffer.last_change_sequence_number(),
+                self.next_heartbeat_count(),
+                self.endianness,
+                reader_entity_id, // to Reader
+                final_flag, 
+                liveliness_flag);
       }
 
       let data_message = message_builder.add_header_and_build(self.my_guid.prefix);
@@ -736,7 +819,15 @@ impl Writer {
         let liveliness_flag = false; // This is not a manual liveliness assertion (DDS API call), but side-effect of
                                      // writing new data.
         let hb_msg = MessageBuilder::new()
-          .heartbeat_msg(self, reader_entity_id, final_flag, liveliness_flag)
+          .heartbeat_msg(
+                self.entity_id(), // from Writer
+                self.history_buffer.first_change_sequence_number(),
+                self.history_buffer.last_change_sequence_number(),
+                self.next_heartbeat_count(),
+                self.endianness,
+                reader_entity_id, // to Reader
+                final_flag, 
+                liveliness_flag)
           .add_header_and_build(self.my_guid.prefix);
         messages_to_send.push(hb_msg);
       }
@@ -764,7 +855,7 @@ impl Writer {
     fragmentation_needed
   }
 
-  fn insert_to_history_cache(
+  fn insert_to_history_buffer(
     &mut self,
     data: DDSData,
     write_options: WriteOptions,
@@ -772,34 +863,15 @@ impl Writer {
   ) -> Timestamp {
     assert!(new_sequence_number > SequenceNumber::zero());
 
-    // Create a new CacheChange from DDSData & insert to topic cache
+    // Create a new CacheChange from DDSData & insert to history buffer
     // The timestamp taken here is used as a unique(!) key in the cache.
     let new_cache_change = CacheChange::new(self.guid(), new_sequence_number, write_options, data);
     let timestamp = Timestamp::now();
 
-    let mut topic_cache = self.acquire_the_topic_cache_guard();
-    topic_cache.add_change(&timestamp, new_cache_change);
+    self.history_buffer.add_change(timestamp, new_cache_change);
 
-    // Set our sequence numbering state right
-    let first_available_sn = match topic_cache.writers_smallest_sn_in_cache(self.my_guid) {
-      Some(sn) => sn,
-      None => {
-        warn!(
-          "Could not get the smallest available sequence number from topic cache. Something's not \
-           right."
-        );
-        new_sequence_number
-      }
-    };
-    drop(topic_cache);
-
-    self.first_change_sequence_number = first_available_sn;
-    self.last_change_sequence_number = new_sequence_number;
-
-    // keeping table of instant sequence number pairs
-    self
-      .sequence_number_to_instant
-      .insert(new_sequence_number, timestamp);
+    // Do not add to Global DDS cache, as we do not necessarily have a local Reader.
+    // If we do, then we will receive the ATA packet from network.
 
     timestamp
   }
@@ -829,34 +901,45 @@ impl Writer {
       self.readers.len()
     );
 
-    self.increase_heartbeat_counter();
-    // TODO: This produces same heartbeat count for all messages sent, but
-    // then again, they represent the same writer status.
+    let first_change = self.history_buffer.first_change_sequence_number();
+    let last_change = self.history_buffer.last_change_sequence_number();
 
     if self
       .readers
       .values()
-      .all(|rp| self.last_change_sequence_number < rp.all_acked_before)
+      .all(|rp| last_change < rp.all_acked_before)
     {
       trace!("heartbeat tick: all readers have all available data.");
     } else {
+
+      // the interface to .heartbeat_msg is silly: we give ref to ourself
+      // and that function then queries us.
       let hb_message = MessageBuilder::new()
         .ts_msg(self.endianness, Some(Timestamp::now()))
-        .heartbeat_msg(self, EntityId::UNKNOWN, final_flag, liveliness_flag)
+        .heartbeat_msg(
+          self.entity_id(), // from Writer
+          self.history_buffer.first_change_sequence_number(),
+          self.history_buffer.last_change_sequence_number(),
+          self.next_heartbeat_count(),
+          self.endianness,
+          EntityId::UNKNOWN, // to Reader
+          final_flag, 
+          liveliness_flag)
         .add_header_and_build(self.my_guid.prefix);
 
       debug!(
-        "Writer {:?} topic={:} HEARTBEAT {:?}",
+        "Writer {:?} topic={:} HEARTBEAT {:?} to {:?}",
         self.guid().entity_id,
         self.topic_name(),
-        hb_message
+        first_change,
+        last_change,
       );
 
       // In the volatile key exchange topic we cannot send to multiple readers by any
       // means, so we handle that separately.
       if self.entity_id() == EntityId::P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_WRITER {
         for rp in self.readers.values() {
-          if self.last_change_sequence_number < rp.all_acked_before {
+          if last_change < rp.all_acked_before {
             // Everything we have has been acknowledged already. Do nothing.
           } else {
             self.send_message_to_readers(
@@ -900,7 +983,7 @@ impl Writer {
     match ack_submessage {
       AckSubmessage::AckNack(ref an) => {
         // Update the ReaderProxy
-        let last_seq = self.last_change_sequence_number; // to avoid borrow problems
+        let last_seq = self.history_buffer.last_change_sequence_number(); // to avoid borrow problems
 
         // sanity check requested sequence numbers
         match an.reader_sn_state.iter().next().map(i64::from) {
@@ -922,33 +1005,34 @@ impl Writer {
           // Sanity Check: if the reader asked for something we did not even advertise
           // yet. TODO: This
           // checks the stored unset_changes, not presently received ACKNACK.
-          if let Some(req_high) = reader_proxy.unsent_changes_iter().next_back() {
-            if req_high > last_seq {
+          if cfg!(debug_assertions) {
+            if let Some(req_high) = reader_proxy.unsent_changes_iter().next_back() {
+              if req_high > last_seq {
+                warn!(
+                  "ReaderProxy {:?} thinks we need to send {:?} but I have only up to {:?}",
+                  reader_proxy.remote_reader_guid,
+                  reader_proxy.unsent_changes_debug(),
+                  last_seq
+                );
+              }
+            }
+            // Sanity Check 2
+            if an.reader_sn_state.base() > last_seq.plus_1() {
               warn!(
-                "ReaderProxy {:?} thinks we need to send {:?} but I have only up to {:?}",
-                reader_proxy.remote_reader_guid,
-                reader_proxy.unsent_changes_debug(),
-                last_seq
+                "ACKNACK from {:?} acks {:?}, but I have only up to {:?} count={:?} topic={:?}",
+                reader_proxy.remote_reader_guid, an.reader_sn_state, last_seq, an.count, my_topic
               );
             }
-          }
-          // Sanity Check
-          if an.reader_sn_state.base() > last_seq.plus_1() {
-            // more sanity
-            warn!(
-              "ACKNACK from {:?} acks {:?}, but I have only up to {:?} count={:?} topic={:?}",
-              reader_proxy.remote_reader_guid, an.reader_sn_state, last_seq, an.count, my_topic
-            );
-          }
-          if let Some(max_req_sn) = an.reader_sn_state.iter().next_back() {
-            // sanity check
-            if max_req_sn > last_seq {
-              warn!(
-                "ACKNACK from {:?} requests {:?} but I have only up to {:?}",
-                reader_proxy.remote_reader_guid,
-                an.reader_sn_state.iter().collect::<Vec<SequenceNumber>>(),
-                last_seq
-              );
+            // Sanity check 3
+            if let Some(max_req_sn) = an.reader_sn_state.iter().next_back() {
+              if max_req_sn > last_seq {
+                warn!(
+                  "ACKNACK from {:?} requests {:?} but I have only up to {:?}",
+                  reader_proxy.remote_reader_guid,
+                  an.reader_sn_state.iter().collect::<Vec<SequenceNumber>>(),
+                  last_seq
+                );
+              }
             }
           }
 
@@ -1092,16 +1176,11 @@ impl Writer {
       let pending_gaps = reader_proxy.get_pending_gap();
 
       // Check what we actually have in store
-      let topic_cache_guard = self.acquire_the_topic_cache_guard();
-      if let Some(first_available) = topic_cache_guard.writers_smallest_sn_in_cache(self.my_guid) {
-        if unsent_sn < first_available {
-          all_irrelevant_before = Some(first_available);
-        }
-      } else {
-        // We do not have any samples to send!
-        all_irrelevant_before = Some(unsent_sn);
+      let first_available = self.history_buffer.first_change_sequence_number(); 
+      if unsent_sn < first_available {
+        // Reader is requesting older than what we actually have. Notify that they are gone.
+        all_irrelevant_before = Some(first_available);
       }
-      std::mem::drop(topic_cache_guard);
 
       // If all_irrelevant_before is still None, then TopicCache has SNs that are
       // less than equal to the requested "unsent_sn". But might not have that exact SN.
@@ -1109,11 +1188,17 @@ impl Writer {
         no_longer_relevant.extend(pending_gaps);
       } else {
         // Reader not pending gap on unsent_sn. Get the cache change from topic cache
-        let topic_cache = self.acquire_the_topic_cache_guard();
-        if let Some(cc) = self
-          .sequence_number_to_instant(unsent_sn)
-          .and_then(|ts| topic_cache.get_change(&ts))
+        if let Some(cc) = self.history_buffer.get_by_sn(unsent_sn)
         {
+          // DEBUG
+          if self.my_guid.entity_id == EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER 
+            && reader_proxy.remote_reader_guid.prefix != self.my_guid.prefix {
+            info!("Publications Writer sends repair DATA {:?}", 
+              unsent_sn);
+          }
+          // DEBUG
+
+
           // The cache change was found. Send it to the reader
           let data_was_fragmented = self.send_cache_change(cc, false, Some(reader_proxy));
 
@@ -1124,7 +1209,6 @@ impl Writer {
             reader_proxy.mark_all_frags_requested(unsent_sn, num_frags);
 
             // Set a timer to send repair frags if needed
-            std::mem::drop(topic_cache); // For borrow checker
             self.timed_event_timer.set_timeout(
               self.repairfrags_continue_delay,
               TimedEvent::SendRepairFrags {
@@ -1135,25 +1219,20 @@ impl Writer {
           // mark as sent
           reader_proxy.mark_change_sent(unsent_sn);
         } else {
-          // Did not find a cache change for the sequence number
+          // Did not find a cache change for the sequence number. Mark for GAP.
           no_longer_relevant.insert(unsent_sn);
           // Try to find a reason why and log about it
-          if unsent_sn < self.first_change_sequence_number {
-            debug!(
+          if unsent_sn < first_available {
+            info!(
               "Reader {:?} requested too old data {:?}. I have only from {:?}. Topic {:?}",
-              &reader_proxy, unsent_sn, self.first_change_sequence_number, &self.my_topic_name
-            );
-          } else if self.disposed_sequence_numbers.contains(&unsent_sn) {
-            debug!(
-              "Reader {:?} requested disposed {:?}. Topic {:?}",
-              &reader_proxy, unsent_sn, &self.my_topic_name
+              &reader_proxy, unsent_sn, first_available, &self.my_topic_name
             );
           } else {
             // we are running out of excuses
             error!(
-              "handle_repair_data_send_worker {:?} seq.number {:?} missing. Instant map = {:?} first_change={:?}",
-              self.my_guid, unsent_sn, self.sequence_number_to_instant(unsent_sn), 
-              self.first_change_sequence_number
+              "handle_repair_data_send_worker {:?} seq.number {:?} missing. first_change={:?}",
+              self.my_guid, unsent_sn,
+              first_available
             );
           }
         }
@@ -1170,7 +1249,7 @@ impl Writer {
             self.endianness,
             reader_guid,
           );
-          reader_proxy.mark_all_changes_sent_before(all_irrelevant_before);
+          reader_proxy.remove_from_unsent_set_all_before(all_irrelevant_before);
         }
         if !no_longer_relevant.is_empty() {
           gap_msg = gap_msg.gap_msg(
@@ -1213,59 +1292,51 @@ impl Writer {
       // Sanity check request
       // ^^^ TODO
 
-      if let Some(timestamp) = self.sequence_number_to_instant(seq_num) {
-        // Try to find the cache change from topic cache
-        if let Some(cache_change) = self.acquire_the_topic_cache_guard().get_change(&timestamp) {
-          // If the data is meant for a single reader only, make sure it is the one we're
-          // about to send frags to.
-          if let Some(single_reader_guid) = cache_change.write_options.to_single_reader() {
-            if single_reader_guid != reader_guid {
-              error!(
-                "We were asked to send datafrags meant for the reader {single_reader_guid:?} to a \
-                 different reader {reader_guid:?}. Not gonna happen."
-              );
-              return;
-            }
+      if let Some(cache_change) = self.history_buffer.get_by_sn(seq_num) {
+        // If the data is meant for a single reader only, make sure it is the one we're
+        // about to send frags to.
+        if let Some(single_reader_guid) = cache_change.write_options.to_single_reader() {
+          if single_reader_guid != reader_guid {
+            error!(
+              "We were asked to send datafrags meant for the reader {single_reader_guid:?} to a \
+               different reader {reader_guid:?}. Not gonna happen."
+            );
+            return;
           }
-
-          // Generate datafrag message
-          let mut message_builder = MessageBuilder::new();
-          if let Some(src_ts) = cache_change.write_options.source_timestamp() {
-            message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
-          }
-
-          let fragment_size: u32 = self.data_max_size_serialized as u32; // TODO: overflow check
-          let data_size: u32 = cache_change.data_value.payload_size() as u32; // TODO: overflow check
-
-          message_builder = message_builder.data_frag_msg(
-            cache_change,
-            reader_guid.entity_id, // reader
-            self.my_guid,          // writer
-            frag_num,
-            fragment_size as u16, // TODO: overflow check
-            data_size,
-            self.endianness,
-            self.security_plugins.as_ref(),
-          );
-
-          // TODO: some sort of queuing is needed
-          self.send_message_to_readers(
-            DeliveryMode::Unicast,
-            message_builder.add_header_and_build(self.my_guid.prefix),
-            &mut std::iter::once(&*reader_proxy),
-          );
-        } else {
-          error!(
-            "handle_repair_frags_send_worker: {:?} missing from DDSCache. topic={:?}",
-            seq_num, self.my_topic_name
-          );
-          // TODO: Should we send a GAP message then?
         }
+
+        // Generate datafrag message
+        let mut message_builder = MessageBuilder::new();
+        if let Some(src_ts) = cache_change.write_options.source_timestamp() {
+          message_builder = message_builder.ts_msg(self.endianness, Some(src_ts));
+        }
+
+        let fragment_size: u32 = self.data_max_size_serialized as u32; // TODO: overflow check
+        let data_size: u32 = cache_change.data_value.payload_size() as u32; // TODO: overflow check
+
+        message_builder = message_builder.data_frag_msg(
+          cache_change,
+          reader_guid.entity_id, // reader
+          self.my_guid,          // writer
+          frag_num,
+          fragment_size as u16, // TODO: overflow check
+          data_size,
+          self.endianness,
+          self.security_plugins.as_ref(),
+        );
+
+        // TODO: some sort of queuing is needed
+        self.send_message_to_readers(
+          DeliveryMode::Unicast,
+          message_builder.add_header_and_build(self.my_guid.prefix),
+          &mut std::iter::once(&*reader_proxy),
+        );
       } else {
         error!(
-          "handle_repair_frags_send_worker: {:?} missing from instant map. topic={:?}",
+          "handle_repair_frags_send_worker: {:?} missing from history_buffer. topic={:?}",
           seq_num, self.my_topic_name
         );
+        // TODO: Should we send a GAP message then?
       }
 
       reader_proxy.mark_frag_sent(seq_num, &frag_num);
@@ -1291,42 +1362,20 @@ impl Writer {
       // to keep samples 0..4, i.e. from acked_up_to_before - depth .
       max(
         acked_by_all_readers - SequenceNumber::from(depth),
-        self.first_change_sequence_number,
+        self.history_buffer.first_change_sequence_number(),
       )
     } else {
       // Stateless-like writer currently supports only BestEffort behavior, so here we
       // make it explicit that it does not care about acked sequence numbers
-      self.first_change_sequence_number
+      self.history_buffer.first_change_sequence_number()
     };
 
-    // We notify the topic cache that it can release older samples
-    // as far as this Writer is concerned.
-    if let Some(&keep_instant) = self.sequence_number_to_instant.get(&first_keeper) {
-      self
-        .acquire_the_topic_cache_guard()
-        .remove_changes_before(keep_instant);
-    } else {
-      // if we end up with SequenceNumber(1), it may be due to "max()" above,
-      // and may mean that no messages have ever been received, so it is
-      // normal that we did not find anything.
-      if first_keeper > SequenceNumber::new(1) {
-        warn!(
-          "DDCache garbage collect: {:?} missing from instant map",
-          first_keeper
-        );
-      } else {
-        debug!(
-          "DDCache garbage collect: {:?} missing from instant map. But it is normal for number 1.",
-          first_keeper
-        );
-      }
-    }
-    self.first_change_sequence_number = first_keeper;
-    self.sequence_number_to_instant = self.sequence_number_to_instant.split_off(&first_keeper);
+    // actual cleaning
+    self.history_buffer.remove_changes_before( first_keeper );
   }
 
-  fn increase_heartbeat_counter(&mut self) {
-    self.heartbeat_message_counter += 1;
+  pub(crate) fn next_heartbeat_count(&self) -> i32 {
+    self.heartbeat_message_counter.fetch_add(1, atomic::Ordering::SeqCst)
   }
 
   #[cfg(feature = "security")]
@@ -1545,7 +1594,7 @@ impl Writer {
           // With Durabilty::Volatile QoS we won't send the sequence numbers which existed
           // before matching with this reader. Therefore we set the reader as pending GAP
           // for all existing sequence numbers
-          new_proxy.set_pending_gap_up_to(self.last_change_sequence_number);
+          new_proxy.set_pending_gap_up_to(self.history_buffer.last_change_sequence_number());
         }
         new_proxy
       });
@@ -1606,13 +1655,6 @@ impl Writer {
 
   fn lookup_reader_proxy_mut(&mut self, guid: GUID) -> Option<&mut RtpsReaderProxy> {
     self.readers.get_mut(&guid)
-  }
-
-  pub fn sequence_number_to_instant(&self, sequence_number: SequenceNumber) -> Option<Timestamp> {
-    self
-      .sequence_number_to_instant
-      .get(&sequence_number)
-      .copied()
   }
 
   pub fn topic_name(&self) -> &String {

@@ -501,23 +501,26 @@ impl MessageBuilder {
 
   pub fn heartbeat_msg(
     mut self,
-    writer: &RtpsWriter,
+    //writer: &RtpsWriter,
+    writer_entity_id: EntityId,
+    first: SequenceNumber,
+    last: SequenceNumber,
+    heartbeat_count: i32,
+    endianness: Endianness,
     reader_entity_id: EntityId,
     set_final_flag: bool,
     set_liveliness_flag: bool,
   ) -> Self {
-    let first = writer.first_change_sequence_number;
-    let last = writer.last_change_sequence_number;
 
     let heartbeat = Heartbeat {
       reader_id: reader_entity_id,
-      writer_id: writer.entity_id(),
+      writer_id: writer_entity_id,
       first_sn: first,
       last_sn: last,
-      count: writer.heartbeat_message_counter,
+      count: heartbeat_count,
     };
 
-    let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(writer.endianness);
+    let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(endianness);
 
     if set_final_flag {
       flags.insert(HEARTBEAT_Flags::Final);

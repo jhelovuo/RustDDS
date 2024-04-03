@@ -140,11 +140,10 @@ impl RtpsReaderProxy {
   }
 
   // Changes are actually sent (via DATA/DATAFRAG) or reported missing as GAP
-  pub fn mark_all_changes_sent_before(&mut self, before_seq_num: SequenceNumber) {
+  pub fn remove_from_unsent_set_all_before(&mut self, before_seq_num: SequenceNumber) {
     // The handy split_off function "Returns everything after the given key,
     // including the key."
     self.unsent_changes = self.unsent_changes.split_off(&before_seq_num);
-    self.all_acked_before = before_seq_num;
   }
 
   pub fn from_reader(reader: &ReaderIngredients, domain_participant: &DomainParticipant) -> Self {
@@ -236,7 +235,8 @@ impl RtpsReaderProxy {
           error!("all_acked_before updated backwards! old={:?} new={:?}",
             self.all_acked_before, new_all_acked_before);
         }
-        self.mark_all_changes_sent_before(new_all_acked_before); // update anyway
+        self.remove_from_unsent_set_all_before(new_all_acked_before); // update anyway
+        self.all_acked_before = new_all_acked_before;
 
         // Insert the requested changes. These are (by construction) greater
         // then new_all_acked_before.
