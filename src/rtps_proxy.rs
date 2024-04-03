@@ -10,6 +10,7 @@ use crate::{
   dds::{participant::DomainParticipantDisc, with_key::Sample},
   discovery::{DiscoveredReaderData, DiscoveredWriterData, SpdpDiscoveredParticipantData},
   rtps::Message,
+  structure::guid::EntityId,
   Keyed,
 };
 #[cfg(feature = "security")]
@@ -93,6 +94,29 @@ pub(crate) fn sync_proxy_data_channel(
     },
   ))
 }
+
+// Entity IDs used in those discovery topics that contain locator data.
+// RTPS messages cannot be directly proxied because of the locator data.
+pub const ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING: &[EntityId] = &[
+  EntityId::SPDP_BUILTIN_PARTICIPANT_READER,
+  EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER,
+  EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_READER,
+  EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_WRITER,
+  EntityId::SEDP_BUILTIN_PUBLICATIONS_READER,
+  EntityId::SEDP_BUILTIN_PUBLICATIONS_WRITER,
+  #[cfg(feature = "security")]
+  EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_READER,
+  #[cfg(feature = "security")]
+  EntityId::SPDP_RELIABLE_BUILTIN_PARTICIPANT_SECURE_WRITER,
+  #[cfg(feature = "security")]
+  EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_READER,
+  #[cfg(feature = "security")]
+  EntityId::SEDP_BUILTIN_SUBSCRIPTIONS_SECURE_WRITER,
+  #[cfg(feature = "security")]
+  EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_READER,
+  #[cfg(feature = "security")]
+  EntityId::SEDP_BUILTIN_PUBLICATIONS_SECURE_WRITER,
+];
 
 #[derive(Clone, Debug)]
 // Samples of discovery data that contains locators

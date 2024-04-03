@@ -46,7 +46,7 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::security_plugins::SecurityPluginsHandle;
 #[cfg(feature = "rtps_proxy")]
-use crate::rtps_proxy::{ProxyData, ProxyDataChannelSender};
+use crate::rtps_proxy::ProxyDataChannelSender;
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,

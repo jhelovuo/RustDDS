@@ -19,7 +19,6 @@ use crate::{
 #[cfg(feature = "security")]
 use crate::{
   create_security_error,
-  messages::submessages::secure_prefix::SecurePrefix,
   security::{
     cryptographic::{DecodeOutcome, DecodedSubmessage, EndpointCryptoHandle},
     security_plugins::SecurityPluginsHandle,
@@ -29,7 +28,9 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
 #[cfg(feature = "rtps_proxy")]
-use crate::rtps_proxy::{ProxyData, ProxyDataChannelSender};
+use crate::rtps_proxy::{
+  ProxyData, ProxyDataChannelSender, ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING,
+};
 #[cfg(test)]
 use crate::dds::ddsdata::DDSData;
 #[cfg(test)]
@@ -52,9 +53,9 @@ const RTPS_MESSAGE_HEADER_SIZE: usize = 20;
 enum SecureReceiverState {
   None,
   // SecurePrefix received
-  Prefix(SecurePrefix),
+  Prefix(Submessage),
   // Submessage after SecurePrefix
-  SecureSubmessage(SecurePrefix, Submessage),
+  SecureSubmessage(Submessage, Submessage),
 }
 
 // Describes allowed endpoints for an unprotected submessage from security
@@ -271,11 +272,16 @@ impl MessageReceiver {
     self.source_vendor_id = rtps_message.header.vendor_id;
 
     #[cfg(not(feature = "security"))]
-    let unprotected_submessages: Vec<UnprotectedSubmessage> = rtps_message
-      .submessages
-      .into_iter()
-      .map(UnprotectedSubmessage::from)
-      .collect();
+    let unprotected_submessages: Vec<UnprotectedSubmessage> = {
+      #[cfg(feature = "rtps_proxy")]
+      self.proxy_rtps_message(rtps_message.clone());
+
+      rtps_message
+        .submessages
+        .into_iter()
+        .map(UnprotectedSubmessage::from)
+        .collect()
+    };
 
     #[cfg(feature = "security")]
     // Decode the possible RTPS and submessage level protections
@@ -382,15 +388,21 @@ impl MessageReceiver {
 
     let mut unprotected_submessages: Vec<UnprotectedSubmessage> = vec![];
 
+    #[cfg(feature = "rtps_proxy")]
+    let mut proxied_submessages: Vec<Submessage> = vec![];
+
     let mut secure_receiver_state = SecureReceiverState::None;
 
-    for submessage in rtps_message.submessages.into_iter() {
+    for new_submessage in rtps_message.submessages.into_iter() {
+      #[cfg(feature = "rtps_proxy")]
+      let new_submessage_clone = new_submessage.clone();
+
       if let SecureReceiverState::Prefix(prefix) = secure_receiver_state {
         // If we have a SecurePrefix stored, the new submessage is always stored in
         // secure receiving state
-        secure_receiver_state = SecureReceiverState::SecureSubmessage(prefix, submessage);
+        secure_receiver_state = SecureReceiverState::SecureSubmessage(prefix, new_submessage);
       } else {
-        match submessage.body {
+        match new_submessage.body {
           SubmessageBody::Interpreter(msg) => {
             // Plain interpreter submessage. Save source/destination if present, since these
             // affect how protected messages need to be decoded
@@ -408,6 +420,9 @@ impl MessageReceiver {
               _ => {}
             }
             unprotected_submessages.push(UnprotectedSubmessage::Interpreter(msg));
+
+            #[cfg(feature = "rtps_proxy")]
+            proxied_submessages.push(new_submessage_clone);
           }
           SubmessageBody::Writer(msg) => {
             // Plain Writer submessage. Only readers with no submessage protection are
@@ -416,6 +431,9 @@ impl MessageReceiver {
               msg,
               AllowedEndpoints::WithNoSubmessageProtection,
             ));
+
+            #[cfg(feature = "rtps_proxy")]
+            proxied_submessages.push(new_submessage_clone);
           }
           SubmessageBody::Reader(msg) => {
             // Plain Reader submessage. Only writers with no submessage protection are
@@ -424,6 +442,9 @@ impl MessageReceiver {
               msg,
               AllowedEndpoints::WithNoSubmessageProtection,
             ));
+
+            #[cfg(feature = "rtps_proxy")]
+            proxied_submessages.push(new_submessage_clone);
           }
           SubmessageBody::Security(ref sec_submsg) => {
             // Security submessage
@@ -449,32 +470,35 @@ impl MessageReceiver {
                 dest_guid_prefix,
                 self.own_guid_prefix
               );
+              #[cfg(feature = "rtps_proxy")]
+              proxied_submessages.push(new_submessage_clone);
+
               continue;
             }
 
             // Security submessages should arrive in a (prefix, submsg, postfix) sequence.
             // The variable secure_receiver_state holds the receiving state.
             match sec_submsg {
-              SecuritySubmessage::SecurePrefix(prefix, _prefix_flags) => {
+              SecuritySubmessage::SecurePrefix(_prefix, _prefix_flags) => {
                 // Received a SecurePrefix. This should start a new (prefix, submsg, postfix)
                 // sequence.
                 match secure_receiver_state {
                   SecureReceiverState::None => {
-                    secure_receiver_state = SecureReceiverState::Prefix(prefix.clone());
+                    secure_receiver_state = SecureReceiverState::Prefix(new_submessage);
                   }
                   SecureReceiverState::Prefix(_existing_prefix) => {
                     warn!(
                       "Received another SecurePrefix while one was already in store. Discarding \
                        the first one."
                     );
-                    secure_receiver_state = SecureReceiverState::Prefix(prefix.clone());
+                    secure_receiver_state = SecureReceiverState::Prefix(new_submessage);
                   }
                   SecureReceiverState::SecureSubmessage(_prefix, _submsg) => {
                     warn!(
                       "Received SecurePrefix while waiting for SecurePostfix. Keeping only the \
                        new prefix."
                     );
-                    secure_receiver_state = SecureReceiverState::Prefix(prefix.clone());
+                    secure_receiver_state = SecureReceiverState::Prefix(new_submessage);
                   }
                 }
               }
@@ -487,7 +511,7 @@ impl MessageReceiver {
                   }
                   SecureReceiverState::Prefix(prefix) => {
                     secure_receiver_state =
-                      SecureReceiverState::SecureSubmessage(prefix, submessage);
+                      SecureReceiverState::SecureSubmessage(prefix, new_submessage);
                   }
                   SecureReceiverState::SecureSubmessage(_prefix, _submsg) => {
                     warn!(
@@ -512,67 +536,132 @@ impl MessageReceiver {
                     warn!("Received a SecurePostfix while waiting a submsg. Discarding.");
                     secure_receiver_state = SecureReceiverState::None;
                   }
-                  SecureReceiverState::SecureSubmessage(prefix, submsg) => {
+                  SecureReceiverState::SecureSubmessage(prefix_submsg, submsg) => {
                     // Now we have the full (prefix, submsg, postfix) sequence.
-                    // Attempt to decode it.
-                    let decode_result = sec_plugins_handle
-                      .get_plugins()
-                      .decode_submessage((prefix, submsg, postfix.clone()), &source_guid_prefix);
 
-                    // Reset secure receiving state
-                    secure_receiver_state = SecureReceiverState::None;
+                    #[cfg(feature = "rtps_proxy")]
+                    // Clone the submessages for possible proxying. We'll proxy them if
+                    //  1. We can't decode the messages, since they're probably meant for someone
+                    //     else
+                    //  2. We can decode them, but the resulting submessage is in a topic which
+                    //     should not be proxied, or
+                    let mut secure_submessages_for_proxying = vec![
+                      prefix_submsg.clone(),
+                      submsg.clone(),
+                      new_submessage.clone(), // The postfix
+                    ];
 
-                    match decode_result {
-                      Err(e) => {
-                        warn!(
-                          "Decoding a secure submessage from participant {source_guid_prefix:?} \
-                           failed: {e:?}"
-                        );
-                      }
-                      Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
-                        warn!(
-                          "No matching submessage decode keys found for the key id {:?} for the \
-                           remote participant {:?}",
-                          header_key_id, source_guid_prefix
-                        );
-                      }
-                      Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed) => {
-                        warn!(
-                          "No endpoints passed the receiver-specific MAC validation for the \
-                           submessage. Remote participant: {source_guid_prefix:?}"
-                        );
-                      }
-                      Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(guid_prefix)) => {
-                        warn!(
-                          "No participant crypto handle found for the participant {:?} for \
-                           submessage decoding.",
-                          guid_prefix
-                        );
-                      }
-                      Ok(DecodeOutcome::Success(decoded_msg)) => {
-                        // Decoding successful
-                        if let DecodedSubmessage::Interpreter(interpreter_submsg) = &decoded_msg {
-                          // Decoded an interpreter submessage. Save source/destination if
-                          // present, since these affect how protected
-                          // messages need to be decoded
-                          match interpreter_submsg {
-                            InterpreterSubmessage::InfoSource(info_src, _flags) => {
-                              source_guid_prefix = info_src.guid_prefix;
-                            }
-                            InterpreterSubmessage::InfoDestination(info_dest, _flags) => {
-                              dest_guid_prefix =
-                                if info_dest.guid_prefix != GUID::GUID_UNKNOWN.prefix {
-                                  self.own_guid_prefix
-                                } else {
-                                  info_dest.guid_prefix
-                                };
-                            }
-                            _ => {}
+                    // Verify that the prefix submessage is actually a secure prefix
+                    if let SubmessageBody::Security(SecuritySubmessage::SecurePrefix(
+                      prefix,
+                      _flags,
+                    )) = prefix_submsg.body
+                    {
+                      // Attempt to decode the sequence
+                      let decode_result = sec_plugins_handle
+                        .get_plugins()
+                        .decode_submessage((prefix, submsg, postfix.clone()), &source_guid_prefix);
+
+                      // Reset secure receiving state
+                      secure_receiver_state = SecureReceiverState::None;
+
+                      #[cfg(feature = "rtps_proxy")]
+                      // Whether the secure submessages are proxied depends on the decoding result
+                      let proxy_the_secure_submessages: bool;
+
+                      match decode_result {
+                        Err(e) => {
+                          warn!(
+                            "Decoding a secure submessage from participant {source_guid_prefix:?} \
+                             failed: {e:?}"
+                          );
+                          #[cfg(feature = "rtps_proxy")]
+                          {
+                            proxy_the_secure_submessages = true;
                           }
                         }
-                        unprotected_submessages.push(UnprotectedSubmessage::from(decoded_msg));
+                        Ok(DecodeOutcome::KeysNotFound(header_key_id)) => {
+                          warn!(
+                            "No matching submessage decode keys found for the key id {:?} for the \
+                             remote participant {:?}",
+                            header_key_id, source_guid_prefix
+                          );
+                          #[cfg(feature = "rtps_proxy")]
+                          {
+                            proxy_the_secure_submessages = true;
+                          }
+                        }
+                        Ok(DecodeOutcome::ValidatingReceiverSpecificMACFailed) => {
+                          warn!(
+                            "No endpoints passed the receiver-specific MAC validation for the \
+                             submessage. Remote participant: {source_guid_prefix:?}"
+                          );
+                          #[cfg(feature = "rtps_proxy")]
+                          {
+                            proxy_the_secure_submessages = true;
+                          }
+                        }
+                        Ok(DecodeOutcome::ParticipantCryptoHandleNotFound(guid_prefix)) => {
+                          warn!(
+                            "No participant crypto handle found for the participant {:?} for \
+                             submessage decoding.",
+                            guid_prefix
+                          );
+                          #[cfg(feature = "rtps_proxy")]
+                          {
+                            proxy_the_secure_submessages = true;
+                          }
+                        }
+                        Ok(DecodeOutcome::Success(decoded_msg)) => {
+                          // Decoding successful
+                          if let DecodedSubmessage::Interpreter(interpreter_submsg) = &decoded_msg {
+                            // Decoded an interpreter submessage. Save source/destination if
+                            // present, since these affect how protected
+                            // messages need to be decoded
+                            match interpreter_submsg {
+                              InterpreterSubmessage::InfoSource(info_src, _flags) => {
+                                source_guid_prefix = info_src.guid_prefix;
+                              }
+                              InterpreterSubmessage::InfoDestination(info_dest, _flags) => {
+                                dest_guid_prefix =
+                                  if info_dest.guid_prefix != GUID::GUID_UNKNOWN.prefix {
+                                    self.own_guid_prefix
+                                  } else {
+                                    info_dest.guid_prefix
+                                  };
+                              }
+                              _ => {}
+                            }
+                          }
+
+                          #[cfg(feature = "rtps_proxy")]
+                          {
+                            proxy_the_secure_submessages = match &decoded_msg {
+                              DecodedSubmessage::Reader(msg, _handles) => {
+                                !ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING
+                                  .contains(&msg.sender_entity_id())
+                              }
+                              DecodedSubmessage::Writer(msg, _handles) => {
+                                !ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING
+                                  .contains(&msg.sender_entity_id())
+                              }
+                              DecodedSubmessage::Interpreter(_msg) => true,
+                            };
+                          }
+
+                          unprotected_submessages.push(UnprotectedSubmessage::from(decoded_msg));
+                        }
                       }
-                    } // decode_result
+
+                      #[cfg(feature = "rtps_proxy")]
+                      if proxy_the_secure_submessages {
+                        proxied_submessages.append(&mut secure_submessages_for_proxying);
+                      }
+                    } else {
+                      // The prefix submessage was not a Secure prefix. Should not happen.
+                      error!("Found an invalid submessage in the secure receiver state");
+                      secure_receiver_state = SecureReceiverState::None;
+                    }
                   }
                 }
               }
@@ -587,6 +676,13 @@ impl MessageReceiver {
         }
       }
     }
+
+    #[cfg(feature = "rtps_proxy")]
+    self.proxy_rtps_message(Message {
+      header: rtps_message.header,
+      submessages: proxied_submessages,
+    });
+
     unprotected_submessages
   }
 
@@ -1114,6 +1210,57 @@ impl MessageReceiver {
   pub fn send_preemptive_acknacks(&mut self) {
     for reader in self.available_readers.values_mut() {
       reader.send_preemptive_acknacks();
+    }
+  }
+
+  #[cfg(feature = "rtps_proxy")]
+  fn proxy_rtps_message(&self, rtps_message: Message) {
+    // Filter out submessages of those topics that should not be directly
+    // RTPS-proxied, and send the resulting RTPS message to the proxy
+
+    let mut contains_other_than_interpreter_messages = false;
+
+    let filtered_submessages: Vec<Submessage> = rtps_message
+      .submessages
+      .into_iter()
+      .filter(|submsg| match &submsg.body {
+        SubmessageBody::Reader(msg) => {
+          let should_be_proxied =
+            !ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING.contains(&msg.sender_entity_id());
+          if should_be_proxied {
+            contains_other_than_interpreter_messages = true;
+          }
+          should_be_proxied
+        }
+        SubmessageBody::Writer(msg) => {
+          let should_be_proxied =
+            !ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING.contains(&msg.sender_entity_id());
+          if should_be_proxied {
+            contains_other_than_interpreter_messages = true;
+          }
+          should_be_proxied
+        }
+        SubmessageBody::Interpreter(_msg) => true,
+        #[cfg(feature = "security")]
+        SubmessageBody::Security(_msg) => {
+          contains_other_than_interpreter_messages = true;
+          true
+        }
+      })
+      .collect();
+
+    if contains_other_than_interpreter_messages {
+      let proxied_message = Message {
+        header: rtps_message.header,
+        submessages: filtered_submessages,
+      };
+
+      if let Err(e) = self
+        .proxy_data_sender
+        .try_send(ProxyData::RTPSMessage(proxied_message))
+      {
+        error!("RTPS proxy: failed to send RTPS message to proxy: {e}");
+      }
     }
   }
 
