@@ -350,7 +350,7 @@ where
   /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    S: Decode<DA::Deserialized>,
+    S: Decode<DA::Deserialized> + Clone,
   {
     let is_reliable = matches!(
       self.qos_policy.reliability(),

@@ -56,7 +56,7 @@ where
 
   pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    S: Decode<DA::Deserialized>,
+    S: Decode<DA::Deserialized> + Clone,
   {
     match self.keyed_simpledatareader.try_take_one_with(decoder) {
       Err(e) => Err(e),
