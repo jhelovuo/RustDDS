@@ -10,7 +10,7 @@ use std::{
 };
 
 use futures::{Future, Stream};
-use mio_06::{self, Evented, Events, PollOpt, Ready, Token};
+use mio_06::{Events, PollOpt, Ready, Token};
 use mio_extras::channel::{self as mio_channel, SendError, TrySendError};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -18,7 +18,6 @@ use log::{debug, error, info, trace, warn};
 use crate::{
   dds::{
     adapters::with_key::SerializerAdapter,
-    dds_entity::DDSEntity,
     ddsdata::DDSData,
     helpers::*,
     pubsub::Publisher,
@@ -907,7 +906,7 @@ where
   D: Keyed,
   SA: SerializerAdapter<D>,
 {
-  fn as_status_evented(&mut self) -> &dyn Evented {
+  fn as_status_evented(&mut self) -> &dyn mio_06::Evented {
     self.status_receiver.as_status_evented()
   }
 
@@ -942,13 +941,6 @@ where
   fn qos(&self) -> QosPolicies {
     self.qos_policy.clone()
   }
-}
-
-impl<D, SA> DDSEntity for DataWriter<D, SA>
-where
-  D: Keyed,
-  SA: SerializerAdapter<D>,
-{
 }
 
 //-------------------------------------------------------------------------------
@@ -1236,11 +1228,7 @@ mod tests {
 
   use super::*;
   use crate::{
-    dds::{
-      key::{Key, Keyed},
-      participant::DomainParticipant,
-    },
-    serialization::cdr_serializer::CDRSerializerAdapter,
+    dds::{key::Key, participant::DomainParticipant},
     structure::topic_kind::TopicKind,
     test::random_data::*,
   };

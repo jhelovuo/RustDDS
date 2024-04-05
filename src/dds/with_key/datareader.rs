@@ -7,8 +7,6 @@ use std::{
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio_06::{self, Evented};
-use mio_08;
 use futures::stream::{FusedStream, Stream};
 
 use super::datasample_cache::DataSampleCache;
@@ -742,13 +740,13 @@ where
 
 // -------------------
 
-impl<D, DA> Evented for DataReader<D, DA>
+impl<D, DA> mio_06::Evented for DataReader<D, DA>
 where
   D: Keyed,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it
-  // already implements Evented
+  // already implements mio_06::Evented
   fn register(
     &self,
     poll: &mio_06::Poll,
@@ -827,7 +825,7 @@ where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
 {
-  fn as_status_evented(&mut self) -> &dyn Evented {
+  fn as_status_evented(&mut self) -> &dyn mio_06::Evented {
     self.simple_data_reader.as_status_evented()
   }
 
@@ -1014,13 +1012,13 @@ mod tests {
       message_receiver::*,
       reader::{Reader, ReaderIngredients},
     },
-    serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::to_bytes},
+    serialization::cdr_serializer::to_bytes,
     structure::{
       guid::{EntityId, EntityKind, GuidPrefix},
       sequence_number::SequenceNumber,
     },
     test::random_data::*,
-    Keyed, RepresentationIdentifier,
+    RepresentationIdentifier,
   };
 
   #[test]

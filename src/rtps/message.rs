@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::BTreeSet, convert::TryInto, io};
+use std::{cmp::min, collections::BTreeSet, io};
 
 #[allow(unused_imports)]
 use log::{debug, error, trace, warn};
@@ -14,15 +14,14 @@ use crate::{
     protocol_version::ProtocolVersion,
     submessages::{
       elements::{parameter::Parameter, parameter_list::ParameterList},
-      submessage::WriterSubmessage,
-      submessages::{SubmessageKind, *},
+      submessages::*,
     },
+    validity_trait::Validity,
     vendor_id::VendorId,
   },
-  rtps::{writer::Writer as RtpsWriter, Submessage, SubmessageBody},
+  rtps::{Submessage, SubmessageBody},
   structure::{
     cache_change::CacheChange,
-    entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     parameter_id::ParameterId,
     sequence_number::{FragmentNumber, SequenceNumber, SequenceNumberSet},
@@ -31,8 +30,8 @@ use crate::{
 };
 #[cfg(feature = "security")]
 use crate::{
+  create_security_error_and_log,
   security::{security_plugins::SecurityPluginsHandle, SecurityError},
-  security_error,
 };
 #[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
@@ -66,6 +65,9 @@ impl Message {
     // The Header deserializes the same
     let rtps_header =
       Header::read_from_buffer(buffer).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    if !rtps_header.valid() {
+      return Err(io::Error::new(io::ErrorKind::Other, "Invalid RTPS header"));
+    }
     let mut message = Self::new(rtps_header);
     let mut submessages_left: Bytes = buffer.slice(20..); // header is 20 bytes
                                                           // submessage loop
@@ -233,7 +235,7 @@ impl MessageBuilder {
         serialized_payload
           // Serialize
           .write_to_vec()
-          .map_err(|e| security_error!("{e:?}"))
+          .map_err(|e| create_security_error_and_log!("{e:?}"))
           .and_then(|serialized_payload| {
             match security_plugins.map(SecurityPluginsHandle::get_plugins) {
               Some(security_plugins) => {
@@ -444,18 +446,16 @@ impl MessageBuilder {
   ) -> Self {
     match (irrelevant_sns.first(), irrelevant_sns.last()) {
       (Some(&gap_start), Some(&_last_sn)) => {
-        // Determine the contiguous range (starting from gap_start) of irrelevant
-        // seqnums
-        let mut range_end = gap_start;
-        while irrelevant_sns.contains(&range_end.plus_1()) {
-          range_end = range_end.plus_1();
+        // Determine the contiguous range of irrelevant seqnums starting from gap_start.
+        // Do this by finding the first seqnum which is larger than gap_start but is not
+        // included in irrelevant_sns. That is, find the
+        // exclusive endpoint of the contiguous range.
+        let mut range_endpoint_excl = gap_start.plus_1();
+        while irrelevant_sns.contains(&range_endpoint_excl) {
+          range_endpoint_excl = range_endpoint_excl.plus_1();
         }
-        // range_end is now the last seqnum in the contiguous range.
-        // Note that when receiving a GAP, the interpreted range is
-        // (gap_start .. gapList.base -1). But since gapList.base is included in the
-        // gapList, gapList.base is also always interpred as irrelevant, hence
-        // completing the range
-        let list_base = range_end;
+        // Set gapList.base as this exclusive endpoint of the range
+        let list_base = range_endpoint_excl;
         let list_set = irrelevant_sns.clone().split_off(&list_base);
         let gap_list = SequenceNumberSet::from_base_and_set(list_base, &list_set);
 
@@ -475,25 +475,50 @@ impl MessageBuilder {
     self
   }
 
+  // GAP for range 1 <= SN < irrelevant_sns_before
+  pub fn gap_msg_before(
+    mut self,
+    irrelevant_sns_before: SequenceNumber,
+    writer_entity_id: EntityId,
+    writer_endianness: Endianness,
+    reader_guid: GUID,
+  ) -> Self {
+    let gap_list = SequenceNumberSet::new_empty(irrelevant_sns_before);
+    let gap = Gap {
+      reader_id: reader_guid.entity_id,
+      writer_id: writer_entity_id,
+      gap_start: SequenceNumber::from(1),
+      gap_list,
+    };
+
+    let gap_flags = BitFlags::<GAP_Flags>::from_endianness(writer_endianness);
+    gap
+      .create_submessage(gap_flags)
+      .map(|s| self.submessages.push(s));
+    self
+  }
+
+  #[allow(clippy::too_many_arguments)] // Heartbeat just is complicated.
   pub fn heartbeat_msg(
     mut self,
-    writer: &RtpsWriter,
+    writer_entity_id: EntityId,
+    first: SequenceNumber,
+    last: SequenceNumber,
+    heartbeat_count: i32,
+    endianness: Endianness,
     reader_entity_id: EntityId,
     set_final_flag: bool,
     set_liveliness_flag: bool,
   ) -> Self {
-    let first = writer.first_change_sequence_number;
-    let last = writer.last_change_sequence_number;
-
     let heartbeat = Heartbeat {
       reader_id: reader_entity_id,
-      writer_id: writer.entity_id(),
+      writer_id: writer_entity_id,
       first_sn: first,
       last_sn: last,
-      count: writer.heartbeat_message_counter,
+      count: heartbeat_count,
     };
 
-    let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(writer.endianness);
+    let mut flags = BitFlags::<HEARTBEAT_Flags>::from_endianness(endianness);
 
     if set_final_flag {
       flags.insert(HEARTBEAT_Flags::Final);
@@ -527,7 +552,6 @@ impl MessageBuilder {
 #[allow(non_snake_case)]
 mod tests {
   use log::info;
-  use speedy::Writable;
 
   use super::*;
 

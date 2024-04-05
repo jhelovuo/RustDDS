@@ -239,7 +239,7 @@ impl RosParticipantInner {
       let rpi = sample.value();
       match self.external_nodes.get_mut(&rpi.guid()) {
         Some(rpi2) => {
-          *rpi2 = rpi.nodes().clone();
+          rpi2.clone_from(rpi.nodes());
         }
         None => {
           self.external_nodes.insert(rpi.guid(), rpi.nodes().clone());

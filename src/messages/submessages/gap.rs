@@ -16,9 +16,9 @@ use super::{
   submessage_kind::SubmessageKind,
 };
 /// This Submessage is sent from an RTPS Writer to an RTPS Reader and
-/// indicates to the RTPS Reader that a range of sequence numbers
-/// is no longer relevant. The set may be a contiguous range of
-/// sequence numbers or a specific set of sequence numbers.
+/// indicates to the RTPS Reader that a set of sequence numbers
+/// is no longer relevant. The set may contain a contiguous range of sequence
+/// numbers and/or a noncontiguous collection of sequence numbers.
 #[derive(Debug, PartialEq, Eq, Clone, Readable, Writable)]
 pub struct Gap {
   /// Identifies the Reader Entity that is being informed of the
@@ -29,15 +29,19 @@ pub struct Gap {
   /// numbers applies.
   pub writer_id: EntityId,
 
-  /// Identifies the first sequence number in the interval of
+  /// Identifies the first sequence number in the contiguous range of
   /// irrelevant sequence numbers
   pub gap_start: SequenceNumber,
 
-  /// Identifies the last sequence number in the interval of irrelevant
-  /// sequence numbers.
+  /// Identifies the last sequence number in the contiguous range of irrelevant
+  /// sequence numbers as defined by the spec: gap_list.base is the exclusive
+  /// endpoint of this range. Therefore, the range contains the sequence
+  /// numbers which satisfy gap_start <= sn < gap_list.base.
   ///
   /// Identifies an additional list of sequence numbers that are
-  /// irrelevant.
+  /// irrelevant. Note that gap_list.base may or may not be included in this
+  /// list (and if it is, then the contiguous range of irrelevant
+  /// sequence numbers is actually larger than gap_start <= sn < gap_list.base).
   pub gap_list: SequenceNumberSet,
 }
 

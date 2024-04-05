@@ -95,9 +95,13 @@ impl RtpsReaderProxy {
     if self.unicast_locator_list != update.unicast_locator_list
       || self.multicast_locator_list != update.multicast_locator_list
     {
-      info!("Upddate changes Locators in ReaderProxy.");
-      self.unicast_locator_list = update.unicast_locator_list.clone();
-      self.multicast_locator_list = update.multicast_locator_list.clone();
+      info!("Update changes Locators in ReaderProxy.");
+      let mut unicasts = update.unicast_locator_list.clone();
+      unicasts.retain(Self::not_loopback);
+      self.unicast_locator_list = unicasts;
+      self
+        .multicast_locator_list
+        .clone_from(&update.multicast_locator_list);
     }
 
     self.expects_in_line_qos = update.expects_in_line_qos;
@@ -135,6 +139,13 @@ impl RtpsReaderProxy {
     self.unsent_changes.remove(&seq_num);
   }
 
+  // Changes are actually sent (via DATA/DATAFRAG) or reported missing as GAP
+  pub fn remove_from_unsent_set_all_before(&mut self, before_seq_num: SequenceNumber) {
+    // The handy split_off function "Returns everything after the given key,
+    // including the key."
+    self.unsent_changes = self.unsent_changes.split_off(&before_seq_num);
+  }
+
   pub fn from_reader(reader: &ReaderIngredients, domain_participant: &DomainParticipant) -> Self {
     let mut self_locators = domain_participant.self_locators(); // This clones a map of locator lists.
     let unicast_locator_list = self_locators
@@ -168,15 +179,28 @@ impl RtpsReaderProxy {
     }
   }
 
+  // OpenDDS seems to advertise also loopback address as its Locator over SPDP,
+  // which is problematic, if we are not on the same host.
+  fn not_loopback(l: &Locator) -> bool {
+    let is_loopback = l.is_loopback();
+    if is_loopback {
+      info!("Ignoring loopback address {:?}", l);
+    }
+
+    !is_loopback
+  }
+
   pub fn from_discovered_reader_data(
     discovered_reader_data: &DiscoveredReaderData,
     default_unicast_locators: &[Locator],
     default_multicast_locators: &[Locator],
   ) -> Self {
-    let unicast_locator_list = Self::discovered_or_default(
+    let mut unicast_locator_list = Self::discovered_or_default(
       &discovered_reader_data.reader_proxy.unicast_locator_list,
       default_unicast_locators,
     );
+    unicast_locator_list.retain(Self::not_loopback);
+
     let multicast_locator_list = Self::discovered_or_default(
       &discovered_reader_data.reader_proxy.multicast_locator_list,
       default_multicast_locators,
@@ -205,13 +229,19 @@ impl RtpsReaderProxy {
   ) {
     match ack_submessage {
       AckSubmessage::AckNack(acknack) => {
-        self.all_acked_before = acknack.reader_sn_state.base();
-        // clean up unsent_changes:
-        // The handy split_off function "Returns everything after the given key,
-        // including the key."
-        self.unsent_changes = self.unsent_changes.split_off(&self.all_acked_before);
+        let new_all_acked_before = acknack.reader_sn_state.base();
+        // sanity check:
+        if new_all_acked_before < self.all_acked_before {
+          error!(
+            "all_acked_before updated backwards! old={:?} new={:?}",
+            self.all_acked_before, new_all_acked_before
+          );
+        }
+        self.remove_from_unsent_set_all_before(new_all_acked_before); // update anyway
+        self.all_acked_before = new_all_acked_before;
 
-        // Insert the requested changes.
+        // Insert the requested changes. These are (by construction) greater
+        // then new_all_acked_before.
         for nack_sn in acknack.reader_sn_state.iter() {
           self.unsent_changes.insert(nack_sn);
         }
@@ -219,9 +249,13 @@ impl RtpsReaderProxy {
         if let Some(&high) = self.unsent_changes.iter().next_back() {
           if high > last_available {
             warn!(
-              "ReaderProxy {:?} asks for {:?} but I have only up to {:?}. ACKNACK = {:?}",
+              "ReaderProxy {:?} asks for {:?} but I have only up to {:?}. Truncating request. \
+               ACKNACK = {:?}",
               self.remote_reader_guid, self.unsent_changes, last_available, acknack
             );
+            // Requesting something which is not yet available is unreasonable.
+            // Ignore the request from last_available + 1 onwards.
+            self.unsent_changes.split_off(&last_available.plus_1());
           }
         }
         // AckNack also clears pending_gap

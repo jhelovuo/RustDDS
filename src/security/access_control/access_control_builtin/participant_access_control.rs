@@ -1,6 +1,7 @@
 use chrono::Utc;
 
 use crate::{
+  create_security_error_and_log,
   dds::qos::QosPolicies,
   discovery::SpdpDiscoveredParticipantData,
   security::{
@@ -14,7 +15,8 @@ use crate::{
     authentication::{
       authentication_builtin::types::{
         AUTHENTICATED_PEER_TOKEN_IDENTITY_CERTIFICATE_PROPERTY_NAME,
-        AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME, CERT_SN_PROPERTY_NAME,
+        AUTHENTICATED_PEER_TOKEN_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
+        QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME,
       },
       *,
     },
@@ -22,21 +24,16 @@ use crate::{
     config::*,
     *,
   },
-  security_error,
 };
 use super::{
   domain_governance_document::{DomainRule, TopicRule},
   s_mime_config_parser::SignedDocument,
   types::{
     BuiltinPermissionsCredentialToken, BuiltinPermissionsToken,
-    BuiltinPluginParticipantSecurityAttributes,
+    BuiltinPluginParticipantSecurityAttributes, QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME,
+    QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME, QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME,
   },
-  AccessControlBuiltin,
 };
-
-const QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME: &str = "dds.sec.access.permissions_ca";
-const QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME: &str = "dds.sec.access.governance";
-const QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME: &str = "dds.sec.access.permissions";
 
 impl AccessControlBuiltin {
   fn check_participant(
@@ -71,7 +68,7 @@ impl AccessControlBuiltin {
 impl ParticipantAccessControl for AccessControlBuiltin {
   fn validate_local_permissions(
     &mut self,
-    auth_plugin: &dyn Authentication,
+    _auth_plugin: &dyn Authentication,
     identity_handle: IdentityHandle,
     domain_id: u16,
     participant_qos: &QosPolicies,
@@ -80,7 +77,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       .get_property(QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME)
       .and_then(|certificate_uri| {
         read_uri(&certificate_uri).map_err(|conf_err| {
-          security_error!(
+          create_security_error_and_log!(
             "Failed to read the permissions certificate from {}: {:?}",
             certificate_uri,
             conf_err
@@ -88,14 +85,15 @@ impl ParticipantAccessControl for AccessControlBuiltin {
         })
       })
       .and_then(|certificate_contents_pem| {
-        Certificate::from_pem(certificate_contents_pem).map_err(|e| security_error!("{e:?}"))
+        Certificate::from_pem(certificate_contents_pem)
+          .map_err(|e| create_security_error_and_log!("{e:?}"))
       })?;
 
     let domain_rule = participant_qos
       .get_property(QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME)
       .and_then(|governance_uri| {
         read_uri(&governance_uri).map_err(|conf_err| {
-          security_error!(
+          create_security_error_and_log!(
             "Failed to read the domain governance document from {}: {:?}",
             governance_uri,
             conf_err
@@ -109,29 +107,22 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       })
       .and_then(|governance_xml| {
         DomainGovernanceDocument::from_xml(&String::from_utf8_lossy(governance_xml.as_ref()))
-          .map_err(|e| security_error!("{e:?}"))
+          .map_err(|e| create_security_error_and_log!("{e:?}"))
       })
       .and_then(|domain_governance_document| {
         domain_governance_document
           .find_rule(domain_id)
-          .ok_or_else(|| security_error!("Domain rule not found for the domain_id {}", domain_id))
+          .ok_or_else(|| {
+            create_security_error_and_log!("Domain rule not found for the domain_id {}", domain_id)
+          })
           .cloned()
       })?;
-
-    let subject_name: DistinguishedName = auth_plugin
-      .get_identity_token(identity_handle)
-      .and_then(|identity_token| {
-        identity_token
-          .data_holder
-          .get_property(CERT_SN_PROPERTY_NAME)
-      })
-      .and_then(|name| DistinguishedName::parse(&name).map_err(|e| security_error!("{e:?}")))?;
 
     let signed_permissions = participant_qos
       .get_property(QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME)
       .and_then(|permissions_uri| {
         read_uri(&permissions_uri).map_err(|conf_err| {
-          security_error!(
+          create_security_error_and_log!(
             "Failed to read the domain participant permissions from {}: {:?}",
             permissions_uri,
             conf_err
@@ -143,17 +134,36 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       .and_then(|signed_document| signed_document.verify_signature(&permissions_ca_certificate))
       .and_then(|permissions_xml| {
         DomainParticipantPermissions::from_xml(&String::from_utf8_lossy(permissions_xml.as_ref()))
-          .map_err(|e| security_error!("{e:?}"))
+          .map_err(|e| create_security_error_and_log!("{e:?}"))
       })?;
 
     // Check the subject name in the identity certificate matches the one from the
     // permissions document.
+    // First get the subject name from the certificate
+    let subject_name: DistinguishedName = participant_qos
+      .get_property(QOS_IDENTITY_CERTIFICATE_PROPERTY_NAME)
+      .and_then(|certificate_uri| {
+        read_uri(&certificate_uri).map_err(|conf_err| {
+          create_security_error_and_log!(
+            "Failed to read the identity certificate from {}: {:?}",
+            certificate_uri,
+            conf_err
+          )
+        })
+      })
+      .and_then(|certificate_contents_pem| {
+        Certificate::from_pem(certificate_contents_pem)
+          .map_err(|e| create_security_error_and_log!("{e:?}"))
+      })
+      .map(|cert| cert.subject_name().clone())?;
+
+    // Then verify that we have permissions for this subject name
     if domain_participant_permissions
       .find_grant(&subject_name, &Utc::now())
       .is_none()
     {
-      Err(security_error!(
-        "No valid grants with the subject name {:?} found",
+      Err(create_security_error_and_log!(
+        "The subject name '{}' from the ID certificate not found in the permissions document",
         subject_name
       ))?;
     }
@@ -263,7 +273,7 @@ impl ParticipantAccessControl for AccessControlBuiltin {
       .find_grant(remote_subject_name, &Utc::now())
       .is_none()
     {
-      Err(security_error!(
+      Err(create_security_error_and_log!(
         "No valid grants with the subject name {:?} found",
         remote_subject_name
       ))?;
@@ -310,10 +320,14 @@ impl ParticipantAccessControl for AccessControlBuiltin {
   fn get_permissions_token(&self, handle: PermissionsHandle) -> SecurityResult<PermissionsToken> {
     self
       .get_permissions_ca_certificate(&handle)
-      .map(|certificate| {
+      .map(|_certificate| {
+        // The CA subject name and algorithm identifier are optional properties
+        // according to the spec. We do not set values for them, since this has
+        // caused interoperability issues with FastDDS. In RustDDS we do not
+        // use them for anything, since they don't provide any additional security.
         BuiltinPermissionsToken {
-          permissions_ca_subject_name: Some(certificate.subject_name().clone()),
-          permissions_ca_algorithm: certificate.algorithm(),
+          permissions_ca_subject_name: None,
+          permissions_ca_algorithm: None,
         }
         .into()
       })

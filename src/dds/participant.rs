@@ -14,7 +14,7 @@ use std::{
 
 use mio_extras::channel as mio_channel;
 use mio_06::{self, Evented};
-use mio_08::{self, Interest, Registry};
+use mio_08::{Interest, Registry};
 use futures::stream::{FusedStream, Stream};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -1097,6 +1097,7 @@ impl DomainParticipantInner {
     };
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
+    let dds_cache_clone = Arc::clone(&dds_cache);
 
     let (discovery_db_event_sender, discovery_db_event_receiver) =
       mio_channel::sync_channel::<()>(1);
@@ -1118,6 +1119,7 @@ impl DomainParticipantInner {
       .spawn(move || {
         let dp_event_loop = DPEventLoop::new(
           domain_info,
+          dds_cache_clone,
           listeners,
           disc_db_clone,
           participant_guid.prefix,
@@ -1452,14 +1454,11 @@ mod tests {
   use crate::{
     dds::{qos::QosPolicies, topic::TopicKind},
     messages::{
-      header::Header,
-      protocol_id::ProtocolId,
-      protocol_version::ProtocolVersion,
-      submessages::submessages::{AckNack, SubmessageHeader, SubmessageKind, *},
-      vendor_id::VendorId,
+      header::Header, protocol_id::ProtocolId, protocol_version::ProtocolVersion,
+      submessages::submessages::*, vendor_id::VendorId,
     },
     network::{constant::user_traffic_unicast_port, udp_sender::UDPSender},
-    rtps::{submessage::*, Message, Submessage},
+    rtps::{submessage::*, Message},
     serialization::cdr_serializer::CDRSerializerAdapter,
     structure::{
       guid::{EntityId, GUID},

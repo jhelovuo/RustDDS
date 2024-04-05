@@ -46,6 +46,7 @@ use crate::{
   structure::{
     cache_change::{CacheChange, ChangeKind},
     dds_cache::TopicCache,
+    duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
     locator::Locator,
@@ -134,6 +135,7 @@ pub(crate) struct Reader {
   received_heartbeat_count: i32,
 
   fragment_assemblers: BTreeMap<GUID, FragmentAssembler>,
+  last_fragment_garbage_collect: Timestamp,
   matched_writers: BTreeMap<GUID, RtpsWriterProxy>,
   writer_match_count_total: i32, // total count, never decreases
 
@@ -150,6 +152,12 @@ pub(crate) struct Reader {
   #[allow(dead_code)] // to avoid warning if no security feature
   security_plugins: Option<SecurityPluginsHandle>,
 }
+
+// If we are assembling a fragment, but it does not receive any updates
+// for this time, the AssemblyBuffer is just dropped.
+const FRAGMENT_ASSEMBLY_TIMEOUT: Duration = Duration::from_secs(10);
+// minimum interval (max frequency) of AssemblyBuffer GC
+const MIN_FRAGMENT_GC_INTERVAL: Duration = Duration::from_secs(2);
 
 impl Reader {
   pub(crate) fn new(
@@ -193,6 +201,7 @@ impl Reader {
       heartbeat_suppression_duration: StdDuration::new(0, 0),
       received_heartbeat_count: 0,
       fragment_assemblers: BTreeMap::new(),
+      last_fragment_garbage_collect: Timestamp::now(),
       matched_writers: BTreeMap::new(),
       writer_match_count_total: 0,
       requested_deadline_missed_count: 0,
@@ -644,12 +653,26 @@ impl Reader {
   }
 
   fn garbage_collect_fragments(&mut self) {
-    // TODO: On most calls, do nothing.
-    //
     // If GC time/packet limit has been exceeded, iterate through
     // fragment assemblers and discard those assembly buffers whose
     // creation / modification timestamps look like it is no longer receiving
     // data and can therefore be discarded.
+    let now = Timestamp::now();
+    if now - self.last_fragment_garbage_collect > MIN_FRAGMENT_GC_INTERVAL {
+      self.last_fragment_garbage_collect = now;
+
+      let expire_before = now - FRAGMENT_ASSEMBLY_TIMEOUT;
+
+      self
+        .fragment_assemblers
+        .iter_mut()
+        .for_each(|(writer, fa)| {
+          debug!("AssemblyBuffer GC writer {:?}", writer);
+          fa.garbage_collect_before(expire_before);
+        });
+    } else {
+      trace!("Not yet AssemblyBuffer GC time.");
+    }
   }
 
   fn missing_frags_for(
@@ -693,7 +716,7 @@ impl Reader {
       if let Some(writer_proxy) = self.matched_writer_mut(writer_guid) {
         if writer_proxy.should_ignore_change(writer_sn) {
           // change already present
-          debug!("handle_data_msg already have this seq={:?}", writer_sn);
+          trace!("handle_data_msg already have this seq={:?}", writer_sn);
           if my_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
             debug!("Accepting duplicate message to participant reader.");
             // This is an attempted workaround to eProsima FastRTPS not
@@ -893,8 +916,13 @@ impl Reader {
 
         // remove changes until first_sn.
         writer_proxy.irrelevant_changes_up_to(heartbeat.first_sn);
-        let mut tc = this.acquire_the_topic_cache_guard();
-        tc.mark_reliably_received_before(writer_guid, writer_proxy.all_ackable_before());
+
+        let marker_moved = this
+          .acquire_the_topic_cache_guard()
+          .mark_reliably_received_before(writer_guid, writer_proxy.all_ackable_before());
+        if marker_moved {
+          this.notify_cache_change();
+        }
 
         // let received_before = writer_proxy.all_ackable_before();
         let reader_id = this.entity_id();
@@ -1091,9 +1119,19 @@ impl Reader {
       all_ackable_before = writer_proxy.all_ackable_before();
     }
 
-    // Get the topic cache
-    let mut tc = self.acquire_the_topic_cache_guard();
-    tc.mark_reliably_received_before(writer_guid, all_ackable_before);
+    // Get the topic cache and mark progress
+    let marker_moved = self
+      .acquire_the_topic_cache_guard()
+      .mark_reliably_received_before(writer_guid, all_ackable_before);
+
+    // Receiving a GAP could make a Reliable stream.
+    // E.g. we had #2, but were missing #1. Now GAP says that #1 does not exist.
+    // Then a Reliable Datareader
+    if marker_moved {
+      self.notify_cache_change();
+    }
+    // able to move forward, i.e. hand over data to application, if
+    // we now know that nothing is missng from the past.
 
     // TODO: If receiving GAP actually moved the reliably received mark forward
     // in the Topic Cache, then we should generate a SAMPLE_LOST status event
@@ -1162,6 +1200,8 @@ impl Reader {
     if !self.like_stateless {
       self.matched_writer(writer_guid).map(|wp| {
         tc.mark_reliably_received_before(writer_guid, wp.all_ackable_before());
+        // Here we do not need to notify waiting DataReader, because
+        // the upper call level from here does it.
       });
     }
   }
@@ -1414,17 +1454,9 @@ mod tests {
   use std::sync::RwLock;
 
   use crate::{
-    dds::{
-      qos::policy::Reliability,
-      statusevents::{sync_status_channel, DataReaderStatus},
-      typedesc::TypeDesc,
-      with_key::datawriter::WriteOptions,
-    },
-    structure::{
-      dds_cache::DDSCache,
-      guid::{EntityId, EntityKind, GUID},
-    },
-    Duration, QosPolicyBuilder,
+    dds::{qos::policy::Reliability, statusevents::sync_status_channel, typedesc::TypeDesc},
+    structure::{dds_cache::DDSCache, guid::EntityKind},
+    QosPolicyBuilder,
   };
   use super::*;
 

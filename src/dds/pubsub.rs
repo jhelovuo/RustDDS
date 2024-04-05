@@ -41,7 +41,6 @@ use crate::{
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, EntityKind, GUID},
-    topic_kind::TopicKind,
   },
 };
 use super::{
@@ -481,17 +480,6 @@ impl InnerPublisher {
       .ok_or("upgrade fail")
       .or_else(|e| create_error_dropped!("Where is my DomainParticipant? {}", e))?;
 
-    // Get a handle to the topic cache
-    let topic_cache_handle = match dp.dds_cache().read() {
-      Ok(dds_cache) => dds_cache.get_existing_topic_cache(&topic.name())?,
-      Err(e) => return create_error_poisoned!("Cannot lock DDScache. Error: {}", e),
-    };
-    // Update topic cache with DataWriter's Qos
-    match topic_cache_handle.lock() {
-      Ok(mut tc) => tc.update_keep_limits(&writer_qos),
-      Err(e) => return create_error_poisoned!("Cannot lock topic cache. Error: {}", e),
-    };
-
     let guid = GUID::new_with_prefix_and_id(dp.guid().prefix, entity_id);
 
     #[cfg(feature = "security")]
@@ -548,7 +536,6 @@ impl InnerPublisher {
       writer_command_receiver: hccc_download,
       writer_command_receiver_waker: Arc::clone(&writer_waker),
       topic_name: topic.name(),
-      topic_cache_handle,
       like_stateless: writer_like_stateless,
       qos_policies: writer_qos.clone(),
       status_sender,
@@ -796,25 +783,25 @@ impl Subscriber {
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
   /// ```
-  pub fn create_datareader<D: 'static, SA>(
+  pub fn create_datareader<D, SA>(
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
-    D: Keyed,
+    D: 'static + Keyed,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     self.inner.create_datareader(self, topic, None, qos, false)
   }
 
-  pub fn create_datareader_cdr<D: 'static>(
+  pub fn create_datareader_cdr<D>(
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> CreateResult<WithKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
-    D: serde::de::DeserializeOwned + Keyed,
+    D: 'static + serde::de::DeserializeOwned + Keyed,
     for<'de> <D as Keyed>::K: Deserialize<'de>,
   {
     self.create_datareader::<D, CDRDeserializerAdapter<D>>(topic, qos)
@@ -849,12 +836,13 @@ impl Subscriber {
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::NoKey).unwrap();
   /// let data_reader = subscriber.create_datareader_no_key::<SomeType, CDRDeserializerAdapter<_>>(&topic, None);
   /// ```
-  pub fn create_datareader_no_key<D: 'static, SA>(
+  pub fn create_datareader_no_key<D, SA>(
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> CreateResult<NoKeyDataReader<D, SA>>
   where
+    D: 'static,
     SA: adapters::no_key::DeserializerAdapter<D>,
   {
     self
@@ -862,33 +850,34 @@ impl Subscriber {
       .create_datareader_no_key(self, topic, None, qos, false)
   }
 
-  pub fn create_simple_datareader_no_key<D: 'static, DA: 'static>(
+  pub fn create_simple_datareader_no_key<D, DA>(
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> CreateResult<no_key::SimpleDataReader<D, DA>>
   where
-    DA: adapters::no_key::DeserializerAdapter<D>,
+    D: 'static,
+    DA: 'static + adapters::no_key::DeserializerAdapter<D>,
   {
     self
       .inner
       .create_simple_datareader_no_key(self, topic, None, qos)
   }
 
-  pub fn create_datareader_no_key_cdr<D: 'static>(
+  pub fn create_datareader_no_key_cdr<D>(
     &self,
     topic: &Topic,
     qos: Option<QosPolicies>,
   ) -> CreateResult<NoKeyDataReader<D, CDRDeserializerAdapter<D>>>
   where
-    D: serde::de::DeserializeOwned,
+    D: 'static + serde::de::DeserializeOwned,
   {
     self.create_datareader_no_key::<D, CDRDeserializerAdapter<D>>(topic, qos)
   }
 
   // versions with callee-specified EntityId. These are for Discovery use only.
 
-  pub(crate) fn create_datareader_with_entity_id_with_key<D: 'static, SA>(
+  pub(crate) fn create_datareader_with_entity_id_with_key<D, SA>(
     &self,
     topic: &Topic,
     entity_id: EntityId,
@@ -896,7 +885,7 @@ impl Subscriber {
     reader_like_stateless: bool, // Create a stateless-like RTPS reader?
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
-    D: Keyed,
+    D: 'static + Keyed,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     self
@@ -905,7 +894,7 @@ impl Subscriber {
   }
 
   #[cfg(feature = "security")] // to avoid "never used" warning
-  pub(crate) fn create_datareader_with_entity_id_no_key<D: 'static, SA>(
+  pub(crate) fn create_datareader_with_entity_id_no_key<D, SA>(
     &self,
     topic: &Topic,
     entity_id: EntityId,
@@ -913,6 +902,7 @@ impl Subscriber {
     reader_like_stateless: bool, // Create a stateless-like RTPS reader?
   ) -> CreateResult<NoKeyDataReader<D, SA>>
   where
+    D: 'static,
     SA: adapters::no_key::DeserializerAdapter<D>,
   {
     self
@@ -993,7 +983,7 @@ impl InnerSubscriber {
     }
   }
 
-  fn create_datareader_internal<D: 'static, SA>(
+  fn create_datareader_internal<D, SA>(
     &self,
     outer: &Subscriber,
     entity_id_opt: Option<EntityId>,
@@ -1002,7 +992,7 @@ impl InnerSubscriber {
     reader_like_stateless: bool, // Create a stateless-like RTPS reader? Usually false
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
-    D: Keyed,
+    D: 'static + Keyed,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     let simple_dr = self.create_simple_datareader_internal(
@@ -1017,7 +1007,7 @@ impl InnerSubscriber {
     ))
   }
 
-  fn create_simple_datareader_internal<D: 'static, SA>(
+  fn create_simple_datareader_internal<D, SA>(
     &self,
     outer: &Subscriber,
     entity_id_opt: Option<EntityId>,
@@ -1026,7 +1016,7 @@ impl InnerSubscriber {
     reader_like_stateless: bool, // Create a stateless-like RTPS reader? Usually false
   ) -> CreateResult<with_key::SimpleDataReader<D, SA>>
   where
-    D: Keyed,
+    D: 'static + Keyed,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     // incoming data notification channel from Reader to DataReader
@@ -1226,7 +1216,7 @@ impl InnerSubscriber {
     Ok(datareader)
   }
 
-  pub fn create_datareader<D: 'static, SA>(
+  pub fn create_datareader<D, SA>(
     &self,
     outer: &Subscriber,
     topic: &Topic,
@@ -1235,7 +1225,7 @@ impl InnerSubscriber {
     reader_like_stateless: bool, // Create a stateless-like RTPS reader? Usually false
   ) -> CreateResult<WithKeyDataReader<D, SA>>
   where
-    D: Keyed,
+    D: 'static + Keyed,
     SA: adapters::with_key::DeserializerAdapter<D>,
   {
     if topic.kind() != TopicKind::WithKey {

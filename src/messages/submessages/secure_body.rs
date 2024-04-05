@@ -9,9 +9,9 @@ use super::{
   submessages::SubmessageHeader,
 };
 use crate::{
+  create_security_error_and_log,
   rtps::{Submessage, SubmessageBody},
   security::{SecurityError, SecurityResult},
-  security_error,
 };
 
 /// SecureBodySubMsg: section 7.3.6.3 of the Security specification (v. 1.1)
@@ -35,7 +35,7 @@ impl SecureBody {
         original_bytes: None,
       })
       .map_err(|e| {
-        security_error!(
+        create_security_error_and_log!(
           "Security plugin couldn't write SecureBody to bytes. Error: {}",
           e
         )

@@ -15,13 +15,13 @@ use crate::{
     nack_frag::NackFrag,
     submessage::{ReaderSubmessage, WriterSubmessage},
     submessage_flag::{
-      endianness_flag, ACKNACK_Flags, DATAFRAG_Flags, DATA_Flags, GAP_Flags, HEARTBEAT_Flags,
-      INFODESTINATION_Flags, INFOREPLY_Flags, INFOSOURCE_Flags, INFOTIMESTAMP_Flags,
-      NACKFRAG_Flags,
+      endianness_flag, ACKNACK_Flags, DATAFRAG_Flags, DATA_Flags, GAP_Flags, HEARTBEATFRAG_Flags,
+      HEARTBEAT_Flags, INFODESTINATION_Flags, INFOREPLY_Flags, INFOSOURCE_Flags,
+      INFOTIMESTAMP_Flags, NACKFRAG_Flags,
     },
     submessage_header::SubmessageHeader,
     submessage_kind::SubmessageKind,
-    submessages::{Data, DataFrag, Gap, InfoReply, InterpreterSubmessage},
+    submessages::{Data, DataFrag, Gap, HeartbeatFrag, InfoReply, InterpreterSubmessage},
   },
   Timestamp,
 };
@@ -185,6 +185,14 @@ impl Submessage {
         ))
       }
 
+      SubmessageKind::HEARTBEAT_FRAG => {
+        let f = BitFlags::<HEARTBEATFRAG_Flags>::from_bits_truncate(sub_header.flags);
+        mk_w_subm(WriterSubmessage::HeartbeatFrag(
+          HeartbeatFrag::read_from_buffer_with_ctx(e, &sub_content_buffer)?,
+          f,
+        ))
+      }
+
       // interpreter submessages
       SubmessageKind::INFO_DST => {
         let f = BitFlags::<INFODESTINATION_Flags>::from_bits_truncate(sub_header.flags);
@@ -323,13 +331,9 @@ impl<C: Context> Writable<C> for Submessage {
 
 #[cfg(test)]
 mod tests {
-  use bytes::Bytes;
-  use enumflags2::BitFlags;
   use log::info;
-  use speedy::{Readable, Writable};
   use hex_literal::hex;
 
-  use super::Submessage;
   use crate::{messages::submessages::submessages::*, rtps::submessage::*};
 
   #[test]

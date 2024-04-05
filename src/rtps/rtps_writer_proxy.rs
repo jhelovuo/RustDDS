@@ -74,7 +74,6 @@ pub(crate) struct RtpsWriterProxy {
   // These are used for quick tracking of
   last_received_sequence_number: SequenceNumber,
   last_received_timestamp: Timestamp,
-  //fragment_assembler: Option<FragmentAssembler>,
 }
 
 impl RtpsWriterProxy {
@@ -97,7 +96,6 @@ impl RtpsWriterProxy {
       ack_base: SequenceNumber::new(1),
       last_received_sequence_number: SequenceNumber::new(0),
       last_received_timestamp: Timestamp::INVALID,
-      //fragment_assembler: None,
     }
   }
 
@@ -330,7 +328,6 @@ impl RtpsWriterProxy {
       ack_base: SequenceNumber::default(),
       last_received_sequence_number: SequenceNumber::new(0),
       last_received_timestamp: Timestamp::INVALID,
-      //fragment_assembler: None,
     }
   } // fn
 

@@ -5,7 +5,6 @@ use mio_06::Evented;
 use crate::{
   dds::{
     adapters::no_key::SerializerAdapter,
-    dds_entity::DDSEntity,
     pubsub::Publisher,
     qos::{HasQoSPolicy, QosPolicies},
     result::{unwrap_no_key_write_error, WriteResult},
@@ -428,8 +427,6 @@ impl<D, SA: SerializerAdapter<D>> HasQoSPolicy for DataWriter<D, SA> {
     self.keyed_datawriter.qos()
   }
 }
-
-impl<D, SA: SerializerAdapter<D>> DDSEntity for DataWriter<D, SA> {}
 
 //-------------------------------------------------------------------------------
 // async writing implementation

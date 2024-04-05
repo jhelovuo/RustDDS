@@ -7,11 +7,7 @@ use log::{debug, error, info, trace, warn};
 use bytes::Bytes;
 
 use crate::{
-  messages::{
-    protocol_version::ProtocolVersion,
-    submessages::submessages::{WriterSubmessage, *},
-    vendor_id::VendorId,
-  },
+  messages::{protocol_version::ProtocolVersion, submessages::submessages::*, vendor_id::VendorId},
   rtps::{reader::Reader, Message, Submessage, SubmessageBody},
   structure::{
     entity::RTPSEntity,
@@ -119,7 +115,7 @@ pub(crate) struct MessageReceiver {
   pub multicast_reply_locator_list: Vec<Locator>,
   pub source_timestamp: Option<Timestamp>,
 
-  submessage_count: usize, // Used in tests only?
+  submessage_count: usize, // Used in tests and error messages only?
   secure_receiver_state: Option<SecureReceiverState>,
   #[cfg(feature = "security")]
   secure_rtps_wrapped: Option<SecureWrapping>,

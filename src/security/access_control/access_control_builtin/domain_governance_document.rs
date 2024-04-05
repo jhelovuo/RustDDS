@@ -248,8 +248,6 @@ mod xml {
 
 #[cfg(test)]
 mod tests {
-  use serde_xml_rs::from_str;
-
   use super::*;
 
   #[test]

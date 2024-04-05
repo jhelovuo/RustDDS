@@ -13,8 +13,6 @@ use serde::de::DeserializeOwned;
 use mio_extras::channel as mio_channel;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio_06::{self, Evented};
-use mio_08;
 
 use crate::{
   dds::{
@@ -239,6 +237,7 @@ where
   }
 
   fn deserialize_with<S>(
+    &self,
     timestamp: Timestamp,
     cc: &CacheChange,
     hash_to_key_map: &mut BTreeMap<KeyHash, D::K>,
@@ -264,14 +263,28 @@ where
               Ok(DeserializedCacheChange::new(timestamp, cc, p))
             }
             Err(e) => Err(ReadError::Deserialization {
-              reason: format!("Failed to deserialize sample bytes: {e}, "),
+              reason: format!(
+                "Failed to deserialize sample bytes: {}, , Topic = {}, Type = {:?}",
+                e,
+                self.my_topic.name(),
+                self.my_topic.get_type()
+              ),
             }),
           }
         } else {
+          info!(
+            "Unknown representation id: {:?} , Topic = {}, Type = {:?} data = {:02x?}",
+            serialized_payload.representation_identifier,
+            self.my_topic.name(),
+            self.my_topic.get_type(),
+            serialized_payload.value,
+          );
           Err(ReadError::Deserialization {
             reason: format!(
-              "Unknown representation id {:?}.",
-              serialized_payload.representation_identifier
+              "Unknown representation id {:?} , Topic = {}, Type = {:?}",
+              serialized_payload.representation_identifier,
+              self.my_topic.name(),
+              self.my_topic.get_type()
             ),
           })
         }
@@ -291,7 +304,12 @@ where
             Ok(DeserializedCacheChange::new(timestamp, cc, k))
           }
           Err(e) => Err(ReadError::Deserialization {
-            reason: format!("Failed to deserialize key {}", e),
+            reason: format!(
+              "Failed to deserialize key {}, Topic = {}, Type = {:?}",
+              e,
+              self.my_topic.name(),
+              self.my_topic.get_type()
+            ),
           }),
         }
       }
@@ -306,8 +324,13 @@ where
             Sample::Dispose(key.clone()),
           ))
         } else {
-          Err(ReadError::Deserialization {
-            reason: format!("Tried to dispose with unknown key hash: {:x?}", key_hash),
+          Err(ReadError::UnknownKey {
+            details: format!(
+              "Received dispose with unknown key hash: {:x?}, Topic = {}, Type = {:?}",
+              key_hash,
+              self.my_topic.name(),
+              self.my_topic.get_type()
+            ),
           })
         }
       }
@@ -339,34 +362,44 @@ where
     let mut read_state_ref = self.read_state.lock().unwrap();
     let latest_instant = read_state_ref.latest_instant;
     let (last_read_sn, hash_to_key_map) = read_state_ref.get_sn_map_and_hash_map();
-    let (timestamp, cc) = match Self::try_take_undecoded(
-      is_reliable,
-      &topic_cache,
-      latest_instant,
-      last_read_sn,
-    )
-    .next()
-    {
-      None => return Ok(None),
-      Some((ts, cc)) => (ts, cc),
-    };
 
-    match Self::deserialize_with(timestamp, cc, hash_to_key_map, decoder) {
-      Ok(dcc) => {
-        read_state_ref.latest_instant = max(read_state_ref.latest_instant, timestamp);
+    // loop in case we get a sample that should be ignored, so we try next.
+    loop {
+      let (timestamp, cc) =
+        match Self::try_take_undecoded(is_reliable, &topic_cache, latest_instant, last_read_sn)
+          .next()
+        {
+          None => return Ok(None), // no more data available right now
+          Some((ts, cc)) => (ts, cc),
+        };
+
+      let result = self.deserialize_with(timestamp, cc, hash_to_key_map, decoder.clone());
+
+      if let Err(ReadError::UnknownKey { .. }) = result {
+        // ignore unknown key hash, continue looping
+      } else {
+        // return with this result
+        // make copies of guid and SN to calm down borrow checker.
+        let writer_guid = cc.writer_guid;
+        let sequence_number = cc.sequence_number;
+        // Advance read pointer, error or not, because otherwise
+        // the SimpleDatareader is stuck.
+        read_state_ref.latest_instant = max(latest_instant, timestamp);
         read_state_ref
           .last_read_sn
-          .insert(dcc.writer_guid, dcc.sequence_number);
-        Ok(Some(dcc))
+          .insert(writer_guid, sequence_number);
+
+        // // Debug sanity check:
+        // use crate::Duration;
+        // if Timestamp::now().duration_since(timestamp) > Duration::from_secs(1) {
+        //   error!("Sample delayed by {:?} , Topic = {} {:?}",
+        //     Timestamp::now().duration_since(timestamp), self.topic().name(),
+        //     sequence_number,
+        //      );
+        // }
+
+        return result.map(Some);
       }
-      Err(ser_err) => Err(ReadError::Deserialization {
-        reason: format!(
-          "{}, Topic = {}, Type = {:?}",
-          ser_err,
-          self.my_topic.name(),
-          self.my_topic.get_type()
-        ),
-      }),
     }
   }
 
@@ -412,15 +445,15 @@ where
   }
 }
 
-// This is  not part of DDS spec. We implement mio Evented so that the
+// This is  not part of DDS spec. We implement mio mio_06::Evented so that the
 // application can asynchronously poll DataReader(s).
-impl<D, DA> Evented for SimpleDataReader<D, DA>
+impl<D, DA> mio_06::Evented for SimpleDataReader<D, DA>
 where
   D: Keyed,
   DA: DeserializerAdapter<D>,
 {
   // We just delegate all the operations to notification_receiver, since it
-  // already implements Evented
+  // already implements mio_06::Evented
   fn register(
     &self,
     poll: &mio_06::Poll,
@@ -488,7 +521,7 @@ where
   D: Keyed,
   DA: DeserializerAdapter<D>,
 {
-  fn as_status_evented(&mut self) -> &dyn Evented {
+  fn as_status_evented(&mut self) -> &dyn mio_06::Evented {
     self.status_receiver.as_status_evented()
   }
 
@@ -581,6 +614,12 @@ where
         // 1. synchronously store waker to background thread (must rendezvous)
         // 2. try take_bare again, in case something arrived just now
         // 3. if nothing still, return pending.
+
+        // // DEBUG
+        // if self.simple_datareader.guid().entity_id.entity_kind.is_user_defined() {
+        //   error!("Setting waker for {:?}", self.simple_datareader.topic().name());
+        // }
+        // // DEBUG
         self.simple_datareader.set_waker(Some(cx.waker().clone()));
         match self
           .simple_datareader

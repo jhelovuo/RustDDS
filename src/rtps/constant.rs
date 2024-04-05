@@ -13,6 +13,8 @@ use crate::{
 
 pub const PREEMPTIVE_ACKNACK_PERIOD: Duration = Duration::from_secs(5);
 
+pub const CACHE_CLEAN_PERIOD: Duration = Duration::from_secs(4);
+
 // RTPS spec Section 8.4.7.1.1  "Default Timing-Related Values"
 pub const NACK_RESPONSE_DELAY: Duration = Duration::from_millis(200);
 pub const NACK_SUPPRESSION_DURATION: Duration = Duration::from_millis(0);
@@ -234,6 +236,7 @@ pub const DISCOVERY_PARTICIPANT_MESSAGE_TOKEN: Token = Token(40 + PTB);
 pub const DISCOVERY_PARTICIPANT_MESSAGE_TIMER_TOKEN: Token = Token(41 + PTB);
 
 pub const DPEV_ACKNACK_TIMER_TOKEN: Token = Token(45 + PTB);
+pub const DPEV_CACHE_CLEAN_TIMER_TOKEN: Token = Token(46 + PTB);
 
 pub const SECURE_DISCOVERY_PARTICIPANT_DATA_TOKEN: Token = Token(50 + PTB);
 // pub const DISCOVERY_PARTICIPANT_CLEANUP_TOKEN: Token = Token(51 + PTB);

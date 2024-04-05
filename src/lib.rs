@@ -162,6 +162,7 @@
   clippy::option_map_unit_fn,
 )]
 
+mod polling;
 #[macro_use]
 mod serialization_test;
 #[macro_use]

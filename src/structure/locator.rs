@@ -30,6 +30,14 @@ impl Locator {
   pub fn is_udp(&self) -> bool {
     matches!(self, Self::UdpV4(_) | Self::UdpV6(_))
   }
+
+  pub fn is_loopback(&self) -> bool {
+    match self {
+      Locator::UdpV4(socket_address) => socket_address.ip().is_loopback(),
+      Locator::UdpV6(socket_address) => socket_address.ip().is_loopback(),
+      _ => false,
+    }
+  }
 }
 
 impl From<Locator> for SocketAddr {
@@ -153,7 +161,7 @@ pub(crate) mod repr {
 mod tests {
   use std::net::{Ipv4Addr, Ipv6Addr, SocketAddr};
 
-  use speedy::{self, Endianness, Readable, Writable};
+  use speedy::{Endianness, Readable, Writable};
   use test_case::test_case;
 
   use super::{repr, Locator};

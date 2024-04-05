@@ -361,13 +361,13 @@ impl PlCdrDeserialize for DiscoveredReaderData {
     let unicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
       &ctx,
-      ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
+      ParameterId::PID_UNICAST_LOCATOR,
       "unicast locators",
     )?;
     let multicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
       &ctx,
-      ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
+      ParameterId::PID_MULTICAST_LOCATOR,
       "multicast locators",
     )?;
 
@@ -511,14 +511,14 @@ impl ParameterListable for DiscoveredReaderData {
 
     for loc in unicast_locator_list {
       emit!(
-        PID_DEFAULT_UNICAST_LOCATOR,
+        PID_UNICAST_LOCATOR,
         &locator::repr::Locator::from(*loc),
         locator::repr::Locator
       );
     }
     for loc in multicast_locator_list {
       emit!(
-        PID_DEFAULT_MULTICAST_LOCATOR,
+        PID_MULTICAST_LOCATOR,
         &locator::repr::Locator::from(*loc),
         locator::repr::Locator
       );
@@ -810,13 +810,13 @@ impl PlCdrDeserialize for DiscoveredWriterData {
     let unicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
       &ctx,
-      ParameterId::PID_DEFAULT_UNICAST_LOCATOR,
+      ParameterId::PID_UNICAST_LOCATOR,
       "unicast locators",
     )?;
     let multicast_locator_list: Vec<Locator> = get_all_from_pl_map(
       &pl_map,
       &ctx,
-      ParameterId::PID_DEFAULT_MULTICAST_LOCATOR,
+      ParameterId::PID_MULTICAST_LOCATOR,
       "multicast locators",
     )?;
 
@@ -953,14 +953,14 @@ impl ParameterListable for DiscoveredWriterData {
 
     for loc in unicast_locator_list {
       emit!(
-        PID_DEFAULT_UNICAST_LOCATOR,
+        PID_UNICAST_LOCATOR,
         &locator::repr::Locator::from(*loc),
         locator::repr::Locator
       );
     }
     for loc in multicast_locator_list {
       emit!(
-        PID_DEFAULT_MULTICAST_LOCATOR,
+        PID_MULTICAST_LOCATOR,
         &locator::repr::Locator::from(*loc),
         locator::repr::Locator
       );
@@ -1275,7 +1275,6 @@ impl Key for ParticipantMessageDataKey {}
 #[cfg(test)]
 mod tests {
   use byteorder::LittleEndian;
-  use bytes::Bytes;
   use log::info;
   use test_log::test; // to capture logging macros run by test cases
 
@@ -1290,7 +1289,6 @@ mod tests {
       content_filter_data, publication_builtin_topic_data, reader_proxy_data,
       subscription_builtin_topic_data, topic_data, writer_proxy_data,
     },
-    RepresentationIdentifier,
   };
 
   /* do not test separate ser/deser of components, as these are never seen on wire individually

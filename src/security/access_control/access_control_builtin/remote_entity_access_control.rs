@@ -9,7 +9,7 @@ use crate::{
 };
 use super::{
   domain_governance_document::TopicRule, domain_participant_permissions_document::Action,
-  types::Entity, AccessControlBuiltin,
+  types::Entity,
 };
 
 impl RemoteEntityAccessControl for AccessControlBuiltin {

@@ -5,6 +5,7 @@ use enumflags2::{bitflags, BitFlags};
 use speedy::{Readable, Writable};
 
 use crate::{
+  create_security_error_and_log,
   security::{
     access_control::{
       EndpointSecurityAttributes, PermissionsCredentialToken, PermissionsToken,
@@ -16,7 +17,6 @@ use crate::{
     PluginParticipantSecurityAttributesMask, PluginSecurityAttributesMask, Property, SecurityError,
     SecurityResult,
   },
-  security_error,
 };
 
 // 9.4.2.3
@@ -39,7 +39,7 @@ impl TryFrom<PluginParticipantSecurityAttributesMask>
   ) -> Result<Self, Self::Error> {
     BitFlags::<BuiltinPluginParticipantSecurityAttributesMaskFlags>::try_from(value)
       .map_err(|e| {
-        security_error!(
+        create_security_error_and_log!(
           "Could not convert to BuiltinPluginParticipantSecurityAttributesMask: {e:?}"
         )
       })
@@ -63,7 +63,7 @@ impl TryFrom<PluginParticipantSecurityAttributesMask>
             ),
           })
         } else {
-          Err(security_error!(
+          Err(create_security_error_and_log!(
             "The IsValid flag of BuiltinPluginParticipantSecurityAttributesMask was set to false."
           ))
         }
@@ -143,7 +143,9 @@ impl TryFrom<PluginEndpointSecurityAttributesMask> for BuiltinPluginEndpointSecu
   ) -> Result<Self, Self::Error> {
     BitFlags::<BuiltinPluginEndpointSecurityAttributesMaskFlags>::try_from(value)
       .map_err(|e| {
-        security_error!("Could not convert to BuiltinPluginEndpointSecurityAttributesMask: {e:?}")
+        create_security_error_and_log!(
+          "Could not convert to BuiltinPluginEndpointSecurityAttributesMask: {e:?}"
+        )
       })
       .and_then(|mask| {
         if mask.contains(BuiltinPluginEndpointSecurityAttributesMaskFlags::IsValid) {
@@ -157,7 +159,7 @@ impl TryFrom<PluginEndpointSecurityAttributesMask> for BuiltinPluginEndpointSecu
               .contains(BuiltinPluginEndpointSecurityAttributesMaskFlags::IsPayloadEncrypted),
           })
         } else {
-          Err(security_error!(
+          Err(create_security_error_and_log!(
             "The IsValid flag of BuiltinPluginEndpointSecurityAttributesMask was set to false."
           ))
         }
@@ -231,6 +233,14 @@ impl EndpointSecurityAttributes {
 const PERMISSIONS_TOKEN_CLASS_ID: &str = "DDS:Access:Permissions:1.0";
 const PERMISSIONS_TOKEN_SUBJECT_NAME_PROPERTY_NAME: &str = "dds.perm_ca.sn";
 const PERMISSIONS_TOKEN_ALGORITHM_PROPERTY_NAME: &str = "dds.perm_ca.algo";
+
+pub(in crate::security) const QOS_PERMISSIONS_CERTIFICATE_PROPERTY_NAME: &str =
+  "dds.sec.access.permissions_ca";
+pub(in crate::security) const QOS_GOVERNANCE_DOCUMENT_PROPERTY_NAME: &str =
+  "dds.sec.access.governance";
+pub(in crate::security) const QOS_PERMISSIONS_DOCUMENT_PROPERTY_NAME: &str =
+  "dds.sec.access.permissions";
+
 // 9.4.2.2
 pub(super) struct BuiltinPermissionsToken {
   pub permissions_ca_subject_name: Option<DistinguishedName>,

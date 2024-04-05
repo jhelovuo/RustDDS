@@ -24,7 +24,7 @@ use serde::{Deserialize, Serialize};
 use clap::{Arg, ArgMatches, Command}; // command line argument processing
 use rand::prelude::*;
 use smol::Timer;
-use futures::{stream::StreamExt, FutureExt, TryFutureExt};
+use futures::{pin_mut, stream::StreamExt, FutureExt, TryFutureExt};
 #[cfg(feature = "security")]
 use rustdds::DomainParticipantSecurityConfigFiles;
 
@@ -215,7 +215,8 @@ fn main() {
 
   let dp_event_loop = async {
     let mut run = true;
-    let mut stop = stop_receiver.recv().fuse();
+    let stop = stop_receiver.recv().fuse();
+    pin_mut!(stop);
     let dp_status_listener = domain_participant.status_listener();
     let mut dp_status_stream = dp_status_listener.as_async_status_stream();
 
@@ -234,7 +235,8 @@ fn main() {
       None => (),
       Some(datareader) => {
         let mut run = true;
-        let mut stop = stop_receiver.recv().fuse();
+        let stop = stop_receiver.recv().fuse();
+        pin_mut!(stop);
         let mut datareader_stream = datareader.async_sample_stream();
         let mut datareader_event_stream = datareader_stream.async_event_stream();
         while run {
@@ -275,7 +277,8 @@ fn main() {
       None => (),
       Some(datawriter) => {
         let mut run = true;
-        let mut stop = stop_receiver.recv().fuse();
+        let stop = stop_receiver.recv().fuse();
+        pin_mut!(stop);
         let mut tick_stream = futures::StreamExt::fuse(Timer::interval(write_interval));
 
         let mut datawriter_event_stream = datawriter.as_async_status_stream();

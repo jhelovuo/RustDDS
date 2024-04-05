@@ -5,7 +5,6 @@ use enumflags2::{bitflags, BitFlags};
 use log::error;
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use serde::{Deserialize, Serialize};
-use openssl;
 
 use crate::{
   dds::qos,
@@ -100,11 +99,19 @@ impl From<openssl::error::ErrorStack> for SecurityError {
   }
 }
 
+impl From<cryptoki::error::Error> for SecurityError {
+  fn from(e: cryptoki::error::Error) -> Self {
+    SecurityError {
+      msg: format!("cryptoki (PKCS#11) Error: {e:?}"),
+    }
+  }
+}
+
 #[doc(hidden)]
 #[macro_export]
-macro_rules! security_error {
+macro_rules! create_security_error_and_log {
   ($($arg:tt)*) => (
-      { log::error!($($arg)*);
+      { log::error!($($arg)*);  // Note: this needs to be security-specific logging
         SecurityError{ msg: format!($($arg)*) }
       }
     )
@@ -173,8 +180,9 @@ fn get_optional_property(properties: &[Property], property_name: &str) -> Option
     .map(|Property { value, .. }| value.clone())
 }
 fn get_property(properties: &[Property], property_name: &str) -> SecurityResult<String> {
-  get_optional_property(properties, property_name)
-    .ok_or_else(|| security_error!("Could not find a property of the name {}.", property_name))
+  get_optional_property(properties, property_name).ok_or_else(|| {
+    create_security_error_and_log!("Could not find a property of the name {}.", property_name)
+  })
 }
 
 impl QosPolicies {
@@ -190,7 +198,7 @@ impl QosPolicies {
     self
       .property
       .as_ref()
-      .ok_or_else(|| security_error!("The QosPolicies did not have any properties."))
+      .ok_or_else(|| create_security_error_and_log!("The QosPolicies did not have any properties."))
       .and_then(|properties_or_binary_properties| {
         get_property(&properties_or_binary_properties.value, property_name)
       })
@@ -236,7 +244,7 @@ fn get_binary_property(
   binary_property_name: &str,
 ) -> SecurityResult<Bytes> {
   get_optional_binary_property(binary_properties, binary_property_name).ok_or_else(|| {
-    security_error!(
+    create_security_error_and_log!(
       "Could not find a binary property of the name {}.",
       binary_property_name
     )
@@ -444,10 +452,6 @@ impl DataHolder {
     }
   }
 
-  pub(super) fn get_property(&self, property_name: &str) -> SecurityResult<String> {
-    get_property(&self.properties, property_name)
-  }
-
   pub(super) fn get_binary_property(&self, binary_property_name: &str) -> SecurityResult<Bytes> {
     get_binary_property(&self.binary_properties, binary_property_name)
   }
@@ -543,7 +547,7 @@ impl PluginClassId {
       .eq(other_plugin_class_name)
       .then_some(())
       .ok_or_else(|| {
-        security_error!(
+        create_security_error_and_log!(
           "Mismatched plugin class names: {} and {}",
           self.plugin_class_name,
           other_plugin_class_name
@@ -555,7 +559,7 @@ impl PluginClassId {
           .eq(other_major_version)
           .then_some(())
           .ok_or_else(|| {
-            security_error!(
+            create_security_error_and_log!(
               "Mismatched plugin major versions: {} and {}",
               self.major_version,
               other_major_version
@@ -570,7 +574,7 @@ impl TryFrom<String> for PluginClassId {
     value
       .rsplit_once(':')
       .ok_or_else(|| {
-        security_error!(
+        create_security_error_and_log!(
           "Failed to parse the class_id {}. Expected PluginClassName:VersionNumber",
           value
         )
@@ -579,7 +583,7 @@ impl TryFrom<String> for PluginClassId {
         version_number
           .split_once('.')
           .ok_or_else(|| {
-            security_error!(
+            create_security_error_and_log!(
               "Failed to parse the version number {} of class_id {}. Expected \
                MajorVersion.MinorVersion",
               version_number,

@@ -8,11 +8,11 @@ use openssl::{bn::BigNum, pkey::Private};
 use ring::agreement;
 
 use crate::{
+  create_security_error_and_log,
   security::{
-    access_control::PermissionsToken, certificate, security_error, SecurityError, SecurityResult,
+    access_control::PermissionsToken, certificate, private_key, security_error, SecurityError,
+    SecurityResult,
   },
-  security_error,
-  //structure::guid::GuidPrefix,
   GUID,
 };
 use self::types::{DH_MODP_KAGREE_ALGO_NAME, ECDH_KAGREE_ALGO_NAME};
@@ -89,7 +89,7 @@ struct LocalParticipantInfo {
   identity_handle: IdentityHandle,
   identity_token: BuiltinIdentityToken,
   guid: GUID,
-  id_cert_private_key: certificate::PrivateKey, // PrivateKey is actually (private,public) key pair
+  id_cert_private_key: private_key::PrivateKey, // PrivateKey is actually (private,public) key pair
   identity_certificate: certificate::Certificate, // Certificate contains the public key also
   identity_ca: certificate::Certificate,        /* Certification Authority who has signed
                                                  * identity_certificate */
@@ -226,13 +226,17 @@ impl AuthenticationBuiltin {
 
   fn get_local_participant_info(&self) -> SecurityResult<&LocalParticipantInfo> {
     self.local_participant_info.as_ref().ok_or_else(|| {
-      security_error!("Local participant info not found. Has the local identity been validated?")
+      create_security_error_and_log!(
+        "Local participant info not found. Has the local identity been validated?"
+      )
     })
   }
 
   fn get_local_participant_info_mutable(&mut self) -> SecurityResult<&mut LocalParticipantInfo> {
     self.local_participant_info.as_mut().ok_or_else(|| {
-      security_error!("Local participant info not found. Has the local identity been validated?")
+      create_security_error_and_log!(
+        "Local participant info not found. Has the local identity been validated?"
+      )
     })
   }
 
@@ -244,7 +248,7 @@ impl AuthenticationBuiltin {
     self
       .remote_participant_infos
       .get(identity_handle)
-      .ok_or_else(|| security_error!("Remote participant info not found"))
+      .ok_or_else(|| create_security_error_and_log!("Remote participant info not found"))
   }
 
   // Returns mutable info
@@ -255,7 +259,7 @@ impl AuthenticationBuiltin {
     self
       .remote_participant_infos
       .get_mut(identity_handle)
-      .ok_or_else(|| security_error!("Remote participant info not found"))
+      .ok_or_else(|| create_security_error_and_log!("Remote participant info not found"))
   }
 
   fn handshake_handle_to_identity_handle(
@@ -265,7 +269,9 @@ impl AuthenticationBuiltin {
     self
       .handshake_to_identity_handle_map
       .get(hs_handle)
-      .ok_or_else(|| security_error!("Identity handle not found with handshake handle"))
+      .ok_or_else(|| {
+        create_security_error_and_log!("Identity handle not found with handshake handle")
+      })
   }
 
   fn generate_random_32_bytes(&self) -> SecurityResult<[u8; 32]> {
