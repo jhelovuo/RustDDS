@@ -36,7 +36,7 @@ use crate::{
     discovery_db::DiscoveryDB,
     sedp_messages::DiscoveredTopicData,
   },
-  network::{constant::*, udp_listener::UDPListener},
+  network::{constant::*, udp_listener::UDPListener, util::get_local_ip_address},
   rtps::{
     constant::*,
     dp_event_loop::{DPEventLoop, DomainInfo, EventLoopCommand},
@@ -66,9 +66,7 @@ use crate::rtps_proxy::{
 pub struct DomainParticipantBuilder {
   domain_id: u16,
 
-  #[allow(dead_code)] /* only_networks is a placeholder for a feature to limit
-  which interfaces the DomainParticipant will talk to. */
-  only_networks: Option<Vec<String>>, // if specified, run RTPS only over these interfaces
+  only_network: Option<String>, // if specified, run RTPS only over this network
 
   #[cfg(feature = "security")]
   security_plugins: Option<SecurityPlugins>,
@@ -80,12 +78,19 @@ impl DomainParticipantBuilder {
   pub fn new(domain_id: u16) -> DomainParticipantBuilder {
     DomainParticipantBuilder {
       domain_id,
-      only_networks: None,
+      only_network: None,
       #[cfg(feature = "security")]
       security_plugins: None,
       #[cfg(feature = "security")]
       sec_properties: None,
     }
+  }
+
+  /// Set the participant to use only a single network interface. Otherwise, all
+  /// available interfaces are used.
+  pub fn network_interface(mut self, interface_name: String) -> Self {
+    self.only_network = Some(interface_name);
+    self
   }
 
   #[cfg(feature = "security")]
@@ -239,6 +244,7 @@ impl DomainParticipantBuilder {
     // intermediate DP wrapper
     let dp = DomainParticipantDisc::new(
       self.domain_id,
+      self.only_network,
       participant_guid,
       participant_qos,
       djh_receiver,
@@ -508,8 +514,20 @@ impl DomainParticipant {
     self.dpi.lock().unwrap().new_entity_id(entity_kind)
   }
 
-  pub(crate) fn self_locators(&self) -> HashMap<mio_06::Token, Vec<Locator>> {
-    self.dpi.lock().unwrap().self_locators()
+  pub(crate) fn user_traffic_unicast_locators(&self) -> Vec<Locator> {
+    let mut all_locators = self.dpi.lock().unwrap().self_locators();
+    all_locators
+      .remove(&USER_TRAFFIC_LISTENER_TOKEN)
+      .unwrap_or_default()
+      .clone()
+  }
+
+  pub(crate) fn user_traffic_multicast_locators(&self) -> Vec<Locator> {
+    let mut all_locators = self.dpi.lock().unwrap().self_locators();
+    all_locators
+      .remove(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
+      .unwrap_or_default()
+      .clone()
   }
 } // end impl DomainParticipant
 
@@ -776,6 +794,7 @@ impl DomainParticipantDisc {
   #[allow(clippy::too_many_arguments)]
   pub fn new(
     domain_id: u16,
+    only_network: Option<String>, // if specified, run RTPS only over this interface
     participant_guid: GUID,
     qos_policies: QosPolicies,
     discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
@@ -790,6 +809,7 @@ impl DomainParticipantDisc {
   ) -> CreateResult<Self> {
     let dpi = DomainParticipantInner::new(
       domain_id,
+      only_network,
       participant_guid,
       qos_policies,
       discovery_update_notification_receiver,
@@ -1021,6 +1041,7 @@ impl DomainParticipantInner {
   #[allow(clippy::too_many_arguments)]
   fn new(
     domain_id: u16,
+    only_network: Option<String>, // if specified, run RTPS only over this interface
     participant_guid: GUID,
     _qos_policies: QosPolicies,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
@@ -1037,8 +1058,10 @@ impl DomainParticipantInner {
 
     let mut listeners = HashMap::new();
 
+    let my_ip_addr = get_local_ip_address(only_network)?;
+
     match UDPListener::new_multicast(
-      "0.0.0.0",
+      my_ip_addr,
       spdp_well_known_multicast_port(domain_id),
       Ipv4Addr::new(239, 255, 0, 1),
     ) {
@@ -1056,7 +1079,7 @@ impl DomainParticipantInner {
     // Numbers"
     while discovery_listener.is_none() && participant_id < 120 {
       discovery_listener = UDPListener::new_unicast(
-        "0.0.0.0",
+        my_ip_addr,
         spdp_well_known_unicast_port(domain_id, participant_id),
       )
       .ok();
@@ -1077,7 +1100,7 @@ impl DomainParticipantInner {
     // Now the user traffic listeners
 
     match UDPListener::new_multicast(
-      "0.0.0.0",
+      my_ip_addr,
       user_traffic_multicast_port(domain_id),
       Ipv4Addr::new(239, 255, 0, 1),
     ) {
@@ -1088,14 +1111,14 @@ impl DomainParticipantInner {
     }
 
     let user_traffic_listener = UDPListener::new_unicast(
-      "0.0.0.0",
+      my_ip_addr,
       user_traffic_unicast_port(domain_id, participant_id),
     )
     .or_else(|e| {
       if matches!(e.kind(), ErrorKind::AddrInUse) {
         // If we do not get the preferred listening port,
         // try again, with "any" port number.
-        UDPListener::new_unicast("0.0.0.0", 0).or_else(|e| {
+        UDPListener::new_unicast(my_ip_addr, 0).or_else(|e| {
           create_error_out_of_resources!(
             "Could not open unicast user traffic listener, any port number: {:?}",
             e
@@ -1111,7 +1134,7 @@ impl DomainParticipantInner {
     // construct our own Locators
     let self_locators: HashMap<mio_06::Token, Vec<Locator>> = listeners
       .iter()
-      .map(|(t, l)| match l.to_locator_address() {
+      .map(|(t, l)| match l.to_locators() {
         Ok(locs) => (*t, locs),
         Err(e) => {
           error!("No local network address for token {:?}: {:?}", t, e);
@@ -1160,6 +1183,7 @@ impl DomainParticipantInner {
         let dp_event_loop = DPEventLoop::new(
           domain_info,
           dds_cache_clone,
+          my_ip_addr,
           listeners,
           disc_db_clone,
           participant_guid.prefix,
@@ -1526,7 +1550,7 @@ mod tests {
   fn dp_basic_domain_participant() {
     // let _dp = DomainParticipant::new();
 
-    let sender = UDPSender::new(11401).unwrap();
+    let sender = UDPSender::new("0.0.0.0".parse().unwrap(), 11401).unwrap();
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
     let addrs = vec![SocketAddr::new("127.0.0.1".parse().unwrap(), 7412)];
@@ -1583,7 +1607,7 @@ mod tests {
       .expect("Failed to create datawriter");
 
     let port_number: u16 = user_traffic_unicast_port(5, 0);
-    let sender = UDPSender::new(1234).unwrap();
+    let sender = UDPSender::new("0.0.0.0".parse().unwrap(), 1234).unwrap();
     let mut m: Message = Message::default();
 
     let a: AckNack = AckNack {

@@ -1,5 +1,6 @@
 use std::{
   collections::HashMap,
+  net::IpAddr,
   rc::Rc,
   sync::{Arc, RwLock},
   time::{Duration, Instant},
@@ -99,6 +100,7 @@ impl DPEventLoop {
   pub(crate) fn new(
     domain_info: DomainInfo,
     dds_cache: Arc<RwLock<DDSCache>>,
+    host_ip_addr: IpAddr,
     udp_listeners: HashMap<Token, UDPListener>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     participant_guid_prefix: GuidPrefix,
@@ -195,7 +197,7 @@ impl DPEventLoop {
       .expect("Failed to register reader update notification.");
 
     // port number 0 means OS chooses an available port number.
-    let udp_sender = UDPSender::new(0).expect("UDPSender construction fail"); // TODO
+    let udp_sender = UDPSender::new(host_ip_addr, 0).expect("UDPSender construction fail"); // TODO
 
     #[cfg(not(feature = "security"))]
     let security_plugins_opt = security_plugins_opt.and(None); // make sure it is None an consume value
@@ -1131,6 +1133,7 @@ mod tests {
       let dp_event_loop = DPEventLoop::new(
         domain_info,
         dds_cache_clone,
+        "0.0.0.0".parse().unwrap(),
         HashMap::new(),
         discovery_db,
         GuidPrefix::default(),

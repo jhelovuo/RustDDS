@@ -1509,7 +1509,7 @@ mod tests {
     };
     let mut reader = Reader::new(
       reader_ing,
-      Rc::new(UDPSender::new(0).unwrap()),
+      Rc::new(UDPSender::new("0.0.0.0".parse().unwrap(), 0).unwrap()),
       mio_extras::timer::Builder::default().build(),
       participant_status_sender,
     );
@@ -1594,7 +1594,7 @@ mod tests {
     };
     let mut reader = Reader::new(
       reader_ing,
-      Rc::new(UDPSender::new(0).unwrap()),
+      Rc::new(UDPSender::new("0.0.0.0".parse().unwrap(), 0).unwrap()),
       mio_extras::timer::Builder::default().build(),
       participant_status_sender,
     );
@@ -1700,7 +1700,7 @@ mod tests {
     };
     let mut reader = Reader::new(
       reader_ing,
-      Rc::new(UDPSender::new(0).unwrap()),
+      Rc::new(UDPSender::new("0.0.0.0".parse().unwrap(), 0).unwrap()),
       mio_extras::timer::Builder::default().build(),
       participant_status_sender,
     );
@@ -1809,7 +1809,7 @@ mod tests {
     };
     let mut reader = Reader::new(
       reader_ing,
-      Rc::new(UDPSender::new(0).unwrap()),
+      Rc::new(UDPSender::new("0.0.0.0".parse().unwrap(), 0).unwrap()),
       mio_extras::timer::Builder::default().build(),
       participant_status_sender,
     );
@@ -1947,7 +1947,7 @@ mod tests {
     };
     let mut reader = Reader::new(
       reader_ing,
-      Rc::new(UDPSender::new(0).unwrap()),
+      Rc::new(UDPSender::new("0.0.0.0".parse().unwrap(), 0).unwrap()),
       mio_extras::timer::Builder::default().build(),
       participant_status_sender,
     );

@@ -7,12 +7,7 @@ use log::{debug, error, info, trace, warn};
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use bytes::{Bytes, BytesMut};
 
-use crate::{
-  network::util::{
-    get_local_multicast_ip_addrs, get_local_multicast_locators, get_local_unicast_locators,
-  },
-  structure::locator::Locator,
-};
+use crate::{network::util::get_local_nonloopback_ip_addrs, structure::locator::Locator};
 
 const MAX_MESSAGE_SIZE: usize = 64 * 1024; // This is max we can get from UDP.
 const MESSAGE_BUFFER_ALLOCATION_CHUNK: usize = 256 * 1024; // must be >= MAX_MESSAGE_SIZE
@@ -43,7 +38,7 @@ impl Drop for UDPListener {
 
 impl UDPListener {
   fn new_listening_socket(
-    host: &str,
+    host_ip: IpAddr,
     port: u16,
     reuse_addr: bool,
   ) -> io::Result<mio_06::net::UdpSocket> {
@@ -65,12 +60,7 @@ impl UDPListener {
       }
     }
 
-    let address = SocketAddr::new(
-      host
-        .parse()
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?,
-      port,
-    );
+    let address = SocketAddr::new(host_ip, port);
 
     if let Err(e) = raw_socket.bind(&SockAddr::from(address)) {
       info!("new_socket - cannot bind socket: {e:?}");
@@ -92,17 +82,33 @@ impl UDPListener {
     Ok(mio_socket)
   }
 
-  pub fn to_locator_address(&self) -> io::Result<Vec<Locator>> {
-    let local_port = self.socket.local_addr()?.port();
+  pub fn to_locators(&self) -> io::Result<Vec<Locator>> {
+    let socket_addr = self.socket.local_addr()?;
 
-    match self.multicast_group {
-      Some(_ipv4_addr) => Ok(get_local_multicast_locators(local_port)),
-      None => Ok(get_local_unicast_locators(local_port)),
-    }
+    let locators = match self.multicast_group {
+      Some(ipv4_addr) => {
+        let locator = Locator::from(SocketAddr::new(IpAddr::from(ipv4_addr), socket_addr.port()));
+        vec![locator]
+      }
+      None => {
+        // Unicast socket
+        if socket_addr.ip().is_unspecified() {
+          // Get locators for all local interfaces, except loopback
+          get_local_nonloopback_ip_addrs()?
+            .into_iter()
+            .map(|ip| Locator::from(SocketAddr::new(ip, socket_addr.port())))
+            .collect()
+        } else {
+          let locator = Locator::from(socket_addr);
+          vec![locator]
+        }
+      }
+    };
+    Ok(locators)
   }
 
-  pub fn new_unicast(host: &str, port: u16) -> io::Result<Self> {
-    let mio_socket = Self::new_listening_socket(host, port, false)?;
+  pub fn new_unicast(host_ip: IpAddr, port: u16) -> io::Result<Self> {
+    let mio_socket = Self::new_listening_socket(host_ip, port, false)?;
 
     Ok(Self {
       socket: mio_socket,
@@ -111,7 +117,7 @@ impl UDPListener {
     })
   }
 
-  pub fn new_multicast(host: &str, port: u16, multicast_group: Ipv4Addr) -> io::Result<Self> {
+  pub fn new_multicast(host_ip: IpAddr, port: u16, multicast_group: Ipv4Addr) -> io::Result<Self> {
     if !multicast_group.is_multicast() {
       return io::Result::Err(io::Error::new(
         io::ErrorKind::Other,
@@ -119,18 +125,32 @@ impl UDPListener {
       ));
     }
 
-    let mio_socket = Self::new_listening_socket(host, port, true)?;
+    // Create a socket bound to the multicast address
+    let mio_socket = Self::new_listening_socket(IpAddr::V4(multicast_group), port, true)?;
 
-    for multicast_if_ipaddr in get_local_multicast_ip_addrs()? {
-      match multicast_if_ipaddr {
-        IpAddr::V4(a) => mio_socket
-          .join_multicast_v4(&multicast_group, &a)
-          .unwrap_or_else(|e| {
+    // Join the socket to the multicast group in local interfaces
+    let local_ip_addrs = if host_ip.is_unspecified() {
+      get_local_nonloopback_ip_addrs()?
+    } else {
+      vec![host_ip]
+    };
+
+    for ip_addr in local_ip_addrs {
+      match ip_addr {
+        IpAddr::V4(addr) => match mio_socket.join_multicast_v4(&multicast_group, &addr) {
+          Ok(()) => {
+            info!(
+              "join_multicast_v4 succeeded: multicast_group [{:?}] interface [{:?}]",
+              multicast_group, addr
+            );
+          }
+          Err(e) => {
             warn!(
               "join_multicast_v4 failed: {:?}. multicast_group [{:?}] interface [{:?}]",
-              e, multicast_group, a
+              e, multicast_group, addr
             );
-          }),
+          }
+        },
         IpAddr::V6(_a) => error!("UDPListener::new_multicast() not implemented for IpV6"), // TODO
       }
     }
@@ -259,7 +279,7 @@ mod tests {
 
   #[test]
   fn udpl_single_address() {
-    let listener = UDPListener::new_unicast("127.0.0.1", 10001).unwrap();
+    let listener = UDPListener::new_unicast("127.0.0.1".parse().unwrap(), 10001).unwrap();
     let sender = UDPSender::new_with_random_port().expect("failed to create UDPSender");
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
@@ -275,8 +295,12 @@ mod tests {
 
   #[test]
   fn udpl_multicast_address() {
-    let listener =
-      UDPListener::new_multicast("0.0.0.0", 10002, Ipv4Addr::new(239, 255, 0, 1)).unwrap();
+    let listener = UDPListener::new_multicast(
+      "0.0.0.0".parse().unwrap(),
+      10002,
+      Ipv4Addr::new(239, 255, 0, 1),
+    )
+    .unwrap();
     let sender = UDPSender::new_with_random_port().unwrap();
 
     // setsockopt(sender.socket.as_raw_fd(), IpMulticastLoop, &true)

@@ -8,7 +8,6 @@ use crate::{
   dds::{participant::DomainParticipant, qos::QosPolicies},
   discovery::sedp_messages::DiscoveredReaderData,
   messages::submessages::submessage::AckSubmessage,
-  rtps::constant::*,
   structure::{
     guid::{EntityId, GUID},
     locator::Locator,
@@ -139,14 +138,9 @@ impl RtpsReaderProxy {
     self.unsent_changes.remove(&seq_num);
   }
 
-  pub fn from_reader(reader: &ReaderIngredients, domain_participant: &DomainParticipant) -> Self {
-    let mut self_locators = domain_participant.self_locators(); // This clones a map of locator lists.
-    let unicast_locator_list = self_locators
-      .remove(&USER_TRAFFIC_LISTENER_TOKEN)
-      .unwrap_or_default();
-    let multicast_locator_list = self_locators
-      .remove(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
-      .unwrap_or_default();
+  pub fn from_reader(reader: &ReaderIngredients, dp: &DomainParticipant) -> Self {
+    let unicast_locator_list = dp.user_traffic_unicast_locators();
+    let multicast_locator_list = dp.user_traffic_multicast_locators();
 
     Self {
       remote_reader_guid: reader.guid,

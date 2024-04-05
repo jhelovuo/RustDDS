@@ -11,7 +11,7 @@ use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 #[cfg(windows)]
 use local_ip_address::list_afinet_netifas;
 
-use crate::{network::util::get_local_multicast_ip_addrs, structure::locator::Locator};
+use crate::{network::util::get_local_nonloopback_ip_addrs, structure::locator::Locator};
 
 // We need one multicast sender socket per interface
 
@@ -22,10 +22,10 @@ pub struct UDPSender {
 }
 
 impl UDPSender {
-  pub fn new(sender_port: u16) -> io::Result<Self> {
+  pub fn new(host_ip: IpAddr, sender_port: u16) -> io::Result<Self> {
     #[cfg(not(windows))]
     let unicast_socket = {
-      let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
+      let saddr: SocketAddr = SocketAddr::new(host_ip, sender_port);
       mio_08::net::UdpSocket::bind(saddr)?
     };
 
@@ -38,14 +38,16 @@ impl UDPSender {
       // addresses one by one.
       let network_interfaces = list_afinet_netifas().unwrap();
       for (name, ip) in network_interfaces.iter() {
-        raw_socket
-          .bind(&SockAddr::from(SocketAddr::new(*ip, sender_port)))
-          .unwrap_or_else(|e| {
-            error!(
-              "Could not bind socket on {} to {:?}:{} reason {:?}. Ignoring.",
-              name, ip, sender_port, e
-            )
-          });
+        if host_ip.is_unspecified() || ip == host_ip {
+          raw_socket
+            .bind(&SockAddr::from(SocketAddr::new(*ip, sender_port)))
+            .unwrap_or_else(|e| {
+              error!(
+                "Could not bind socket on {} to {:?}:{} reason {:?}. Ignoring.",
+                name, ip, sender_port, e
+              )
+            });
+        }
       }
       mio_08::net::UdpSocket::from_std(std::net::UdpSocket::from(raw_socket))
     };
@@ -59,20 +61,23 @@ impl UDPSender {
       });
 
     let mut multicast_sockets = Vec::with_capacity(1);
-    for multicast_if_ipaddr in get_local_multicast_ip_addrs()? {
+
+    let local_ip_addrs = if host_ip.is_unspecified() {
+      get_local_nonloopback_ip_addrs()?
+    } else {
+      vec![host_ip]
+    };
+
+    for ip_addr in local_ip_addrs {
       let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-      // beef: specify output interface
-      info!(
-        "UDPSender: Multicast sender on interface {:?}",
-        multicast_if_ipaddr
-      );
-      match multicast_if_ipaddr {
+      info!("UDPSender: Multicast sender on interface {:?}", ip_addr);
+      match ip_addr {
         IpAddr::V4(a) => {
           raw_socket.set_multicast_if_v4(&a)?;
           if cfg!(windows) {
             raw_socket.set_reuse_address(true)?;
           } // Necessary? TODO: Check if necessary.
-          raw_socket.bind(&SockAddr::from(SocketAddr::new(multicast_if_ipaddr, 0)))?;
+          raw_socket.bind(&SockAddr::from(SocketAddr::new(ip_addr, 0)))?;
         }
         IpAddr::V6(_a) => error!("UDPSender::new() not implemented for IpV6"), // TODO
       }
@@ -94,7 +99,7 @@ impl UDPSender {
 
   #[cfg(test)]
   pub fn new_with_random_port() -> io::Result<Self> {
-    Self::new(0)
+    Self::new("0.0.0.0".parse().unwrap(), 0)
   }
 
   pub fn send_to_locator_list(&self, buffer: &[u8], ll: &[Locator]) {
@@ -190,8 +195,9 @@ mod tests {
 
   #[test]
   fn udps_single_send() {
-    let listener = UDPListener::new_unicast("127.0.0.1", 10201).unwrap();
-    let sender = UDPSender::new(11201).expect("failed to create UDPSender");
+    let listener = UDPListener::new_unicast("127.0.0.1".parse().unwrap(), 10201).unwrap();
+    let sender =
+      UDPSender::new("0.0.0.0".parse().unwrap(), 11201).expect("failed to create UDPSender");
 
     let data: Vec<u8> = vec![0, 1, 2, 3, 4];
 
@@ -206,9 +212,10 @@ mod tests {
 
   #[test]
   fn udps_multi_send() {
-    let listener_1 = UDPListener::new_unicast("127.0.0.1", 10301).unwrap();
-    let listener_2 = UDPListener::new_unicast("127.0.0.1", 10302).unwrap();
-    let sender = UDPSender::new(11301).expect("failed to create UDPSender");
+    let listener_1 = UDPListener::new_unicast("127.0.0.1".parse().unwrap(), 10301).unwrap();
+    let listener_2 = UDPListener::new_unicast("127.0.0.1".parse().unwrap(), 10302).unwrap();
+    let sender =
+      UDPSender::new("0.0.0.0".parse().unwrap(), 11301).expect("failed to create UDPSender");
 
     let data: Vec<u8> = vec![5, 4, 3, 2, 1, 0];
 
