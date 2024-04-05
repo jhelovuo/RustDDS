@@ -131,15 +131,19 @@ struct HistoryBuffer {
   /// Maintains as many samples as QoS policies History and Resource Limits
   /// specifiy.
   history_buffer: BTreeMap<Timestamp, CacheChange>,
+
+  // topic name is just for debugging
+  topic_name: String, 
 }
 
 impl HistoryBuffer {
-  fn new() -> Self {
+  fn new(topic_name: String) -> Self {
     HistoryBuffer {
       first_seq: SequenceNumber::new(1),
       last_seq: SequenceNumber::new(0), // Indicates that we have nothing yet
       sequence_number_to_instant: BTreeMap::new(),
       history_buffer: BTreeMap::new(),
+      topic_name,
     }
   }
 
@@ -206,10 +210,13 @@ impl HistoryBuffer {
         );
       }
     } else {
-      error!(
-        "HistoryBuffer: remove_changes_before. Cannot find {:?}",
-        remove_before_seq
-      );
+      // Number 1 is a special case. If the buffer is empty, then it is not found.
+      if remove_before_seq != SequenceNumber::new(1) {
+        warn!(
+          "HistoryBuffer: remove_changes_before. Cannot find {:?} first={:?} last={:?} topic={}",
+          remove_before_seq, self.first_seq, self.last_seq, self.topic_name
+        );
+      }
     }
   }
 }
@@ -390,8 +397,8 @@ impl Writer {
       matched_readers_count_total: 0,
       requested_incompatible_qos_count: 0,
       udp_sender,
-      my_topic_name: i.topic_name,
-      history_buffer: HistoryBuffer::new(),
+      my_topic_name: i.topic_name.clone(),
+      history_buffer: HistoryBuffer::new(i.topic_name),
       timed_event_timer,
       like_stateless: i.like_stateless,
       qos_policies: i.qos_policies,
