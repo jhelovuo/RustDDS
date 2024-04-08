@@ -19,6 +19,7 @@ use crate::{
     result::ReadResult,
     statusevents::*,
     with_key::{datasample::*, simpledatareader::*},
+    ReadError,
   },
   discovery::sedp_messages::PublicationBuiltinTopicData,
   serialization::CDRDeserializerAdapter,
@@ -402,7 +403,7 @@ where
     // read call
     Ok(
       self
-        .read_bare(std::usize::MAX, ReadCondition::not_read())?
+        .read_bare(usize::MAX, ReadCondition::not_read())?
         .into_iter(),
     )
   }
@@ -448,7 +449,7 @@ where
   ) -> ReadResult<impl Iterator<Item = Sample<&D, D::K>>> {
     // TODO: We could come up with a more efficient implementation than wrapping a
     // read call
-    Ok(self.read_bare(std::usize::MAX, read_condition)?.into_iter())
+    Ok(self.read_bare(usize::MAX, read_condition)?.into_iter())
   }
 
   /// Produces an iterator over the currently available NOT_READ samples.
@@ -495,7 +496,7 @@ where
     // take call
     Ok(
       self
-        .take_bare(std::usize::MAX, ReadCondition::not_read())?
+        .take_bare(usize::MAX, ReadCondition::not_read())?
         .into_iter(),
     )
   }
@@ -543,7 +544,7 @@ where
   ) -> ReadResult<impl Iterator<Item = Sample<D, D::K>>> {
     // TODO: We could come up with a more efficient implementation than wrapping a
     // take call
-    Ok(self.take_bare(std::usize::MAX, read_condition)?.into_iter())
+    Ok(self.take_bare(usize::MAX, read_condition)?.into_iter())
   }
 
   // ----------------------------------------------------------------------------
@@ -879,16 +880,11 @@ where
       datareader: Arc::clone(&self.datareader),
     }
   }
-}
-
-trait SafeAcquire<T> {
-    fn safe_lock(&self) -> MutexGuard<T>;
-}
-
-impl<T> SafeAcquire<T> for Mutex<T> {
-    fn safe_lock(&self) -> MutexGuard<T> {
-        self.lock().expect("failed to acquire lock during process")
-    }
+  fn lock_datareader(&self) -> ReadResult<MutexGuard<DataReader<D, DA>>> {
+    self.datareader.lock().map_err(|_e| ReadError::Poisoned {
+      reason: "DataReaderStream could not lock datareader: {e:?}".to_string(),
+    })
+  }
 }
 
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
@@ -908,7 +904,11 @@ where
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
-    let mut datareader = self.datareader.safe_lock();
+    let mut datareader = match self.lock_datareader() {
+      Ok(g) => g,
+      Err(e) => return Poll::Ready(Some(Err(e))),
+    }; //TODO: Upgrade to ?-operator: https://github.com/rust-lang/rust/issues/84277
+
     match datareader.take_bare(1, ReadCondition::not_read()) {
       Err(e) =>
       // DDS fails
@@ -962,6 +962,18 @@ pub struct DataReaderEventStream<
   datareader: Arc<Mutex<DataReader<D, DA>>>,
 }
 
+impl<D, DA> DataReaderEventStream<D, DA>
+where
+  D: Keyed + 'static,
+  DA: DeserializerAdapter<D>,
+{
+  fn lock_datareader(&self) -> ReadResult<MutexGuard<DataReader<D, DA>>> {
+    self.datareader.lock().map_err(|_e| ReadError::Poisoned {
+      reason: "DataReaderEventStream could not lock datareader: {e:?}".to_string(),
+    })
+  }
+}
+
 impl<D, DA> Stream for DataReaderEventStream<D, DA>
 where
   D: Keyed + 'static,
@@ -970,7 +982,14 @@ where
   type Item = DataReaderStatus;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    let datareader = self.datareader.safe_lock();
+    let datareader = match self.lock_datareader() {
+      Ok(g) => g,
+      Err(_e) => return Poll::Ready(None),
+      // If the locking failed, it is due to lock poisoning. This is not recoverable.
+      // We just indicate that the stream of events has ended, because there is
+      // no Result to return here.
+    };
+
     Pin::new(&mut datareader.simple_data_reader.as_async_status_stream()).poll_next(cx)
   }
 }

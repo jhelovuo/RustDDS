@@ -37,7 +37,9 @@ pub enum ReadError {
   /// thread fails. This is most likely because either thread has panicked or
   /// gotten stuck somewhere, neither of which is supposed to happen. This is
   /// typically not recoverable, except by starting a new DomainParticipant.
-  #[error("Cannot communicate with background thread. It may have panicked. Details: {reason}")]
+  #[error(
+    "Synchronization failed due poisoning. Another thread may have panicked. Details: {reason}"
+  )]
   Poisoned { reason: String },
 
   /// Something that should not go wrong went wrong anyway.
