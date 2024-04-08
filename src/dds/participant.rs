@@ -259,7 +259,6 @@ impl DomainParticipantBuilder {
       #[cfg(feature = "rtps_proxy")]
       proxy_data_receiver,
     )?;
-    let self_locators = dp.self_locators();
 
     // outer DP wrapper
     let dp = DomainParticipant {
@@ -281,7 +280,6 @@ impl DomainParticipantBuilder {
           discovery_updated_sender,
           discovery_command_receiver,
           spdp_liveness_receiver,
-          self_locators,
           status_sender,
           security_plugins_handle,
           #[cfg(feature = "rtps_proxy")]
@@ -526,6 +524,22 @@ impl DomainParticipant {
     let mut all_locators = self.dpi.lock().unwrap().self_locators();
     all_locators
       .remove(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
+      .unwrap_or_default()
+      .clone()
+  }
+
+  pub(crate) fn metatraffic_unicast_locators(&self) -> Vec<Locator> {
+    let mut all_locators = self.dpi.lock().unwrap().self_locators();
+    all_locators
+      .remove(&DISCOVERY_LISTENER_TOKEN)
+      .unwrap_or_default()
+      .clone()
+  }
+
+  pub(crate) fn metatraffic_multicast_locators(&self) -> Vec<Locator> {
+    let mut all_locators = self.dpi.lock().unwrap().self_locators();
+    all_locators
+      .remove(&DISCOVERY_MUL_LISTENER_TOKEN)
       .unwrap_or_default()
       .clone()
   }

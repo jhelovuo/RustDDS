@@ -716,7 +716,7 @@ impl Reader {
       if let Some(writer_proxy) = self.matched_writer_mut(writer_guid) {
         if writer_proxy.should_ignore_change(writer_sn) {
           // change already present
-          debug!("handle_data_msg already have this seq={:?}", writer_sn);
+          trace!("handle_data_msg already have this seq={:?}", writer_sn);
           if my_entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_READER {
             debug!("Accepting duplicate message to participant reader.");
             // This is an attempted workaround to eProsima FastRTPS not

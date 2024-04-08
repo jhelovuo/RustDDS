@@ -480,17 +480,6 @@ impl InnerPublisher {
       .ok_or("upgrade fail")
       .or_else(|e| create_error_dropped!("Where is my DomainParticipant? {}", e))?;
 
-    // Get a handle to the topic cache
-    let topic_cache_handle = match dp.dds_cache().read() {
-      Ok(dds_cache) => dds_cache.get_existing_topic_cache(&topic.name())?,
-      Err(e) => return create_error_poisoned!("Cannot lock DDScache. Error: {}", e),
-    };
-    // Update topic cache with DataWriter's Qos
-    match topic_cache_handle.lock() {
-      Ok(mut tc) => tc.update_keep_limits(&writer_qos),
-      Err(e) => return create_error_poisoned!("Cannot lock topic cache. Error: {}", e),
-    };
-
     let guid = GUID::new_with_prefix_and_id(dp.guid().prefix, entity_id);
 
     #[cfg(feature = "security")]
@@ -547,7 +536,6 @@ impl InnerPublisher {
       writer_command_receiver: hccc_download,
       writer_command_receiver_waker: Arc::clone(&writer_waker),
       topic_name: topic.name(),
-      topic_cache_handle,
       like_stateless: writer_like_stateless,
       qos_policies: writer_qos.clone(),
       status_sender,
