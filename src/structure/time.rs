@@ -4,8 +4,7 @@ use speedy::{Readable, Writable};
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-
-use chrono::{DateTime,Utc};
+use chrono::{DateTime, Utc};
 
 use super::duration::Duration;
 
@@ -57,13 +56,12 @@ impl Timestamp {
   };
 
   pub fn now() -> Self {
-    Self::try_from(Utc::now())
-      .unwrap_or_else(|e| {
-        error!("{e}");
-        // We get an invalid timestamp, if the system clock is set more than
-        // ~584 years from 1970 in either direction.
-        Timestamp::INVALID
-      })
+    Self::try_from(Utc::now()).unwrap_or_else(|e| {
+      error!("{e}");
+      // We get an invalid timestamp, if the system clock is set more than
+      // ~584 years from 1970 in either direction.
+      Timestamp::INVALID
+    })
   }
 
   fn to_ticks(self) -> u64 {
@@ -92,15 +90,12 @@ impl Timestamp {
 /// Error from this means "out of range"
 impl TryFrom<DateTime<Utc>> for Timestamp {
   type Error = String;
-  
-  fn try_from(ct: DateTime<Utc>) -> Result<Timestamp,String> {
+
+  fn try_from(ct: DateTime<Utc>) -> Result<Timestamp, String> {
     match ct.timestamp_nanos_opt() {
-      None => 
-        Err("Timestamp out of range.".to_string()),
-      Some(negative) if negative < 0 => 
-        Err("Timestamp out of range (negative).".to_string()),
-      Some(non_negative) => 
-        Ok(Timestamp::from_nanos(non_negative as u64)),
+      None => Err("Timestamp out of range.".to_string()),
+      Some(negative) if negative < 0 => Err("Timestamp out of range (negative).".to_string()),
+      Some(non_negative) => Ok(Timestamp::from_nanos(non_negative as u64)),
     }
   }
 }

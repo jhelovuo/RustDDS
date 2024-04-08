@@ -1,12 +1,11 @@
 use std::{
-  collections::HashMap,
   sync::{Arc, RwLock},
   time::Duration as StdDuration,
 };
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio_06::{Events, Poll, PollOpt, Ready, Token};
+use mio_06::{Events, Poll, PollOpt, Ready};
 use mio_extras::{channel as mio_channel, timer::Timer};
 use paste::paste; // token pasting macro
 
@@ -42,7 +41,6 @@ use crate::{
     duration::Duration,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, GUID},
-    locator::Locator,
     time::Timestamp,
   },
   with_key::{DataReader, DataWriter, Sample},
@@ -194,9 +192,6 @@ pub(crate) struct Discovery {
 
   participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
 
-  // TODO: Why is this a HashMap? Are there ever more than 2?
-  self_locators: HashMap<Token, Vec<Locator>>,
-
   // DDS Subscriber and Publisher for Discovery
   // ...but these are not actually used after initialization
   // discovery_subscriber: Subscriber,
@@ -295,7 +290,6 @@ impl Discovery {
     discovery_updated_sender: mio_channel::SyncSender<DiscoveryNotificationType>,
     discovery_command_receiver: mio_channel::Receiver<DiscoveryCommand>,
     spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
-    self_locators: HashMap<Token, Vec<Locator>>,
     participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
   ) -> CreateResult<Self> {
@@ -666,7 +660,6 @@ impl Discovery {
       discovery_command_receiver,
       spdp_liveness_receiver,
       participant_status_sender,
-      self_locators,
 
       liveliness_state: LivelinessState::new(),
 
@@ -912,7 +905,6 @@ impl Discovery {
 
     let participant_data = SpdpDiscoveredParticipantData::from_local_participant(
       &dp,
-      &self.self_locators,
       &self.security_opt,
       Duration::INFINITE,
     );
@@ -1336,7 +1328,6 @@ impl Discovery {
     // twice
     let data = SpdpDiscoveredParticipantData::from_local_participant(
       local_dp,
-      &self.self_locators,
       &self.security_opt,
       5.0 * Duration::from(Self::SEND_PARTICIPANT_INFO_PERIOD),
     );
@@ -1985,6 +1976,7 @@ mod tests {
 
   use chrono::Utc;
   use speedy::{Endianness, Writable};
+  use mio_06::Token;
 
   use super::*;
   use crate::{
@@ -2042,7 +2034,9 @@ mod tests {
 
   #[test]
   fn discovery_reader_data_test() {
-    use crate::{serialization::pl_cdr_adapters::PlCdrSerialize, TopicKind};
+    use crate::{
+      serialization::pl_cdr_adapters::PlCdrSerialize, structure::locator::Locator, TopicKind,
+    };
 
     let participant = DomainParticipant::new(0).expect("participant creation");
 

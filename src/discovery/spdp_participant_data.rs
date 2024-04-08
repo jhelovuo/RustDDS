@@ -1,9 +1,6 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use mio_06::Token;
 use speedy::{Readable, Writable};
 use chrono::Utc;
 use bytes::Bytes;
@@ -165,26 +162,26 @@ impl SpdpDiscoveredParticipantData {
 
   pub(crate) fn from_local_participant(
     participant: &DomainParticipant,
-    self_locators: &HashMap<Token, Vec<Locator>>,
     _secure_discovery_opt: &Option<SecureDiscovery>, // If present, security is enabled
     lease_duration: Duration,
   ) -> Self {
-    let metatraffic_multicast_locators = self_locators
+    let dp_locators = participant.self_locators();
+    let metatraffic_multicast_locators = dp_locators
       .get(&DISCOVERY_MUL_LISTENER_TOKEN)
       .cloned()
       .unwrap_or_default();
 
-    let metatraffic_unicast_locators = self_locators
+    let metatraffic_unicast_locators = dp_locators
       .get(&DISCOVERY_LISTENER_TOKEN)
       .cloned()
       .unwrap_or_default();
 
-    let default_multicast_locators = self_locators
+    let default_multicast_locators = dp_locators
       .get(&USER_TRAFFIC_MUL_LISTENER_TOKEN)
       .cloned()
       .unwrap_or_default();
 
-    let default_unicast_locators = self_locators
+    let default_unicast_locators = dp_locators
       .get(&USER_TRAFFIC_LISTENER_TOKEN)
       .cloned()
       .unwrap_or_default();

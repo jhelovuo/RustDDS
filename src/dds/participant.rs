@@ -241,7 +241,6 @@ impl DomainParticipantBuilder {
       status_receiver,
       security_plugins_handle.clone(),
     )?;
-    let self_locators = dp.self_locators();
 
     // outer DP wrapper
     let dp = DomainParticipant {
@@ -263,7 +262,6 @@ impl DomainParticipantBuilder {
           discovery_updated_sender,
           discovery_command_receiver,
           spdp_liveness_receiver,
-          self_locators,
           status_sender,
           security_plugins_handle,
         ) {

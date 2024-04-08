@@ -133,7 +133,7 @@ struct HistoryBuffer {
   history_buffer: BTreeMap<Timestamp, CacheChange>,
 
   // topic name is just for debugging
-  topic_name: String, 
+  topic_name: String,
 }
 
 impl HistoryBuffer {
