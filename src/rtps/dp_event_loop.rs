@@ -47,7 +47,7 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::security_plugins::SecurityPluginsHandle;
 #[cfg(feature = "rtps_proxy")]
-use crate::rtps_proxy::ProxyDataChannelSender;
+use crate::{rtps::Message, rtps_proxy::ProxyDataEndpoint};
 
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,
@@ -114,7 +114,7 @@ impl DPEventLoop {
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender,
+    #[cfg(feature = "rtps_proxy")] proxy_data_endpoint: ProxyDataEndpoint<Message>,
   ) -> Self {
     #[cfg(not(feature = "security"))]
     let _dummy = _discovery_command_sender;
@@ -208,7 +208,7 @@ impl DPEventLoop {
       spdp_liveness_sender,
       security_plugins_opt.clone(),
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_sender,
+      proxy_data_endpoint,
     );
 
     Self {
@@ -1078,7 +1078,7 @@ mod tests {
     mio_source,
   };
   #[cfg(feature = "rtps_proxy")]
-  use crate::rtps_proxy::sync_proxy_data_channel;
+  use crate::rtps_proxy::create_connected_proxying_data_endpoints;
 
   //#[test]
   // TODO: Investigate why this fails in the github CI pipeline

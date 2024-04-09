@@ -59,8 +59,9 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
 #[cfg(feature = "rtps_proxy")]
-use crate::rtps_proxy::{
-  sync_proxy_data_channel, ProxyDataChannelReceiver, ProxyDataChannelSender, ProxyDataListener,
+use crate::{
+  rtps::Message,
+  rtps_proxy::{self, ProxyApplicationEndpoints, ProxyDataEndpoint},
 };
 
 pub struct DomainParticipantBuilder {
@@ -233,8 +234,8 @@ impl DomainParticipantBuilder {
     let (status_sender, status_receiver) = sync_status_channel(16)?;
 
     #[cfg(feature = "rtps_proxy")]
-    // Channel used to send RTPS-proxy data to DomainParticipant
-    let (proxy_data_sender, proxy_data_receiver) = sync_proxy_data_channel(128)?;
+    let (proxy_app_endpoints, proxy_evloop_endpoints, proxy_discovery_endpoints) =
+      rtps_proxy::create_connected_proxying_data_endpoints();
 
     #[cfg(not(feature = "security"))]
     let security_plugins_handle = None;
@@ -255,9 +256,9 @@ impl DomainParticipantBuilder {
       status_receiver,
       security_plugins_handle.clone(),
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_sender.clone(),
+      proxy_evloop_endpoints,
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_receiver,
+      proxy_app_endpoints,
     )?;
 
     // outer DP wrapper
@@ -283,7 +284,7 @@ impl DomainParticipantBuilder {
           status_sender,
           security_plugins_handle,
           #[cfg(feature = "rtps_proxy")]
-          proxy_data_sender,
+          proxy_discovery_endpoints,
         ) {
           discovery.discovery_event_loop(); // run the event loop
         }
@@ -485,10 +486,8 @@ impl DomainParticipant {
   }
 
   #[cfg(feature = "rtps_proxy")]
-  pub fn rtps_proxy_data_listener(&self) -> ProxyDataListener {
-    ProxyDataListener {
-      dp_disc: Arc::clone(&self.dpi),
-    }
+  pub fn proxy_app_endpoints(&self) -> Arc<Mutex<ProxyApplicationEndpoints>> {
+    self.dpi.lock().unwrap().proxy_app_endpoints()
   }
 
   pub(crate) fn weak_clone(&self) -> DomainParticipantWeak {
@@ -818,8 +817,8 @@ impl DomainParticipantDisc {
     status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender,
-    #[cfg(feature = "rtps_proxy")] proxy_data_receiver: ProxyDataChannelReceiver,
+    #[cfg(feature = "rtps_proxy")] proxy_evloop_endpoints: ProxyDataEndpoint<Message>,
+    #[cfg(feature = "rtps_proxy")] proxy_app_endpoints: ProxyApplicationEndpoints,
   ) -> CreateResult<Self> {
     let dpi = DomainParticipantInner::new(
       domain_id,
@@ -833,9 +832,9 @@ impl DomainParticipantDisc {
       status_receiver,
       security_plugins_handle,
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_sender,
+      proxy_evloop_endpoints,
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_receiver,
+      proxy_app_endpoints,
     )?;
 
     Ok(Self {
@@ -948,12 +947,8 @@ impl DomainParticipantDisc {
     self.dpi.status_channel_receiver_mut()
   }
   #[cfg(feature = "rtps_proxy")]
-  pub(crate) fn proxy_channel_receiver(&self) -> &ProxyDataChannelReceiver {
-    self.dpi.proxy_channel_receiver()
-  }
-  #[cfg(feature = "rtps_proxy")]
-  pub(crate) fn proxy_channel_receiver_mut(&mut self) -> &mut ProxyDataChannelReceiver {
-    self.dpi.proxy_channel_receiver_mut()
+  pub(crate) fn proxy_app_endpoints(&self) -> Arc<Mutex<ProxyApplicationEndpoints>> {
+    self.dpi.proxy_app_endpoints()
   }
 }
 
@@ -1024,7 +1019,7 @@ pub(crate) struct DomainParticipantInner {
   security_plugins_handle: Option<SecurityPluginsHandle>,
 
   #[cfg(feature = "rtps_proxy")]
-  proxy_data_receiver: ProxyDataChannelReceiver,
+  proxy_app_endpoints: Arc<Mutex<ProxyApplicationEndpoints>>,
 }
 
 impl Drop for DomainParticipantInner {
@@ -1064,8 +1059,8 @@ impl DomainParticipantInner {
     status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender,
-    #[cfg(feature = "rtps_proxy")] proxy_data_receiver: ProxyDataChannelReceiver,
+    #[cfg(feature = "rtps_proxy")] proxy_evloop_endpoints: ProxyDataEndpoint<Message>,
+    #[cfg(feature = "rtps_proxy")] proxy_app_endpoints: ProxyApplicationEndpoints,
   ) -> CreateResult<Self> {
     #[cfg(not(feature = "security"))]
     let _dummy = _qos_policies; // to make clippy happy
@@ -1188,6 +1183,9 @@ impl DomainParticipantInner {
 
     let (stop_poll_sender, stop_poll_receiver) = mio_channel::channel();
 
+    #[cfg(feature = "rtps_proxy")]
+    let proxy_app_endpoints_mutex = Arc::new(Mutex::new(proxy_app_endpoints));
+
     // Launch the background thread for DomainParticipant
     let disc_db_clone = discovery_db.clone();
     let security_plugins_clone = security_plugins_handle.clone();
@@ -1224,7 +1222,7 @@ impl DomainParticipantInner {
           status_sender,
           security_plugins_clone,
           #[cfg(feature = "rtps_proxy")]
-          proxy_data_sender,
+          proxy_evloop_endpoints,
         );
         dp_event_loop.event_loop();
       })?;
@@ -1256,7 +1254,7 @@ impl DomainParticipantInner {
       self_locators,
       security_plugins_handle,
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_receiver,
+      proxy_app_endpoints: proxy_app_endpoints_mutex,
     })
   }
 
@@ -1494,12 +1492,8 @@ impl DomainParticipantInner {
     &mut self.status_receiver
   }
   #[cfg(feature = "rtps_proxy")]
-  pub(crate) fn proxy_channel_receiver(&self) -> &ProxyDataChannelReceiver {
-    &self.proxy_data_receiver
-  }
-  #[cfg(feature = "rtps_proxy")]
-  pub(crate) fn proxy_channel_receiver_mut(&mut self) -> &mut ProxyDataChannelReceiver {
-    &mut self.proxy_data_receiver
+  pub(crate) fn proxy_app_endpoints(&self) -> Arc<Mutex<ProxyApplicationEndpoints>> {
+    self.proxy_app_endpoints.clone()
   }
 } // impl
 

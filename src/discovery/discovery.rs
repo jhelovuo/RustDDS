@@ -54,7 +54,7 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::*;
 #[cfg(feature = "rtps_proxy")]
-use crate::rtps_proxy::{self, ProxyData, ProxyDataChannelSender};
+use crate::rtps_proxy::{DiscoverySample, ProxyDataEndpoint};
 
 #[derive(Clone, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub enum DiscoveryCommand {
@@ -257,7 +257,7 @@ pub(crate) struct Discovery {
   cached_secure_discovery_messages_resend_timer: Timer<()>,
 
   #[cfg(feature = "rtps_proxy")]
-  proxy_data_sender: ProxyDataChannelSender,
+  proxy_data_endpoint: ProxyDataEndpoint<DiscoverySample>,
 }
 
 impl Discovery {
@@ -297,7 +297,7 @@ impl Discovery {
     spdp_liveness_receiver: mio_channel::Receiver<GuidPrefix>,
     participant_status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     security_plugins_opt: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_sender: ProxyDataChannelSender,
+    #[cfg(feature = "rtps_proxy")] proxy_data_endpoint: ProxyDataEndpoint<DiscoverySample>,
   ) -> CreateResult<Self> {
     // helper macro to handle initialization failures.
     macro_rules! try_construct {
@@ -657,6 +657,17 @@ impl Discovery {
       None // no security configured
     };
 
+    #[cfg(feature = "rtps_proxy")]
+    try_construct!(
+      poll.register(
+        &proxy_data_endpoint,
+        DISCOVERY_PROXY_DATA_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      ),
+      "Failed to register Discovery proxy receiver. {:?}"
+    );
+
     Ok(Self {
       poll,
       domain_participant,
@@ -695,7 +706,7 @@ impl Discovery {
       #[cfg(feature = "security")]
       cached_secure_discovery_messages_resend_timer: secure_message_resend_timer,
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_sender,
+      proxy_data_endpoint,
     })
   }
 
@@ -888,6 +899,10 @@ impl Discovery {
             #[cfg(feature = "security")]
             self.handle_secure_publication_reader(None);
           }
+          DISCOVERY_PROXY_DATA_TOKEN => {
+            #[cfg(feature = "rtps_proxy")]
+            self.read_proxy_data();
+          }
 
           other_token => {
             error!("discovery event loop got token: {:?}", other_token);
@@ -937,9 +952,10 @@ impl Discovery {
           // If working in RTPS proxy mode, send a clone of the sample to the proxy
           #[cfg(feature = "rtps_proxy")]
           {
-            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
-              rtps_proxy::DiscoverySample::Participant(ds.value().clone()),
-            )) {
+            if let Err(e) = self
+              .proxy_data_endpoint
+              .try_send(DiscoverySample::Participant(ds.value().clone()))
+            {
               error!("RTPS proxy: Failed to send Participant sample: {e}");
             }
           }
@@ -1086,9 +1102,10 @@ impl Discovery {
           .map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             #[cfg(feature = "rtps_proxy")]
-            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
-              rtps_proxy::DiscoverySample::Subscription(sample.clone()),
-            )) {
+            if let Err(e) = self
+              .proxy_data_endpoint
+              .try_send(DiscoverySample::Subscription(sample.clone()))
+            {
               error!("RTPS proxy: Failed to send Subscription sample: {e}");
             }
             sample
@@ -1169,9 +1186,10 @@ impl Discovery {
           .map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             #[cfg(feature = "rtps_proxy")]
-            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
-              rtps_proxy::DiscoverySample::Publication(sample.clone()),
-            )) {
+            if let Err(e) = self
+              .proxy_data_endpoint
+              .try_send(DiscoverySample::Publication(sample.clone()))
+            {
               error!("RTPS proxy: Failed to send Publication sample: {e}");
             }
             sample
@@ -1552,9 +1570,10 @@ impl Discovery {
       // If working in RTPS proxy mode, send a clone of the sample to the proxy
       #[cfg(feature = "rtps_proxy")]
       {
-        if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
-          rtps_proxy::DiscoverySample::ParticipantSecure(sample.clone()),
-        )) {
+        if let Err(e) = self
+          .proxy_data_endpoint
+          .try_send(DiscoverySample::ParticipantSecure(sample.clone()))
+        {
           error!("RTPS proxy: Failed to send ParticipantSecure sample: {e}");
         }
       }
@@ -1594,9 +1613,10 @@ impl Discovery {
           .map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             #[cfg(feature = "rtps_proxy")]
-            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
-              rtps_proxy::DiscoverySample::SubscriptionSecure(sample.clone()),
-            )) {
+            if let Err(e) = self
+              .proxy_data_endpoint
+              .try_send(DiscoverySample::SubscriptionSecure(sample.clone()))
+            {
               error!("RTPS proxy: Failed to send SubscriptionSecure sample: {e}");
             }
             sample
@@ -1659,9 +1679,10 @@ impl Discovery {
           .map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             #[cfg(feature = "rtps_proxy")]
-            if let Err(e) = self.proxy_data_sender.try_send(ProxyData::Discovery(
-              rtps_proxy::DiscoverySample::PublicationSecure(sample.clone()),
-            )) {
+            if let Err(e) = self
+              .proxy_data_endpoint
+              .try_send(DiscoverySample::PublicationSecure(sample.clone()))
+            {
               error!("RTPS proxy: Failed to send PublicationSecure sample: {e}");
             }
             sample
@@ -2034,6 +2055,13 @@ impl Discovery {
       .participant_status_sender
       .try_send(event)
       .unwrap_or_else(|e| error!("Cannot report participant status: {e:?}"));
+  }
+
+  #[cfg(feature = "rtps_proxy")]
+  fn read_proxy_data(&self) {
+    while let Some(data) = self.proxy_data_endpoint.try_recv_data() {
+      info!("Received DiscoverySample from proxy: {data:?}");
+    }
   }
 }
 

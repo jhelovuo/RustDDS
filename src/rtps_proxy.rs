@@ -1,17 +1,13 @@
-use std::{
-  io,
-  sync::{Arc, Mutex},
-};
+use std::io;
 
-use mio_06::event::Evented;
 use mio_extras::channel as mio_channel;
 
 use crate::{
-  dds::{participant::DomainParticipantDisc, with_key::Sample},
+  dds::with_key::Sample,
   discovery::{DiscoveredReaderData, DiscoveredWriterData, SpdpDiscoveredParticipantData},
   rtps::Message,
-  structure::guid::EntityId,
-  Keyed,
+  structure::guid::{EntityId, GuidPrefix},
+  DomainParticipant, Keyed,
 };
 #[cfg(feature = "security")]
 use crate::security::{
@@ -19,27 +15,22 @@ use crate::security::{
   SubscriptionBuiltinTopicDataSecure,
 };
 
-pub trait ProxyEvented {
-  fn as_proxy_evented(&mut self) -> &dyn Evented; // This is for polling with mio-0.6.x
-  fn try_recv_data(&self) -> Option<ProxyData>;
+pub struct ProxyDataEndpoint<T> {
+  sender: mio_channel::SyncSender<T>,
+  receiver: mio_channel::Receiver<T>,
 }
 
-#[derive(Clone)]
-pub struct ProxyDataChannelSender {
-  actual_sender: mio_channel::SyncSender<ProxyData>,
-}
+impl<T> ProxyDataEndpoint<T> {
+  pub fn try_send(&self, data: T) -> Result<(), mio_channel::TrySendError<T>> {
+    self.sender.try_send(data)
+  }
 
-impl ProxyDataChannelSender {
-  pub fn try_send(&self, data: ProxyData) -> Result<(), mio_channel::TrySendError<ProxyData>> {
-    self.actual_sender.try_send(data)
+  pub fn try_recv_data(&self) -> Option<T> {
+    self.receiver.try_recv().ok()
   }
 }
 
-pub struct ProxyDataChannelReceiver {
-  actual_receiver: Mutex<mio_channel::Receiver<ProxyData>>,
-}
-
-impl mio_06::Evented for ProxyDataChannelReceiver {
+impl<T> mio_06::Evented for ProxyDataEndpoint<T> {
   // Call the trait methods of the mio channel which implements Evented
   fn register(
     &self,
@@ -48,11 +39,7 @@ impl mio_06::Evented for ProxyDataChannelReceiver {
     interest: mio_06::Ready,
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
-    self
-      .actual_receiver
-      .lock()
-      .unwrap()
-      .register(poll, token, interest, opts)
+    self.receiver.register(poll, token, interest, opts)
   }
 
   fn reregister(
@@ -62,37 +49,67 @@ impl mio_06::Evented for ProxyDataChannelReceiver {
     interest: mio_06::Ready,
     opts: mio_06::PollOpt,
   ) -> io::Result<()> {
-    self
-      .actual_receiver
-      .lock()
-      .unwrap()
-      .reregister(poll, token, interest, opts)
+    self.receiver.reregister(poll, token, interest, opts)
   }
 
   fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
-    self.actual_receiver.lock().unwrap().deregister(poll)
+    self.receiver.deregister(poll)
   }
 }
 
-impl ProxyEvented for ProxyDataChannelReceiver {
-  fn as_proxy_evented(&mut self) -> &dyn Evented {
-    self
-  }
-  fn try_recv_data(&self) -> Option<ProxyData> {
-    self.actual_receiver.lock().unwrap().try_recv().ok()
-  }
+pub struct ProxyApplicationEndpoints {
+  pub rtps: ProxyDataEndpoint<Message>,
+  pub discovery: ProxyDataEndpoint<DiscoverySample>,
 }
 
-pub(crate) fn sync_proxy_data_channel(
-  capacity: usize,
-) -> io::Result<(ProxyDataChannelSender, ProxyDataChannelReceiver)> {
-  let (actual_sender, actual_receiver) = mio_channel::sync_channel(capacity);
-  Ok((
-    ProxyDataChannelSender { actual_sender },
-    ProxyDataChannelReceiver {
-      actual_receiver: Mutex::new(actual_receiver),
+pub fn create_connected_proxying_data_endpoints() -> (
+  ProxyApplicationEndpoints,
+  ProxyDataEndpoint<Message>,
+  ProxyDataEndpoint<DiscoverySample>,
+) {
+  let channel_capacity = 128;
+
+  // Channel for Proxy app --> EventLoop (RTPS messages)
+  let (app_rtps_sender, evloop_proxy_receiver) =
+    mio_channel::sync_channel::<Message>(channel_capacity);
+
+  // Channel for EventLoop --> Proxy app (RTPS messages)
+  let (evloop_proxy_sender, app_rtps_receiver) =
+    mio_channel::sync_channel::<Message>(channel_capacity);
+
+  // Endpoints that should end up to EventLoop
+  let evloop_endpoints = ProxyDataEndpoint::<Message> {
+    sender: evloop_proxy_sender,
+    receiver: evloop_proxy_receiver,
+  };
+
+  // Channel for Proxy app --> Discovery (Discovery samples)
+  let (app_discovery_sender, disc_proxy_receiver) =
+    mio_channel::sync_channel::<DiscoverySample>(channel_capacity);
+
+  // Channel for Discovery --> Proxy app (Discovery samples)
+  let (disc_proxy_sender, app_discovery_receiver) =
+    mio_channel::sync_channel::<DiscoverySample>(channel_capacity);
+
+  // Endpoints that should end up to Discovery
+  let discovery_endpoints = ProxyDataEndpoint::<DiscoverySample> {
+    sender: disc_proxy_sender,
+    receiver: disc_proxy_receiver,
+  };
+
+  // Endpoints that should end up to the proxy application
+  let application_endpoints = ProxyApplicationEndpoints {
+    rtps: ProxyDataEndpoint::<Message> {
+      sender: app_rtps_sender,
+      receiver: app_rtps_receiver,
     },
-  ))
+    discovery: ProxyDataEndpoint::<DiscoverySample> {
+      sender: app_discovery_sender,
+      receiver: app_discovery_receiver,
+    },
+  };
+
+  (application_endpoints, evloop_endpoints, discovery_endpoints)
 }
 
 // Entity IDs used in those discovery topics that contain locator data.
@@ -138,73 +155,92 @@ pub enum DiscoverySample {
   ),
 }
 
-#[allow(clippy::large_enum_variant)] // Temporary, for dev only
-#[derive(Clone, Debug)]
-pub enum ProxyData {
-  RTPSMessage(Message),
-  Discovery(DiscoverySample),
-}
-
-pub struct ProxyDataListener {
-  pub(crate) dp_disc: Arc<Mutex<DomainParticipantDisc>>,
-}
-
-impl ProxyEvented for ProxyDataListener {
-  fn as_proxy_evented(&mut self) -> &dyn Evented {
-    self
-  }
-  fn try_recv_data(&self) -> Option<ProxyData> {
-    self
-      .dp_disc
-      .lock()
-      .unwrap()
-      .proxy_channel_receiver()
-      .try_recv_data()
-  }
-}
-
-impl mio_06::Evented for ProxyDataListener {
-  // Call the Evented trait methods of the ProxyDataChannelReceiver in the
-  // DomainParticipant
-  fn register(
-    &self,
-    poll: &mio_06::Poll,
-    token: mio_06::Token,
-    interest: mio_06::Ready,
-    opts: mio_06::PollOpt,
-  ) -> io::Result<()> {
-    self
-      .dp_disc
-      .lock()
-      .unwrap()
-      .proxy_channel_receiver_mut()
-      .as_proxy_evented()
-      .register(poll, token, interest, opts)
+impl DiscoverySample {
+  pub fn sender_participant_guid_prefix(&self) -> GuidPrefix {
+    match self {
+      Self::Participant(sample) => match sample {
+        Sample::Value(data) => data.key().0.prefix,
+        Sample::Dispose(guid) => guid.0.prefix,
+      },
+      Self::Subscription(sample) => match sample {
+        Sample::Value(data) => data.key().0.prefix,
+        Sample::Dispose(guid) => guid.0.prefix,
+      },
+      Self::Publication(sample) => match sample {
+        Sample::Value(data) => data.key().0.prefix,
+        Sample::Dispose(guid) => guid.0.prefix,
+      },
+      #[cfg(feature = "security")]
+      Self::ParticipantSecure(sample) => match sample {
+        Sample::Value(data) => data.key().0.prefix,
+        Sample::Dispose(guid) => guid.0.prefix,
+      },
+      #[cfg(feature = "security")]
+      Self::SubscriptionSecure(sample) => match sample {
+        Sample::Value(data) => data.key().0.prefix,
+        Sample::Dispose(guid) => guid.0.prefix,
+      },
+      #[cfg(feature = "security")]
+      Self::PublicationSecure(sample) => match sample {
+        Sample::Value(data) => data.key().0.prefix,
+        Sample::Dispose(guid) => guid.0.prefix,
+      },
+    }
   }
 
-  fn reregister(
-    &self,
-    poll: &mio_06::Poll,
-    token: mio_06::Token,
-    interest: mio_06::Ready,
-    opts: mio_06::PollOpt,
-  ) -> io::Result<()> {
-    self
-      .dp_disc
-      .lock()
-      .unwrap()
-      .proxy_channel_receiver_mut()
-      .as_proxy_evented()
-      .reregister(poll, token, interest, opts)
-  }
-
-  fn deregister(&self, poll: &mio_06::Poll) -> io::Result<()> {
-    self
-      .dp_disc
-      .lock()
-      .unwrap()
-      .proxy_channel_receiver_mut()
-      .as_proxy_evented()
-      .deregister(poll)
+  pub fn source_participant_to(&mut self, dp: &DomainParticipant) {
+    // Change locators in sample values. Do nothing for dispose samples.
+    match self {
+      Self::Participant(Sample::Value(dp_data)) => {
+        dp_data.metatraffic_unicast_locators = dp.metatraffic_unicast_locators();
+        dp_data.metatraffic_multicast_locators = dp.metatraffic_multicast_locators();
+        dp_data.default_unicast_locators = dp.user_traffic_unicast_locators();
+        dp_data.default_multicast_locators = dp.user_traffic_multicast_locators();
+      }
+      #[cfg(feature = "security")]
+      Self::ParticipantSecure(Sample::Value(data)) => {
+        data.participant_data.metatraffic_unicast_locators = dp.metatraffic_unicast_locators();
+        data.participant_data.metatraffic_multicast_locators = dp.metatraffic_multicast_locators();
+        data.participant_data.default_unicast_locators = dp.user_traffic_unicast_locators();
+        data.participant_data.default_multicast_locators = dp.user_traffic_multicast_locators();
+      }
+      Self::Subscription(Sample::Value(sub_data)) => {
+        sub_data.reader_proxy.unicast_locator_list = dp.user_traffic_unicast_locators();
+        sub_data.reader_proxy.multicast_locator_list = dp.user_traffic_multicast_locators();
+      }
+      #[cfg(feature = "security")]
+      Self::SubscriptionSecure(Sample::Value(data)) => {
+        data
+          .discovered_reader_data
+          .reader_proxy
+          .unicast_locator_list = dp.user_traffic_unicast_locators();
+        data
+          .discovered_reader_data
+          .reader_proxy
+          .multicast_locator_list = dp.user_traffic_multicast_locators();
+      }
+      Self::Publication(Sample::Value(pub_data)) => {
+        pub_data.writer_proxy.unicast_locator_list = dp.user_traffic_unicast_locators();
+        pub_data.writer_proxy.multicast_locator_list = dp.user_traffic_multicast_locators();
+      }
+      #[cfg(feature = "security")]
+      Self::PublicationSecure(Sample::Value(data)) => {
+        data
+          .discovered_writer_data
+          .writer_proxy
+          .unicast_locator_list = dp.user_traffic_unicast_locators();
+        data
+          .discovered_writer_data
+          .writer_proxy
+          .multicast_locator_list = dp.user_traffic_multicast_locators();
+      }
+      Self::Participant(Sample::Dispose(_))
+      | Self::Subscription(Sample::Dispose(_))
+      | Self::Publication(Sample::Dispose(_)) => {}
+      #[cfg(feature = "security")]
+      Self::ParticipantSecure(Sample::Dispose(_))
+      | Self::SubscriptionSecure(Sample::Dispose(_))
+      | Self::PublicationSecure(Sample::Dispose(_)) => {}
+    };
   }
 }

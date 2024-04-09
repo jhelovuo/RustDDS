@@ -248,6 +248,9 @@ pub const P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN: Token = Token(62 + PTB);
 pub const CACHED_SECURE_DISCOVERY_MESSAGE_RESEND_TIMER_TOKEN: Token = Token(63 + PTB);
 pub const P2P_BUILTIN_PARTICIPANT_VOLATILE_SECURE_TOKEN: Token = Token(64 + PTB);
 
+pub const DISCOVERY_PROXY_DATA_TOKEN: Token = Token(70 + PTB);
+pub const RTPS_PROXY_DATA_TOKEN: Token = Token(71 + PTB);
+
 // See note about maximum allowed number above.
 
 pub struct TokenReceiverPair<T> {
