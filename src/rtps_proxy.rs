@@ -58,27 +58,27 @@ impl<T> mio_06::Evented for ProxyDataEndpoint<T> {
 }
 
 pub struct ProxyApplicationEndpoints {
-  pub rtps: ProxyDataEndpoint<Message>,
+  pub rtps: ProxyDataEndpoint<RTPSMessage>,
   pub discovery: ProxyDataEndpoint<DiscoverySample>,
 }
 
 pub fn create_connected_proxying_data_endpoints() -> (
   ProxyApplicationEndpoints,
-  ProxyDataEndpoint<Message>,
+  ProxyDataEndpoint<RTPSMessage>,
   ProxyDataEndpoint<DiscoverySample>,
 ) {
   let channel_capacity = 128;
 
   // Channel for Proxy app --> EventLoop (RTPS messages)
   let (app_rtps_sender, evloop_proxy_receiver) =
-    mio_channel::sync_channel::<Message>(channel_capacity);
+    mio_channel::sync_channel::<RTPSMessage>(channel_capacity);
 
   // Channel for EventLoop --> Proxy app (RTPS messages)
   let (evloop_proxy_sender, app_rtps_receiver) =
-    mio_channel::sync_channel::<Message>(channel_capacity);
+    mio_channel::sync_channel::<RTPSMessage>(channel_capacity);
 
   // Endpoints that should end up to EventLoop
-  let evloop_endpoints = ProxyDataEndpoint::<Message> {
+  let evloop_endpoints = ProxyDataEndpoint::<RTPSMessage> {
     sender: evloop_proxy_sender,
     receiver: evloop_proxy_receiver,
   };
@@ -99,7 +99,7 @@ pub fn create_connected_proxying_data_endpoints() -> (
 
   // Endpoints that should end up to the proxy application
   let application_endpoints = ProxyApplicationEndpoints {
-    rtps: ProxyDataEndpoint::<Message> {
+    rtps: ProxyDataEndpoint::<RTPSMessage> {
       sender: app_rtps_sender,
       receiver: app_rtps_receiver,
     },
@@ -243,4 +243,10 @@ impl DiscoverySample {
       | Self::PublicationSecure(Sample::Dispose(_)) => {}
     };
   }
+}
+
+// Currently contains just the message, we may need something extra in the
+// future.
+pub struct RTPSMessage {
+  pub msg: Message,
 }

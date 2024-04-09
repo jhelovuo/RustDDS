@@ -59,10 +59,7 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
 #[cfg(feature = "rtps_proxy")]
-use crate::{
-  rtps::Message,
-  rtps_proxy::{self, ProxyApplicationEndpoints, ProxyDataEndpoint},
-};
+use crate::rtps_proxy::{self, ProxyApplicationEndpoints, ProxyDataEndpoint};
 
 pub struct DomainParticipantBuilder {
   domain_id: u16,
@@ -817,7 +814,9 @@ impl DomainParticipantDisc {
     status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_evloop_endpoints: ProxyDataEndpoint<Message>,
+    #[cfg(feature = "rtps_proxy")] proxy_evloop_endpoints: ProxyDataEndpoint<
+      rtps_proxy::RTPSMessage,
+    >,
     #[cfg(feature = "rtps_proxy")] proxy_app_endpoints: ProxyApplicationEndpoints,
   ) -> CreateResult<Self> {
     let dpi = DomainParticipantInner::new(
@@ -1059,7 +1058,9 @@ impl DomainParticipantInner {
     status_sender: StatusChannelSender<DomainParticipantStatusEvent>,
     status_receiver: StatusChannelReceiver<DomainParticipantStatusEvent>,
     security_plugins_handle: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_evloop_endpoints: ProxyDataEndpoint<Message>,
+    #[cfg(feature = "rtps_proxy")] proxy_evloop_endpoints: ProxyDataEndpoint<
+      rtps_proxy::RTPSMessage,
+    >,
     #[cfg(feature = "rtps_proxy")] proxy_app_endpoints: ProxyApplicationEndpoints,
   ) -> CreateResult<Self> {
     #[cfg(not(feature = "security"))]
