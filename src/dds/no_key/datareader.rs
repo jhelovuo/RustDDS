@@ -254,7 +254,7 @@ where
     // read call
     Ok(
       self
-        .read(std::usize::MAX, ReadCondition::not_read())?
+        .read(usize::MAX, ReadCondition::not_read())?
         .into_iter()
         .map(|ds| ds.value),
     )
@@ -294,7 +294,7 @@ where
     // read call
     Ok(
       self
-        .read(std::usize::MAX, read_condition)?
+        .read(usize::MAX, read_condition)?
         .into_iter()
         .map(|ds| ds.value),
     )
@@ -334,7 +334,7 @@ where
     // read call
     Ok(
       self
-        .take(std::usize::MAX, ReadCondition::not_read())?
+        .take(usize::MAX, ReadCondition::not_read())?
         .into_iter()
         .map(|ds| ds.value),
     )
@@ -376,7 +376,7 @@ where
     // read call
     Ok(
       self
-        .take(std::usize::MAX, read_condition)?
+        .take(usize::MAX, read_condition)?
         .into_iter()
         .map(|ds| ds.value),
     )

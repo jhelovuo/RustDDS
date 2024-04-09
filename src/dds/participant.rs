@@ -920,10 +920,8 @@ impl Drop for DomainParticipantDisc {
 
 // This is the actual working DomainParticipant.
 pub(crate) struct DomainParticipantInner {
-  domain_id: u16,
-  participant_id: u16,
+  domain_info: DomainInfo,
 
-  my_guid: GUID,
   #[cfg(feature = "security")] // just to avoid warning
   my_qos_policies: QosPolicies,
 
@@ -1093,6 +1091,7 @@ impl DomainParticipantInner {
       domain_id,
       participant_id,
     };
+    let domain_info_clone = domain_info.clone();
 
     let dds_cache = Arc::new(RwLock::new(DDSCache::new()));
     let dds_cache_clone = Arc::clone(&dds_cache);
@@ -1116,7 +1115,7 @@ impl DomainParticipantInner {
       .name(format!("RustDDS Participant {} event loop", participant_id))
       .spawn(move || {
         let dp_event_loop = DPEventLoop::new(
-          domain_info,
+          domain_info_clone,
           dds_cache_clone,
           listeners,
           disc_db_clone,
@@ -1156,11 +1155,9 @@ impl DomainParticipantInner {
     );
 
     Ok(Self {
-      domain_id,
-      participant_id,
+      domain_info,
       #[cfg(feature = "security")]
       my_qos_policies: _qos_policies,
-      my_guid: participant_guid,
       sender_add_reader,
       sender_remove_reader,
       stop_poll_sender,
@@ -1244,8 +1241,8 @@ impl DomainParticipantInner {
       // Security is enabled.
       // Check are we allowed to create the topic from Access control
       let check_res = sec_handle.get_plugins().check_create_topic(
-        self.my_guid.prefix,
-        self.domain_id,
+        self.guid().prefix,
+        self.domain_id(),
         name.clone(),
         qos,
       );
@@ -1384,11 +1381,11 @@ impl DomainParticipantInner {
   // }
 
   pub fn domain_id(&self) -> u16 {
-    self.domain_id
+    self.domain_info.domain_id
   }
 
   pub fn participant_id(&self) -> u16 {
-    self.participant_id
+    self.domain_info.participant_id
   }
 
   pub fn discovered_topics(&self) -> Vec<DiscoveredTopicData> {
@@ -1425,7 +1422,7 @@ impl RTPSEntity for DomainParticipantDisc {
 
 impl RTPSEntity for DomainParticipantInner {
   fn guid(&self) -> GUID {
-    self.my_guid
+    self.domain_info.domain_participant_guid
   }
 }
 

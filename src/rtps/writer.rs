@@ -1442,6 +1442,10 @@ impl Writer {
     // unicast and multicast locators for each reader only on every reader update,
     // and not find it dynamically on every message.
 
+    // TODO: In addition to Locators found in Readers, we should observe
+    // the Locators given in MEssageReceiverState, i.e. if there was an
+    // applicable InfoReply submessage, and we are sending a reply.
+
     let readers = readers.collect::<Vec<_>>(); // clone iterator
 
     #[cfg(feature = "security")]

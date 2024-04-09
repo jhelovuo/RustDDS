@@ -46,6 +46,7 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::security_plugins::SecurityPluginsHandle;
 
+#[derive(Clone, Debug)]
 pub struct DomainInfo {
   pub domain_participant_guid: GUID,
   pub domain_id: u16,

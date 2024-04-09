@@ -64,13 +64,21 @@ enum SecureReceiverState {
 pub struct SecureWrapping {
   // TODO
 }
-// This is partial receiver state to be sent to Reader or Writer
+
+// This is partial receiver state to be sent to a Reader or a Writer with a
+// Submessage
 #[derive(Debug, Clone)]
 pub struct MessageReceiverState {
   pub source_guid_prefix: GuidPrefix,
   pub unicast_reply_locator_list: Vec<Locator>,
+
+  #[allow(dead_code)]
+  // TODO: We do not use the multicast Locators from InfoReply for anything for now.
   pub multicast_reply_locator_list: Vec<Locator>,
+
   pub source_timestamp: Option<Timestamp>,
+
+  #[allow(dead_code)] // TODO: Remove this when/if SecureWrapping actually does something.
   #[cfg(feature = "security")]
   pub secure_rtps_wrapped: Option<SecureWrapping>,
 }

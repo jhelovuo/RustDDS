@@ -12,8 +12,13 @@ use crate::security::{
 // A list of Grants
 #[derive(Debug, Clone)]
 pub struct DomainParticipantPermissions {
-  pub grants: Vec<Grant>,
-  pub original_string: String,
+  // Parsed content
+  grants: Vec<Grant>,
+
+  // we are keeping the original string for debugging. But may be removed later if no-one is using
+  // it.
+  #[allow(dead_code)]
+  original_string: String,
 }
 
 impl DomainParticipantPermissions {
