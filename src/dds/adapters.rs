@@ -76,40 +76,6 @@ pub mod no_key {
       Self::from_bytes_with(input_bytes, encoding, Self::DECODER)
     }
 
-    /// Decode from a slice of [`Bytes`] using the given decoder.
-    ///
-    /// This method has a default implementation, but the default will make a
-    /// copy of all the input data in memory and then call
-    /// [`Self::from_bytes_with`].
-    // In order to avoid the copy, implement also this method.
-    fn from_vec_bytes_with<S>(
-      input_vec_bytes: &[Bytes],
-      encoding: RepresentationIdentifier,
-      decoder: S,
-    ) -> Result<D, Self::Error>
-    where
-      S: Decode<Self::Deserialized, Error = Self::Error>,
-    {
-      let total_len = input_vec_bytes.iter().map(Bytes::len).sum();
-      let mut total_payload = Vec::with_capacity(total_len);
-      for iv in input_vec_bytes {
-        total_payload.extend(iv);
-      }
-      Self::from_bytes_with(&total_payload, encoding, decoder)
-    }
-
-    /// Decode from a slice of [`Bytes`].
-    ///
-    /// Only usable if the `Self::Deserialized` type has a default decoder.
-    fn from_vec_bytes(
-      input_vec_bytes: &[Bytes],
-      encoding: RepresentationIdentifier,
-    ) -> Result<D, Self::Error>
-    where
-      Self: DefaultDecoder<D>,
-    {
-      Self::from_vec_bytes_with(input_vec_bytes, encoding, Self::DECODER)
-    }
   }
 
   /// The `DeserializerAdapter` can be used without a decoder as there is a
