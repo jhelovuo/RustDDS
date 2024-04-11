@@ -13,6 +13,18 @@ pub mod no_key {
 
   /// trait for connecting a Deserializer implementation and DataReader
   /// together - no_key version.
+  ///
+  /// Deserialization is done in two steps: decode and transform.
+  /// The basic pipeline is:
+  /// 
+  /// byte slice → decode → value of type `Self::Deserialized` → call
+  /// [`Self::transform_deserialized`] → value of type `D`
+  ///
+  /// The transform step may be an identity function, which means that
+  /// `Self::Deserialized` and `D` are the same.
+  ///
+  /// The decoding step can be parameterized at run time, if the decoder is defined suitaby.
+  /// If there is no need for such parameterization, use subtrait `DefaultDecoder`.
   pub trait DeserializerAdapter<D> {
     /// The error type returned when decoding fails.
     type Error: std::error::Error;
@@ -20,11 +32,8 @@ pub mod no_key {
     /// Type after deserialization.
     ///
     /// The adapter might apply additional operations or wrapper types to the
-    /// deserialized value, so this type might be different from `D`. The basic
-    /// pipeline is:
+    /// deserialized value, so this type might be different from `D`. 
     ///
-    /// byte slice → deserialize → value of type `Self::Deserialized` → call
-    /// [`Self::transform_deserialized`] → value of type `D`
     type Deserialized;
 
     /// Which data representations can the DeserializerAdapter read?
