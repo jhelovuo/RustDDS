@@ -34,13 +34,13 @@ const REPR_IDS: [RepresentationIdentifier; 3] = [
 
 impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
   type Error = Error;
-  type Deserialized = D;
+  type Decoded = D;
 
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &REPR_IDS
   }
 
-  fn transform_deserialized(deserialized: Self::Deserialized) -> D {
+  fn transform_deserialized(deserialized: Self::Decoded) -> D {
     deserialized
   }
 }

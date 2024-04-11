@@ -736,7 +736,7 @@ mod tests {
     info!("{:?}", serialized_1);
     let u32_value_1: u32 = deserialize_from_little_endian(&serialized_1).unwrap();
     let deserialized_1: MyEnumeration = deserialize_from_little_endian(&serialized_1).unwrap();
-    info!("Deserialized 1: {:?}", deserialized_1);
+    info!("Decoded 1: {:?}", deserialized_1);
     assert_eq!(deserialized_1, enum_object_1);
     assert_eq!(u32_value_1, 0);
 
@@ -744,7 +744,7 @@ mod tests {
     info!("{:?}", serialized_2);
     let u32_value_2: u32 = deserialize_from_little_endian(&serialized_2).unwrap();
     let deserialized_2: MyEnumeration = deserialize_from_little_endian(&serialized_2).unwrap();
-    info!("Deserialized 2: {:?}", deserialized_2);
+    info!("Decoded 2: {:?}", deserialized_2);
     assert_eq!(deserialized_2, enum_object_2);
     assert_eq!(u32_value_2, 1);
 
@@ -752,7 +752,7 @@ mod tests {
     info!("{:?}", serialized_3);
     let deserialized_3: MyEnumeration = deserialize_from_little_endian(&serialized_3).unwrap();
     let u32_value_3: u32 = deserialize_from_little_endian(&serialized_3).unwrap();
-    info!("Deserialized 3: {:?}", deserialized_3);
+    info!("Decoded 3: {:?}", deserialized_3);
     assert_eq!(deserialized_3, enum_object_3);
     assert_eq!(u32_value_3, 2);
 
@@ -764,7 +764,7 @@ mod tests {
     info!("{:?}", serialized_7);
     let deserialized_7: MyEnumeration = deserialize_from_little_endian(&serialized_7).unwrap();
     let u32_value_7: u32 = deserialize_from_little_endian(&serialized_7).unwrap();
-    info!("Deserialized 7: {:?}", deserialized_7);
+    info!("Decoded 7: {:?}", deserialized_7);
     assert_eq!(deserialized_7, enum_object_7);
     assert_eq!(u32_value_7, 700);
 

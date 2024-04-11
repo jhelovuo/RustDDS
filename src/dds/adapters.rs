@@ -17,11 +17,11 @@ pub mod no_key {
   /// Deserialization is done in two steps: decode and transform.
   /// The basic pipeline is:
   /// 
-  /// byte slice → decode → value of type `Self::Deserialized` → call
+  /// byte slice → decode → value of type `Self::Decoded` → call
   /// [`Self::transform_deserialized`] → value of type `D`
   ///
   /// The transform step may be an identity function, which means that
-  /// `Self::Deserialized` and `D` are the same.
+  /// `Self::Decoded` and `D` are the same.
   ///
   /// The decoding step can be parameterized at run time, if the decoder is defined suitaby.
   /// If there is no need for such parameterization, use subtrait `DefaultDecoder`.
@@ -34,18 +34,18 @@ pub mod no_key {
     /// The adapter might apply additional operations or wrapper types to the
     /// deserialized value, so this type might be different from `D`. 
     ///
-    type Deserialized;
+    type Decoded;
 
     /// Which data representations can the DeserializerAdapter read?
     /// See RTPS specification Section 10 and Table 10.3
     fn supported_encodings() -> &'static [RepresentationIdentifier];
 
-    /// Transform the `Self::Deserialized` type returned by the decoder into a
+    /// Transform the `Self::Decoded` type returned by the decoder into a
     /// value of type `D`.
     ///
-    /// If [`Self::Deserialized`] is set to `D`, this method can be the identity
+    /// If [`Self::Decoded`] is set to `D`, this method can be the identity
     /// function.
-    fn transform_deserialized(deserialized: Self::Deserialized) -> D;
+    fn transform_deserialized(deserialized: Self::Decoded) -> D;
 
     /// Deserialize data from bytes to an object using the given decoder.
     ///
@@ -57,7 +57,7 @@ pub mod no_key {
       decoder: S,
     ) -> Result<D, S::Error>
     where
-      S: Decode<Self::Deserialized>,
+      S: Decode<Self::Decoded>,
     {
       decoder
         .decode_bytes(input_bytes, encoding)
@@ -85,7 +85,7 @@ pub mod no_key {
     ///
     /// The default decoder needs to be clonable to be usable for async stream
     /// creation (as it's needed multiple times).
-    type Decoder: Decode<Self::Deserialized, Error = Self::Error> + Clone;
+    type Decoder: Decode<Self::Decoded, Error = Self::Error> + Clone;
 
     /// The default decoder value.
     ///

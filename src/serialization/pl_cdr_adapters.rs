@@ -108,13 +108,13 @@ where
   D: PlCdrDeserialize,
 {
   type Error = PlCdrDeserializeError;
-  type Deserialized = D;
+  type Decoded = D;
 
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &REPR_IDS
   }
 
-  fn transform_deserialized(deserialized: Self::Deserialized) -> D {
+  fn transform_deserialized(deserialized: Self::Decoded) -> D {
     deserialized
   }
 }

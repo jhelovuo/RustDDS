@@ -83,14 +83,14 @@ where
   DA: no_key::DeserializerAdapter<D>,
 {
   type Error = DA::Error;
-  type Deserialized = DA::Deserialized;
+  type Decoded = DA::Decoded;
 
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     DA::supported_encodings()
   }
 
   /// Wraps the deserialized value into a [`NoKeyWrapper`].
-  fn transform_deserialized(deserialized: Self::Deserialized) -> NoKeyWrapper<D> {
+  fn transform_deserialized(deserialized: Self::Decoded) -> NoKeyWrapper<D> {
     NoKeyWrapper::<D> {
       d: DA::transform_deserialized(deserialized),
     }

@@ -244,7 +244,7 @@ where
     decoder: S,
   ) -> ReadResult<DeserializedCacheChange<D>>
   where
-    S: Decode<DA::Deserialized>,
+    S: Decode<DA::Decoded>,
   {
     match cc.data_value {
       DDSData::Data {
@@ -350,7 +350,7 @@ where
   /// calling this one. Otherwise, new notifications may not appear.
   pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
-    S: Decode<DA::Deserialized> + Clone,
+    S: Decode<DA::Decoded> + Clone,
   {
     let is_reliable = matches!(
       self.qos_policy.reliability(),
@@ -419,14 +419,14 @@ where
   where
     DA: DefaultDecoder<D, Decoder = S>,
     DA::Decoder: Clone,
-    S: Decode<DA::Deserialized>,
+    S: Decode<DA::Decoded>,
   {
     Self::as_async_stream_with(self, DA::DECODER)
   }
 
   pub fn as_async_stream_with<S>(&self, decoder: S) -> SimpleDataReaderStream<D, S, DA>
   where
-    S: Decode<DA::Deserialized> + Clone,
+    S: Decode<DA::Decoded> + Clone,
   {
     SimpleDataReaderStream {
       simple_datareader: self,
@@ -558,7 +558,7 @@ where
 pub struct SimpleDataReaderStream<
   'a,
   D: Keyed + 'static,
-  S: Decode<DA::Deserialized>,
+  S: Decode<DA::Decoded>,
   DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
 > {
   simple_datareader: &'a SimpleDataReader<D, DA>,
@@ -573,7 +573,7 @@ impl<'a, D, S, DA> Unpin for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  S: Decode<DA::Deserialized> + Unpin,
+  S: Decode<DA::Decoded> + Unpin,
 {
 }
 
@@ -581,7 +581,7 @@ impl<'a, D, S, DA> Stream for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  S: Decode<DA::Deserialized> + Clone,
+  S: Decode<DA::Decoded> + Clone,
 {
   type Item = ReadResult<DeserializedCacheChange<D>>;
 
@@ -638,7 +638,7 @@ impl<'a, D, S, DA> FusedStream for SimpleDataReaderStream<'a, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
-  S: Decode<DA::Deserialized> + Clone,
+  S: Decode<DA::Decoded> + Clone,
 {
   fn is_terminated(&self) -> bool {
     false // Never terminate. This means it is always valid to call poll_next().
