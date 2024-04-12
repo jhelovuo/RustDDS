@@ -95,6 +95,8 @@ pub struct DPEventLoop {
   discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
   #[cfg(feature = "security")]
   discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
+  #[cfg(feature = "rtps_proxy")]
+  proxy_data_endpoint: ProxyDataEndpoint<rtps_proxy::RTPSMessage>,
 }
 
 impl DPEventLoop {
@@ -199,6 +201,16 @@ impl DPEventLoop {
       )
       .expect("Failed to register reader update notification.");
 
+    #[cfg(feature = "rtps_proxy")]
+    poll
+      .register(
+        &proxy_data_endpoint,
+        RTPS_PROXY_DATA_TOKEN,
+        Ready::readable(),
+        PollOpt::edge(),
+      )
+      .expect("Failed to register proxy data endpoint.");
+
     // port number 0 means OS chooses an available port number.
     let udp_sender =
       UDPSender::new(network.host_ip().into(), 0).expect("UDPSender construction fail"); // TODO
@@ -212,7 +224,7 @@ impl DPEventLoop {
       spdp_liveness_sender,
       security_plugins_opt.clone(),
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_endpoint,
+      proxy_data_endpoint.sender.clone(),
     );
 
     Self {
@@ -237,6 +249,8 @@ impl DPEventLoop {
       participant_status_sender,
       #[cfg(feature = "security")]
       discovery_command_sender: _discovery_command_sender,
+      #[cfg(feature = "rtps_proxy")]
+      proxy_data_endpoint,
     }
   }
 
@@ -399,6 +413,11 @@ impl DPEventLoop {
                 debug!("Clean DDSCache on timer");
                 ev_wrapper.dds_cache.write().unwrap().garbage_collect();
                 cache_gc_timer.set_timeout(CACHE_CLEAN_PERIOD, ());
+              }
+
+              RTPS_PROXY_DATA_TOKEN => {
+                #[cfg(feature = "rtps_proxy")]
+                ev_wrapper.read_from_proxy();
               }
 
               fixed_unknown => {
@@ -1037,6 +1056,13 @@ impl DPEventLoop {
           other
         );
       }
+    }
+  }
+
+  #[cfg(feature = "rtps_proxy")]
+  fn read_from_proxy(&self) {
+    while let Some(msg) = self.proxy_data_endpoint.try_recv_data() {
+      info!("TODO: Received proxy RTPS message: {msg:?}");
     }
   }
 }

@@ -28,7 +28,7 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
 #[cfg(feature = "rtps_proxy")]
-use crate::rtps_proxy::{self, ProxyDataEndpoint, ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING};
+use crate::rtps_proxy::{self, ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING};
 #[cfg(test)]
 use crate::dds::ddsdata::DDSData;
 #[cfg(test)]
@@ -155,7 +155,7 @@ pub(crate) struct MessageReceiver {
   must_be_rtps_protection_special_case: bool,
 
   #[cfg(feature = "rtps_proxy")]
-  proxy_data_endpoint: ProxyDataEndpoint<rtps_proxy::RTPSMessage>,
+  proxy_rtps_sender: mio_channel::SyncSender<rtps_proxy::RTPSMessage>,
 }
 
 impl MessageReceiver {
@@ -164,7 +164,9 @@ impl MessageReceiver {
     acknack_sender: mio_channel::SyncSender<(GuidPrefix, AckSubmessage)>,
     spdp_liveness_sender: mio_channel::SyncSender<GuidPrefix>,
     security_plugins: Option<SecurityPluginsHandle>,
-    #[cfg(feature = "rtps_proxy")] proxy_data_endpoint: ProxyDataEndpoint<rtps_proxy::RTPSMessage>,
+    #[cfg(feature = "rtps_proxy")] proxy_rtps_sender: mio_channel::SyncSender<
+      rtps_proxy::RTPSMessage,
+    >,
   ) -> Self {
     Self {
       available_readers: BTreeMap::new(),
@@ -185,7 +187,7 @@ impl MessageReceiver {
       #[cfg(feature = "security")]
       must_be_rtps_protection_special_case: true,
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_endpoint,
+      proxy_rtps_sender,
     }
   }
 
@@ -1253,7 +1255,7 @@ impl MessageReceiver {
         submessages: filtered_submessages,
       };
 
-      if let Err(e) = self.proxy_data_endpoint.try_send(rtps_proxy::RTPSMessage {
+      if let Err(e) = self.proxy_rtps_sender.try_send(rtps_proxy::RTPSMessage {
         msg: proxied_message,
       }) {
         error!("RTPS proxy: failed to send RTPS message to proxy: {e}");
