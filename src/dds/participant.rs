@@ -1,14 +1,12 @@
 // use mio::Token;
 use std::{
   collections::HashMap,
-  io,
-  io::ErrorKind,
+  io::{self, ErrorKind},
   net::Ipv4Addr,
   pin::Pin,
   sync::{atomic, Arc, Mutex, RwLock, Weak},
   task::{Context, Poll},
-  thread,
-  thread::JoinHandle,
+  thread::{self, JoinHandle},
   time::{Duration, Instant},
 };
 
@@ -36,7 +34,7 @@ use crate::{
     discovery_db::DiscoveryDB,
     sedp_messages::DiscoveredTopicData,
   },
-  network::{constant::*, udp_listener::UDPListener, util::get_local_ip_address},
+  network::{constant::*, udp_listener::UDPListener, util::NetworkInfo},
   rtps::{
     constant::*,
     dp_event_loop::{DPEventLoop, DomainInfo, EventLoopCommand},
@@ -64,7 +62,7 @@ use crate::rtps_proxy::{self, ProxyApplicationEndpoints, ProxyDataEndpoint};
 pub struct DomainParticipantBuilder {
   domain_id: u16,
 
-  only_network: Option<String>, // if specified, run RTPS only over this network
+  network: NetworkInfo,
 
   #[cfg(feature = "security")]
   security_plugins: Option<SecurityPlugins>,
@@ -76,7 +74,7 @@ impl DomainParticipantBuilder {
   pub fn new(domain_id: u16) -> DomainParticipantBuilder {
     DomainParticipantBuilder {
       domain_id,
-      only_network: None,
+      network: NetworkInfo::unspecified_multicast(),
       #[cfg(feature = "security")]
       security_plugins: None,
       #[cfg(feature = "security")]
@@ -84,10 +82,43 @@ impl DomainParticipantBuilder {
     }
   }
 
-  /// Set the participant to use only a single network interface. Otherwise, all
-  /// available interfaces are used.
-  pub fn network_interface(mut self, interface_name: String) -> Self {
-    self.only_network = Some(interface_name);
+  /// Set the participant to use only a single network interface. The network is
+  /// assumed to support multicast, which is the standard with DDS.
+  /// The default (when a single interface is not set) is that the participant
+  /// uses all available network interfaces.
+  pub fn use_single_multicast_network(mut self, host_ip_addr_str: &str) -> Self {
+    let host_ip_addr = host_ip_addr_str
+      .parse()
+      .unwrap_or_else(|_| panic!("Could not parse {host_ip_addr_str} to an IPv4 address"));
+    self.network = NetworkInfo::new_multicast(host_ip_addr);
+    self
+  }
+
+  /// Set the participant to use only a single network interface. The network is
+  /// assumed to support only unicast, and therefore the remote SPDP discovery
+  /// socket addresses need to be configured manually. A socket address is
+  /// given as as string as in "127.0.0.1:7410".
+  pub fn use_single_unicast_network(
+    mut self,
+    host_ip_addr_str: &str,
+    host_discovery_port: u16,
+    remote_discovery_socket_addrs_str: Vec<String>,
+  ) -> Self {
+    let host_ip_addr = host_ip_addr_str
+      .parse()
+      .unwrap_or_else(|_| panic!("Could not parse {host_ip_addr_str} to an IPv4 address"));
+
+    let remote_discovery_addrs = remote_discovery_socket_addrs_str
+      .into_iter()
+      .map(|addr_str| {
+        addr_str
+          .parse()
+          .unwrap_or_else(|_| panic!("Could not parse {addr_str} to an IPv4 socket address"))
+      })
+      .collect();
+
+    self.network =
+      NetworkInfo::new_unicast_only(host_ip_addr, host_discovery_port, remote_discovery_addrs);
     self
   }
 
@@ -242,7 +273,7 @@ impl DomainParticipantBuilder {
     // intermediate DP wrapper
     let dp = DomainParticipantDisc::new(
       self.domain_id,
-      self.only_network,
+      self.network,
       participant_guid,
       participant_qos,
       djh_receiver,
@@ -804,7 +835,7 @@ impl DomainParticipantDisc {
   #[allow(clippy::too_many_arguments)]
   pub fn new(
     domain_id: u16,
-    only_network: Option<String>, // if specified, run RTPS only over this interface
+    network: NetworkInfo,
     participant_guid: GUID,
     qos_policies: QosPolicies,
     discovery_join_handle: mio_channel::Receiver<JoinHandle<()>>,
@@ -821,7 +852,7 @@ impl DomainParticipantDisc {
   ) -> CreateResult<Self> {
     let dpi = DomainParticipantInner::new(
       domain_id,
-      only_network,
+      network,
       participant_guid,
       qos_policies,
       discovery_update_notification_receiver,
@@ -983,6 +1014,115 @@ impl Drop for DomainParticipantDisc {
   }
 }
 
+fn construct_udp_listeners(
+  domain_id: u16,
+  network: &NetworkInfo,
+) -> CreateResult<(HashMap<mio_06::Token, UDPListener>, u16)> {
+  let mut listeners = HashMap::new();
+
+  let mut participant_id = 0;
+
+  match network {
+    NetworkInfo::Multicast(host_ip_addr) => {
+      // The standard case. Construct
+      //  - Discovery multicast & unicast listener
+      //  - User traffic multicast listener
+      // according to the spec
+
+      // Multicast discovery listener
+      match UDPListener::new_multicast(
+        (*host_ip_addr).into(),
+        spdp_well_known_multicast_port(domain_id),
+        Ipv4Addr::new(239, 255, 0, 1),
+      ) {
+        Ok(l) => {
+          listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, l);
+        }
+        Err(e) => warn!("Cannot get multicast discovery listener: {e:?}"),
+      }
+
+      // Unicast discovery listener
+      let mut unicast_discovery_listener_opt = None;
+
+      // Magic value 120 below is from RTPS spec 2.5 Section "9.6.2.3 Default Port
+      // Numbers"
+      while unicast_discovery_listener_opt.is_none() && participant_id < 120 {
+        unicast_discovery_listener_opt = UDPListener::new_unicast(
+          (*host_ip_addr).into(),
+          spdp_well_known_unicast_port(domain_id, participant_id),
+        )
+        .ok();
+        if unicast_discovery_listener_opt.is_none() {
+          participant_id += 1;
+        }
+      }
+
+      match unicast_discovery_listener_opt {
+        Some(listener) => {
+          listeners.insert(DISCOVERY_LISTENER_TOKEN, listener);
+        }
+        None => return create_error_out_of_resources!("Could not find free ParticipantId"),
+      };
+
+      // Multicast user traffic listener
+      match UDPListener::new_multicast(
+        (*host_ip_addr).into(),
+        user_traffic_multicast_port(domain_id),
+        Ipv4Addr::new(239, 255, 0, 1),
+      ) {
+        Ok(l) => {
+          listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, l);
+        }
+        Err(e) => warn!("Cannot get multicast user traffic listener: {e:?}"),
+      }
+    }
+    NetworkInfo::Unicast(unicast_info) => {
+      // A unicast-only network.
+      // Construct a discovery unicast listener with the given ip and port.
+      match UDPListener::new_unicast(
+        unicast_info.host_ip.into(),
+        unicast_info.host_discovery_port,
+      ) {
+        Ok(listener) => {
+          listeners.insert(DISCOVERY_LISTENER_TOKEN, listener);
+        }
+        Err(e) => {
+          return create_error_out_of_resources!(
+            "Could not create unicast discovery listener: {e}"
+          );
+        }
+      }
+    }
+  }
+
+  info!("ParticipantId {} selected.", participant_id);
+
+  // Lastly, construct the user traffic unicast listener
+
+  let user_traffic_listener = UDPListener::new_unicast(
+    network.host_ip().into(),
+    user_traffic_unicast_port(domain_id, participant_id),
+  )
+  .or_else(|e| {
+    if matches!(e.kind(), ErrorKind::AddrInUse) {
+      // If we do not get the preferred listening port,
+      // try again, with "any" port number.
+      UDPListener::new_unicast(network.host_ip().into(), 0).or_else(|e| {
+        create_error_out_of_resources!(
+          "Could not open unicast user traffic listener, any port number: {:?}",
+          e
+        )
+      })
+    } else {
+      create_error_out_of_resources!("Could not open unicast user traffic listener: {e:?}")
+    }
+  })?;
+
+  listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
+
+  Ok((listeners, participant_id))
+}
+
 // This is the actual working DomainParticipant.
 pub(crate) struct DomainParticipantInner {
   domain_id: u16,
@@ -1049,7 +1189,7 @@ impl DomainParticipantInner {
   #[allow(clippy::too_many_arguments)]
   fn new(
     domain_id: u16,
-    only_network: Option<String>, // if specified, run RTPS only over this interface
+    network: NetworkInfo,
     participant_guid: GUID,
     _qos_policies: QosPolicies,
     discovery_update_notification_receiver: mio_channel::Receiver<DiscoveryNotificationType>,
@@ -1066,82 +1206,9 @@ impl DomainParticipantInner {
     #[cfg(not(feature = "security"))]
     let _dummy = _qos_policies; // to make clippy happy
 
-    let mut listeners = HashMap::new();
+    let (listeners, participant_id) = construct_udp_listeners(domain_id, &network)?;
 
-    let my_ip_addr = get_local_ip_address(only_network)?;
-
-    match UDPListener::new_multicast(
-      my_ip_addr,
-      spdp_well_known_multicast_port(domain_id),
-      Ipv4Addr::new(239, 255, 0, 1),
-    ) {
-      Ok(l) => {
-        listeners.insert(DISCOVERY_MUL_LISTENER_TOKEN, l);
-      }
-      Err(e) => warn!("Cannot get multicast discovery listener: {e:?}"),
-    }
-
-    let mut participant_id = 0;
-
-    let mut discovery_listener = None;
-
-    // Magic value 120 below is from RTPS spec 2.5 Section "9.6.2.3 Default Port
-    // Numbers"
-    while discovery_listener.is_none() && participant_id < 120 {
-      discovery_listener = UDPListener::new_unicast(
-        my_ip_addr,
-        spdp_well_known_unicast_port(domain_id, participant_id),
-      )
-      .ok();
-      if discovery_listener.is_none() {
-        participant_id += 1;
-      }
-    }
-
-    info!("ParticipantId {} selected.", participant_id);
-
-    // here discovery_listener is redefined (shadowed)
-    let discovery_listener = match discovery_listener {
-      Some(dl) => dl,
-      None => return create_error_out_of_resources!("Could not find free ParticipantId"),
-    };
-    listeners.insert(DISCOVERY_LISTENER_TOKEN, discovery_listener);
-
-    // Now the user traffic listeners
-
-    match UDPListener::new_multicast(
-      my_ip_addr,
-      user_traffic_multicast_port(domain_id),
-      Ipv4Addr::new(239, 255, 0, 1),
-    ) {
-      Ok(l) => {
-        listeners.insert(USER_TRAFFIC_MUL_LISTENER_TOKEN, l);
-      }
-      Err(e) => warn!("Cannot get multicast user traffic listener: {e:?}"),
-    }
-
-    let user_traffic_listener = UDPListener::new_unicast(
-      my_ip_addr,
-      user_traffic_unicast_port(domain_id, participant_id),
-    )
-    .or_else(|e| {
-      if matches!(e.kind(), ErrorKind::AddrInUse) {
-        // If we do not get the preferred listening port,
-        // try again, with "any" port number.
-        UDPListener::new_unicast(my_ip_addr, 0).or_else(|e| {
-          create_error_out_of_resources!(
-            "Could not open unicast user traffic listener, any port number: {:?}",
-            e
-          )
-        })
-      } else {
-        create_error_out_of_resources!("Could not open unicast user traffic listener: {e:?}")
-      }
-    })?;
-
-    listeners.insert(USER_TRAFFIC_LISTENER_TOKEN, user_traffic_listener);
-
-    // construct our own Locators
+    // Construct our own Locators
     let self_locators: HashMap<mio_06::Token, Vec<Locator>> = listeners
       .iter()
       .map(|(t, l)| match l.to_locators() {
@@ -1196,7 +1263,7 @@ impl DomainParticipantInner {
         let dp_event_loop = DPEventLoop::new(
           domain_info,
           dds_cache_clone,
-          my_ip_addr,
+          network,
           listeners,
           disc_db_clone,
           participant_guid.prefix,

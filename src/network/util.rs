@@ -1,36 +1,52 @@
 use std::{
   io,
-  net::{IpAddr, Ipv4Addr},
+  net::{IpAddr, Ipv4Addr, SocketAddrV4},
 };
 
 use if_addrs::Interface;
 #[allow(unused_imports)]
 use log::{debug, error, info, trace};
 
-use crate::{
-  create_error_bad_parameter,
-  dds::{CreateError, CreateResult},
-};
+#[derive(Clone)]
+pub struct UnicastInfo {
+  pub host_ip: Ipv4Addr,
+  pub host_discovery_port: u16,
+  pub remote_discovery_addrs: Vec<SocketAddrV4>,
+}
 
-pub fn get_local_ip_address(only_network: Option<String>) -> CreateResult<IpAddr> {
-  let ip_address: IpAddr = if let Some(network_name) = only_network {
-    let local_interfaces = if_addrs::get_if_addrs()?;
-    match local_interfaces
-      .into_iter()
-      .find(|interface| interface.name == network_name)
-    {
-      Some(interface) => interface.addr.ip(),
-      None => {
-        return create_error_bad_parameter!(
-          "Could not find a network interface with the name {network_name}"
-        );
-      }
+#[derive(Clone)]
+pub enum NetworkInfo {
+  Multicast(Ipv4Addr),  // Supports multicast. Contains the host IP address to use.
+  Unicast(UnicastInfo), // Unicast only
+}
+
+impl NetworkInfo {
+  pub fn new_multicast(host_ip_addr: Ipv4Addr) -> Self {
+    Self::Multicast(host_ip_addr)
+  }
+
+  pub fn unspecified_multicast() -> Self {
+    Self::Multicast(Ipv4Addr::UNSPECIFIED)
+  }
+
+  pub fn new_unicast_only(
+    host_ip: Ipv4Addr,
+    host_discovery_port: u16,
+    remote_discovery_addrs: Vec<SocketAddrV4>,
+  ) -> Self {
+    Self::Unicast(UnicastInfo {
+      host_ip,
+      host_discovery_port,
+      remote_discovery_addrs,
+    })
+  }
+
+  pub fn host_ip(&self) -> Ipv4Addr {
+    match self {
+      NetworkInfo::Multicast(ip_addr) => *ip_addr,
+      NetworkInfo::Unicast(unicast_info) => unicast_info.host_ip,
     }
-  } else {
-    // No network specified
-    IpAddr::V4(Ipv4Addr::UNSPECIFIED) // Corresponds to 0.0.0.0
-  };
-  Ok(ip_address)
+  }
 }
 
 pub fn get_local_nonloopback_ip_addrs() -> io::Result<Vec<IpAddr>> {

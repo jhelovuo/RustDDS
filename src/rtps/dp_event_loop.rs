@@ -1,6 +1,6 @@
 use std::{
   collections::HashMap,
-  net::IpAddr,
+  net::{SocketAddr, SocketAddrV4},
   rc::Rc,
   sync::{Arc, RwLock},
   time::{Duration, Instant},
@@ -21,7 +21,7 @@ use crate::{
     sedp_messages::{DiscoveredReaderData, DiscoveredWriterData},
   },
   messages::submessages::submessages::AckSubmessage,
-  network::{udp_listener::UDPListener, udp_sender::UDPSender},
+  network::{udp_listener::UDPListener, udp_sender::UDPSender, util::NetworkInfo},
   polling::new_simple_timer,
   qos::HasQoSPolicy,
   rtps::{
@@ -36,7 +36,9 @@ use crate::{
     dds_cache::DDSCache,
     entity::RTPSEntity,
     guid::{EntityId, GuidPrefix, TokenDecode, GUID},
+    locator::Locator,
   },
+  QosPolicies,
 };
 #[cfg(feature = "security")]
 use crate::{
@@ -62,6 +64,7 @@ pub(crate) enum EventLoopCommand {
 
 pub struct DPEventLoop {
   domain_info: DomainInfo,
+  network: NetworkInfo,
   poll: Poll,
   dds_cache: Arc<RwLock<DDSCache>>,
   discovery_db: Arc<RwLock<DiscoveryDB>>,
@@ -100,7 +103,7 @@ impl DPEventLoop {
   pub(crate) fn new(
     domain_info: DomainInfo,
     dds_cache: Arc<RwLock<DDSCache>>,
-    host_ip_addr: IpAddr,
+    network: NetworkInfo,
     udp_listeners: HashMap<Token, UDPListener>,
     discovery_db: Arc<RwLock<DiscoveryDB>>,
     participant_guid_prefix: GuidPrefix,
@@ -197,7 +200,8 @@ impl DPEventLoop {
       .expect("Failed to register reader update notification.");
 
     // port number 0 means OS chooses an available port number.
-    let udp_sender = UDPSender::new(host_ip_addr, 0).expect("UDPSender construction fail"); // TODO
+    let udp_sender =
+      UDPSender::new(network.host_ip().into(), 0).expect("UDPSender construction fail"); // TODO
 
     #[cfg(not(feature = "security"))]
     let security_plugins_opt = security_plugins_opt.and(None); // make sure it is None an consume value
@@ -213,6 +217,7 @@ impl DPEventLoop {
 
     Self {
       domain_info,
+      network,
       poll,
       dds_cache,
       discovery_db,
@@ -926,12 +931,28 @@ impl DPEventLoop {
       )
       .expect("Writer heartbeat timer channel registration failed!!");
 
-    let new_writer = Writer::new(
+    let mut new_writer = Writer::new(
       writer_ing,
       self.udp_sender.clone(),
       timer,
       self.participant_status_sender.clone(),
     );
+
+    if new_writer.entity_id() == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
+      // This is our SPDP writer
+      // If we're operating in a unicast-only network, add each remote unicast
+      // discovery address as a dummy reader proxy to the writer. This way the
+      // writer will send our SPDP data to the remote participants.
+      if let NetworkInfo::Unicast(info) = &self.network {
+        let mut guid_seed = 1;
+        for socket_addr in &info.remote_discovery_addrs {
+          let dummy_reader_proxy =
+            dummy_unicast_reader_proxy_for_spdp(guid_seed, new_writer.qos(), *socket_addr);
+          new_writer.update_reader_proxy(&dummy_reader_proxy, dummy_reader_proxy.qos());
+          guid_seed += 1;
+        }
+      }
+    }
 
     self
       .poll
@@ -1055,6 +1076,30 @@ fn check_are_endpoints_securities_compatible(
     // Seems a bit strange. Currently we require that all masks are valid
     false
   }
+}
+
+fn dummy_unicast_reader_proxy_for_spdp(
+  guid_seed: u16,
+  qos: QosPolicies,
+  socket_addr: SocketAddrV4,
+) -> RtpsReaderProxy {
+  // Create dummy guid for the reader proxy
+  let dummy_prefix_base = GuidPrefix::UNKNOWN;
+  let mut prefix_bytes = dummy_prefix_base.bytes;
+  // Convert guid_seed to two bytes and use them as the last bytes of dummy prefix
+  let byte0 = (guid_seed & 0xFF) as u8;
+  let byte1 = ((guid_seed >> 8) & 0xFF) as u8;
+
+  prefix_bytes[prefix_bytes.len() - 1] = byte0;
+  prefix_bytes[prefix_bytes.len() - 2] = byte1;
+
+  let dummy_guid_prefix = GuidPrefix::new(&prefix_bytes);
+  let dummy_guid = GUID::new(dummy_guid_prefix, EntityId::SPDP_BUILTIN_PARTICIPANT_READER);
+
+  let mut dummy_reader_proxy = RtpsReaderProxy::new(dummy_guid, qos, false);
+  dummy_reader_proxy.unicast_locator_list = vec![Locator::from(SocketAddr::from(socket_addr))];
+
+  dummy_reader_proxy
 }
 
 // -----------------------------------------------------------
