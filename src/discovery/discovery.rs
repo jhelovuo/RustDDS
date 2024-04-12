@@ -2,6 +2,8 @@ use std::{
   sync::{Arc, RwLock},
   time::Duration as StdDuration,
 };
+#[cfg(feature = "rtps_proxy")]
+use std::collections::HashSet;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
@@ -258,6 +260,10 @@ pub(crate) struct Discovery {
 
   #[cfg(feature = "rtps_proxy")]
   proxy_data_endpoint: ProxyDataEndpoint<DiscoverySample>,
+  #[cfg(feature = "rtps_proxy")]
+  // We keep track of those participants whose discovery data is sent by the proxy.
+  // These participants' discovery data is not sent back to the proxy
+  participants_from_proxy: HashSet<GuidPrefix>,
 }
 
 impl Discovery {
@@ -707,6 +713,8 @@ impl Discovery {
       cached_secure_discovery_messages_resend_timer: secure_message_resend_timer,
       #[cfg(feature = "rtps_proxy")]
       proxy_data_endpoint,
+      #[cfg(feature = "rtps_proxy")]
+      participants_from_proxy: HashSet::new(),
     })
   }
 
@@ -901,7 +909,7 @@ impl Discovery {
           }
           DISCOVERY_PROXY_DATA_TOKEN => {
             #[cfg(feature = "rtps_proxy")]
-            self.read_proxy_data();
+            self.read_from_proxy();
           }
 
           other_token => {
@@ -951,14 +959,7 @@ impl Discovery {
         Ok(Some(ds)) => {
           // If working in RTPS proxy mode, send a clone of the sample to the proxy
           #[cfg(feature = "rtps_proxy")]
-          {
-            if let Err(e) = self
-              .proxy_data_endpoint
-              .try_send(DiscoverySample::Participant(ds.value().clone()))
-            {
-              error!("RTPS proxy: Failed to send Participant sample: {e}");
-            }
-          }
+          self.send_to_proxy(DiscoverySample::Participant(ds.value().clone()));
 
           #[cfg(not(feature = "security"))]
           let permission = NormalDiscoveryPermission::Allow;
@@ -1102,12 +1103,7 @@ impl Discovery {
           .map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             #[cfg(feature = "rtps_proxy")]
-            if let Err(e) = self
-              .proxy_data_endpoint
-              .try_send(DiscoverySample::Subscription(sample.clone()))
-            {
-              error!("RTPS proxy: Failed to send Subscription sample: {e}");
-            }
+            self.send_to_proxy(DiscoverySample::Subscription(sample.clone()));
             sample
           })
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
@@ -1186,12 +1182,7 @@ impl Discovery {
           .map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             #[cfg(feature = "rtps_proxy")]
-            if let Err(e) = self
-              .proxy_data_endpoint
-              .try_send(DiscoverySample::Publication(sample.clone()))
-            {
-              error!("RTPS proxy: Failed to send Publication sample: {e}");
-            }
+            self.send_to_proxy(DiscoverySample::Publication(sample.clone()));
             sample
           })
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
@@ -1569,14 +1560,7 @@ impl Discovery {
     for sample in sample_iter {
       // If working in RTPS proxy mode, send a clone of the sample to the proxy
       #[cfg(feature = "rtps_proxy")]
-      {
-        if let Err(e) = self
-          .proxy_data_endpoint
-          .try_send(DiscoverySample::ParticipantSecure(sample.clone()))
-        {
-          error!("RTPS proxy: Failed to send ParticipantSecure sample: {e}");
-        }
-      }
+      self.send_to_proxy(DiscoverySample::ParticipantSecure(sample.clone()));
 
       let permission = if let Some(security) = self.security_opt.as_mut() {
         security.secure_participant_read(
@@ -1613,12 +1597,7 @@ impl Discovery {
           .map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             #[cfg(feature = "rtps_proxy")]
-            if let Err(e) = self
-              .proxy_data_endpoint
-              .try_send(DiscoverySample::SubscriptionSecure(sample.clone()))
-            {
-              error!("RTPS proxy: Failed to send SubscriptionSecure sample: {e}");
-            }
+            self.send_to_proxy(DiscoverySample::SubscriptionSecure(sample.clone()));
             sample
           })
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
@@ -1679,12 +1658,7 @@ impl Discovery {
           .map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             #[cfg(feature = "rtps_proxy")]
-            if let Err(e) = self
-              .proxy_data_endpoint
-              .try_send(DiscoverySample::PublicationSecure(sample.clone()))
-            {
-              error!("RTPS proxy: Failed to send PublicationSecure sample: {e}");
-            }
+            self.send_to_proxy(DiscoverySample::PublicationSecure(sample.clone()));
             sample
           })
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
@@ -2058,9 +2032,65 @@ impl Discovery {
   }
 
   #[cfg(feature = "rtps_proxy")]
-  fn read_proxy_data(&self) {
-    while let Some(data) = self.proxy_data_endpoint.try_recv_data() {
-      info!("Received DiscoverySample from proxy: {data:?}");
+  fn send_to_proxy(&self, sample: DiscoverySample) {
+    if !self
+      .participants_from_proxy
+      .contains(&sample.sender_guid_prefix())
+    {
+      self
+        .proxy_data_endpoint
+        .try_send(sample)
+        .unwrap_or_else(|e| error!("RTPS proxy: Failed to send DiscoverySample to proxy: {e}"));
+    }
+  }
+
+  #[cfg(feature = "rtps_proxy")]
+  fn read_from_proxy(&mut self) {
+    while let Some(sample) = self.proxy_data_endpoint.try_recv_data() {
+      self
+        .participants_from_proxy
+        .insert(sample.sender_guid_prefix());
+
+      macro_rules! write_or_dispose_sample {
+        ($sample:expr, $operator:expr) => {
+          match $sample {
+            Sample::Value(data) => {
+              $operator.writer.write(data, None).unwrap_or_else(|e| {
+                error!("RTPS proxy: Publishing Discovery data failed: {e}");
+              });
+            }
+            Sample::Dispose(key) => {
+              $operator.writer.dispose(&key, None).unwrap_or_else(|e| {
+                error!("RTPS proxy: Disposing Discovery data failed: {e}");
+              });
+            }
+          }
+        };
+      }
+
+      match sample {
+        DiscoverySample::Participant(spdp_sample) => {
+          write_or_dispose_sample!(spdp_sample, self.dcps_participant);
+        }
+        DiscoverySample::Publication(pub_sample) => {
+          write_or_dispose_sample!(pub_sample, self.dcps_publication);
+        }
+        DiscoverySample::Subscription(sub_sample) => {
+          write_or_dispose_sample!(sub_sample, self.dcps_subscription);
+        }
+        #[cfg(feature = "security")]
+        DiscoverySample::ParticipantSecure(sec_spdp_sample) => {
+          write_or_dispose_sample!(sec_spdp_sample, self.dcps_participant_secure);
+        }
+        #[cfg(feature = "security")]
+        DiscoverySample::PublicationSecure(sec_pub_sample) => {
+          write_or_dispose_sample!(sec_pub_sample, self.dcps_publications_secure);
+        }
+        #[cfg(feature = "security")]
+        DiscoverySample::SubscriptionSecure(sec_sub_sample) => {
+          write_or_dispose_sample!(sec_sub_sample, self.dcps_subscriptions_secure);
+        }
+      }
     }
   }
 }
