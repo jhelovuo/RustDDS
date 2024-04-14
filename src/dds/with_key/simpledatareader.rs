@@ -346,6 +346,7 @@ where
 
   /// Note: Always remember to call .drain_read_notifications() just before
   /// calling this one. Otherwise, new notifications may not appear.
+  #[allow(clippy::needless_pass_by_value)]
   pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
   where
     S: Decode<DA::Decoded, DA::DecodedKey> + Clone,
