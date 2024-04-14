@@ -12,7 +12,7 @@ use futures::stream::{FusedStream, Stream};
 use super::datasample_cache::DataSampleCache;
 use crate::{
   dds::{
-    adapters::{no_key::DefaultDecoder, with_key::*},
+    adapters::with_key::{DefaultDecoder, *},
     key::*,
     qos::*,
     readcondition::*,
