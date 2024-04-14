@@ -6,6 +6,63 @@
 ///
 /// for WITH_KEY topics, we need to be able to (de)serialize the key in addition
 /// to data.
+///
+/// Type parameter `D` is the type resulting from (successful) deserialization.
+///
+/// Deserialization consists of two steps: decode and transform. Decode inputs a byte slice
+/// and outputs an intermediate type `Decoded`. Transform step maps `Decoded`into `D`.
+///
+/// It is a common case that `Decoded` and `D` are the same and the 
+/// transform step is the identity function.
+///
+/// How to implement DeserializerAdapter<D> for e.g. MyDataFormat.
+///
+/// 0. Define a type MyDataFormatAdapter<D>, that is used as a link between RustDDS and
+///  (possibly pre-existing) MyDataFormat decoder routines. The adapter type is necessary to bridge
+///  together RustDDS and MyDataFormat, because Rust's orphan implementation rule prevents
+///  an application crate from implementing RustDDS-defined traits on types in MyDataFormat crate.
+///
+/// 1. Implement no_key::DeserializerAdapter<D> for MyDataFormatAdapter<D>
+///   * Define `Error` type to indicate deserialization failures
+///   * Define the `Decoded` type.
+///   * Implement `supported_encodings` function. This function defines which RTPS data encodings are
+///     decodable by this adapter.
+///   * Implement the `transform_decoded` function.
+///   * Do not implement the provided functions in this trait.
+///
+/// At this point, you should be all set for deserializing no_key data with run-time seed,
+/// i.e. you are required to provide a decoder function at run time, every time.
+///
+/// If you do not need/want provide the decoder at every deserialization call, and can
+/// define a deserializer that only depends on type `D`, and the incoming byte slice,
+/// then extend your no_key::DeseriaizerAdapter<D> as follows
+///
+/// 2. Implement no_key::DefaultDecoder<D> for MyDataFormatAdapter<D>
+///   * Define a type, e.g. MyDataFormatDecoder<D>, that implements trait `no_key::Decode<Decoded>`
+///     * Implement the `decode_bytes` function to do the decoding from byte slice to `Decoded`
+///     * The decoder may minimally be a struct with no actual fields, possibly only a `PhantomData<D>`, which makes
+///       it zero size and no cost to clone. But this depends on the workings of MyDataFormat.
+///   * Implement `no_key::DefaultDecoder<D>` for MyDataFormatAdapter<D>
+///     * Define the associated type `Decoder = MyDataFormatDecoder<D>`
+///     * Define a const `DECODER` as an instance of `MyDataFormatDecoder`
+///   * Implement or derive `Clone` for MyDataFormatDecoder. The cloning should be cheap, as a
+///     new instance is needed for each deserialization operation.
+///
+/// Now you should be able to deserialize no_key data with a default decoder function.
+///
+/// If you need to handle also with_key deserialization, then we need more implementations
+/// to also handle the instance keys.
+///
+/// 3. Implement with_key::DeserializerAdapter<D> for MyDataFormatAdapter<D>
+///   * Define the `DecodedKey` type.
+///   * Implement the `transform_decoded_key` function.
+///
+/// To use a default decoder for with_key deserialization also:
+/// 
+/// 4. Implement with_key::DefaultDecoder<D> for MyDataFormatAdapter<D>
+///   * implement also `with_key::Decode<DecodedValue, DecodedKey>` for MyDataFormatDecoder.
+///   * one member function `decode_key_bytes` is needed to define how to decode a key.
+///
 pub mod no_key {
   use bytes::Bytes;
 
@@ -32,10 +89,10 @@ pub mod no_key {
     /// The error type returned when decoding fails.
     type Error: std::error::Error;
 
-    /// Type after deserialization.
+    /// Type after decoding.
     ///
     /// The adapter might apply additional operations or wrapper types to the
-    /// deserialized value, so this type might be different from `D`.
+    /// decoded value, so this type might be different from `D`.
     type Decoded;
 
     /// Which data representations can the DeserializerAdapter read?
