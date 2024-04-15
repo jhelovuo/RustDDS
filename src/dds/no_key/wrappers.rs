@@ -102,8 +102,8 @@ where
 {
   type DecodedKey = ();
 
-  #[allow(clippy::unused_unit, clippy::semicolon_if_nothing_returned)] 
-  // transform_decoded_key is supposed to return 
+  #[allow(clippy::unused_unit, clippy::semicolon_if_nothing_returned)]
+  // transform_decoded_key is supposed to return
   // a value, but in this instance it is of type unit.
 
   fn transform_decoded_key(_decoded_key: Self::DecodedKey) -> () {
@@ -144,7 +144,8 @@ impl<NoKeyDecode> DecodeWrapper<NoKeyDecode> {
   }
 }
 
-// re-implement no_key::Decode<Decoded> for the wrapper also. Wrapped type already does it for us.
+// re-implement no_key::Decode<Decoded> for the wrapper also. Wrapped type
+// already does it for us.
 impl<Decoded, NoKeyDecode> no_key::Decode<Decoded> for DecodeWrapper<NoKeyDecode>
 where
   NoKeyDecode: no_key::Decode<Decoded>,
@@ -161,7 +162,8 @@ where
 }
 
 // implement with_key::Decode<Decoded> for the wrapper.
-// The key has type `()`, so the decoded value is always `()` regardless of the input bytes.
+// The key has type `()`, so the decoded value is always `()` regardless of the
+// input bytes.
 impl<Decoded, NoKeyDecode> with_key::Decode<Decoded, ()> for DecodeWrapper<NoKeyDecode>
 where
   NoKeyDecode: no_key::Decode<Decoded>,
