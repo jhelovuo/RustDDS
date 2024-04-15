@@ -47,6 +47,11 @@ impl Message {
     self.submessages.push(submessage);
   }
 
+  #[cfg(feature = "rtps_proxy")]
+  pub fn prepend_submessage(&mut self, submessage: Submessage) {
+    self.submessages.insert(0, submessage);
+  }
+
   #[cfg(test)]
   pub fn submessages(self) -> Vec<Submessage> {
     self.submessages

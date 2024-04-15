@@ -1,5 +1,5 @@
 use speedy::{Readable, Writable};
-#[cfg(feature = "security")]
+#[cfg(any(feature = "security", feature = "rtps_proxy"))]
 use enumflags2::BitFlags;
 
 use crate::{
@@ -8,12 +8,12 @@ use crate::{
   },
   structure::guid::GuidPrefix,
 };
-#[cfg(feature = "security")]
+#[cfg(any(feature = "security", feature = "rtps_proxy"))]
 use super::{
   submessage::InterpreterSubmessage, submessage_flag::INFOSOURCE_Flags,
   submessage_kind::SubmessageKind, submessages::SubmessageHeader,
 };
-#[cfg(feature = "security")]
+#[cfg(any(feature = "security", feature = "rtps_proxy"))]
 use crate::rtps::{Submessage, SubmessageBody};
 
 /// This message modifies the logical source of the Submessages
@@ -36,7 +36,7 @@ pub struct InfoSource {
 }
 
 impl InfoSource {
-  #[cfg(feature = "security")] // currently otherwise unused, clippy warns about this
+  #[cfg(any(feature = "security", feature = "rtps_proxy"))] // currently otherwise unused, clippy warns about this
   pub fn len_serialized(&self) -> usize {
     std::mem::size_of::<u32>()
       + std::mem::size_of::<ProtocolVersion>()
@@ -44,7 +44,7 @@ impl InfoSource {
       + std::mem::size_of::<GuidPrefix>()
   }
 
-  #[cfg(feature = "security")] // currently otherwise unused
+  #[cfg(any(feature = "security", feature = "rtps_proxy"))] // currently otherwise unused
   pub fn create_submessage(self, flags: BitFlags<INFOSOURCE_Flags>) -> Submessage {
     Submessage {
       header: SubmessageHeader {

@@ -97,6 +97,10 @@ pub struct DPEventLoop {
   discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
   #[cfg(feature = "rtps_proxy")]
   proxy_data_endpoint: ProxyDataEndpoint<rtps_proxy::RTPSMessage>,
+  #[cfg(feature = "rtps_proxy")]
+  // When acting as proxy, we maintain a list of unicast locators for the domain participants, so
+  // that we don't constantly have to request them from DiscoveryDB
+  remote_unicast_locators: HashMap<GuidPrefix, Locator>,
 }
 
 impl DPEventLoop {
@@ -251,6 +255,8 @@ impl DPEventLoop {
       discovery_command_sender: _discovery_command_sender,
       #[cfg(feature = "rtps_proxy")]
       proxy_data_endpoint,
+      #[cfg(feature = "rtps_proxy")]
+      remote_unicast_locators: HashMap::new(),
     }
   }
 
@@ -693,6 +699,17 @@ impl DPEventLoop {
       }
     } // for
 
+    #[cfg(feature = "rtps_proxy")]
+    {
+      // Store the participant's unicast locator
+      let guidp = discovered_participant.participant_guid.prefix;
+      discovered_participant
+        .default_unicast_locators
+        .clone()
+        .pop()
+        .and_then(|loc| self.remote_unicast_locators.insert(guidp, loc));
+    }
+
     debug!(
       "update_participant - finished for {:?}",
       participant_guid_prefix
@@ -723,6 +740,12 @@ impl DPEventLoop {
         .unregister_remote_participant(&participant_guid_prefix)
         .unwrap_or_else(|e| error!("{e}"));
     }
+
+    #[cfg(feature = "rtps_proxy")]
+    // Forget the participant's unicast locator
+    self
+      .remote_unicast_locators
+      .remove(&participant_guid_prefix);
   }
 
   fn remote_reader_discovered(&mut self, remote_reader: &DiscoveredReaderData) {
@@ -1061,8 +1084,17 @@ impl DPEventLoop {
 
   #[cfg(feature = "rtps_proxy")]
   fn read_from_proxy(&self) {
+    use speedy::{Endianness, Writable};
+
     while let Some(msg) = self.proxy_data_endpoint.try_recv_data() {
-      info!("TODO: Received proxy RTPS message: {msg:?}");
+      let buffer = msg
+        .msg
+        .write_to_vec_with_ctx(Endianness::LittleEndian)
+        .unwrap();
+
+      for locator in self.remote_unicast_locators.values() {
+        self.udp_sender.send_to_locator(&buffer, locator);
+      }
     }
   }
 }

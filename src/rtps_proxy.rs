@@ -1,13 +1,18 @@
 use std::io;
 
+use enumflags2::BitFlags;
 use mio_extras::channel as mio_channel;
 
 use crate::{
   dds::with_key::Sample,
   discovery::{DiscoveredReaderData, DiscoveredWriterData, SpdpDiscoveredParticipantData},
+  messages::{
+    header::Header,
+    submessages::{info_source::InfoSource, submessage_flag::FromEndianness},
+  },
   rtps::Message,
   structure::guid::{EntityId, GuidPrefix},
-  DomainParticipant, Keyed,
+  DomainParticipant, Keyed, RTPSEntity,
 };
 #[cfg(feature = "security")]
 use crate::security::{
@@ -16,7 +21,7 @@ use crate::security::{
 };
 
 pub struct ProxyDataEndpoint<T> {
-  sender: mio_channel::SyncSender<T>,
+  pub sender: mio_channel::SyncSender<T>,
   receiver: mio_channel::Receiver<T>,
 }
 
@@ -156,7 +161,7 @@ pub enum DiscoverySample {
 }
 
 impl DiscoverySample {
-  pub fn sender_participant_guid_prefix(&self) -> GuidPrefix {
+  pub fn sender_guid_prefix(&self) -> GuidPrefix {
     match self {
       Self::Participant(sample) => match sample {
         Sample::Value(data) => data.key().0.prefix,
@@ -188,7 +193,7 @@ impl DiscoverySample {
     }
   }
 
-  pub fn source_participant_to(&mut self, dp: &DomainParticipant) {
+  pub fn set_proxy_participant_info(&mut self, dp: &DomainParticipant) {
     // Change locators in sample values. Do nothing for dispose samples.
     match self {
       Self::Participant(Sample::Value(dp_data)) => {
@@ -247,6 +252,25 @@ impl DiscoverySample {
 
 // Currently contains just the message, we may need something extra in the
 // future.
+#[derive(Debug)]
 pub struct RTPSMessage {
   pub msg: Message,
+}
+
+impl RTPSMessage {
+  pub fn sender_guid_prefix(&self) -> GuidPrefix {
+    self.msg.header.guid_prefix
+  }
+
+  pub fn set_proxy_participant_info(&mut self, dp: &DomainParticipant) {
+    // Add info source indicating the original participant
+    let info_source = InfoSource::from(self.msg.header)
+      .create_submessage(BitFlags::from_endianness(speedy::Endianness::BigEndian));
+
+    self.msg.prepend_submessage(info_source);
+
+    // Add header of proxy participant
+    let new_header = Header::new(dp.guid_prefix());
+    self.msg.header = new_header;
+  }
 }
