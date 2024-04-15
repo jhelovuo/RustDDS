@@ -1218,6 +1218,11 @@ impl MessageReceiver {
     // Filter out submessages of those topics that should not be directly
     // RTPS-proxied, and send the resulting RTPS message to the proxy
 
+    if rtps_message.header.guid_prefix == self.own_guid_prefix {
+      // Do not proxy messages sent by this proxy participant
+      return;
+    }
+
     let mut contains_other_than_interpreter_messages = false;
 
     let filtered_submessages: Vec<Submessage> = rtps_message

@@ -2033,15 +2033,19 @@ impl Discovery {
 
   #[cfg(feature = "rtps_proxy")]
   fn send_to_proxy(&self, sample: DiscoverySample) {
-    if !self
-      .participants_from_proxy
-      .contains(&sample.sender_guid_prefix())
+    let sender_guidp = sample.sender_guid_prefix();
+    if sender_guidp == self.domain_participant.guid_prefix()
+      || self.participants_from_proxy.contains(&sender_guidp)
     {
-      self
-        .proxy_data_endpoint
-        .try_send(sample)
-        .unwrap_or_else(|e| error!("RTPS proxy: Failed to send DiscoverySample to proxy: {e}"));
+      // Do not send samples from this participant or those participants whose data
+      // proxy sends to us
+      return;
     }
+
+    self
+      .proxy_data_endpoint
+      .try_send(sample)
+      .unwrap_or_else(|e| error!("RTPS proxy: Failed to send DiscoverySample to proxy: {e}"));
   }
 
   #[cfg(feature = "rtps_proxy")]
