@@ -20,6 +20,11 @@ Currently, the implementation is complete enough to do data exchange with [ROS2]
 
 The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talking to ROS components. The `ros2` module within RustDDS should not be used anymore.
 
+## Version 0.10.0
+The `DeserializerAdpter` interface for attaching serialization formats to RTPS was extended
+to support deserialization with a "seed" value. This allows the deserialization process
+to input other run-time data besides the incoming byte stream.
+
 ## Version 0.9.2
 * Redesign internal caching to resolve bugs in connecting.
 
