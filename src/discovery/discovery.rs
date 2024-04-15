@@ -959,7 +959,13 @@ impl Discovery {
         Ok(Some(ds)) => {
           // If working in RTPS proxy mode, send a clone of the sample to the proxy
           #[cfg(feature = "rtps_proxy")]
-          self.send_to_proxy(DiscoverySample::Participant(ds.value().clone()));
+          {
+            let process_locally =
+              self.send_to_proxy(DiscoverySample::Participant(ds.value().clone()));
+            if !process_locally {
+              continue;
+            }
+          }
 
           #[cfg(not(feature = "security"))]
           let permission = NormalDiscoveryPermission::Allow;
@@ -1095,19 +1101,22 @@ impl Discovery {
   }
 
   // Check if there are messages about new Readers
-  #[allow(clippy::map_identity)]
   pub fn handle_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
     let drds: Vec<Sample<DiscoveredReaderData, GUID>> =
       match self.dcps_subscription.reader.into_iterator() {
-        Ok(ds) => ds
-          .map(|sample| {
+        Ok(ds) => {
+          #[cfg(feature = "rtps_proxy")]
+          let ds = ds.filter_map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
-            #[cfg(feature = "rtps_proxy")]
-            self.send_to_proxy(DiscoverySample::Subscription(sample.clone()));
-            sample
-          })
-          .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
-          .filter(|d|
+            // The return value tells if we should process the sample locally
+            if self.send_to_proxy(DiscoverySample::Subscription(sample.clone())) {
+              Some(sample)
+            } else {
+              None
+            }
+          });
+          ds.map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
+            .filter(|d|
               // If a participant was specified, we must match its GUID prefix.
               match (read_history, d) {
                 (None, _) => true, // Not asked to filter by participant
@@ -1116,7 +1125,8 @@ impl Discovery {
                 (Some(participant_to_update), Sample::Dispose(guid)) =>
                   guid.prefix == participant_to_update,
               })
-          .collect(),
+            .collect()
+        }
         Err(e) => {
           error!("handle_subscription_reader: {e:?}");
           return;
@@ -1171,32 +1181,36 @@ impl Discovery {
     } // loop
   }
 
-  #[allow(clippy::map_identity)]
   pub fn handle_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
     let dwds: Vec<Sample<DiscoveredWriterData, GUID>> =
       match self.dcps_publication.reader.into_iterator() {
         // a lot of cloning here, but we must copy the data out of the
         // reader before we can use self again, as .read() returns references to within
         // a reader and thus self
-        Ok(ds) => ds
-          .map(|sample| {
+        Ok(ds) => {
+          #[cfg(feature = "rtps_proxy")]
+          let ds = ds.filter_map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
-            #[cfg(feature = "rtps_proxy")]
-            self.send_to_proxy(DiscoverySample::Publication(sample.clone()));
-            sample
-          })
-          .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
-          // If a participant was specified, we must match its GUID prefix.
-          .filter(|d| match (read_history, d) {
-            (None, _) => true, // Not asked to filter by participant
-            (Some(participant_to_update), Sample::Value(dwd)) => {
-              dwd.writer_proxy.remote_writer_guid.prefix == participant_to_update
+            // The return value tells if we should process the sample locally
+            if self.send_to_proxy(DiscoverySample::Publication(sample.clone())) {
+              Some(sample)
+            } else {
+              None
             }
-            (Some(participant_to_update), Sample::Dispose(guid)) => {
-              guid.prefix == participant_to_update
-            }
-          })
-          .collect(),
+          });
+          ds.map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
+            // If a participant was specified, we must match its GUID prefix.
+            .filter(|d| match (read_history, d) {
+              (None, _) => true, // Not asked to filter by participant
+              (Some(participant_to_update), Sample::Value(dwd)) => {
+                dwd.writer_proxy.remote_writer_guid.prefix == participant_to_update
+              }
+              (Some(participant_to_update), Sample::Dispose(guid)) => {
+                guid.prefix == participant_to_update
+              }
+            })
+            .collect()
+        }
         Err(e) => {
           error!("handle_publication_reader: {e:?}");
           return;
@@ -1560,7 +1574,13 @@ impl Discovery {
     for sample in sample_iter {
       // If working in RTPS proxy mode, send a clone of the sample to the proxy
       #[cfg(feature = "rtps_proxy")]
-      self.send_to_proxy(DiscoverySample::ParticipantSecure(sample.clone()));
+      {
+        let process_locally =
+          self.send_to_proxy(DiscoverySample::ParticipantSecure(sample.clone()));
+        if !process_locally {
+          continue;
+        }
+      }
 
       let permission = if let Some(security) = self.security_opt.as_mut() {
         security.secure_participant_read(
@@ -1589,17 +1609,24 @@ impl Discovery {
   }
 
   #[cfg(feature = "security")]
-  #[allow(clippy::map_identity)]
   pub fn handle_secure_subscription_reader(&mut self, read_history: Option<GuidPrefix>) {
-    let sec_subs: Vec<Sample<SubscriptionBuiltinTopicDataSecure, GUID>> =
-      match self.dcps_subscriptions_secure.reader.into_iterator() {
-        Ok(ds) => ds
-          .map(|sample| {
-            // If working in RTPS proxy mode, send a clone of the sample to the proxy
-            #[cfg(feature = "rtps_proxy")]
-            self.send_to_proxy(DiscoverySample::SubscriptionSecure(sample.clone()));
-            sample
-          })
+    let sec_subs: Vec<Sample<SubscriptionBuiltinTopicDataSecure, GUID>> = match self
+      .dcps_subscriptions_secure
+      .reader
+      .into_iterator()
+    {
+      Ok(ds) => {
+        #[cfg(feature = "rtps_proxy")]
+        let ds = ds.filter_map(|sample| {
+          // If working in RTPS proxy mode, send a clone of the sample to the proxy
+          // The return value tells if we should process the sample locally
+          if self.send_to_proxy(DiscoverySample::SubscriptionSecure(sample.clone())) {
+            Some(sample)
+          } else {
+            None
+          }
+        });
+        ds
           .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
           .filter(|d|
               // If a participant was specified, we must match its GUID prefix.
@@ -1610,12 +1637,13 @@ impl Discovery {
                 (Some(participant_to_update), Sample::Dispose(guid)) =>
                   guid.prefix == participant_to_update,
               })
-          .collect(),
-        Err(e) => {
-          error!("handle_secure_subscription_reader: {e:?}");
-          return;
-        }
-      };
+          .collect()
+      }
+      Err(e) => {
+        error!("handle_secure_subscription_reader: {e:?}");
+        return;
+      }
+    };
 
     for sec_sub_sample in sec_subs {
       let permission = if let Some(security) = self.security_opt.as_mut() {
@@ -1650,34 +1678,38 @@ impl Discovery {
   }
 
   #[cfg(feature = "security")]
-  #[allow(clippy::map_identity)]
   pub fn handle_secure_publication_reader(&mut self, read_history: Option<GuidPrefix>) {
     let sec_pubs: Vec<Sample<PublicationBuiltinTopicDataSecure, GUID>> =
       match self.dcps_publications_secure.reader.into_iterator() {
-        Ok(ds) => ds
-          .map(|sample| {
+        Ok(ds) => {
+          #[cfg(feature = "rtps_proxy")]
+          let ds = ds.filter_map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
-            #[cfg(feature = "rtps_proxy")]
-            self.send_to_proxy(DiscoverySample::PublicationSecure(sample.clone()));
-            sample
-          })
-          .map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
-          // If a participant was specified, we must match its GUID prefix.
-          .filter(|d| match (read_history, d) {
-            (None, _) => true, // Not asked to filter by participant
-            (Some(participant_to_update), Sample::Value(sec_pub)) => {
-              sec_pub
-                .discovered_writer_data
-                .writer_proxy
-                .remote_writer_guid
-                .prefix
-                == participant_to_update
+            // The return value tells if we should process the sample locally
+            if self.send_to_proxy(DiscoverySample::PublicationSecure(sample.clone())) {
+              Some(sample)
+            } else {
+              None
             }
-            (Some(participant_to_update), Sample::Dispose(guid)) => {
-              guid.prefix == participant_to_update
-            }
-          })
-          .collect(),
+          });
+          ds.map(|d| d.map_dispose(|g| g.0)) // map_dispose removes Endpoint_GUID wrapper around GUID
+            // If a participant was specified, we must match its GUID prefix.
+            .filter(|d| match (read_history, d) {
+              (None, _) => true, // Not asked to filter by participant
+              (Some(participant_to_update), Sample::Value(sec_pub)) => {
+                sec_pub
+                  .discovered_writer_data
+                  .writer_proxy
+                  .remote_writer_guid
+                  .prefix
+                  == participant_to_update
+              }
+              (Some(participant_to_update), Sample::Dispose(guid)) => {
+                guid.prefix == participant_to_update
+              }
+            })
+            .collect()
+        }
         Err(e) => {
           error!("handle_secure_publication_reader: {e:?}");
           return;
@@ -2032,20 +2064,24 @@ impl Discovery {
   }
 
   #[cfg(feature = "rtps_proxy")]
-  fn send_to_proxy(&self, sample: DiscoverySample) {
+  // The returned boolean indicates if the sample should be processed also locally
+  fn send_to_proxy(&self, sample: DiscoverySample) -> bool {
     let sender_guidp = sample.sender_guid_prefix();
-    if sender_guidp == self.domain_participant.guid_prefix()
-      || self.participants_from_proxy.contains(&sender_guidp)
-    {
-      // Do not send samples from this participant or those participants whose data
-      // proxy sends to us
-      return;
+
+    let sample_is_mine = sender_guidp == self.domain_participant.guid_prefix();
+    let sample_is_from_proxy = self.participants_from_proxy.contains(&sender_guidp);
+
+    // If the sample is by this participant or originally sent to us by the proxy,
+    // do not send it to the proxy
+    if !sample_is_mine && !sample_is_from_proxy {
+      self
+        .proxy_data_endpoint
+        .try_send(sample)
+        .unwrap_or_else(|e| error!("RTPS proxy: Failed to send DiscoverySample to proxy: {e}"));
     }
 
-    self
-      .proxy_data_endpoint
-      .try_send(sample)
-      .unwrap_or_else(|e| error!("RTPS proxy: Failed to send DiscoverySample to proxy: {e}"));
+    // Sample should be processed locally if it is not originally from the proxy
+    !sample_is_from_proxy
   }
 
   #[cfg(feature = "rtps_proxy")]
