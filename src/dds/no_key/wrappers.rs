@@ -81,16 +81,17 @@ where
   DA: no_key::DeserializerAdapter<D>,
 {
   type Error = DA::Error;
+  type Decoded = DA::Decoded;
 
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     DA::supported_encodings()
   }
 
-  fn from_bytes(
-    input_bytes: &[u8],
-    encoding: RepresentationIdentifier,
-  ) -> Result<NoKeyWrapper<D>, DA::Error> {
-    DA::from_bytes(input_bytes, encoding).map(|d| NoKeyWrapper::<D> { d })
+  /// Wraps the deserialized value into a [`NoKeyWrapper`].
+  fn transform_decoded(deserialized: Self::Decoded) -> NoKeyWrapper<D> {
+    NoKeyWrapper::<D> {
+      d: DA::transform_decoded(deserialized),
+    }
   }
 }
 
@@ -99,11 +100,79 @@ impl<D, DA> with_key::DeserializerAdapter<NoKeyWrapper<D>> for DAWrapper<DA>
 where
   DA: no_key::DeserializerAdapter<D>,
 {
-  fn key_from_bytes(
-    _input_bytes: &[u8],
+  type DecodedKey = ();
+
+  #[allow(clippy::unused_unit, clippy::semicolon_if_nothing_returned)]
+  // transform_decoded_key is supposed to return
+  // a value, but in this instance it is of type unit.
+
+  fn transform_decoded_key(_decoded_key: Self::DecodedKey) -> () {
+    // #[allow()]
+    ()
+  }
+}
+
+// If DeserializerAdpter DA additionally implements no_key::DefaultDecoder, then
+// the wrapped version implements both no_key::DefaultDecoder and
+// with_key::DefaultDecoder
+
+impl<D, DA> no_key::DefaultDecoder<NoKeyWrapper<D>> for DAWrapper<DA>
+where
+  DA: no_key::DefaultDecoder<D>,
+{
+  type Decoder = DA::Decoder;
+  const DECODER: Self::Decoder = DA::DECODER;
+}
+
+impl<D, DA> with_key::DefaultDecoder<NoKeyWrapper<D>> for DAWrapper<DA>
+where
+  DA: no_key::DefaultDecoder<D>,
+{
+  type Decoder = DecodeWrapper<DA::Decoder>;
+  const DECODER: Self::Decoder = DecodeWrapper::new(DA::DECODER);
+}
+
+/// Wrapper to turn any no_key::Decode into a with_key::Decode with a unit key.
+#[derive(Clone)]
+pub struct DecodeWrapper<NoKeyDecode> {
+  no_key: NoKeyDecode,
+}
+
+impl<NoKeyDecode> DecodeWrapper<NoKeyDecode> {
+  pub const fn new(no_key: NoKeyDecode) -> Self {
+    DecodeWrapper { no_key }
+  }
+}
+
+// re-implement no_key::Decode<Decoded> for the wrapper also. Wrapped type
+// already does it for us.
+impl<Decoded, NoKeyDecode> no_key::Decode<Decoded> for DecodeWrapper<NoKeyDecode>
+where
+  NoKeyDecode: no_key::Decode<Decoded>,
+{
+  type Error = NoKeyDecode::Error;
+
+  fn decode_bytes(
+    self,
+    input_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> Result<Decoded, Self::Error> {
+    self.no_key.decode_bytes(input_bytes, encoding)
+  }
+}
+
+// implement with_key::Decode<Decoded> for the wrapper.
+// The key has type `()`, so the decoded value is always `()` regardless of the
+// input bytes.
+impl<Decoded, NoKeyDecode> with_key::Decode<Decoded, ()> for DecodeWrapper<NoKeyDecode>
+where
+  NoKeyDecode: no_key::Decode<Decoded>,
+{
+  fn decode_key_bytes(
+    self,
+    _input_key_bytes: &[u8],
     _encoding: RepresentationIdentifier,
-  ) -> Result<<NoKeyWrapper<D> as Keyed>::K, DA::Error> {
-    // also unreachable!() should work here, as this is not supposed to be used
+  ) -> Result<(), Self::Error> {
     Ok(())
   }
 }

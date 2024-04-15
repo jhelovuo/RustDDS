@@ -6,8 +6,12 @@ use log::{debug, error, info, trace, warn};
 
 use crate::{
   dds::{
-    adapters::no_key::*, no_key::datasample::DeserializedCacheChange, qos::*, result::ReadResult,
-    statusevents::*, with_key,
+    adapters::no_key::*,
+    no_key::{datasample::DeserializedCacheChange, wrappers::DecodeWrapper},
+    qos::*,
+    result::ReadResult,
+    statusevents::*,
+    with_key,
   },
   serialization::CDRDeserializerAdapter,
   structure::entity::RTPSEntity,
@@ -47,8 +51,21 @@ where
     self.keyed_simpledatareader.drain_read_notifications();
   }
 
-  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>> {
-    match self.keyed_simpledatareader.try_take_one() {
+  pub fn try_take_one(&self) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    DA: DefaultDecoder<D>,
+  {
+    Self::try_take_one_with(self, DA::DECODER)
+  }
+
+  pub fn try_take_one_with<S>(&self, decoder: S) -> ReadResult<Option<DeserializedCacheChange<D>>>
+  where
+    S: Decode<DA::Decoded> + Clone,
+  {
+    match self
+      .keyed_simpledatareader
+      .try_take_one_with(DecodeWrapper::new(decoder))
+    {
       Err(e) => Err(e),
       Ok(None) => Ok(None),
       Ok(Some(kdcc)) => match DeserializedCacheChange::<D>::from_keyed(kdcc) {
@@ -68,10 +85,23 @@ where
 
   pub fn as_async_stream(
     &self,
-  ) -> impl FusedStream<Item = ReadResult<DeserializedCacheChange<D>>> + '_ {
+  ) -> impl FusedStream<Item = ReadResult<DeserializedCacheChange<D>>> + '_
+  where
+    DA: DefaultDecoder<D>,
+  {
+    Self::as_async_stream_with(self, DA::DECODER)
+  }
+
+  pub fn as_async_stream_with<'a, S>(
+    &'a self,
+    decoder: S,
+  ) -> impl FusedStream<Item = ReadResult<DeserializedCacheChange<D>>> + 'a
+  where
+    S: Decode<DA::Decoded> + Clone + 'a,
+  {
     self
       .keyed_simpledatareader
-      .as_async_stream()
+      .as_async_stream_with(DecodeWrapper::new(decoder))
       .filter_map(move |r| async {
         // This is Stream::filter_map, so returning None means just skipping Item.
         match r {

@@ -31,18 +31,17 @@ const REPR_IDS: [RepresentationIdentifier; 3] = [
   RepresentationIdentifier::PL_CDR_LE,
 ];
 
-impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
-where
-  D: DeserializeOwned,
-{
+impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
   type Error = Error;
+  type Decoded = D;
 
   fn supported_encodings() -> &'static [RepresentationIdentifier] {
     &REPR_IDS
   }
 
-  fn from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
-    deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
+  // no transform, just the identity function
+  fn transform_decoded(decoded: Self::Decoded) -> D {
+    decoded
   }
 }
 
@@ -51,8 +50,109 @@ where
   D: Keyed + DeserializeOwned,
   <D as Keyed>::K: DeserializeOwned, // Key should do this already?
 {
-  fn key_from_bytes(input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D::K> {
+  type DecodedKey = D::K;
+
+  fn transform_decoded_key(decoded_key: Self::DecodedKey) -> D::K {
+    decoded_key
+  }
+}
+
+/// A default decoder is available for all types that implement
+/// `serde::Deserialize`.
+impl<'de, D> no_key::DefaultDecoder<D> for CDRDeserializerAdapter<D>
+where
+  D: serde::Deserialize<'de>,
+{
+  type Decoder = CdrDeserializeDecoder<D>;
+  const DECODER: Self::Decoder = CdrDeserializeDecoder(PhantomData);
+}
+
+impl<D> with_key::DefaultDecoder<D> for CDRDeserializerAdapter<D>
+where
+  D: Keyed + DeserializeOwned,
+  D::K: DeserializeOwned,
+{
+  type Decoder = CdrDeserializeDecoder<D>;
+  const DECODER: Self::Decoder = CdrDeserializeDecoder(PhantomData);
+}
+
+/// Decode type based on a `serde::Deserialize` implementation.
+pub struct CdrDeserializeDecoder<D>(PhantomData<D>);
+
+impl<'de, D> no_key::Decode<D> for CdrDeserializeDecoder<D>
+where
+  D: serde::Deserialize<'de>,
+{
+  type Error = Error;
+
+  fn decode_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
     deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
+  }
+}
+
+impl<Dec, DecKey> with_key::Decode<Dec, DecKey> for CdrDeserializeDecoder<Dec>
+where
+  Dec: DeserializeOwned,
+  DecKey: DeserializeOwned,
+{
+  fn decode_key_bytes(
+    self,
+    input_key_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> Result<DecKey> {
+    deserialize_from_cdr(input_key_bytes, encoding).map(|(d, _size)| d)
+  }
+}
+
+impl<D> Clone for CdrDeserializeDecoder<D> {
+  fn clone(&self) -> Self {
+    Self(self.0)
+  }
+}
+
+/// Decode type based on a `serde::de::DeserializeSeed` implementation.
+#[derive(Clone)]
+pub struct CdrDeserializeSeedDecoder<S, SK> {
+  value_seed: S,
+  key_seed: SK,
+}
+
+impl<'de, S, SK> CdrDeserializeSeedDecoder<S, SK>
+where
+  S: serde::de::DeserializeSeed<'de>,
+  SK: serde::de::DeserializeSeed<'de>,
+{
+  pub fn new(value_seed: S, key_seed: SK) -> Self {
+    Self {
+      value_seed,
+      key_seed,
+    }
+  }
+}
+
+/// Decode type based on a [`serde::de::DeserializeSeed`]-based decoder.
+impl<'de, D, S, SK> no_key::Decode<D> for CdrDeserializeSeedDecoder<S, SK>
+where
+  S: serde::de::DeserializeSeed<'de, Value = D>,
+{
+  type Error = Error;
+
+  fn decode_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
+    deserialize_from_cdr_with(input_bytes, encoding, self.value_seed).map(|(d, _size)| d)
+  }
+}
+
+impl<'de, Dec, DecKey, S, SK> with_key::Decode<Dec, DecKey> for CdrDeserializeSeedDecoder<S, SK>
+where
+  S: serde::de::DeserializeSeed<'de, Value = Dec>,
+  SK: serde::de::DeserializeSeed<'de, Value = DecKey>,
+{
+  fn decode_key_bytes(
+    self,
+    input_key_bytes: &[u8],
+    encoding: RepresentationIdentifier,
+  ) -> Result<DecKey> {
+    deserialize_from_cdr_with(input_key_bytes, encoding, self.key_seed).map(|(d, _size)| d)
   }
 }
 
@@ -158,24 +258,40 @@ where
   }
 }
 
+/// Decode type based on a [`serde::Deserialize`] implementation.
+///
 /// return deserialized object + count of bytes consumed
-pub fn deserialize_from_cdr<T>(
+pub fn deserialize_from_cdr<'de, T>(
   input_bytes: &[u8],
   encoding: RepresentationIdentifier,
 ) -> Result<(T, usize)>
 where
-  T: DeserializeOwned,
+  T: serde::Deserialize<'de>,
+{
+  deserialize_from_cdr_with(input_bytes, encoding, PhantomData)
+}
+
+/// Decode type using the given [`DeserializeSeed`]-based decoder.
+///
+/// return deserialized object + count of bytes consumed
+pub fn deserialize_from_cdr_with<'de, S>(
+  input_bytes: &[u8],
+  encoding: RepresentationIdentifier,
+  decoder: S,
+) -> Result<(S::Value, usize)>
+where
+  S: DeserializeSeed<'de>,
 {
   match encoding {
     RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
       let mut deserializer = CdrDeserializer::<LittleEndian>::new(input_bytes);
-      let t = T::deserialize(&mut deserializer)?;
+      let t = decoder.deserialize(&mut deserializer)?;
       Ok((t, deserializer.serialized_data_count))
     }
 
     RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => {
       let mut deserializer = CdrDeserializer::<BigEndian>::new(input_bytes);
-      let t = T::deserialize(&mut deserializer)?;
+      let t = decoder.deserialize(&mut deserializer)?;
       Ok((t, deserializer.serialized_data_count))
     }
 
