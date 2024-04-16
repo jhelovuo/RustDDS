@@ -207,22 +207,26 @@ impl DiscoveryDB {
     new_participant
   }
 
-  pub fn participant_is_alive(&mut self, guid_prefix: GuidPrefix) {
+  // Returns the duration since liveness was last updated
+  pub fn participant_is_alive(&mut self, guid_prefix: GuidPrefix) -> Option<std::time::Duration> {
     if let Some(ts) = self.participant_last_life_signs.get_mut(&guid_prefix) {
       let now = Instant::now();
-      if now.duration_since(*ts) > std::time::Duration::from_secs(1) {
+      let duration_since_last_update = now.duration_since(*ts);
+      if duration_since_last_update > std::time::Duration::from_secs(1) {
         debug!(
           "Participant alive update for {:?}, but no full update.",
           guid_prefix
         );
       }
       *ts = now;
+      Some(duration_since_last_update)
     } else {
       info!(
         "Participant alive update for unknown {:?}. This is normal, if the message does not \
          repeat.",
         guid_prefix
       );
+      None
     }
   }
 

@@ -880,7 +880,10 @@ impl Discovery {
           }
           SPDP_LIVENESS_TOKEN => {
             while let Ok(guid_prefix) = self.spdp_liveness_receiver.try_recv() {
-              discovery_db_write(&self.discovery_db).participant_is_alive(guid_prefix);
+              let _duration_since_last_update =
+                discovery_db_write(&self.discovery_db).participant_is_alive(guid_prefix);
+              #[cfg(feature = "rtps_proxy")]
+              self.info_participant_liveness_to_proxy(guid_prefix, _duration_since_last_update);
             }
           }
           P2P_PARTICIPANT_STATELESS_MESSAGE_TOKEN => {
@@ -2129,6 +2132,43 @@ impl Discovery {
         #[cfg(feature = "security")]
         DiscoverySample::SubscriptionSecure(sec_sub_sample) => {
           write_or_dispose_sample!(sec_sub_sample, self.dcps_subscriptions_secure);
+        }
+      }
+    }
+  }
+
+  #[cfg(feature = "rtps_proxy")]
+  fn info_participant_liveness_to_proxy(
+    &mut self,
+    guidp: GuidPrefix,
+    duration_since_last_liveness_update: Option<StdDuration>,
+  ) {
+    // Do not info about liveness of the proxy participant or participants from
+    // proxy
+    if guidp == self.domain_participant.guid_prefix()
+      || self.participants_from_proxy.contains(&guidp)
+    {
+      return;
+    }
+
+    // Do not info about liveness too often.
+    // This avoids sending the same liveness data multiple times in very short
+    // bursts.
+    let info_about_liveness = match duration_since_last_liveness_update {
+      None => false,
+      Some(duration) => duration > std::time::Duration::from_millis(100),
+    };
+
+    if info_about_liveness {
+      // To info about liveness, we send the SPDP data to the proxy
+      match discovery_db_read(&self.discovery_db).find_participant_proxy(guidp) {
+        Some(spdp_data) => {
+          self.send_to_proxy(DiscoverySample::Participant(Sample::Value(
+            spdp_data.clone(),
+          )));
+        }
+        None => {
+          warn!("Did not find participant {guidp:?} data to info about liveness to proxy");
         }
       }
     }
