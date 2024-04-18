@@ -1003,6 +1003,14 @@ impl Discovery {
                 self.process_participant_dispose(participant_guid.0.prefix);
               }
             }
+          } else {
+            // Security did not give permission to process the sample normally.
+            // However, according to the Security spec (section 7.4.1.6 New
+            // DCPSParticipantSecure Builtin Topic), we may still use the sample
+            // to maintain the liveness of the remote participant.
+            // This is needed when communicating with FastDDS via the RTPS proxy.
+            let guid_prefix = ds.key().0.prefix;
+            discovery_db_write(&self.discovery_db).participant_is_alive(guid_prefix);
           }
         }
         Ok(None) => {
