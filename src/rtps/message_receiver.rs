@@ -28,7 +28,10 @@ use crate::{
 #[cfg(not(feature = "security"))]
 use crate::no_security::SecurityPluginsHandle;
 #[cfg(feature = "rtps_proxy")]
-use crate::rtps_proxy::{self, ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING};
+use crate::{
+  rtps::constant::*,
+  rtps_proxy::{self, ENTITY_IDS_WITH_NO_DIRECT_RTPS_PROXYING},
+};
 #[cfg(test)]
 use crate::dds::ddsdata::DDSData;
 #[cfg(test)]
@@ -156,6 +159,8 @@ pub(crate) struct MessageReceiver {
 
   #[cfg(feature = "rtps_proxy")]
   proxy_rtps_sender: mio_channel::SyncSender<rtps_proxy::RTPSMessage>,
+  #[cfg(feature = "rtps_proxy")]
+  msg_source_locator_type: rtps_proxy::LocatorType,
 }
 
 impl MessageReceiver {
@@ -188,6 +193,8 @@ impl MessageReceiver {
       must_be_rtps_protection_special_case: true,
       #[cfg(feature = "rtps_proxy")]
       proxy_rtps_sender,
+      #[cfg(feature = "rtps_proxy")]
+      msg_source_locator_type: rtps_proxy::LocatorType::MetaTraffic,
     }
   }
 
@@ -1214,6 +1221,21 @@ impl MessageReceiver {
   }
 
   #[cfg(feature = "rtps_proxy")]
+  pub fn set_msg_source_locator_type(&mut self, evloop_event_token: mio_06::Token) {
+    match evloop_event_token {
+      DISCOVERY_LISTENER_TOKEN | DISCOVERY_MUL_LISTENER_TOKEN => {
+        self.msg_source_locator_type = rtps_proxy::LocatorType::MetaTraffic;
+      }
+      USER_TRAFFIC_LISTENER_TOKEN | USER_TRAFFIC_MUL_LISTENER_TOKEN => {
+        self.msg_source_locator_type = rtps_proxy::LocatorType::UserTraffic;
+      }
+      _ => {
+        error!("RPTS proxy: Unexpected token from Event loop.");
+      }
+    }
+  }
+
+  #[cfg(feature = "rtps_proxy")]
   fn proxy_rtps_message(&self, rtps_message: Message) {
     // Filter out submessages of those topics that should not be directly
     // RTPS-proxied, and send the resulting RTPS message to the proxy
@@ -1262,6 +1284,7 @@ impl MessageReceiver {
 
       if let Err(e) = self.proxy_rtps_sender.try_send(rtps_proxy::RTPSMessage {
         msg: proxied_message,
+        target_locator_type: self.msg_source_locator_type.clone(),
       }) {
         error!("RTPS proxy: failed to send RTPS message to proxy: {e}");
       }

@@ -100,7 +100,8 @@ pub struct DPEventLoop {
   #[cfg(feature = "rtps_proxy")]
   // When acting as proxy, we maintain a list of unicast locators for the domain participants, so
   // that we don't constantly have to request them from DiscoveryDB
-  remote_unicast_locators: HashMap<GuidPrefix, Locator>,
+  // The first locator is for metatraffic (discovery), second for user traffic
+  remote_unicast_locators: HashMap<GuidPrefix, (Locator, Locator)>,
 }
 
 impl DPEventLoop {
@@ -357,6 +358,12 @@ impl DPEventLoop {
                     },
                     UDPListener::messages,
                   );
+
+                #[cfg(feature = "rtps_proxy")]
+                ev_wrapper
+                  .message_receiver
+                  .set_msg_source_locator_type(fixed_token);
+
                 for packet in udp_messages {
                   ev_wrapper.message_receiver.handle_received_packet(&packet);
                 }
@@ -701,13 +708,30 @@ impl DPEventLoop {
 
     #[cfg(feature = "rtps_proxy")]
     {
-      // Store the participant's unicast locator
+      // Store the participant's unicast locators
       let guidp = discovered_participant.participant_guid.prefix;
-      discovered_participant
+      let metatraffic_loc_opt = discovered_participant
+        .metatraffic_unicast_locators
+        .clone()
+        .pop();
+      let user_traffic_loc_opt = discovered_participant
         .default_unicast_locators
         .clone()
-        .pop()
-        .and_then(|loc| self.remote_unicast_locators.insert(guidp, loc));
+        .pop();
+
+      match (metatraffic_loc_opt, user_traffic_loc_opt) {
+        (Some(meta_loc), Some(user_loc)) => {
+          self
+            .remote_unicast_locators
+            .insert(guidp, (meta_loc, user_loc));
+        }
+        (_, _) => {
+          warn!(
+            "RTPS proxy: did not find metatraffic and user traffic locators for participant \
+             {guidp:?}"
+          );
+        }
+      }
     }
 
     debug!(
@@ -1092,7 +1116,12 @@ impl DPEventLoop {
         .write_to_vec_with_ctx(Endianness::LittleEndian)
         .unwrap();
 
-      for locator in self.remote_unicast_locators.values() {
+      for (metatraffic_locator, usertraffic_locator) in self.remote_unicast_locators.values() {
+        let locator = match msg.target_locator_type {
+          rtps_proxy::LocatorType::MetaTraffic => metatraffic_locator,
+          rtps_proxy::LocatorType::UserTraffic => usertraffic_locator,
+        };
+
         self.udp_sender.send_to_locator(&buffer, locator);
       }
     }

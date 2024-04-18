@@ -250,11 +250,16 @@ impl DiscoverySample {
   }
 }
 
-// Currently contains just the message, we may need something extra in the
-// future.
+#[derive(Clone, Debug)]
+pub enum LocatorType {
+  MetaTraffic,
+  UserTraffic,
+}
+
 #[derive(Debug)]
 pub struct RTPSMessage {
   pub msg: Message,
+  pub target_locator_type: LocatorType,
 }
 
 impl RTPSMessage {
