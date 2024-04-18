@@ -351,7 +351,7 @@ impl SecureDiscovery {
             auth_msg_writer,
           );
         }
-        info!("Authenticating with Participant {guid_prefix:?}");
+        debug!("Still trying to authenticate with Participant {guid_prefix:?}");
         // Otherwise keep the same authentication status
         AuthenticationStatus::Authenticating
       }
