@@ -64,11 +64,11 @@ impl Timestamp {
     })
   }
 
-  fn to_ticks(self) -> u64 {
+  pub fn to_ticks(self) -> u64 {
     (u64::from(self.seconds) << 32) + u64::from(self.fraction)
   }
 
-  fn from_ticks(ticks: u64) -> Self {
+  pub fn from_ticks(ticks: u64) -> Self {
     Self {
       seconds: (ticks >> 32) as u32,
       fraction: ticks as u32,
