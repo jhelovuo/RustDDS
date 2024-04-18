@@ -14,6 +14,7 @@ use crate::{
     protocol_version::ProtocolVersion,
     submessages::{
       elements::{parameter::Parameter, parameter_list::ParameterList},
+      info_source::InfoSource,
       submessages::*,
     },
     validity_trait::Validity,
@@ -122,6 +123,14 @@ pub(crate) struct MessageBuilder {
 impl MessageBuilder {
   pub fn new() -> Self {
     Self::default()
+  }
+
+  pub fn info_src_msg(mut self, endianness: Endianness, guid_prefix: GuidPrefix) -> Self {
+    let info_src = InfoSource::from(Header::new(guid_prefix));
+    let info_src_submsg =
+      info_src.create_submessage(BitFlags::<INFOSOURCE_Flags>::from_endianness(endianness));
+    self.submessages.push(info_src_submsg);
+    self
   }
 
   pub fn dst_submessage(mut self, endianness: Endianness, guid_prefix: GuidPrefix) -> Self {

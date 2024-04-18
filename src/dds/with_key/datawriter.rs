@@ -37,7 +37,7 @@ use crate::{
     cache_change::ChangeKind, duration, entity::RTPSEntity, guid::GUID, rpc::SampleIdentity,
     sequence_number::SequenceNumber, time::Timestamp,
   },
-  Keyed, TopicDescription,
+  GuidPrefix, Keyed, TopicDescription,
 };
 
 // TODO: Move the write options and the builder type to some lower-level module
@@ -47,6 +47,7 @@ pub struct WriteOptionsBuilder {
   related_sample_identity: Option<SampleIdentity>,
   source_timestamp: Option<Timestamp>,
   to_single_reader: Option<GUID>,
+  source_participant: Option<GuidPrefix>,
 }
 
 impl WriteOptionsBuilder {
@@ -59,6 +60,7 @@ impl WriteOptionsBuilder {
       related_sample_identity: self.related_sample_identity,
       source_timestamp: self.source_timestamp,
       to_single_reader: self.to_single_reader,
+      source_participant: self.source_participant,
     }
   }
 
@@ -88,6 +90,13 @@ impl WriteOptionsBuilder {
     self.to_single_reader = Some(reader);
     self
   }
+
+  #[cfg(feature = "rtps_proxy")]
+  // Only used internally with the SPDP topic when in RTPS proxy mode.
+  pub(crate) fn source_participant(mut self, guidp: GuidPrefix) -> Self {
+    self.source_participant = Some(guidp);
+    self
+  }
 }
 
 /// Type to be used with write_with_options.
@@ -96,8 +105,11 @@ impl WriteOptionsBuilder {
 pub struct WriteOptions {
   related_sample_identity: Option<SampleIdentity>, // for DDS-RPC
   source_timestamp: Option<Timestamp>,             // from DDS spec
-  to_single_reader: Option<GUID>,                  /* try to send to one Reader only
-                                                    * future extension room fo other fields. */
+  to_single_reader: Option<GUID>,                  // try to send to one Reader only
+  source_participant: Option<GuidPrefix>,          /* Send the RTSP message with Info source
+                                                    * submessage containg the given GuidPrefix.
+                                                    * Has effect only in the SPDP topic
+                                                    * future extension room for other fields. */
 }
 
 impl WriteOptions {
@@ -112,6 +124,10 @@ impl WriteOptions {
   pub fn to_single_reader(&self) -> Option<GUID> {
     self.to_single_reader
   }
+
+  pub(crate) fn source_participant(&self) -> Option<GuidPrefix> {
+    self.source_participant
+  }
 }
 
 impl From<Option<Timestamp>> for WriteOptions {
@@ -120,6 +136,7 @@ impl From<Option<Timestamp>> for WriteOptions {
       related_sample_identity: None,
       source_timestamp,
       to_single_reader: None,
+      source_participant: None,
     }
   }
 }

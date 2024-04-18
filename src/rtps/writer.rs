@@ -709,6 +709,15 @@ impl Writer {
       // We can send DATA
       let mut message_builder = MessageBuilder::new();
 
+      if let Some(guidp) = cc.write_options.source_participant() {
+        // The info source write option is only needed with the SPDP writer.
+        // It might cause havoc on the RTPS protocol level if used carelessly with other
+        // topics, hence the check.
+        if self.my_guid.entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
+          message_builder = message_builder.info_src_msg(self.endianness, guidp);
+        }
+      }
+
       // If DataWriter sent us a source timestamp, then add that.
       // Timestamp has to go before Data to have effect on Data.
       if let Some(src_ts) = cc.write_options.source_timestamp() {
@@ -785,6 +794,15 @@ impl Writer {
         FragmentNumber::range_inclusive(FragmentNumber::new(1), FragmentNumber::new(num_frags))
       {
         let mut message_builder = MessageBuilder::new(); // fresh builder
+
+        if let Some(guidp) = cc.write_options.source_participant() {
+          // The info source write option is only needed with the SPDP writer.
+          // It might cause havoc on the RTPS protocol level if used carelessly with other
+          // topics, hence the check.
+          if self.my_guid.entity_id == EntityId::SPDP_BUILTIN_PARTICIPANT_WRITER {
+            message_builder = message_builder.info_src_msg(self.endianness, guidp);
+          }
+        }
 
         if let Some(src_ts) = cc.write_options.source_timestamp() {
           // Add timestamp

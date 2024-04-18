@@ -2097,18 +2097,23 @@ impl Discovery {
 
   #[cfg(feature = "rtps_proxy")]
   fn read_from_proxy(&mut self) {
+    use crate::WriteOptionsBuilder;
+
     while let Some(sample) = self.proxy_data_endpoint.try_recv_data() {
       self
         .participants_from_proxy
         .insert(sample.sender_guid_prefix());
 
       macro_rules! write_or_dispose_sample {
-        ($sample:expr, $operator:expr) => {
+        ($sample:expr, $operator:expr, $write_options:expr) => {
           match $sample {
             Sample::Value(data) => {
-              $operator.writer.write(data, None).unwrap_or_else(|e| {
-                error!("RTPS proxy: Publishing Discovery data failed: {e}");
-              });
+              let _ = $operator
+                .writer
+                .write_with_options(data, $write_options)
+                .map_err(|e| {
+                  error!("RTPS proxy: Publishing Discovery data failed: {e}");
+                });
             }
             Sample::Dispose(key) => {
               $operator.writer.dispose(&key, None).unwrap_or_else(|e| {
@@ -2118,28 +2123,58 @@ impl Discovery {
           }
         };
       }
+      let write_options_builder = WriteOptionsBuilder::new();
+      let source_participant = sample.sender_guid_prefix();
 
       match sample {
         DiscoverySample::Participant(spdp_sample) => {
-          write_or_dispose_sample!(spdp_sample, self.dcps_participant);
+          write_or_dispose_sample!(
+            spdp_sample,
+            self.dcps_participant,
+            write_options_builder
+              // Send the SPDP message with an InfoSource message indicating the original
+              // participant. FastDDS needs this to know the participant is alive.
+              .source_participant(source_participant)
+              .build()
+          );
         }
         DiscoverySample::Publication(pub_sample) => {
-          write_or_dispose_sample!(pub_sample, self.dcps_publication);
+          write_or_dispose_sample!(
+            pub_sample,
+            self.dcps_publication,
+            write_options_builder.build()
+          );
         }
         DiscoverySample::Subscription(sub_sample) => {
-          write_or_dispose_sample!(sub_sample, self.dcps_subscription);
+          write_or_dispose_sample!(
+            sub_sample,
+            self.dcps_subscription,
+            write_options_builder.build()
+          );
         }
         #[cfg(feature = "security")]
         DiscoverySample::ParticipantSecure(sec_spdp_sample) => {
-          write_or_dispose_sample!(sec_spdp_sample, self.dcps_participant_secure);
+          write_or_dispose_sample!(
+            sec_spdp_sample,
+            self.dcps_participant_secure,
+            write_options_builder.build()
+          );
         }
         #[cfg(feature = "security")]
         DiscoverySample::PublicationSecure(sec_pub_sample) => {
-          write_or_dispose_sample!(sec_pub_sample, self.dcps_publications_secure);
+          write_or_dispose_sample!(
+            sec_pub_sample,
+            self.dcps_publications_secure,
+            write_options_builder.build()
+          );
         }
         #[cfg(feature = "security")]
         DiscoverySample::SubscriptionSecure(sec_sub_sample) => {
-          write_or_dispose_sample!(sec_sub_sample, self.dcps_subscriptions_secure);
+          write_or_dispose_sample!(
+            sec_sub_sample,
+            self.dcps_subscriptions_secure,
+            write_options_builder.build()
+          );
         }
       }
     }
