@@ -158,7 +158,7 @@ pub(crate) struct MessageReceiver {
   must_be_rtps_protection_special_case: bool,
 
   #[cfg(feature = "rtps_proxy")]
-  proxy_rtps_sender: mio_channel::SyncSender<rtps_proxy::RTPSMessage>,
+  rtps_proxy_sender: mio_channel::SyncSender<rtps_proxy::RTPSMessage>,
   #[cfg(feature = "rtps_proxy")]
   msg_source_locator_type: rtps_proxy::LocatorType,
 }
@@ -192,7 +192,7 @@ impl MessageReceiver {
       #[cfg(feature = "security")]
       must_be_rtps_protection_special_case: true,
       #[cfg(feature = "rtps_proxy")]
-      proxy_rtps_sender,
+      rtps_proxy_sender: proxy_rtps_sender,
       #[cfg(feature = "rtps_proxy")]
       msg_source_locator_type: rtps_proxy::LocatorType::MetaTraffic,
     }
@@ -281,7 +281,7 @@ impl MessageReceiver {
     #[cfg(not(feature = "security"))]
     let unprotected_submessages: Vec<UnprotectedSubmessage> = {
       #[cfg(feature = "rtps_proxy")]
-      self.proxy_rtps_message(rtps_message.clone());
+      self.send_message_to_rtps_proxy(rtps_message.clone());
 
       rtps_message
         .submessages
@@ -685,7 +685,7 @@ impl MessageReceiver {
     }
 
     #[cfg(feature = "rtps_proxy")]
-    self.proxy_rtps_message(Message {
+    self.send_message_to_rtps_proxy(Message {
       header: rtps_message.header,
       submessages: proxied_submessages,
     });
@@ -1236,7 +1236,7 @@ impl MessageReceiver {
   }
 
   #[cfg(feature = "rtps_proxy")]
-  fn proxy_rtps_message(&self, rtps_message: Message) {
+  fn send_message_to_rtps_proxy(&self, rtps_message: Message) {
     // Filter out submessages of those topics that should not be directly
     // RTPS-proxied, and send the resulting RTPS message to the proxy
 
@@ -1282,7 +1282,7 @@ impl MessageReceiver {
         submessages: filtered_submessages,
       };
 
-      if let Err(e) = self.proxy_rtps_sender.try_send(rtps_proxy::RTPSMessage {
+      if let Err(e) = self.rtps_proxy_sender.try_send(rtps_proxy::RTPSMessage {
         msg: proxied_message,
         target_locator_type: self.msg_source_locator_type.clone(),
       }) {

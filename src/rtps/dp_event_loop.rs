@@ -96,7 +96,7 @@ pub struct DPEventLoop {
   #[cfg(feature = "security")]
   discovery_command_sender: mio_channel::SyncSender<DiscoveryCommand>,
   #[cfg(feature = "rtps_proxy")]
-  proxy_data_endpoint: ProxyDataEndpoint<rtps_proxy::RTPSMessage>,
+  rtps_proxy_data_endpoint: ProxyDataEndpoint<rtps_proxy::RTPSMessage>,
   #[cfg(feature = "rtps_proxy")]
   // When acting as proxy, we maintain a list of unicast locators for the domain participants, so
   // that we don't constantly have to request them from DiscoveryDB
@@ -255,7 +255,7 @@ impl DPEventLoop {
       #[cfg(feature = "security")]
       discovery_command_sender: _discovery_command_sender,
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_endpoint,
+      rtps_proxy_data_endpoint: proxy_data_endpoint,
       #[cfg(feature = "rtps_proxy")]
       remote_unicast_locators: HashMap::new(),
     }
@@ -430,7 +430,7 @@ impl DPEventLoop {
 
               RTPS_PROXY_DATA_TOKEN => {
                 #[cfg(feature = "rtps_proxy")]
-                ev_wrapper.read_from_proxy();
+                ev_wrapper.read_from_rtps_proxy();
               }
 
               fixed_unknown => {
@@ -1107,7 +1107,7 @@ impl DPEventLoop {
   }
 
   #[cfg(feature = "rtps_proxy")]
-  fn read_from_proxy(&self) {
+  fn read_from_rtps_proxy(&self) {
     use enumflags2::BitFlags;
     use speedy::{Endianness, Writable};
 
@@ -1116,7 +1116,7 @@ impl DPEventLoop {
       submessages::{info_source::InfoSource, submessage_flag::FromEndianness},
     };
 
-    while let Some(proxy_msg) = self.proxy_data_endpoint.try_recv_data() {
+    while let Some(proxy_msg) = self.rtps_proxy_data_endpoint.try_recv_data() {
       let mut msg = proxy_msg.msg;
 
       // Add info source indicating the original participant

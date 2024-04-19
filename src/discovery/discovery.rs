@@ -259,11 +259,11 @@ pub(crate) struct Discovery {
   cached_secure_discovery_messages_resend_timer: Timer<()>,
 
   #[cfg(feature = "rtps_proxy")]
-  proxy_data_endpoint: ProxyDataEndpoint<DiscoverySample>,
+  rtps_proxy_data_endpoint: ProxyDataEndpoint<DiscoverySample>,
   #[cfg(feature = "rtps_proxy")]
   // We keep track of those participants whose discovery data is sent by the proxy.
   // These participants' discovery data is not sent back to the proxy
-  participants_from_proxy: HashSet<GuidPrefix>,
+  participants_from_rtps_proxy: HashSet<GuidPrefix>,
 }
 
 impl Discovery {
@@ -712,9 +712,9 @@ impl Discovery {
       #[cfg(feature = "security")]
       cached_secure_discovery_messages_resend_timer: secure_message_resend_timer,
       #[cfg(feature = "rtps_proxy")]
-      proxy_data_endpoint,
+      rtps_proxy_data_endpoint: proxy_data_endpoint,
       #[cfg(feature = "rtps_proxy")]
-      participants_from_proxy: HashSet::new(),
+      participants_from_rtps_proxy: HashSet::new(),
     })
   }
 
@@ -912,7 +912,7 @@ impl Discovery {
           }
           DISCOVERY_PROXY_DATA_TOKEN => {
             #[cfg(feature = "rtps_proxy")]
-            self.read_from_proxy();
+            self.read_from_rtps_proxy();
           }
 
           other_token => {
@@ -964,7 +964,7 @@ impl Discovery {
           #[cfg(feature = "rtps_proxy")]
           {
             let process_locally =
-              self.send_to_proxy(DiscoverySample::Participant(ds.value().clone()));
+              self.send_to_rtps_proxy(DiscoverySample::Participant(ds.value().clone()));
             if !process_locally {
               continue;
             }
@@ -1120,7 +1120,7 @@ impl Discovery {
           let ds = ds.filter_map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             // The return value tells if we should process the sample locally
-            if self.send_to_proxy(DiscoverySample::Subscription(sample.clone())) {
+            if self.send_to_rtps_proxy(DiscoverySample::Subscription(sample.clone())) {
               Some(sample)
             } else {
               None
@@ -1203,7 +1203,7 @@ impl Discovery {
           let ds = ds.filter_map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             // The return value tells if we should process the sample locally
-            if self.send_to_proxy(DiscoverySample::Publication(sample.clone())) {
+            if self.send_to_rtps_proxy(DiscoverySample::Publication(sample.clone())) {
               Some(sample)
             } else {
               None
@@ -1587,7 +1587,7 @@ impl Discovery {
       #[cfg(feature = "rtps_proxy")]
       {
         let process_locally =
-          self.send_to_proxy(DiscoverySample::ParticipantSecure(sample.clone()));
+          self.send_to_rtps_proxy(DiscoverySample::ParticipantSecure(sample.clone()));
         if !process_locally {
           continue;
         }
@@ -1631,7 +1631,7 @@ impl Discovery {
         let ds = ds.filter_map(|sample| {
           // If working in RTPS proxy mode, send a clone of the sample to the proxy
           // The return value tells if we should process the sample locally
-          if self.send_to_proxy(DiscoverySample::SubscriptionSecure(sample.clone())) {
+          if self.send_to_rtps_proxy(DiscoverySample::SubscriptionSecure(sample.clone())) {
             Some(sample)
           } else {
             None
@@ -1697,7 +1697,7 @@ impl Discovery {
           let ds = ds.filter_map(|sample| {
             // If working in RTPS proxy mode, send a clone of the sample to the proxy
             // The return value tells if we should process the sample locally
-            if self.send_to_proxy(DiscoverySample::PublicationSecure(sample.clone())) {
+            if self.send_to_rtps_proxy(DiscoverySample::PublicationSecure(sample.clone())) {
               Some(sample)
             } else {
               None
@@ -2076,17 +2076,17 @@ impl Discovery {
 
   #[cfg(feature = "rtps_proxy")]
   // The returned boolean indicates if the sample should be processed also locally
-  fn send_to_proxy(&self, sample: DiscoverySample) -> bool {
+  fn send_to_rtps_proxy(&self, sample: DiscoverySample) -> bool {
     let sender_guidp = sample.sender_guid_prefix();
 
     let sample_is_mine = sender_guidp == self.domain_participant.guid_prefix();
-    let sample_is_from_proxy = self.participants_from_proxy.contains(&sender_guidp);
+    let sample_is_from_proxy = self.participants_from_rtps_proxy.contains(&sender_guidp);
 
     // If the sample is by this participant or originally sent to us by the proxy,
     // do not send it to the proxy
     if !sample_is_mine && !sample_is_from_proxy {
       self
-        .proxy_data_endpoint
+        .rtps_proxy_data_endpoint
         .try_send(sample)
         .unwrap_or_else(|e| error!("RTPS proxy: Failed to send DiscoverySample to proxy: {e}"));
     }
@@ -2096,14 +2096,14 @@ impl Discovery {
   }
 
   #[cfg(feature = "rtps_proxy")]
-  fn read_from_proxy(&mut self) {
+  fn read_from_rtps_proxy(&mut self) {
     use crate::WriteOptionsBuilder;
 
-    while let Some(mut sample) = self.proxy_data_endpoint.try_recv_data() {
+    while let Some(mut sample) = self.rtps_proxy_data_endpoint.try_recv_data() {
       // Mark the sender participant down so that we don't sent the sample back to the
       // proxy
       self
-        .participants_from_proxy
+        .participants_from_rtps_proxy
         .insert(sample.sender_guid_prefix());
 
       // Change the locators to point to this participant
@@ -2203,7 +2203,7 @@ impl Discovery {
     // Do not info about liveness of the proxy participant or participants from
     // proxy
     if guidp == self.domain_participant.guid_prefix()
-      || self.participants_from_proxy.contains(&guidp)
+      || self.participants_from_rtps_proxy.contains(&guidp)
     {
       return;
     }
@@ -2220,7 +2220,7 @@ impl Discovery {
       // To info about liveness, we send the SPDP data to the proxy
       match discovery_db_read(&self.discovery_db).find_participant_proxy(guidp) {
         Some(spdp_data) => {
-          self.send_to_proxy(DiscoverySample::Participant(Sample::Value(
+          self.send_to_rtps_proxy(DiscoverySample::Participant(Sample::Value(
             spdp_data.clone(),
           )));
         }
