@@ -225,7 +225,10 @@ pub use serialization::{
   CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializer, CdrSerializer,
 };
 pub use structure::{
-  duration::Duration, entity::RTPSEntity, guid::GUID, sequence_number::SequenceNumber,
+  duration::Duration,
+  entity::RTPSEntity,
+  guid::{GuidPrefix, GUID},
+  sequence_number::SequenceNumber,
   time::Timestamp,
 };
 // re-export from a helper crate

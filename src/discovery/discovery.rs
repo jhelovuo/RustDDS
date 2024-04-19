@@ -2099,11 +2099,25 @@ impl Discovery {
   fn read_from_proxy(&mut self) {
     use crate::WriteOptionsBuilder;
 
-    while let Some(sample) = self.proxy_data_endpoint.try_recv_data() {
+    while let Some(mut sample) = self.proxy_data_endpoint.try_recv_data() {
+      // Mark the sender participant down so that we don't sent the sample back to the
+      // proxy
       self
         .participants_from_proxy
         .insert(sample.sender_guid_prefix());
 
+      // Change the locators to point to this participant
+      match self.domain_participant.clone().upgrade() {
+        Some(dp) => {
+          sample.change_locators(&dp);
+        }
+        None => {
+          error!("Could not get DomainParticipant for Discovery proxying");
+          return;
+        }
+      }
+
+      // Publish the sample
       macro_rules! write_or_dispose_sample {
         ($sample:expr, $operator:expr, $write_options:expr) => {
           match $sample {

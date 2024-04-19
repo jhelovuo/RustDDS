@@ -1,18 +1,13 @@
 use std::io;
 
-use enumflags2::BitFlags;
 use mio_extras::channel as mio_channel;
 
 use crate::{
   dds::with_key::Sample,
   discovery::{DiscoveredReaderData, DiscoveredWriterData, SpdpDiscoveredParticipantData},
-  messages::{
-    header::Header,
-    submessages::{info_source::InfoSource, submessage_flag::FromEndianness},
-  },
   rtps::Message,
   structure::guid::{EntityId, GuidPrefix},
-  DomainParticipant, Keyed, RTPSEntity,
+  DomainParticipant, Keyed,
 };
 #[cfg(feature = "security")]
 use crate::security::{
@@ -193,7 +188,7 @@ impl DiscoverySample {
     }
   }
 
-  pub fn set_proxy_participant_info(&mut self, dp: &DomainParticipant) {
+  pub fn change_locators(&mut self, dp: &DomainParticipant) {
     // Change locators in sample values. Do nothing for dispose samples.
     match self {
       Self::Participant(Sample::Value(dp_data)) => {
@@ -260,22 +255,4 @@ pub enum LocatorType {
 pub struct RTPSMessage {
   pub msg: Message,
   pub target_locator_type: LocatorType,
-}
-
-impl RTPSMessage {
-  pub fn sender_guid_prefix(&self) -> GuidPrefix {
-    self.msg.header.guid_prefix
-  }
-
-  pub fn set_proxy_participant_info(&mut self, dp: &DomainParticipant) {
-    // Add info source indicating the original participant
-    let info_source = InfoSource::from(self.msg.header)
-      .create_submessage(BitFlags::from_endianness(speedy::Endianness::BigEndian));
-
-    self.msg.prepend_submessage(info_source);
-
-    // Add header of proxy participant
-    let new_header = Header::new(dp.guid_prefix());
-    self.msg.header = new_header;
-  }
 }
