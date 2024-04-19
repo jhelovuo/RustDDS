@@ -25,6 +25,9 @@ The `DeserializerAdpter` interface for attaching serialization formats to RTPS w
 to support deserialization with a "seed" value. This allows the deserialization process
 to input other run-time data besides the incoming byte stream.
 
+### 0.10.1
+* Make RTPS Timestamp's native tick count publicly accessible
+
 ## Version 0.9.2
 * Redesign internal caching to resolve bugs in connecting.
 
