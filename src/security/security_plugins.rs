@@ -320,6 +320,13 @@ impl SecurityPlugins {
       .remote_endpoint_crypto_handle_cache
       .contains_key(&(local_guid, remote_guid))
   }
+
+  #[cfg(feature = "rtps_proxy")]
+  pub fn remote_participant_has_crypto_handles(&self, guidp: GuidPrefix) -> bool {
+    self
+      .remote_participant_crypto_handle_cache
+      .contains_key(&guidp)
+  }
 }
 
 /// Interface for using the Authentication plugin

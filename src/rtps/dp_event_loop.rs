@@ -1108,16 +1108,67 @@ impl DPEventLoop {
 
   #[cfg(feature = "rtps_proxy")]
   fn read_from_proxy(&self) {
+    use enumflags2::BitFlags;
     use speedy::{Endianness, Writable};
 
-    while let Some(msg) = self.proxy_data_endpoint.try_recv_data() {
-      let buffer = msg
-        .msg
-        .write_to_vec_with_ctx(Endianness::LittleEndian)
-        .unwrap();
+    use crate::messages::{
+      header::Header,
+      submessages::{info_source::InfoSource, submessage_flag::FromEndianness},
+    };
+
+    while let Some(proxy_msg) = self.proxy_data_endpoint.try_recv_data() {
+      let mut msg = proxy_msg.msg;
+
+      // Add info source indicating the original participant
+      let info_source = InfoSource::from(msg.header)
+        .create_submessage(BitFlags::from_endianness(speedy::Endianness::BigEndian));
+      msg.prepend_submessage(info_source);
+
+      // Add header of this participant
+      msg.header = Header::new(self.domain_info.domain_participant_guid.prefix);
+
+      // Encode the message if needed
+      #[cfg(feature = "security")]
+      let msg = if let Some(plugins_handle) = self.security_plugins_opt.as_ref() {
+        let sec_plugins = plugins_handle.get_plugins();
+
+        // Get all remote participants we know
+        let remote_guidps = self.remote_unicast_locators.keys().cloned();
+        // Keep only those participants for whom we have crypto handles, i.e. the ones
+        // we have exchanged keys with.
+        let remote_guidps_with_crypto: Vec<GuidPrefix> = remote_guidps
+          .filter(|guidp| sec_plugins.remote_participant_has_crypto_handles(*guidp))
+          .collect();
+
+        // Encode the message for those participants.
+        // Note that if the message does not actually need to be encoded, encode_message
+        // will return the plain message no matter what remote_guidps_with_crypto
+        // contains.
+        // The message will be sent to all known participants, but if the message was
+        // actually encoded, only the ones we have exchanged keys with can
+        // decode it.
+        // This could be optimised so that we only send to the ones
+        // with keys, but the gain (in participant/network performance) is
+        // probably marginal
+        match sec_plugins.encode_message(
+          msg,
+          &self.domain_info.domain_participant_guid.prefix,
+          &remote_guidps_with_crypto,
+        ) {
+          Ok(msg) => msg,
+          Err(e) => {
+            error!("RTPS proxy: failed to encode RTPS message: {e}");
+            return;
+          }
+        }
+      } else {
+        msg
+      };
+
+      let buffer = msg.write_to_vec_with_ctx(Endianness::LittleEndian).unwrap();
 
       for (metatraffic_locator, usertraffic_locator) in self.remote_unicast_locators.values() {
-        let locator = match msg.target_locator_type {
+        let locator = match proxy_msg.target_locator_type {
           rtps_proxy::LocatorType::MetaTraffic => metatraffic_locator,
           rtps_proxy::LocatorType::UserTraffic => usertraffic_locator,
         };
