@@ -1,44 +1,47 @@
+//! OMG Common Data Representation (CDR) serialization with [Serde](https://serde.rs/)
+//!
+//! See [Wikipedia](https://en.wikipedia.org/wiki/Common_Data_Representation) or [specification in Section "9.3 CDR Transfer Syntax"](https://www.omg.org/spec/CORBA/3.4/Interoperability/PDF).
+//!
+//! [Full XTYPES specification](https://www.omg.org/spec/DDS-XTypes/1.2/PDF), which covers a lot more.
+//! This implemention is only for "plain" CDR.
+//!
+//!
+//! Note: In CDR encoding, alignment padding bytes are inserted *before* a
+//! multibyte primitive, but not after.
+//!
+//!  e.g. `struct Example {
+//!   a: u8,
+//!   b: i32,
+//!   c: u16,
+//! }`
+//!
+//! Would be serialized as
+//! `
+//! |aa|PP|PP|PP|
+//! |bb|bb|bb|bb|
+//! |cc|cc|
+//! `
+//! which is 10 bytes. `PP` means a byte of padding data.
+//!
+//! Tuple type  `(Example,Example)` would be serialized as
+//! `
+//! |aa|PP|PP|PP|
+//! |bb|bb|bb|bb|
+//! |cc|cc|aa|PP|
+//! |bb|bb|bb|bb|
+//! |cc|cc|
+//! `
+//! Note that this is only 18 bytes, not 20, and the layout of the second
+//! struct is different due to different padding.
+
 use std::{io, io::Write, marker::PhantomData};
 
 use serde::{ser, Serialize};
-use bytes::Bytes;
-use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
+use byteorder::{ByteOrder, WriteBytesExt};
+#[cfg(test)]
+use byteorder::{BigEndian, LittleEndian};
 
-use crate::{
-  dds::{
-    adapters::{no_key, with_key},
-    key::Keyed,
-  },
-  RepresentationIdentifier,
-};
-
-/// Note: In CDR encoding, alignment padding bytes are inserted *before* a
-/// multibyte primitive, but not after.
-///
-///  e.g. `struct Example {
-///   a: u8,
-///   b: i32,
-///   c: u16,
-/// }`
-///
-/// Would be serialized as
-/// `
-/// |aa|PP|PP|PP|
-/// |bb|bb|bb|bb|
-/// |cc|cc|
-/// `
-/// which is 10 bytes. `PP` means a byte of padding data.
-///
-/// Tuple type  `(Example,Example)` would be serialized as
-/// `
-/// |aa|PP|PP|PP|
-/// |bb|bb|bb|bb|
-/// |cc|cc|aa|PP|
-/// |bb|bb|bb|bb|
-/// |cc|cc|
-/// `
-/// Note that this is only 18 bytes, not 20, and the layout of the second
-/// struct is different due to different padding.
+pub use super::error::{Error, Result};
 
 // CountingWrite is a wrapper for a Write object. The wrapper keeps count of
 // bytes written. CDR needs to count bytes, because multibyte primitive types '
@@ -85,61 +88,14 @@ where
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
-/// This type adapts [`CdrSerializer`] (which implements
-/// [`serde::Serializer`]) to work as a [`no_key::SerializerAdapter`] and
-/// [`with_key::SerializerAdapter`].
-///
-/// [`CdrSerializer`] cannot directly implement the trait itself, because
-/// [`CdrSerializer`] has the type parameter BO open, and the adapter needs to
-/// be bi-endian.
-pub struct CDRSerializerAdapter<D, BO = LittleEndian>
-where
-  BO: ByteOrder,
-{
-  phantom: PhantomData<D>,
-  ghost: PhantomData<BO>,
-}
-
-impl<D, BO> no_key::SerializerAdapter<D> for CDRSerializerAdapter<D, BO>
-where
-  D: Serialize,
-  BO: ByteOrder,
-{
-  type Error = Error;
-
-  fn output_encoding() -> RepresentationIdentifier {
-    RepresentationIdentifier::CDR_LE
-  }
-
-  fn to_bytes(value: &D) -> Result<Bytes> {
-    let size_estimate = std::mem::size_of_val(value) * 2; // TODO: crude estimate
-    let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate);
-    to_writer::<D, BO, &mut Vec<u8>>(&mut buffer, value)?;
-    Ok(Bytes::from(buffer))
-  }
-}
-
-impl<D, BO> with_key::SerializerAdapter<D> for CDRSerializerAdapter<D, BO>
-where
-  D: Keyed + Serialize,
-  <D as Keyed>::K: Serialize,
-  BO: ByteOrder,
-{
-  fn key_to_bytes(value: &D::K) -> Result<Bytes> {
-    let size_estimate = std::mem::size_of_val(value) * 2; // TODO: crude estimate
-    let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate);
-    to_writer::<D::K, BO, &mut Vec<u8>>(&mut buffer, value)?;
-    Ok(Bytes::from(buffer))
-  }
-}
-
 // ---------------------------------------------------------------------------------
 // ---------------------------------------------------------------------------------
 
-/// a CDR deserializer implementation
+/// a CDR serializer implementation
 ///
-/// Parameter W is an [`io::Write`] that would receive the serialization
-/// Parameter BO is byte order: [`LittleEndian`] or
+/// Parameter W is an [`io::Write`] that would receive the serialization.
+///
+/// Parameter BO is byte order: [`LittleEndian`](byteorder::LittleEndian) or
 /// [`BigEndian`](byteorder::BigEndian)
 pub struct CdrSerializer<W, BO>
 where
@@ -173,6 +129,12 @@ where
   }
 } // impl
 
+/// General CDR serialization for type `T:Serialize`
+///
+/// Takes ownership of the `writer`, but that can be a reference.
+///
+/// You need to specifiy the byte order (endianness) to use. In CDR, endianess
+/// cannot be detected from serialized stream, but has to be agreed out-of-band.
 pub fn to_writer<T, BO, W>(writer: W, value: &T) -> Result<()>
 where
   T: Serialize,
@@ -182,73 +144,43 @@ where
   value.serialize(&mut CdrSerializer::<W, BO>::new(writer))
 }
 
-pub fn to_writer_endian<T, W>(
-  writer: W,
-  value: &T,
-  encoding: RepresentationIdentifier,
-) -> Result<()>
+/// Serialize to `Vec<u8>`
+/// Size hint indicates how many bytes to initially allocate for serialized
+/// data.
+pub fn to_vec_with_size_hint<T, BO>(value: &T, capacity_hint: usize) -> Result<Vec<u8>>
 where
   T: Serialize,
-  W: io::Write,
+  BO: ByteOrder,
 {
-  match encoding {
-    RepresentationIdentifier::CDR_LE => {
-      value.serialize(&mut CdrSerializer::<W, LittleEndian>::new(writer))
-    }
-    _ => value.serialize(&mut CdrSerializer::<W, BigEndian>::new(writer)),
-  }
+  let mut buffer: Vec<u8> = Vec::with_capacity(capacity_hint);
+  to_writer::<T, BO, &mut Vec<u8>>(&mut buffer, value)?;
+  Ok(buffer)
 }
 
-// Public interface should use to_writer() instead, as it is recommended by
-// serde documentation
+/// Serialize to `Vec<u8>`
+pub fn to_vec<T, BO>(value: &T) -> Result<Vec<u8>>
+where
+  T: Serialize,
+  BO: ByteOrder,
+{
+  to_vec_with_size_hint::<T, BO>(value, std::mem::size_of_val(value) * 2)
+}
+
+// just testing
 #[cfg(test)]
 pub(crate) fn to_little_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {
-  to_bytes::<T, LittleEndian>(value)
+  to_vec::<T, LittleEndian>(value)
 }
 
-// Public interface should use to_writer() instead, as it is recommended by
-// serde documentation
 #[cfg(test)]
 fn to_big_endian_binary<T>(value: &T) -> Result<Vec<u8>>
 where
   T: Serialize,
 {
-  to_bytes::<T, BigEndian>(value)
-}
-
-// Key needs this
-pub(crate) fn to_bytes<T, BO>(value: &T) -> Result<Vec<u8>>
-where
-  T: Serialize,
-  BO: ByteOrder,
-{
-  let mut buffer: Vec<u8> = Vec::with_capacity(std::mem::size_of_val(value) * 2);
-  to_writer::<T, BO, &mut Vec<u8>>(&mut buffer, value)?;
-  Ok(buffer)
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
-
-// cdr_serializer::Error
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-  #[error("CDR serialization requires sequence length to be specified at the start.")]
-  SequenceLengthUnknown,
-
-  #[error("Serde says:{0}")]
-  Serde(String),
-
-  #[error("std::io::Error {0}")]
-  Io(#[from] std::io::Error),
-}
-
-impl ser::Error for Error {
-  fn custom<T: std::fmt::Display>(msg: T) -> Self {
-    Self::Serde(msg.to_string())
-  }
+  to_vec::<T, BigEndian>(value)
 }
 
 // ----------------------------------------------------------

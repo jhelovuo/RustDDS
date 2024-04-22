@@ -802,7 +802,7 @@ mod tests {
       with_key::simpledatareader::ReaderCommand,
     },
     mio_source,
-    serialization::cdr_serializer::CDRSerializerAdapter,
+    serialization::CDRSerializerAdapter,
     structure::guid::*,
     test::{
       random_data::RandomData,

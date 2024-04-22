@@ -1454,7 +1454,7 @@ mod tests {
     },
     network::{constant::user_traffic_unicast_port, udp_sender::UDPSender},
     rtps::{submessage::*, Message},
-    serialization::cdr_serializer::CDRSerializerAdapter,
+    serialization::CDRSerializerAdapter,
     structure::{
       guid::{EntityId, GUID},
       locator::Locator,

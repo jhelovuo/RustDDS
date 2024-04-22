@@ -8,9 +8,10 @@ use log::error;
 use serde::{Deserialize, Serialize};
 pub use cdr_encoding_size::*;
 
-use crate::serialization::cdr_serializer::to_bytes;
-// use crate::serialization::{cdr_serializer::to_bytes, };
-use crate::serialization::pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializeError};
+use crate::serialization::{
+  cdr_serializer::to_vec,
+  pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializeError},
+};
 
 /// Data sample must implement [`Keyed`] to be used in a WITH_KEY topic.
 ///
@@ -152,7 +153,7 @@ pub trait Key:
       maximum-size of the serialized key.
     */
 
-    let mut cdr_bytes = to_bytes::<Self, BigEndian>(self).unwrap_or_else(|e| {
+    let mut cdr_bytes = to_vec::<Self, BigEndian>(self).unwrap_or_else(|e| {
       error!("Hashing key {:?} failed!", e);
       // This would cause a lot of hash collisions, but wht else we could do
       // if the key cannot be serialized? Are there any realistic conditions

@@ -14,7 +14,7 @@ use crate::{
 };
 #[cfg(test)]
 use crate::{
-  dds::adapters::no_key::*, serialization, serialization::cdr_serializer::to_bytes,
+  dds::adapters::no_key::*, serialization, serialization::cdr_serializer::to_vec,
   serialization::CDRDeserializerAdapter,
 };
 
@@ -174,7 +174,7 @@ impl StatusInfo {
   pub fn into_cdr_bytes<BO: ByteOrder>(
     self,
   ) -> Result<Vec<u8>, serialization::cdr_serializer::Error> {
-    to_bytes::<Self, BO>(&self)
+    to_vec::<Self, BO>(&self)
   }
 
   #[cfg(test)]

@@ -1,204 +1,28 @@
+//! OMG Common Data Representation (CDR) deserialization with Serde
+//!
+//! See [Wikipedia](https://en.wikipedia.org/wiki/Common_Data_Representation) or [specification](https://www.omg.org/spec/DDS-XTypes/1.2/PDF).
+//! This implemention is only for "plain" CDR.
+
 use std::marker::PhantomData;
 
 #[allow(unused_imports)]
 use log::{debug, error, info, trace, warn};
-use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
+use byteorder::{ByteOrder, ReadBytesExt};
 use serde::de::{
-  self, DeserializeOwned, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess,
-  VariantAccess, Visitor,
+  self, DeserializeSeed, EnumAccess, IntoDeserializer, MapAccess, SeqAccess, VariantAccess, Visitor,
 };
+#[cfg(test)]
+use serde::de::DeserializeOwned;
+#[cfg(test)]
+use byteorder::{BigEndian, LittleEndian};
 use paste::paste;
 
-use crate::{
-  dds::adapters::{no_key, with_key},
-  Keyed, RepresentationIdentifier,
-};
+pub use super::error::{Error, Result};
 
-/// This type adapts CdrDeserializer (which implements serde::Deserializer) to
-/// work as a [`with_key::DeserializerAdapter`] and
-/// [`no_key::DeserializerAdapter`].
+/// Deserializer type for converting CDR data stream to Rust objects.
 ///
-/// CdrDeserializer cannot directly implement
-/// the trait itself, because CdrDeserializer has the type parameter BO open,
-/// and the adapter needs to be bi-endian.
-pub struct CDRDeserializerAdapter<D> {
-  phantom: PhantomData<D>,
-}
-
-const REPR_IDS: [RepresentationIdentifier; 3] = [
-  RepresentationIdentifier::CDR_BE,
-  RepresentationIdentifier::CDR_LE,
-  RepresentationIdentifier::PL_CDR_LE,
-];
-
-impl<D> no_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D> {
-  type Error = Error;
-  type Decoded = D;
-
-  fn supported_encodings() -> &'static [RepresentationIdentifier] {
-    &REPR_IDS
-  }
-
-  // no transform, just the identity function
-  fn transform_decoded(decoded: Self::Decoded) -> D {
-    decoded
-  }
-}
-
-impl<D> with_key::DeserializerAdapter<D> for CDRDeserializerAdapter<D>
-where
-  D: Keyed + DeserializeOwned,
-  <D as Keyed>::K: DeserializeOwned, // Key should do this already?
-{
-  type DecodedKey = D::K;
-
-  fn transform_decoded_key(decoded_key: Self::DecodedKey) -> D::K {
-    decoded_key
-  }
-}
-
-/// A default decoder is available for all types that implement
-/// `serde::Deserialize`.
-impl<'de, D> no_key::DefaultDecoder<D> for CDRDeserializerAdapter<D>
-where
-  D: serde::Deserialize<'de>,
-{
-  type Decoder = CdrDeserializeDecoder<D>;
-  const DECODER: Self::Decoder = CdrDeserializeDecoder(PhantomData);
-}
-
-impl<D> with_key::DefaultDecoder<D> for CDRDeserializerAdapter<D>
-where
-  D: Keyed + DeserializeOwned,
-  D::K: DeserializeOwned,
-{
-  type Decoder = CdrDeserializeDecoder<D>;
-  const DECODER: Self::Decoder = CdrDeserializeDecoder(PhantomData);
-}
-
-/// Decode type based on a `serde::Deserialize` implementation.
-pub struct CdrDeserializeDecoder<D>(PhantomData<D>);
-
-impl<'de, D> no_key::Decode<D> for CdrDeserializeDecoder<D>
-where
-  D: serde::Deserialize<'de>,
-{
-  type Error = Error;
-
-  fn decode_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
-    deserialize_from_cdr(input_bytes, encoding).map(|(d, _size)| d)
-  }
-}
-
-impl<Dec, DecKey> with_key::Decode<Dec, DecKey> for CdrDeserializeDecoder<Dec>
-where
-  Dec: DeserializeOwned,
-  DecKey: DeserializeOwned,
-{
-  fn decode_key_bytes(
-    self,
-    input_key_bytes: &[u8],
-    encoding: RepresentationIdentifier,
-  ) -> Result<DecKey> {
-    deserialize_from_cdr(input_key_bytes, encoding).map(|(d, _size)| d)
-  }
-}
-
-impl<D> Clone for CdrDeserializeDecoder<D> {
-  fn clone(&self) -> Self {
-    Self(self.0)
-  }
-}
-
-/// Decode type based on a `serde::de::DeserializeSeed` implementation.
-#[derive(Clone)]
-pub struct CdrDeserializeSeedDecoder<S, SK> {
-  value_seed: S,
-  key_seed: SK,
-}
-
-impl<'de, S, SK> CdrDeserializeSeedDecoder<S, SK>
-where
-  S: serde::de::DeserializeSeed<'de>,
-  SK: serde::de::DeserializeSeed<'de>,
-{
-  pub fn new(value_seed: S, key_seed: SK) -> Self {
-    Self {
-      value_seed,
-      key_seed,
-    }
-  }
-}
-
-/// Decode type based on a [`serde::de::DeserializeSeed`]-based decoder.
-impl<'de, D, S, SK> no_key::Decode<D> for CdrDeserializeSeedDecoder<S, SK>
-where
-  S: serde::de::DeserializeSeed<'de, Value = D>,
-{
-  type Error = Error;
-
-  fn decode_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
-    deserialize_from_cdr_with(input_bytes, encoding, self.value_seed).map(|(d, _size)| d)
-  }
-}
-
-impl<'de, Dec, DecKey, S, SK> with_key::Decode<Dec, DecKey> for CdrDeserializeSeedDecoder<S, SK>
-where
-  S: serde::de::DeserializeSeed<'de, Value = Dec>,
-  SK: serde::de::DeserializeSeed<'de, Value = DecKey>,
-{
-  fn decode_key_bytes(
-    self,
-    input_key_bytes: &[u8],
-    encoding: RepresentationIdentifier,
-  ) -> Result<DecKey> {
-    deserialize_from_cdr_with(input_key_bytes, encoding, self.key_seed).map(|(d, _size)| d)
-  }
-}
-
-// Error handling
-
-pub type Result<T> = std::result::Result<T, Error>;
-
-// cdr_deserializer::Error
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-  #[error("Deserializer does not support this operation: {0}")]
-  NotSupported(String),
-
-  #[error("unexpected end of input")]
-  Eof,
-
-  #[error("Expected 0 or 1 as Boolean, got: {0}")]
-  BadBoolean(u8),
-
-  // was not valid UTF-8
-  #[error("UTF-8 error: {0}")]
-  BadUTF8(std::str::Utf8Error),
-
-  #[error("Bad Unicode character code: {0}")]
-  BadChar(u32), // invalid Unicode codepoint
-
-  #[error("Option value must have discriminant 0 or 1, read: {0}")]
-  BadOption(u32), // Option variant tag (discriminant) is not 0 or 1
-
-  #[error("Trailing garbage, {:?} bytes", .0.len())]
-  TrailingCharacters(Vec<u8>),
-
-  #[error("Serde says: {0}")]
-  Serde(String),
-}
-
-impl de::Error for Error {
-  fn custom<T: std::fmt::Display>(msg: T) -> Self {
-    Self::Serde(msg.to_string())
-  }
-}
-
-/// a CDR deserializer implementation.
-///
-/// Input is from &[u8], since we expect to have the data in contiguous memory
-/// buffers.
+/// `CdrDeserializer` is about three machine words of data, so fairly cheap to
+/// create.
 pub struct CdrDeserializer<'i, BO> {
   phantom: PhantomData<BO>, // This field exists only to provide use for BO. See PhantomData docs.
   input: &'i [u8],          /* We borrow the input data, therefore we carry lifetime 'i all
@@ -210,14 +34,6 @@ impl<'de, BO> CdrDeserializer<'de, BO>
 where
   BO: ByteOrder,
 {
-  pub fn new_little_endian(input: &[u8]) -> CdrDeserializer<LittleEndian> {
-    CdrDeserializer::<LittleEndian>::new(input)
-  }
-
-  pub fn new_big_endian(input: &[u8]) -> CdrDeserializer<BigEndian> {
-    CdrDeserializer::<BigEndian>::new(input)
-  }
-
   pub fn new(input: &'de [u8]) -> CdrDeserializer<'de, BO> {
     CdrDeserializer::<BO> {
       phantom: PhantomData,
@@ -258,48 +74,29 @@ where
   }
 }
 
-/// Decode type based on a [`serde::Deserialize`] implementation.
+/// Deserialize an object from `&[u8]` based on a [`serde::Deserialize`]
+/// implementation.
 ///
 /// return deserialized object + count of bytes consumed
-pub fn deserialize_from_cdr<'de, T>(
-  input_bytes: &[u8],
-  encoding: RepresentationIdentifier,
-) -> Result<(T, usize)>
+pub fn from_bytes<'de, T, BO>(input_bytes: &[u8]) -> Result<(T, usize)>
 where
   T: serde::Deserialize<'de>,
+  BO: ByteOrder,
 {
-  deserialize_from_cdr_with(input_bytes, encoding, PhantomData)
+  from_bytes_with::<PhantomData<T>, BO>(input_bytes, PhantomData)
 }
 
-/// Decode type using the given [`DeserializeSeed`]-based decoder.
+/// Deserialize type based on a [`serde::Deserialize`] implementation.
 ///
 /// return deserialized object + count of bytes consumed
-pub fn deserialize_from_cdr_with<'de, S>(
-  input_bytes: &[u8],
-  encoding: RepresentationIdentifier,
-  decoder: S,
-) -> Result<(S::Value, usize)>
+pub fn from_bytes_with<'de, S, BO>(input_bytes: &[u8], decoder: S) -> Result<(S::Value, usize)>
 where
   S: DeserializeSeed<'de>,
+  BO: ByteOrder,
 {
-  match encoding {
-    RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
-      let mut deserializer = CdrDeserializer::<LittleEndian>::new(input_bytes);
-      let t = decoder.deserialize(&mut deserializer)?;
-      Ok((t, deserializer.serialized_data_count))
-    }
-
-    RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => {
-      let mut deserializer = CdrDeserializer::<BigEndian>::new(input_bytes);
-      let t = decoder.deserialize(&mut deserializer)?;
-      Ok((t, deserializer.serialized_data_count))
-    }
-
-    repr_id => Err(Error::NotSupported(format!(
-      "Unknown serialization format. requested={:?}.",
-      repr_id
-    ))),
-  }
+  let mut deserializer = CdrDeserializer::<BO>::new(input_bytes);
+  let t = decoder.deserialize(&mut deserializer)?;
+  Ok((t, deserializer.serialized_data_count))
 }
 
 #[cfg(test)]
@@ -352,7 +149,7 @@ where
   where
     V: Visitor<'de>,
   {
-    Err(Error::NotSupported(
+    Err(Error::NotSelfDescribingFormat(
       "CDR cannot deserialize \"any\" type. ".to_string(),
     ))
   }
@@ -404,9 +201,7 @@ where
   {
     self.calculate_padding_count_from_written_bytes_and_remove(4)?;
     let codepoint = self.next_bytes(4)?.read_u32::<BO>().unwrap();
-    // TODO: Temporary workaround until std::char::from_u32() makes it into stable
-    // matched value should be char::from_u32( codepoint )
-    match Some(codepoint as u8 as char) {
+    match char::from_u32(codepoint) {
       Some(c) => visitor.visit_char(c),
       None => Err(Error::BadChar(codepoint)),
     }
@@ -748,13 +543,10 @@ mod tests {
   use test_case::test_case;
   use serde_repr::{Deserialize_repr, Serialize_repr};
 
-  use crate::{
-    serialization::{
-      cdr_deserializer::{deserialize_from_big_endian, deserialize_from_little_endian},
-      cdr_serializer::to_bytes,
-      deserialize_from_cdr,
-    },
-    RepresentationIdentifier,
+  use crate::serialization::{
+    cdr_deserializer::{deserialize_from_big_endian, deserialize_from_little_endian},
+    cdr_serializer::to_vec,
+    from_bytes,
   };
 
   #[test]
@@ -838,7 +630,7 @@ mod tests {
       0x00, 0x04, 0x00, 0x00, 0x00, 0x61, 0x62, 0x63, 0x00,
     ];
 
-    let serialized = to_bytes::<MyType, LittleEndian>(&micky_mouse).unwrap();
+    let serialized = to_vec::<MyType, LittleEndian>(&micky_mouse).unwrap();
 
     for x in 0..expected_serialized_result.len() {
       if expected_serialized_result[x] != serialized[x] {
@@ -878,7 +670,7 @@ mod tests {
       0x00, 0x64, 0x00, 0x00, 0x00, 0x18, 0x00, 0x00, 0x00,
     ];
 
-    let serialized = to_bytes::<ShapeType, LittleEndian>(&message).unwrap();
+    let serialized = to_vec::<ShapeType, LittleEndian>(&message).unwrap();
     assert_eq!(serialized, expected_serialized_result);
     let deserialized_message: ShapeType = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(deserialized_message, message);
@@ -934,8 +726,8 @@ mod tests {
 
     let deserialized_le: Example = deserialize_from_little_endian(&serialized_le).unwrap();
     let deserialized_be: Example = deserialize_from_big_endian(&serialized_be).unwrap();
-    let serialized_o_le = to_bytes::<Example, LittleEndian>(&o).unwrap();
-    let serialized_o_be = to_bytes::<Example, BigEndian>(&o).unwrap();
+    let serialized_o_le = to_vec::<Example, LittleEndian>(&o).unwrap();
+    let serialized_o_be = to_vec::<Example, BigEndian>(&o).unwrap();
 
     assert_eq!(
       serialized_o_le,
@@ -981,7 +773,7 @@ mod tests {
       deserialize_from_little_endian(&received_message).unwrap();
     info!("{:?}", deserialized_message);
 
-    let serialized_message = to_bytes::<ShapeType, LittleEndian>(&deserialized_message).unwrap();
+    let serialized_message = to_vec::<ShapeType, LittleEndian>(&deserialized_message).unwrap();
 
     assert_eq!(serialized_message, received_message2);
     // assert_eq!(deserialized_message,received_message)
@@ -1103,7 +895,7 @@ mod tests {
       0x00, 0x01, 0x00, 0x01, 0x00, 0x03, 0x00, 0x00, 0x00, 0x17, 0x00, 0x02,
     ];
 
-    let serialization_result_le = to_bytes::<InterestingMessage, LittleEndian>(&value).unwrap();
+    let serialization_result_le = to_vec::<InterestingMessage, LittleEndian>(&value).unwrap();
 
     assert_eq!(serialization_result_le, DATA);
     info!("serialization success!");
@@ -1198,10 +990,10 @@ mod tests {
   where
     T: PartialEq + std::fmt::Debug + Serialize + for<'a> Deserialize<'a>,
   {
-    let serialized = to_bytes::<_, LittleEndian>(&input).unwrap();
+    let serialized = to_vec::<_, LittleEndian>(&input).unwrap();
     println!("Serialized data: {:x?}", &serialized);
     let (deserialized, bytes_consumed): (T, usize) =
-      deserialize_from_cdr(&serialized, RepresentationIdentifier::CDR_LE).unwrap();
+      from_bytes::<T, LittleEndian>(&serialized).unwrap();
     // let deserialized = deserialize_from_little_endian(&serialized).unwrap();
     assert_eq!(input, deserialized);
     assert_eq!(serialized.len(), bytes_consumed);

@@ -1709,7 +1709,7 @@ mod tests {
       participant::DomainParticipant, qos::QosPolicies, topic::TopicKind,
       with_key::datawriter::DataWriter,
     },
-    serialization::cdr_serializer::CDRSerializerAdapter,
+    serialization::CDRSerializerAdapter,
     test::random_data::*,
   };
 

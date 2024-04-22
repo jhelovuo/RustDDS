@@ -634,13 +634,11 @@ mod tests {
 
   #[test]
   fn serde_test() {
-    use crate::serialization::{
-      cdr_deserializer::deserialize_from_big_endian, cdr_serializer::to_bytes,
-    };
+    use crate::serialization::{cdr_deserializer::deserialize_from_big_endian, to_vec};
 
     let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     let test_guid = GUID::from_bytes(test_bytes);
-    let ser = to_bytes::<GUID, BigEndian>(&test_guid).unwrap();
+    let ser = to_vec::<GUID, BigEndian>(&test_guid).unwrap();
     assert_eq!(test_bytes.to_vec(), ser);
 
     let and_back = deserialize_from_big_endian::<GUID>(&ser).unwrap();
@@ -651,11 +649,11 @@ mod tests {
   // fn serde_pl_cdr_test() {
   //   use crate::{
   //     serialization::{pl_cdr_deserializer::PlCdrDeserializer,
-  // cdr_serializer::to_bytes},   };
+  // cdr_serializer::to_vec},   };
 
   //   let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
   //   let test_guid = GUID::from_bytes(test_bytes);
-  //   let ser = to_bytes::<GUID, BigEndian>(&test_guid).unwrap();
+  //   let ser = to_vec::<GUID, BigEndian>(&test_guid).unwrap();
   //   assert_eq!(test_bytes.to_vec(), ser);
 
   //   let and_back =

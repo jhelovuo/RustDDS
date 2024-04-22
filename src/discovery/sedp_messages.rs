@@ -33,8 +33,8 @@ use crate::{
     pl_cdr_adapters::{
       PlCdrDeserialize, PlCdrDeserializeError, PlCdrSerialize, PlCdrSerializeError,
     },
-    representation_identifier::RepresentationIdentifier,
     speedy_pl_cdr_helpers::*,
+    RepresentationIdentifier,
   },
   structure::{
     entity::RTPSEntity,

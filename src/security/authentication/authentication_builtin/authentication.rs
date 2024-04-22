@@ -27,7 +27,7 @@ use crate::{
     config::*,
     *,
   },
-  serialization::{cdr_serializer::to_bytes, pl_cdr_adapters::PlCdrDeserialize},
+  serialization::{cdr_serializer::to_vec, pl_cdr_adapters::PlCdrDeserialize},
   structure::guid::GuidPrefix,
   QosPolicies, RepresentationIdentifier, GUID,
 };
@@ -449,7 +449,7 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
     let hash_c1 = Sha256::hash(
-      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c_properties).map_err(|e| SecurityError {
+      &to_vec::<Vec<BinaryProperty>, BigEndian>(&c_properties).map_err(|e| SecurityError {
         msg: format!("Error serializing C1: {}", e),
       })?,
     );
@@ -578,7 +578,7 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.kagree_algo", request.c_kagree_algo.clone()),
     ];
     let computed_c1_hash = Sha256::hash(
-      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c_properties).map_err(|e| SecurityError {
+      &to_vec::<Vec<BinaryProperty>, BigEndian>(&c_properties).map_err(|e| SecurityError {
         msg: format!("Error serializing C1: {}", e),
       })?,
     );
@@ -618,7 +618,7 @@ impl Authentication for AuthenticationBuiltin {
       BinaryProperty::with_propagate("c.kagree_algo", kagree_algo.clone()),
     ];
     let c2_hash = Sha256::hash(
-      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c2_properties).map_err(|e| SecurityError {
+      &to_vec::<Vec<BinaryProperty>, BigEndian>(&c2_properties).map_err(|e| SecurityError {
         msg: format!("Error serializing C2: {}", e),
       })?,
     );
@@ -638,7 +638,7 @@ impl Authentication for AuthenticationBuiltin {
     ];
 
     let contents_signature = local_info.id_cert_private_key.sign(
-      &to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc2_properties).map_err(|e| SecurityError {
+      &to_vec::<Vec<BinaryProperty>, BigEndian>(&cc2_properties).map_err(|e| SecurityError {
         msg: format!("Error serializing CC2: {}", e),
       })?,
     )?;
@@ -776,10 +776,8 @@ impl Authentication for AuthenticationBuiltin {
           BinaryProperty::with_propagate("c.kagree_algo", reply.c_kagree_algo.clone()),
         ];
         let c2_hash_recomputed = Sha256::hash(
-          &to_bytes::<Vec<BinaryProperty>, BigEndian>(&c2_properties).map_err(|e| {
-            SecurityError {
-              msg: format!("Error serializing C2: {}", e),
-            }
+          &to_vec::<Vec<BinaryProperty>, BigEndian>(&c2_properties).map_err(|e| SecurityError {
+            msg: format!("Error serializing C2: {}", e),
           })?,
         );
 
@@ -824,10 +822,8 @@ impl Authentication for AuthenticationBuiltin {
 
         // Verify "C2" contents against reply.signature and 2's public key
         cert2.verify_signed_data_with_algorithm(
-          to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc2_properties).map_err(|e| {
-            SecurityError {
-              msg: format!("Error serializing CC2: {}", e),
-            }
+          to_vec::<Vec<BinaryProperty>, BigEndian>(&cc2_properties).map_err(|e| SecurityError {
+            msg: format!("Error serializing CC2: {}", e),
           })?,
           reply.signature,
           c2_signature_algorithm,
@@ -867,7 +863,7 @@ impl Authentication for AuthenticationBuiltin {
         ];
 
         let final_contents_signature = local_info.id_cert_private_key.sign(
-          &to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc_final_properties).map_err(|e| {
+          &to_vec::<Vec<BinaryProperty>, BigEndian>(&cc_final_properties).map_err(|e| {
             SecurityError {
               msg: format!("Error serializing CC_final: {}", e),
             }
@@ -1001,7 +997,7 @@ impl Authentication for AuthenticationBuiltin {
 
         remote_id_certificate
           .verify_signed_data_with_algorithm(
-            to_bytes::<Vec<BinaryProperty>, BigEndian>(&cc_final_properties).map_err(|e| {
+            to_vec::<Vec<BinaryProperty>, BigEndian>(&cc_final_properties).map_err(|e| {
               SecurityError {
                 msg: format!("Error serializing CC_final: {}", e),
               }

@@ -10,7 +10,7 @@ use crate::{
     crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
   security::{cryptographic::EndpointCryptoHandle, BinaryProperty, DataHolder, SecurityError},
-  serialization::cdr_serializer::to_bytes,
+  serialization::cdr_serializer::to_vec,
   CdrDeserializer,
 };
 use super::{
@@ -367,11 +367,7 @@ impl TryFrom<&[u8]> for BuiltinCryptoFooter {
   type Error = SecurityError;
   fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
     // Deserialize the data
-    BuiltinCryptoFooter::deserialize(&mut CdrDeserializer::<
-      BigEndian, /* TODO: What's the point of this constructor if we need to specify the byte
-                  * order anyway */
-    >::new_big_endian(data))
-    .map_err(
+    BuiltinCryptoFooter::deserialize(&mut CdrDeserializer::<BigEndian>::new(data)).map_err(
       // Map deserialization error to SecurityError
       |e| Self::Error {
         msg: format!("Error deserializing BuiltinCryptoFooter: {}", e),
@@ -389,7 +385,7 @@ impl TryFrom<BuiltinCryptoFooter> for Vec<u8> {
   type Error = SecurityError;
   fn try_from(value: BuiltinCryptoFooter) -> Result<Self, Self::Error> {
     // Serialize
-    to_bytes::<BuiltinCryptoFooter, BigEndian>(&value).map_err(|e| Self::Error {
+    to_vec::<BuiltinCryptoFooter, BigEndian>(&value).map_err(|e| Self::Error {
       msg: format!("Error serializing BuiltinCryptoFooter: {}", e),
     })
   }

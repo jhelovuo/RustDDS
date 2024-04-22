@@ -37,7 +37,7 @@ use crate::{
     reader::ReaderIngredients,
     writer::{WriterCommand, WriterIngredients},
   },
-  serialization::{cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter},
+  serialization::{CDRDeserializerAdapter, CDRSerializerAdapter},
   structure::{
     entity::RTPSEntity,
     guid::{EntityId, EntityKind, GUID},

@@ -1041,7 +1041,7 @@ mod tests {
       message_receiver::*,
       reader::{Reader, ReaderIngredients},
     },
-    serialization::cdr_serializer::to_bytes,
+    serialization::cdr_serializer::to_vec,
     structure::{
       guid::{EntityId, EntityKind, GuidPrefix},
       sequence_number::SequenceNumber,
@@ -1154,7 +1154,7 @@ mod tests {
         SerializedPayload {
           representation_identifier: RepresentationIdentifier::CDR_LE,
           representation_options: [0, 0],
-          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data).unwrap()),
+          value: Bytes::from(to_vec::<RandomData, LittleEndian>(&test_data).unwrap()),
         }
         .into(),
       ),
@@ -1169,7 +1169,7 @@ mod tests {
         SerializedPayload {
           representation_identifier: RepresentationIdentifier::CDR_LE,
           representation_options: [0, 0],
-          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&test_data2).unwrap()),
+          value: Bytes::from(to_vec::<RandomData, LittleEndian>(&test_data2).unwrap()),
         }
         .into(),
       ),
@@ -1335,7 +1335,7 @@ mod tests {
         SerializedPayload {
           representation_identifier: RepresentationIdentifier::CDR_LE,
           representation_options: [0, 0],
-          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key1).unwrap()),
+          value: Bytes::from(to_vec::<RandomData, LittleEndian>(&data_key1).unwrap()),
         }
         .into(),
       ),
@@ -1349,7 +1349,7 @@ mod tests {
         SerializedPayload {
           representation_identifier: RepresentationIdentifier::CDR_LE,
           representation_options: [0, 0],
-          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
+          value: Bytes::from(to_vec::<RandomData, LittleEndian>(&data_key2_1).unwrap()),
         }
         .into(),
       ),
@@ -1363,7 +1363,7 @@ mod tests {
         SerializedPayload {
           representation_identifier: RepresentationIdentifier::CDR_LE,
           representation_options: [0, 0],
-          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
+          value: Bytes::from(to_vec::<RandomData, LittleEndian>(&data_key2_2).unwrap()),
         }
         .into(),
       ),
@@ -1377,7 +1377,7 @@ mod tests {
         SerializedPayload {
           representation_identifier: RepresentationIdentifier::CDR_LE,
           representation_options: [0, 0],
-          value: Bytes::from(to_bytes::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
+          value: Bytes::from(to_vec::<RandomData, LittleEndian>(&data_key2_3).unwrap()),
         }
         .into(),
       ),

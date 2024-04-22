@@ -472,7 +472,7 @@ mod tests {
   use super::*;
   use crate::{
     dds::{participant::DomainParticipant, topic::TopicKind},
-    serialization::cdr_serializer::*,
+    serialization::*,
     test::random_data::*,
   };
 

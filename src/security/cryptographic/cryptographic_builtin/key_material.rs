@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
   create_security_error_and_log,
   security::{SecurityError, SecurityResult},
-  serialization::cdr_serializer::to_bytes,
+  serialization::cdr_serializer::to_vec,
   CdrDeserializer,
 };
 use super::{
@@ -31,10 +31,9 @@ impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC {
   type Error = SecurityError;
   fn try_from(value: Bytes) -> Result<Self, Self::Error> {
     // Deserialize CDR-formatted key material
-    Serializable_KeyMaterial_AES_GCM_GMAC::deserialize(&mut CdrDeserializer::<
-      BigEndian, /* TODO: What's the point of this constructor if we need to specify the byte
-                  * order anyway */
-    >::new_big_endian(value.as_ref()))
+    Serializable_KeyMaterial_AES_GCM_GMAC::deserialize(&mut CdrDeserializer::<BigEndian>::new(
+      value.as_ref(),
+    ))
     .map_err(
       // Map deserialization error to SecurityError
       |e| Self::Error {
@@ -50,7 +49,7 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC> for Bytes {
     // Convert the key material to the serializable structure
     let serializable_key_material = Serializable_KeyMaterial_AES_GCM_GMAC::from(key_material);
     // Serialize
-    to_bytes::<Serializable_KeyMaterial_AES_GCM_GMAC, BigEndian>(&serializable_key_material)
+    to_vec::<Serializable_KeyMaterial_AES_GCM_GMAC, BigEndian>(&serializable_key_material)
       .map(Bytes::from)
       .map_err(|e| Self::Error {
         msg: format!("Error serializing KeyMaterial_AES_GCM_GMAC: {}", e),
@@ -175,19 +174,15 @@ impl TryFrom<Bytes> for KeyMaterial_AES_GCM_GMAC_seq {
   type Error = SecurityError;
   fn try_from(value: Bytes) -> Result<Self, Self::Error> {
     // Deserialize CDR-formatted key material
-    let serializable_key_materials =
-      Vec::<Serializable_KeyMaterial_AES_GCM_GMAC>::deserialize(&mut CdrDeserializer::<
-        BigEndian, /* TODO: What's the point of this constructor if we need to specify the byte
-                    * order anyway */
-      >::new_big_endian(
-        value.as_ref()
-      ))
-      .map_err(
-        // Map deserialization error to SecurityError
-        |e| Self::Error {
-          msg: format!("Error deserializing Vec<KeyMaterial_AES_GCM_GMAC>: {}", e),
-        },
-      )?;
+    let serializable_key_materials = Vec::<Serializable_KeyMaterial_AES_GCM_GMAC>::deserialize(
+      &mut CdrDeserializer::<BigEndian>::new(value.as_ref()),
+    )
+    .map_err(
+      // Map deserialization error to SecurityError
+      |e| Self::Error {
+        msg: format!("Error deserializing Vec<KeyMaterial_AES_GCM_GMAC>: {}", e),
+      },
+    )?;
 
     serializable_key_materials
       // Map transformation_kind to builtin for each keymat
@@ -212,7 +207,7 @@ impl TryFrom<KeyMaterial_AES_GCM_GMAC_seq> for Bytes {
       .collect();
 
     // Serialize
-    to_bytes::<Vec<Serializable_KeyMaterial_AES_GCM_GMAC>, BigEndian>(&serializable_key_materials)
+    to_vec::<Vec<Serializable_KeyMaterial_AES_GCM_GMAC>, BigEndian>(&serializable_key_materials)
       .map(Bytes::from)
       .map_err(|e| Self::Error {
         msg: format!("Error serializing KeyMaterial_AES_GCM_GMAC_seq: {}", e),

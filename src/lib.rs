@@ -216,7 +216,7 @@ pub use dds::{
 };
 /// Needed to specify serialized data representation in case it is other than
 /// CDR.
-pub use serialization::representation_identifier::RepresentationIdentifier;
+pub use serialization::RepresentationIdentifier;
 #[doc(inline)]
 pub use serialization::{
   CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializer, CdrSerializer,

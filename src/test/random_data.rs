@@ -3,7 +3,7 @@ use std::hash::Hash;
 use serde::{Deserialize, Serialize};
 
 #[allow(unused_imports)] // since this is testing code only
-use crate::{serialization::cdr_serializer::to_bytes, Key, Keyed};
+use crate::{serialization::to_vec, Key, Keyed};
 
 #[derive(Debug, PartialOrd, PartialEq, Eq, Ord, Clone, Hash)]
 pub struct RandomKey {

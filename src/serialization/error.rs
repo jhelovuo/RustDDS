@@ -15,38 +15,41 @@ pub enum Error {
   // Mutex<T> might return an error because the mutex is poisoned, or the
   // Deserialize impl for a struct may return an error because a required
   // field is missing.
+  /// Wrapper for error string
   #[error("{0}")]
   Message(String),
 
+  /// Wrapper for `std::io::Error`
   #[error("io::Error: {0}")]
   Io(#[from] std::io::Error),
 
+  /// CDR is not self-describing format, cannot deserialize \'Any\' type
+  #[error("CDR is not self-describing format, cannot deserialize \'Any\' type: {0}")]
+  NotSelfDescribingFormat(String),
+
+  /// Serialization must know sequence length before serialization.
   #[error("CDR serialization requires sequence length to be specified at the start.")]
   SequenceLengthUnknown,
 
-  // Zero or more variants that can be created directly by the Serializer and
-  // Deserializer without going through `ser::Error` and `de::Error`.
+  /// Unexpected end of input
   #[error("unexpected end of input")]
   Eof,
 
+  /// Bad encoding of Boolean value
   #[error("Expected 0 or 1 as Boolean, got: {0}")]
   BadBoolean(u8),
 
-  // was not valid UTF-8
-  #[error("UTF-8 error: {0}")]
-  BadString(std::str::Utf8Error),
-
+  /// Bad Unicode codepoint
   #[error("Bad Unicode character code: {0}")]
   BadChar(u32), // invalid Unicode codepoint
 
+  /// Bad discriminant (variant tag) in `Option`
   #[error("Option value must have discriminant 0 or 1, read: {0}")]
   BadOption(u32), // Option variant tag (discriminant) is not 0 or 1
 
-  #[error("Trailing garbage, {:?} bytes", .0.len())]
-  TrailingCharacters(Vec<u8>),
-
-  #[error("speedy::Error: {0}")]
-  Speedy(#[from] speedy::Error),
+  // String was not valid UTF-8
+  #[error("UTF-8 error: {0}")]
+  BadUTF8(std::str::Utf8Error),
 }
 
 impl ser::Error for Error {

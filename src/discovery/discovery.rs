@@ -33,10 +33,7 @@ use crate::{
   },
   polling::new_simple_timer,
   rtps::constant::*,
-  serialization::{
-    cdr_deserializer::CDRDeserializerAdapter, cdr_serializer::CDRSerializerAdapter,
-    pl_cdr_adapters::*,
-  },
+  serialization::{pl_cdr_adapters::*, CDRDeserializerAdapter, CDRSerializerAdapter},
   structure::{
     duration::Duration,
     entity::RTPSEntity,
