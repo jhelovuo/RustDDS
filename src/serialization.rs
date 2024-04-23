@@ -1,16 +1,12 @@
-pub(crate) mod speedy_pl_cdr_helpers;
-
-pub(crate) mod cdr_deserializer;
-pub(crate) mod cdr_serializer;
-mod error;
-mod representation_identifier;
-
 pub(crate) mod cdr_adapters;
 pub(crate) mod pl_cdr_adapters;
+pub(crate) mod speedy_pl_cdr_helpers;
 
-// public exports
-pub use cdr_serializer::{to_vec, to_vec_with_size_hint, to_writer, CdrSerializer};
-pub use cdr_deserializer::{from_bytes, CdrDeserializer};
+mod representation_identifier;
+
+// Most of the CDR encoding/decoding comes from this external crate
+pub use cdr_encoding::{
+  from_bytes, to_vec, to_writer, CdrDeserializer, CdrSerializer, Error, Result,
+};
 pub use cdr_adapters::{CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializeSeedDecoder};
-pub use error::{Error, Result};
 pub use representation_identifier::RepresentationIdentifier;

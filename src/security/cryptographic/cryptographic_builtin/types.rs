@@ -5,12 +5,11 @@ use speedy::Readable;
 use crate::{
   create_security_error_and_log,
   messages::submessages::elements::{
-    //crypto_content::CryptoContent,
     crypto_footer::CryptoFooter,
     crypto_header::{CryptoHeader, PluginCryptoHeaderExtra},
   },
   security::{cryptographic::EndpointCryptoHandle, BinaryProperty, DataHolder, SecurityError},
-  serialization::cdr_serializer::to_vec,
+  serialization::to_vec,
   CdrDeserializer,
 };
 use super::{

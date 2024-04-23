@@ -634,14 +634,14 @@ mod tests {
 
   #[test]
   fn serde_test() {
-    use crate::serialization::{cdr_deserializer::deserialize_from_big_endian, to_vec};
+    use crate::serialization::{from_bytes, to_vec};
 
     let test_bytes = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
     let test_guid = GUID::from_bytes(test_bytes);
     let ser = to_vec::<GUID, BigEndian>(&test_guid).unwrap();
     assert_eq!(test_bytes.to_vec(), ser);
 
-    let and_back = deserialize_from_big_endian::<GUID>(&ser).unwrap();
+    let (and_back, _byte_count) = from_bytes::<GUID, BigEndian>(&ser).unwrap();
     assert_eq!(test_guid, and_back);
   }
 

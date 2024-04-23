@@ -1041,7 +1041,7 @@ mod tests {
       message_receiver::*,
       reader::{Reader, ReaderIngredients},
     },
-    serialization::cdr_serializer::to_vec,
+    serialization::to_vec,
     structure::{
       guid::{EntityId, EntityKind, GuidPrefix},
       sequence_number::SequenceNumber,

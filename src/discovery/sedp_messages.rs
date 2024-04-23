@@ -1278,11 +1278,8 @@ mod tests {
   use log::info;
   use test_log::test; // to capture logging macros run by test cases
 
-  use crate::dds::adapters::no_key::SerializerAdapter;
-  use super::*;
-  // use crate::serialization::cdr_serializer::to_little_endian_binary;
   use crate::{
-    dds::adapters::no_key::DeserializerAdapter,
+    dds::adapters::no_key::{DeserializerAdapter, SerializerAdapter},
     rtps::Message,
     serialization::pl_cdr_adapters::*,
     test::test_data::{
@@ -1290,6 +1287,7 @@ mod tests {
       subscription_builtin_topic_data, topic_data, writer_proxy_data,
     },
   };
+  use super::*;
 
   /* do not test separate ser/deser of components, as these are never seen on wire individually
     #[test]

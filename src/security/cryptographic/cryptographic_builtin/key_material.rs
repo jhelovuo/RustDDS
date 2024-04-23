@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
   create_security_error_and_log,
   security::{SecurityError, SecurityResult},
-  serialization::cdr_serializer::to_vec,
+  serialization::to_vec,
   CdrDeserializer,
 };
 use super::{

@@ -9,8 +9,8 @@ use serde::{Deserialize, Serialize};
 pub use cdr_encoding_size::*;
 
 use crate::serialization::{
-  cdr_serializer::to_vec,
   pl_cdr_adapters::{PlCdrDeserializeError, PlCdrSerializeError},
+  to_vec,
 };
 
 /// Data sample must implement [`Keyed`] to be used in a WITH_KEY topic.

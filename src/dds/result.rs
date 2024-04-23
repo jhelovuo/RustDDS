@@ -7,11 +7,7 @@
 
 use std::sync::PoisonError;
 
-use crate::{
-  no_key::wrappers::NoKeyWrapper,
-  serialization::{cdr_deserializer, cdr_serializer},
-  TopicKind,
-};
+use crate::{no_key::wrappers::NoKeyWrapper, serialization, TopicKind};
 #[cfg(feature = "security")]
 use crate::security::SecurityError;
 
@@ -88,8 +84,8 @@ macro_rules! read_error_internal {
     )
 }
 
-impl From<cdr_deserializer::Error> for ReadError {
-  fn from(e: cdr_deserializer::Error) -> Self {
+impl From<serialization::Error> for ReadError {
+  fn from(e: serialization::Error) -> Self {
     ReadError::Deserialization {
       reason: e.to_string(),
     }
@@ -140,9 +136,8 @@ impl<T> From<PoisonError<T>> for WriteError<()> {
   }
 }
 
-// TODO replace cdr_serializer::Error with WriteError::Serialization altogether
-impl From<cdr_serializer::Error> for WriteError<()> {
-  fn from(e: cdr_serializer::Error) -> Self {
+impl From<serialization::Error> for WriteError<()> {
+  fn from(e: serialization::Error) -> Self {
     WriteError::Serialization {
       reason: e.to_string(),
       data: (),

@@ -1076,6 +1076,7 @@ mod tests {
   use log::info;
   use serde::{Deserialize, Serialize};
   use mio_extras::channel as mio_channel;
+  use byteorder::LittleEndian;
 
   use crate::{
     dds::{
@@ -1088,7 +1089,7 @@ mod tests {
     mio_source,
     network::udp_sender::UDPSender,
     rtps::reader::ReaderIngredients,
-    serialization::cdr_deserializer::deserialize_from_little_endian,
+    serialization::from_bytes,
     structure::{dds_cache::DDSCache, guid::EntityKind},
   };
   use super::*;
@@ -1224,7 +1225,7 @@ mod tests {
       y: i32,
       size: i32,
     }
-    let deserialized_shape_type: ShapeType = deserialize_from_little_endian(&a.data()).unwrap();
+    let (deserialized_shape_type, _) = from_bytes::<ShapeType, LittleEndian>(&a.data()).unwrap();
     info!("deserialized shapeType: {:?}", deserialized_shape_type);
 
     // Verify the color in the deserialized value is correct
