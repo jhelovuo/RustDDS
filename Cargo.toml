@@ -61,6 +61,7 @@ socket2 = { version = "0.5", features = ["all"] }
 bytes = "1"
 static_assertions = "1.1"
 thiserror = "1.0.29"
+# cdr-encoding = { version="0.10" , path = "../cdr-encoding"}
 cdr-encoding = { version="0.10" }
 cdr-encoding-size = { version="^0.5" }
 futures = "0.3"

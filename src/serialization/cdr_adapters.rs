@@ -1,7 +1,7 @@
-use std::marker::PhantomData;
+use std::{io, marker::PhantomData};
 
 use serde::{
-  de::{DeserializeOwned, DeserializeSeed},
+  de::{Deserialize, DeserializeOwned, DeserializeSeed},
   Serialize,
 };
 use bytes::Bytes;
@@ -61,6 +61,24 @@ where
     let mut buffer: Vec<u8> = Vec::with_capacity(size_estimate);
     to_writer::<D::K, BO, &mut Vec<u8>>(&mut buffer, value)?;
     Ok(Bytes::from(buffer))
+  }
+}
+
+/// Serialize
+pub fn to_writer_with_rep_id<T, W>(
+  writer: W,
+  value: &T,
+  encoding: RepresentationIdentifier,
+) -> Result<()>
+where
+  T: Serialize,
+  W: io::Write,
+{
+  match encoding {
+    RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
+      to_writer::<T, LittleEndian, W>(writer, value)
+    }
+    _ => to_writer::<T, BigEndian, W>(writer, value),
   }
 }
 
@@ -136,7 +154,7 @@ where
   type Error = Error;
 
   fn decode_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
-    deserialize_from_cdr_with_decoder_and_rep_id(input_bytes, encoding, PhantomData)
+    deserialize_from_cdr_with_decoder_and_rep_id(input_bytes, encoding, PhantomData).map(|r| r.0)
   }
 }
 
@@ -151,6 +169,7 @@ where
     encoding: RepresentationIdentifier,
   ) -> Result<DecKey> {
     deserialize_from_cdr_with_decoder_and_rep_id(input_key_bytes, encoding, PhantomData)
+      .map(|r| r.0)
   }
 }
 
@@ -189,6 +208,7 @@ where
 
   fn decode_bytes(self, input_bytes: &[u8], encoding: RepresentationIdentifier) -> Result<D> {
     deserialize_from_cdr_with_decoder_and_rep_id(input_bytes, encoding, self.value_seed)
+      .map(|r| r.0)
   }
 }
 
@@ -203,29 +223,49 @@ where
     encoding: RepresentationIdentifier,
   ) -> Result<DecKey> {
     deserialize_from_cdr_with_decoder_and_rep_id(input_key_bytes, encoding, self.key_seed)
+      .map(|r| r.0)
   }
 }
 
 /// Decode type using the given [`DeserializeSeed`]-based decoder.
 ///
 /// Returns deserialized object. Byte count is discarded.
-fn deserialize_from_cdr_with_decoder_and_rep_id<'de, S>(
+pub fn deserialize_from_cdr_with_rep_id<'de, T>(
+  input_bytes: &[u8],
+  encoding: RepresentationIdentifier,
+) -> Result<(T, usize)>
+where
+  T: Deserialize<'de>,
+{
+  deserialize_from_cdr_with_decoder_and_rep_id::<PhantomData<T>>(input_bytes, encoding, PhantomData)
+}
+
+/// Decode type using the given [`DeserializeSeed`]-based decoder.
+///
+/// Returns deserialized object and byte count of stream consumed.
+pub fn deserialize_from_cdr_with_decoder_and_rep_id<'de, S>(
   input_bytes: &[u8],
   encoding: RepresentationIdentifier,
   decoder: S,
-) -> Result<S::Value>
+) -> Result<(S::Value, usize)>
 where
   S: DeserializeSeed<'de>,
 {
   match encoding {
     RepresentationIdentifier::CDR_LE | RepresentationIdentifier::PL_CDR_LE => {
       let mut deserializer = CdrDeserializer::<LittleEndian>::new(input_bytes);
-      decoder.deserialize(&mut deserializer)
+      Ok((
+        decoder.deserialize(&mut deserializer)?,
+        deserializer.bytes_consumed(),
+      ))
     }
 
     RepresentationIdentifier::CDR_BE | RepresentationIdentifier::PL_CDR_BE => {
       let mut deserializer = CdrDeserializer::<BigEndian>::new(input_bytes);
-      decoder.deserialize(&mut deserializer)
+      Ok((
+        decoder.deserialize(&mut deserializer)?,
+        deserializer.bytes_consumed(),
+      ))
     }
 
     repr_id => Err(Error::Message(format!(
