@@ -179,7 +179,6 @@ fn main() {
   if is_auto_test {
     // Make automation tests happy
     println!("Create topic: {}", topic.name());
-    println!("Create reader for topic: {}", topic.name());
   } else {
     println!(
       "Topic name is {}. Type is {}.",
@@ -211,6 +210,13 @@ fn main() {
 
   let is_publisher = matches.get_flag("publisher");
   let is_subscriber = matches.get_flag("subscriber");
+
+  // Make automation tests happy
+  if is_auto_test && is_publisher {
+    println!("Create writer for topic: {}", topic.name());
+  } else if is_auto_test && is_subscriber {
+    println!("Create reader for topic: {}", topic.name());
+  }
 
   let mut writer_opt = if is_publisher {
     debug!("Publisher");
