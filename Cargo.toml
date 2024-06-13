@@ -110,4 +110,4 @@ smol = "2.0"
 
 [target.'cfg(unix)'.dev-dependencies]
 # turle_teleop
-termion = "3.0.0"
+termion = "4.0.2"
