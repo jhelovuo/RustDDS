@@ -732,6 +732,14 @@ where
 
   /// An async stream for reading the (bare) data samples.
   /// The resulting Stream can be used to get another stream of status events.
+  pub fn async_bare_sample_stream(self) -> BareDataReaderStream<D, DA> {
+    BareDataReaderStream {
+      datareader: Arc::new(Mutex::new(self)),
+    }
+  }
+
+  /// An async stream for reading the data samples.
+  /// The resulting Stream can be used to get another stream of status events.
   pub fn async_sample_stream(self) -> DataReaderStream<D, DA> {
     DataReaderStream {
       datareader: Arc::new(Mutex::new(self)),
@@ -866,7 +874,99 @@ where
 // ----------------------------------------------
 // ----------------------------------------------
 
-// Async interface to the DataReader
+// Async interface to the (bare) DataReader
+
+pub struct BareDataReaderStream<
+  D: Keyed + 'static,
+  DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
+> {
+  datareader: Arc<Mutex<DataReader<D, DA>>>,
+}
+
+impl<D, DA> BareDataReaderStream<D, DA>
+where
+  D: Keyed + 'static,
+  DA: DeserializerAdapter<D>,
+{
+  /// Get a stream of status events
+  pub fn async_event_stream(&self) -> DataReaderEventStream<D, DA> {
+    DataReaderEventStream {
+      datareader: Arc::clone(&self.datareader),
+    }
+  }
+  fn lock_datareader(&self) -> ReadResult<MutexGuard<DataReader<D, DA>>> {
+    self.datareader.lock().map_err(|_e| ReadError::Poisoned {
+      reason: "DataReaderStream could not lock datareader: {e:?}".to_string(),
+    })
+  }
+}
+
+// https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
+impl<D, DA> Unpin for BareDataReaderStream<D, DA>
+where
+  D: Keyed + 'static,
+  DA: DeserializerAdapter<D>,
+{
+}
+
+impl<D, DA> Stream for BareDataReaderStream<D, DA>
+where
+  D: Keyed + 'static,
+  DA: DeserializerAdapter<D> + DefaultDecoder<D>,
+{
+  type Item = ReadResult<Sample<D, D::K>>;
+
+  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    debug!("poll_next");
+    let mut datareader = match self.lock_datareader() {
+      Ok(g) => g,
+      Err(e) => return Poll::Ready(Some(Err(e))),
+    }; //TODO: Upgrade to ?-operator: https://github.com/rust-lang/rust/issues/84277
+
+    match datareader.take_bare(1, ReadCondition::not_read()) {
+      Err(e) =>
+      // DDS fails
+      {
+        Poll::Ready(Some(Err(e)))
+      }
+
+      Ok(mut v) => {
+        match v.pop() {
+          Some(d) => Poll::Ready(Some(Ok(d))),
+          None => {
+            // Did not get any data.
+            // --> Store waker.
+            // 1. synchronously store waker to background thread (must rendezvous)
+            // 2. try take_bare again, in case something arrived just now
+            // 3. if nothing still, return pending.
+            datareader
+              .simple_data_reader
+              .set_waker(Some(cx.waker().clone()));
+            match datareader.take_bare(1, ReadCondition::not_read()) {
+              Err(e) => Poll::Ready(Some(Err(e))),
+              Ok(mut v) => match v.pop() {
+                None => Poll::Pending,
+                Some(d) => Poll::Ready(Some(Ok(d))),
+              },
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+impl<D, DA> FusedStream for BareDataReaderStream<D, DA>
+where
+  D: Keyed + 'static,
+  DA: DeserializerAdapter<D> + DefaultDecoder<D>,
+{
+  fn is_terminated(&self) -> bool {
+    false // Never terminate. This means it is always valid to call poll_next().
+  }
+}
+
+// Async interface to the (non-bare) DataReader
 
 pub struct DataReaderStream<
   D: Keyed + 'static,
@@ -906,7 +1006,7 @@ where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D> + DefaultDecoder<D>,
 {
-  type Item = ReadResult<Sample<D, D::K>>;
+  type Item = ReadResult<DataSample<D>>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     debug!("poll_next");
@@ -915,7 +1015,7 @@ where
       Err(e) => return Poll::Ready(Some(Err(e))),
     }; //TODO: Upgrade to ?-operator: https://github.com/rust-lang/rust/issues/84277
 
-    match datareader.take_bare(1, ReadCondition::not_read()) {
+    match datareader.take(1, ReadCondition::not_read()) {
       Err(e) =>
       // DDS fails
       {
@@ -929,12 +1029,12 @@ where
             // Did not get any data.
             // --> Store waker.
             // 1. synchronously store waker to background thread (must rendezvous)
-            // 2. try take_bare again, in case something arrived just now
+            // 2. try take again, in case something arrived just now
             // 3. if nothing still, return pending.
             datareader
               .simple_data_reader
               .set_waker(Some(cx.waker().clone()));
-            match datareader.take_bare(1, ReadCondition::not_read()) {
+            match datareader.take(1, ReadCondition::not_read()) {
               Err(e) => Poll::Ready(Some(Err(e))),
               Ok(mut v) => match v.pop() {
                 None => Poll::Pending,

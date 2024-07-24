@@ -83,8 +83,9 @@
 //! DataReader and DataWriter can do Rust async I/O by converting themselves to
 //! [`futures::stream::Stream`]s.
 //! * [`crate::dds::with_key::DataReader::async_sample_stream`] to get data
-//! * [`crate::dds::with_key::DataReaderStream::async_event_stream`] to get
-//!   status events
+//! * [`crate::dds::with_key::DataReader::async_bare_sample_stream`] to get bare data
+//! * [`crate::dds::with_key::BareDataReaderStream::async_event_stream`] or
+//!   [`crate::dds::with_key::DataReaderStream::async_event_stream`] to get data status events
 //!
 //! See exampe `async_shapes_demo`.
 //!
@@ -217,9 +218,7 @@ pub use dds::{
 /// CDR.
 pub use serialization::RepresentationIdentifier;
 #[doc(inline)]
-pub use serialization::{
-  CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializer, CdrSerializer,
-};
+pub use serialization::{CDRDeserializerAdapter, CDRSerializerAdapter, CdrDeserializer, CdrSerializer};
 pub use structure::{
   duration::Duration, entity::RTPSEntity, guid::GUID, sequence_number::SequenceNumber,
   time::Timestamp,

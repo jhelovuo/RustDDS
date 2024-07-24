@@ -237,7 +237,7 @@ fn main() {
         let mut run = true;
         let stop = stop_receiver.recv().fuse();
         pin_mut!(stop);
-        let mut datareader_stream = datareader.async_sample_stream();
+        let mut datareader_stream = datareader.async_bare_sample_stream();
         let mut datareader_event_stream = datareader_stream.async_event_stream();
         while run {
           futures::select! {
