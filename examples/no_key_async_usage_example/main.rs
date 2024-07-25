@@ -72,14 +72,14 @@ fn main() {
       .unwrap();
 
     smol::block_on(async {
-      let mut datareader_stream = reader.async_bare_sample_stream();
+      let mut datareader_stream = reader.async_sample_stream();
       let mut datareader_event_stream = datareader_stream.async_event_stream();
 
       loop {
         futures::select! {
           r=datareader_stream.select_next_some()=>{
             match r{
-              Ok(d)=>{println!("{}",d.a)},
+              Ok(d)=>{println!("{}", d.value().a)},
               Err(e)=> {
                 println!("{:?}", e);
                 break;

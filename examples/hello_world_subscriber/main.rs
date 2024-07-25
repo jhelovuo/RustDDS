@@ -71,10 +71,12 @@ fn main() {
 
         result = sample_stream.select_next_some() => {
           match result {
-            Ok(Sample::Value(hello_msg)) =>
-              println!("Received: {hello_msg:?}"),
-            Ok(Sample::Dispose(key)) =>
-              println!("Disposed hello with key={key}"),
+            Ok(s) => match s.into_value() {
+              Sample::Value(hello_msg) =>
+                println!("Received: {hello_msg:?}"),
+              Sample::Dispose(key) =>
+                println!("Disposed hello with key={key}"),
+            }
             Err(e) =>
               println!("Oh no, DDS read error: {e:?}"),
           }

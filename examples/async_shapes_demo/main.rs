@@ -237,15 +237,15 @@ fn main() {
         let mut run = true;
         let stop = stop_receiver.recv().fuse();
         pin_mut!(stop);
-        let mut datareader_stream = datareader.async_bare_sample_stream();
+        let mut datareader_stream = datareader.async_sample_stream();
         let mut datareader_event_stream = datareader_stream.async_event_stream();
         while run {
           futures::select! {
             _ = stop => run = false,
             r = datareader_stream.select_next_some() => {
               match r {
-                Ok(v) =>
-                  match v {
+                Ok(s) =>
+                  match s.into_value() {
                     Sample::Value(sample) => println!(
                       "{:10.10} {:10.10} {:3.3} {:3.3} [{}]",
                       topic.name(),
