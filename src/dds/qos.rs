@@ -332,7 +332,7 @@ impl QosPolicies {
   ///
   /// * None => Policies are compatible
   /// * Some(policyId) => Failure, where policyId is (any) one of the policies
-  /// causing incompliance
+  ///   causing incompliance
   ///
   /// Compliance (compatibility) is defined in the table in DDS spec v1.4
   /// Section "2.2.3 Supported QoS"

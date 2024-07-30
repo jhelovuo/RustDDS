@@ -1146,12 +1146,15 @@ impl DomainParticipantInner {
         dp_event_loop.event_loop();
       })?;
 
+    #[cfg(feature = "security")]
+    let have_security = true;
+    #[cfg(not(feature = "security"))]
+    let have_security = false;
+
     info!(
-      "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?} security={}",
-      domain_id,
-      participant_id,
-      participant_guid,
-      cfg!(security)
+      "New DomainParticipantInner: domain_id={:?} participant_id={:?} GUID={:?} \
+       security_feature_enabled={}",
+      domain_id, participant_id, participant_guid, have_security,
     );
 
     Ok(Self {
