@@ -51,7 +51,7 @@ struct SampleWithMetaData<D: Keyed> {
   sample_has_been_read: bool,      // sample_state
 
   // the data sample (or key) itself is stored here
-  sample: Sample<D, D::K>,
+  sample: Sample<D, D::K>, // TODO: maybe this should be boxed for moving performance.
 }
 
 impl<D> SampleWithMetaData<D>
@@ -225,11 +225,31 @@ where
     // sample, i.e.
   }
 
+  // Helper for select_keys and select_instance_keys
+  //
+  // Selection is in timestamp order. If there are samples that have been received out-of-order,
+  // then those need to be sorted. Note that there may be SequenceNumbers
+  // from several writers. We need to keep SequenceNumbers ordered per writer, but
+  // there are no other ordering guarantees. (TODO: What about Presentation QoS?)
+  //
+  // The sorting is somewhat wasted effort 
+  fn sort_by_sequence_number(&self, keys: &mut Vec<(Timestamp, D::K)>) {
+    // We `.unwrap()` below, because this is supposed to be called only from
+    // select_*_for_Access-metohds, who take the timestamp keys from the
+    // same map.
+
+    // Most commonly we gat only 0 or 1 keys, so skip sorting in that scenario.
+    if keys.len() > 1 {
+      keys.sort_by_cached_key(|(ts,_k)| self.datasamples.get(&ts).unwrap().sequence_number )
+    }
+  }
+
   // Calling select_(instance)_keys_for access does not constitute access, i.e.
   // it does not change any state of the cache.
   // Samples are marked read or viewed only when "read" or "take" methods (below)
   // are called.
   pub fn select_keys_for_access(&self, rc: ReadCondition) -> Vec<(Timestamp, D::K)> {
+    let mut keys : Vec<(Timestamp, D::K)> =
     self
       .datasamples
       .iter()
@@ -243,7 +263,9 @@ where
           None
         }
       })
-      .collect()
+      .collect();
+    self.sort_by_sequence_number(&mut keys);
+    keys
   }
 
   pub fn select_instance_keys_for_access(
@@ -253,21 +275,25 @@ where
   ) -> Vec<(Timestamp, D::K)> {
     match self.instance_map.get(instance) {
       None => Vec::new(),
-      Some(imd) => imd
-        .instance_samples
-        .iter()
-        .filter_map(|ts| {
-          if let Some(ds) = self.datasamples.get(ts) {
-            if self.sample_selector(&rc, imd, ds) {
-              Some((*ts, instance.clone()))
+      Some(imd) => {
+        let mut keys : Vec<(Timestamp, D::K)> = imd
+          .instance_samples
+          .iter()
+          .filter_map(|ts| {
+            if let Some(ds) = self.datasamples.get(ts) {
+              if self.sample_selector(&rc, imd, ds) {
+                Some((*ts, instance.clone()))
+              } else {
+                None
+              }
             } else {
               None
             }
-          } else {
-            None
-          }
-        })
-        .collect(),
+          })
+          .collect();
+        self.sort_by_sequence_number(&mut keys);
+        keys
+      }
     }
   }
 
