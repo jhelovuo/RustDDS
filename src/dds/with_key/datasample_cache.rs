@@ -227,20 +227,21 @@ where
 
   // Helper for select_keys and select_instance_keys
   //
-  // Selection is in timestamp order. If there are samples that have been received out-of-order,
-  // then those need to be sorted. Note that there may be SequenceNumbers
-  // from several writers. We need to keep SequenceNumbers ordered per writer, but
-  // there are no other ordering guarantees. (TODO: What about Presentation QoS?)
+  // Selection is in timestamp order. If there are samples that have been received
+  // out-of-order, then those need to be sorted. Note that there may be
+  // SequenceNumbers from several writers. We need to keep SequenceNumbers
+  // ordered per writer, but there are no other ordering guarantees. (TODO: What
+  // about Presentation QoS?)
   //
-  // The sorting is somewhat wasted effort 
-  fn sort_by_sequence_number(&self, keys: &mut Vec<(Timestamp, D::K)>) {
+  // The sorting is somewhat wasted effort
+  fn sort_by_sequence_number(&self, keys: &mut [(Timestamp, D::K)]) {
     // We `.unwrap()` below, because this is supposed to be called only from
     // select_*_for_Access-metohds, who take the timestamp keys from the
     // same map.
 
     // Most commonly we gat only 0 or 1 keys, so skip sorting in that scenario.
     if keys.len() > 1 {
-      keys.sort_by_cached_key(|(ts,_k)| self.datasamples.get(&ts).unwrap().sequence_number )
+      keys.sort_by_cached_key(|(ts, _k)| self.datasamples.get(ts).unwrap().sequence_number);
     }
   }
 
@@ -249,8 +250,7 @@ where
   // Samples are marked read or viewed only when "read" or "take" methods (below)
   // are called.
   pub fn select_keys_for_access(&self, rc: ReadCondition) -> Vec<(Timestamp, D::K)> {
-    let mut keys : Vec<(Timestamp, D::K)> =
-    self
+    let mut keys: Vec<(Timestamp, D::K)> = self
       .datasamples
       .iter()
       .filter_map(|(ts, dsm)| {
@@ -276,7 +276,7 @@ where
     match self.instance_map.get(instance) {
       None => Vec::new(),
       Some(imd) => {
-        let mut keys : Vec<(Timestamp, D::K)> = imd
+        let mut keys: Vec<(Timestamp, D::K)> = imd
           .instance_samples
           .iter()
           .filter_map(|ts| {
