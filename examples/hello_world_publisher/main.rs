@@ -59,10 +59,8 @@ fn main() {
   // set up async executor to run concurrent tasks
   smol::block_on(async {
     let mut datawriter_event_stream = writer.as_async_status_stream();
-    let (write_trigger_sender, write_trigger_receiver) = 
-      smol::channel::bounded(1);
-    let mut match_timeout_timer = 
-      futures::FutureExt::fuse(Timer::after(Duration::from_secs(10)));
+    let (write_trigger_sender, write_trigger_receiver) = smol::channel::bounded(1);
+    let mut match_timeout_timer = futures::FutureExt::fuse(Timer::after(Duration::from_secs(10)));
 
     println!("Ready to say hello");
     loop {
