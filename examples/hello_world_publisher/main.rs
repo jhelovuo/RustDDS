@@ -1,19 +1,14 @@
 //! Re-implementation of helloworld / publisher example in CycloneDDS
-//! 
-use std::time::{Duration};
+use std::time::Duration;
+
 use log::error;
-
 use rustdds::{
-  DomainParticipantBuilder, Keyed, QosPolicyBuilder,
+  policy::Reliability, DataWriterStatus, DomainParticipantBuilder, Keyed, QosPolicyBuilder,
   StatusEvented, TopicKind,
-  DataWriterStatus,
 };
-use rustdds::policy::Reliability;
-
 use serde::{Deserialize, Serialize};
-
 use smol::Timer;
-use futures::{FutureExt, TryFutureExt, StreamExt};
+use futures::{FutureExt, StreamExt, TryFutureExt};
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 struct HelloWorldData {
@@ -28,26 +23,23 @@ impl Keyed for HelloWorldData {
   }
 }
 
-
 fn main() {
   let domain_participant = DomainParticipantBuilder::new(0)
     .build()
     .unwrap_or_else(|e| panic!("DomainParticipant construction failed: {e:?}"));
 
   let qos = QosPolicyBuilder::new()
-    .reliability(
-      Reliability::Reliable {
-        max_blocking_time: rustdds::Duration::from_secs(1),
-      })
+    .reliability(Reliability::Reliable {
+      max_blocking_time: rustdds::Duration::from_secs(1),
+    })
     .build();
-
 
   let topic = domain_participant
     .create_topic(
       // We can internally call the Rust type "HelloWorldData" whatever we want,
       // but these strings must match whatever our counterparts expect
       // to see over RTPS.
-      "HelloWorldData_Msg".to_string(), // topic name
+      "HelloWorldData_Msg".to_string(),  // topic name
       "HelloWorldData::Msg".to_string(), // type name
       &qos,
       TopicKind::WithKey,
@@ -60,8 +52,8 @@ fn main() {
     .unwrap();
 
   let hello_message = HelloWorldData {
-    user_id: 123,
-    message: "Hello, World!11".to_string(),
+    user_id: 42,
+    message: "Hello, Rust!".to_string(),
   };
 
   // set up async executor to run concurrent tasks
@@ -95,7 +87,7 @@ fn main() {
               println!("Matched with hello subscriber");
               write_trigger_sender.send(()).await.unwrap();
             }
-            _ => 
+            _ =>
               println!("DataWriter event: {e:?}"),
           }
         }
@@ -105,4 +97,3 @@ fn main() {
     println!("Bye, World!");
   });
 }
-

@@ -16,11 +16,11 @@ use crate::{
   security,
   security::config::ConfigError,
   serialization::{
+    padding_needed_for_alignment_4,
     pl_cdr_adapters::{
       PlCdrDeserialize, PlCdrDeserializeError, PlCdrSerialize, PlCdrSerializeError,
     },
     speedy_pl_cdr_helpers::*,
-    padding_needed_for_alignment_4,
   },
   structure::{guid::GuidPrefix, parameter_id::ParameterId},
   Keyed, QosPolicies, RepresentationIdentifier, GUID,

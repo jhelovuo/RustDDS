@@ -6,6 +6,7 @@ use enumflags2::BitFlags;
 
 use crate::{
   messages::submessages::{elements::parameter_list::ParameterList, submessages::*},
+  serialization::{padding_needed_for_alignment_4, round_up_to_4},
   structure::{guid::EntityId, sequence_number::SequenceNumber},
 };
 // use log::debug;
@@ -125,6 +126,9 @@ impl Data {
       None
     };
 
+    // Serialized data is the rest of the submessage. It may contain some
+    // alignment padding, but at least a CDR decoder should be able to cope with
+    // that.
     let serialized_payload = if expect_data {
       Some(buffer.clone().split_off(cursor.position() as usize))
     } else {
@@ -145,13 +149,15 @@ impl Data {
   // "octetsToNextHeader" field in RTPS spec v2.5 Section "9.4.5.1 Submessage
   // Header".
   pub fn len_serialized(&self) -> usize {
-    2 + // extraFlags
-    2 + // octetsToInlineSos
-    4 + // readerId
-    4 + // writerId
-    8 + // writerSN
-    self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParameterList
-    self.serialized_payload.as_ref().map(|q| q.len()).unwrap_or(0)
+    round_up_to_4(
+      2 + // extraFlags
+      2 + // octetsToInlineSos
+      4 + // readerId
+      4 + // writerId
+      8 + // writerSN
+      self.inline_qos.as_ref().map(|q| q.len_serialized() ).unwrap_or(0) + // QoS ParameterList
+      self.serialized_payload.as_ref().map(|q| q.len()).unwrap_or(0),
+    )
   }
 
   #[cfg(test)]
@@ -198,6 +204,9 @@ impl<C: Context> Writable<C> for Data {
 
     if let Some(serialized_payload) = self.serialized_payload.as_ref() {
       writer.write_bytes(serialized_payload)?;
+      for _ in 0..padding_needed_for_alignment_4(serialized_payload.len()) {
+        writer.write_u8(0)?;
+      }
     }
 
     Ok(())

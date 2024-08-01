@@ -16,7 +16,6 @@ pub use cdr_adapters::{
 };
 pub use representation_identifier::RepresentationIdentifier;
 
-
 // Compute how much padding bytes are needed to
 // get the next multiple of 4
 pub fn padding_needed_for_alignment_4(unaligned_length: usize) -> usize {

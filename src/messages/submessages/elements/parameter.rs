@@ -1,8 +1,7 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use bit_vec::BitVec;
 
-use crate::structure::parameter_id::ParameterId;
-use crate::serialization::round_up_to_4;
+use crate::{serialization::round_up_to_4, structure::parameter_id::ParameterId};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Parameter {
@@ -69,7 +68,7 @@ impl Parameter {
     round_up_to_4(
       2 + // parameter_id 
       2 + // length field
-      self.value.len() // payload
+      self.value.len(), // payload
     )
   }
 }

@@ -11,8 +11,8 @@ use crate::{
   network::util::{
     get_local_multicast_ip_addrs, get_local_multicast_locators, get_local_unicast_locators,
   },
-  structure::locator::Locator,
   serialization::padding_needed_for_alignment_4,
+  structure::locator::Locator,
 };
 
 const MAX_MESSAGE_SIZE: usize = 64 * 1024; // This is max we can get from UDP.
