@@ -44,6 +44,9 @@ fn main() {
 
   let topic = domain_participant
     .create_topic(
+      // We can internally call the Rust type "HelloWorldData" whatever we want,
+      // but these strings must match whatever our counterparts expect
+      // to see over RTPS.
       "HelloWorldData_Msg".to_string(), // topic name
       "HelloWorldData::Msg".to_string(), // type name
       &qos,

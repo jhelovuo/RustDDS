@@ -20,6 +20,7 @@ use crate::{
       PlCdrDeserialize, PlCdrDeserializeError, PlCdrSerialize, PlCdrSerializeError,
     },
     speedy_pl_cdr_helpers::*,
+    padding_needed_for_alignment_4,
   },
   structure::{guid::GuidPrefix, parameter_id::ParameterId},
   Keyed, QosPolicies, RepresentationIdentifier, GUID,
@@ -162,10 +163,8 @@ impl<C: Context> Writable<C> for Property {
 impl Property {
   pub fn serialized_len(&self) -> usize {
     let first = 4 + self.name.len() + 1;
-    let misalign = first % 4;
-    let align = if misalign > 0 { 4 - misalign } else { 0 };
     let second = 4 + self.value.len() + 1;
-    first + align + second
+    first + padding_needed_for_alignment_4(first) + second
   }
 
   pub fn value(&self) -> String {
@@ -284,11 +283,9 @@ mod repr {
 
 impl BinaryProperty {
   pub fn serialized_len(&self) -> usize {
-    let first = 4 + self.name.len() + 1;
-    let misalign = first % 4;
-    let align = if misalign > 0 { 4 - misalign } else { 0 };
+    let first = 4 + self.name.len() + 1; // +1 for NUL byte
     let second = 4 + self.value.len(); // no nul terminator byte here
-    first + align + second
+    first + padding_needed_for_alignment_4(first) + second
   }
 }
 
