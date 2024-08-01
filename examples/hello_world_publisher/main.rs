@@ -83,6 +83,10 @@ fn main() {
             // If we get a matching subscription, trigger the send
             DataWriterStatus::PublicationMatched{..} => {
               println!("Matched with hello subscriber");
+              // Wait for a while so that subscriber also recognizes us.
+              // There is no two- or three-way handshake in pub/sub matching,
+              // so we cannot know if the other side is immediately ready.
+              Timer::after(Duration::from_secs(1)).await;
               write_trigger_sender.send(()).await.unwrap();
             }
             _ =>
