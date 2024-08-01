@@ -23,31 +23,9 @@ pub struct UDPSender {
 
 impl UDPSender {
   pub fn new(sender_port: u16) -> io::Result<Self> {
-    #[cfg(not(windows))]
     let unicast_socket = {
       let saddr: SocketAddr = SocketAddr::new("0.0.0.0".parse().unwrap(), sender_port);
       mio_08::net::UdpSocket::bind(saddr)?
-    };
-
-    #[cfg(windows)]
-    let unicast_socket = {
-      // for windows users, bind to valid addresses only
-      let raw_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
-      raw_socket.set_reuse_address(true)?;
-      // get a list of all detected network interfaces, and try binding to their ip
-      // addresses one by one.
-      let network_interfaces = list_afinet_netifas().unwrap();
-      for (name, ip) in network_interfaces.iter() {
-        raw_socket
-          .bind(&SockAddr::from(SocketAddr::new(*ip, sender_port)))
-          .unwrap_or_else(|e| {
-            error!(
-              "Could not bind socket on {} to {:?}:{} reason {:?}. Ignoring.",
-              name, ip, sender_port, e
-            )
-          });
-      }
-      mio_08::net::UdpSocket::from_std(std::net::UdpSocket::from(raw_socket))
     };
 
     // We set multicasting loop on so that we can hear other DomainParticipant

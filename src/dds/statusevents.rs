@@ -524,8 +524,10 @@ pub enum SampleRejectedStatusKind {
   BySamplesPerInstanceLimit,
 }
 
+/* commented out for now, as it is not used.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct QosPolicyCount {
   policy_id: QosPolicyId,
   count: i32,
 }
+*/

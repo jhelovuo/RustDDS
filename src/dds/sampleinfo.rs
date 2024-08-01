@@ -125,13 +125,16 @@ impl InstanceState {
 /// > For each instance the middleware internally maintains two counts: the
 /// > disposed_generation_count and no_writers_generation_count, relative to
 /// > each DataReader:
-/// > * The disposed_generation_count and
+/// >
+/// > The disposed_generation_count and
 /// > no_writers_generation_count are initialized to zero when the DataReader
 /// > first detects the presence of a never-seen-before instance.
-/// > * The disposed_generation_count is incremented each time the
+/// >
+/// > The disposed_generation_count is incremented each time the
 /// > instance_state of the corresponding instance changes
 /// > from NOT_ALIVE_DISPOSED to ALIVE.
-/// > * The no_writers_generation_count is incremented each time the
+/// >
+/// > The no_writers_generation_count is incremented each time the
 /// > instance_state of the corresponding instance changes
 /// > from NOT_ALIVE_NO_WRITERS to ALIVE.
 /// > The disposed_generation_count and no_writers_generation_count available in

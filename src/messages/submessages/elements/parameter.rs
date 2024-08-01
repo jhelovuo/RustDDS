@@ -1,7 +1,7 @@
 use speedy::{Context, Readable, Reader, Writable, Writer};
 use bit_vec::BitVec;
 
-use crate::structure::parameter_id::ParameterId;
+use crate::{serialization::round_up_to_4, structure::parameter_id::ParameterId};
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Parameter {
@@ -65,17 +65,11 @@ impl Parameter {
     // Serialization aligns parameters to 4-byte boundaries
     // by padding at the end if necessary.
     // RTPS spec v2.5 section "9.4.2.11 ParameterList"
-    let unaligned_length = self.value.len();
-    let pad = if unaligned_length % 4 != 0 {
-      4 - (unaligned_length % 4)
-    } else {
-      0
-    };
-
-    2 + // parameter_id 
-    2 + // length field
-    unaligned_length + // payload
-    pad
+    round_up_to_4(
+      2 + // parameter_id 
+      2 + // length field
+      self.value.len(), // payload
+    )
   }
 }
 

@@ -36,23 +36,22 @@
 //! * Data is sent and received in consecutive *samples*. When read, a sample is
 //!   accompanied with [`SampleInfo`], which contains DDS-generated metadata.
 //! * Topics are either With_Key or No_Key.
-//!   * With_Key topics are like map data
-//!   structures, containing multiple *instances* (map entries), identified by a
-//!   *key*. The key must be something that can be extracted from the data
-//!   samples. Instances can be created (published) and deleted (disposed).
+//!   * With_Key topics are like map data structures, containing multiple
+//!     *instances* (map entries), identified by a *key*. The key must be
+//!     something that can be extracted from the data samples. Instances can be
+//!     created (published) and deleted (disposed).
 //!   * No_Key topics have always only one instance, which cannot be disposed.
 //!   * Many types and traits in RustDDS have both with_key and no_key versions.
-//!     This is
-//!   because with_key communication must be able to access keys from data
-//! samples, so it is required in type signatures. Such requirement makes no
-//! sense for no_key communication, so signature must be different.
+//!     This is because with_key communication must be able to access keys from
+//!     data samples, so it is required in type signatures. Such requirement
+//!     makes no sense for no_key communication, so signature must be different.
 //!
 //!
 //! # Interfacing Rust data types to DDS
 //!
 //! * DDS, as specified, takes care of data serialization and deserialization.
-//! In order for RustDDS to do this, the payload data must be [Serde](https://serde.rs/)
-//! serializable/deserializable.
+//!   In order for RustDDS to do this, the payload data must be [Serde](https://serde.rs/)
+//!   serializable/deserializable.
 //! * If your data is to be communicated over a WithKey topic, the payload data
 //!   type must implement [`Keyed`] trait from this crate.
 //! * If you are using [CDR serialization](https://en.wikipedia.org/wiki/Common_Data_Representation)

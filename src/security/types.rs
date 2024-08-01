@@ -16,6 +16,7 @@ use crate::{
   security,
   security::config::ConfigError,
   serialization::{
+    padding_needed_for_alignment_4,
     pl_cdr_adapters::{
       PlCdrDeserialize, PlCdrDeserializeError, PlCdrSerialize, PlCdrSerializeError,
     },
@@ -162,10 +163,8 @@ impl<C: Context> Writable<C> for Property {
 impl Property {
   pub fn serialized_len(&self) -> usize {
     let first = 4 + self.name.len() + 1;
-    let misalign = first % 4;
-    let align = if misalign > 0 { 4 - misalign } else { 0 };
     let second = 4 + self.value.len() + 1;
-    first + align + second
+    first + padding_needed_for_alignment_4(first) + second
   }
 
   pub fn value(&self) -> String {
@@ -284,11 +283,9 @@ mod repr {
 
 impl BinaryProperty {
   pub fn serialized_len(&self) -> usize {
-    let first = 4 + self.name.len() + 1;
-    let misalign = first % 4;
-    let align = if misalign > 0 { 4 - misalign } else { 0 };
+    let first = 4 + self.name.len() + 1; // +1 for NUL byte
     let second = 4 + self.value.len(); // no nul terminator byte here
-    first + align + second
+    first + padding_needed_for_alignment_4(first) + second
   }
 }
 

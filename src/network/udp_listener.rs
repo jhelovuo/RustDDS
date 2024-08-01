@@ -11,6 +11,7 @@ use crate::{
   network::util::{
     get_local_multicast_ip_addrs, get_local_multicast_locators, get_local_unicast_locators,
   },
+  serialization::padding_needed_for_alignment_4,
   structure::locator::Locator,
 };
 
@@ -214,11 +215,11 @@ impl UDPListener {
       // Now, append some extra data to align the buffer end, so the next piece will
       // be aligned also. This assumes that the initial buffer was aligned to begin
       // with. This is because RTPS data is optimized to align to 4-byte boundaries.
-      let unalign = self.receive_buffer.len() % 4;
-      if unalign != 0 {
+      let pad = padding_needed_for_alignment_4(self.receive_buffer.len());
+      if pad != 0 {
         self
           .receive_buffer
-          .extend_from_slice(&[0xCC, 0xCC, 0xCC, 0xCC][..(4 - unalign)]);
+          .extend_from_slice(&[0xCC, 0xCC, 0xCC, 0xCC][..pad]);
         // Funny value 0xCC encourages a fast crash in case these bytes
         // are ever accessed, as they should not.
       }

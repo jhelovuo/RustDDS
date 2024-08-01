@@ -28,6 +28,11 @@ to input other run-time data besides the incoming byte stream.
 ### 0.10.1
 * Make RTPS Timestamp's native tick count publicly accessible
 
+### 0.10.2
+* Bug fix: Reliable DataReader delivered data samples in the wrong order, if they have arrived out-of-order.
+* Change socket initialization behaviour on Windows.
+* [CDR serialization](https://crates.io/crates/cdr-encoding) is now a separate Rust crate.
+
 ## Version 0.9.2
 * Redesign internal caching to resolve bugs in connecting.
 
