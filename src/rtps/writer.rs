@@ -990,8 +990,26 @@ impl Writer {
           Some(0) => warn!("Request for SN zero! : {:?}", an),
           Some(_) | None => (), // ok
         }
-        let my_topic = self.my_topic_name.clone(); // for debugging
+
         let reader_guid = GUID::new(reader_guid_prefix, an.reader_id);
+
+        // sanity check
+        if an.reader_sn_state.base() < SequenceNumber::from(1) {
+          // This check is based on RTPS v2.5 Spec
+          // Section "8.3.5.5 SequenceNumberSet" and
+          // Section "8.3.8.1.3 Validity".
+          // But apparently some RTPS implementations send ACKNACK with
+          // reader_sn_state.base = 0 to indicate they have matched the writer,
+          // so seeing these once per new writer should be ok.
+          info!(
+            "ACKNACK SequenceNumberSet minimum must be >= 1, got {:?} from {:?} topic {:?}",
+            an.reader_sn_state.base(),
+            reader_guid,
+            self.topic_name()
+          );
+        }
+
+        let my_topic = self.my_topic_name.clone(); // for debugging
         self.update_ack_waiters(reader_guid, Some(an.reader_sn_state.base()));
 
         if let Some(reader_proxy) = self.lookup_reader_proxy_mut(reader_guid) {

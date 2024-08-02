@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+  cmp::max,
+  collections::{BTreeMap, BTreeSet},
+};
 
 use bit_vec::BitVec;
 #[allow(unused_imports)]
@@ -229,7 +232,20 @@ impl RtpsReaderProxy {
   ) {
     match ack_submessage {
       AckSubmessage::AckNack(acknack) => {
-        let new_all_acked_before = acknack.reader_sn_state.base();
+        // Eliminate case that base = 0
+        let new_all_acked_before = max(acknack.reader_sn_state.base(), SequenceNumber::from(1));
+        // Sending acknack with sn_state base = 0 should not happen.
+        // This is not allowed by  SequenceNumberSet
+        // validity rules (RTPS Spec v2.5 "8.3.5.5 SequenceNumberSet")
+        //
+        // The correct way to acknowledge that nothing has been received is to
+        // send ACKNACK with reader_sn_state.base = 1 and empty set contents.
+        // This means everything before 1 has been received, but since
+        // sequence numbering starts at 1 by definition
+        // (in Section 8.3.5.4 SequenceNumber), it means "nothing"
+        //
+        // This is logged in `writer` object.
+
         // sanity check:
         if new_all_acked_before < self.all_acked_before {
           error!(

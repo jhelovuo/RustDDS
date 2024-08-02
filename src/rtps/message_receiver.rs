@@ -231,6 +231,26 @@ impl MessageReceiver {
       return;
     }
 
+    // Check that the 4-byte magic string matches "RTPS"
+    if msg_bytes.len() >= 4 {
+      let magic = &msg_bytes[0..4];
+      if *magic == b"RTPS"[..] {
+        // go ahead and try to decode message
+      } else if *magic == b"RTPX"[..] {
+        // RTI Connext sends also packets with magic RTPX in the header.
+        // We do not know are these really same as RTPS or different, so let's
+        // ignore those.
+        info!("Received message with RTPX header. Ignoring.");
+        return;
+      } else {
+        warn!(
+          "Received message with unknown start of header {:x?}. Ignoring.",
+          magic
+        );
+        return;
+      }
+    }
+
     // call Speedy reader
     // Bytes .clone() is cheap, so no worries
     let rtps_message = match Message::read_from_buffer(msg_bytes) {
