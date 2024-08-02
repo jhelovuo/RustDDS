@@ -33,6 +33,10 @@ to input other run-time data besides the incoming byte stream.
 * Change socket initialization behaviour on Windows.
 * [CDR serialization](https://crates.io/crates/cdr-encoding) is now a separate Rust crate.
 
+### 0.10.3
+* Bug fixes to improve interoperability with CycloneDDS
+* Two example programs to test against CycloneDDS examples
+
 ## Version 0.9.2
 * Redesign internal caching to resolve bugs in connecting.
 
