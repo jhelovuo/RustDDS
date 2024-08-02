@@ -189,17 +189,29 @@ impl MessageBuilder {
 
     let mut param_list = ParameterList::new(); // inline QoS goes here
 
-    // Check if we are disposing by key hash
+    // Check if we are disposing (by key or by key hash).
+    // If yes, then Indicate Dispose by PID_STATUS_INFO in Inline QoS
+    // RTPS Spec v2.5 Section "9.6.4.9 StatusInfo_t (PID_STATUS_INFO)"
+    // Dispose must be indicated in Inline QoS:
+    // RTPS Spec v2.5 Section "8.7.4 Changes in the Instance State"
+    //
+    // When disposing, we also indicate "unregistered", although we do not
+    // support whole register/unregister mechanism at all. TODO: Does this
+    // make sense?
     match cache_change.data_value {
-      DDSData::Data { .. } | DDSData::DisposeByKey { .. } => (), // no
+      DDSData::Data { .. } => (), // data sample, not dispose
+
+      DDSData::DisposeByKey { .. } => {
+        param_list.push(Parameter::create_pid_status_info_parameter(
+          /* disposed */ true, /* unregistered */ true, /* filtered */ false,
+        ));
+      }
       DDSData::DisposeByKeyHash { key_hash, .. } => {
-        // yes, insert to inline QoS
-        // insert key hash
+        // yes, insert key hash to inline QoS
         param_list.push(Parameter {
           parameter_id: ParameterId::PID_KEY_HASH,
           value: key_hash.to_vec(),
         });
-
         // ... and tell what the key_hash means
         let status_info = Parameter::create_pid_status_info_parameter(
           /* disposed */ true, /* unregistered */ true, /* filtered */ false,
