@@ -1715,9 +1715,10 @@ impl Discovery {
         {
           Ok(()) => {
             debug!(
-              "Published DCPSSubscription data on topic {}, reader guid {:?}",
+              "Published DCPSSubscription data on topic {}, reader guid {:?}, data {:?}",
               reader_data.subscription_topic_data.topic_name(),
-              guid
+              guid,
+              reader_data,
             );
           }
           Err(e) => {

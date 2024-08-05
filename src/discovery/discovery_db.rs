@@ -652,7 +652,7 @@ impl DiscoveryDB {
       Some(domain_participant.guid()),
       topic.name(),
       topic.get_type().name().to_string(),
-      &topic.qos(),
+      &reader.qos_policy,
       sec_info_opt,
     );
 
