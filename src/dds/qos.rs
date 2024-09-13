@@ -887,7 +887,8 @@ pub mod policy {
     KeepAll,
   }
 
-  /// DDS 2.2.3.19 RESOURCE_LIMITS
+  /// DDS Spec v1.4 Section 2.2.3.19 RESOURCE_LIMITS
+  ///
   /// DDS Spec v1.4 p.147 "struct ResourceLimitsQosPolicy" defines the
   /// fields as "long". The "long" type of OMG IDL is defined to have
   /// 32-bit (signed, 2's complement) range in the OMG IDL spec v4.2, Table

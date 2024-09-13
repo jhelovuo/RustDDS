@@ -355,6 +355,7 @@ pub enum LostReason {
 }
 
 /// This is a rewrite/summary of SpdpDiscoveredParticipantData from discovery.
+///
 /// The original is not used to avoid circular dependency between participant
 /// and discovery. Some of the more technical details have been left out
 #[derive(Debug, Clone)]

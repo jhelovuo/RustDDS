@@ -169,7 +169,9 @@ pub mod no_key {
   }
 
   /// The trait `Decode` defines a decoder object that produced a value of type
-  /// `Dec` from a slice of bytes and a [`RepresentationIdentifier`]. Note
+  /// `Dec` from a slice of bytes and a [`RepresentationIdentifier`].
+  ///
+  /// Note
   /// that `Decoded` maps to associated type `Decoded` in
   /// `DeserializerAdapter` , not `D`.
   pub trait Decode<Decoded> {

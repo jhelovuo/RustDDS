@@ -299,7 +299,7 @@ impl TopicCache {
   pub fn get_changes_in_range_reliable<'a>(
     &'a self,
     last_read_sn: &'a BTreeMap<GUID, SequenceNumber>,
-  ) -> Box<dyn Iterator<Item = (Timestamp, &CacheChange)> + 'a> {
+  ) -> Box<dyn Iterator<Item = (Timestamp, &'a CacheChange)> + 'a> {
     Box::new(
       self
         .sequence_numbers

@@ -1,4 +1,5 @@
 //! This module corresponds to "Return codes" in DDS spec Section "2.2.1.1
+//!
 //! Format and Conventions", but the error codes are not the same.
 //! In particular, a uniform error type is not used for all DDS calls, because
 //! most calls can only return a subset of errors.

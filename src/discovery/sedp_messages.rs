@@ -1085,6 +1085,7 @@ pub fn topics_inconsistent(t1: &TopicBuiltinTopicData, t2: &TopicBuiltinTopicDat
 // =======================================================================
 
 /// DDS Spec defined DiscoveredTopicData with extra updated time attribute.
+///
 /// Practically this is gotten from
 /// [DomainParticipant](../participant/struct.DomainParticipant.html) during
 /// runtime Type specified in RTPS v2.3 spec Figure 8.30

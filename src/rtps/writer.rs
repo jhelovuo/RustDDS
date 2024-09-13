@@ -986,9 +986,8 @@ impl Writer {
         let last_seq = self.history_buffer.last_change_sequence_number(); // to avoid borrow problems
 
         // sanity check requested sequence numbers
-        match an.reader_sn_state.iter().next().map(i64::from) {
-          Some(0) => warn!("Request for SN zero! : {:?}", an),
-          Some(_) | None => (), // ok
+        if let Some(0) = an.reader_sn_state.iter().next().map(i64::from) {
+          warn!("Request for SN zero! : {:?}", an);
         }
 
         let reader_guid = GUID::new(reader_guid_prefix, an.reader_id);
