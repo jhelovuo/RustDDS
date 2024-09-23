@@ -17,8 +17,8 @@ use crate::{
     with_key::{
       datareader as datareader_with_key,
       datasample::{DataSample as WithKeyDataSample, Sample},
-      DataReader as WithKeyDataReader, DataReaderEventStream as WithKeyDataReaderEventStream,
-      BareDataReaderStream as WithKeyBareDataReaderStream,
+      BareDataReaderStream as WithKeyBareDataReaderStream, DataReader as WithKeyDataReader,
+      DataReaderEventStream as WithKeyDataReaderEventStream,
       DataReaderStream as WithKeyDataReaderStream,
     },
   },
