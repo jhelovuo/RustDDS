@@ -79,7 +79,7 @@ fn main() {
         futures::select! {
           r=datareader_stream.select_next_some()=>{
             match r{
-              Ok(d)=>{println!("{}",d.a)},
+              Ok(d)=>{println!("{}", d.value().a)},
               Err(e)=> {
                 println!("{:?}", e);
                 break;

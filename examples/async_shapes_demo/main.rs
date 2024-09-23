@@ -244,8 +244,8 @@ fn main() {
             _ = stop => run = false,
             r = datareader_stream.select_next_some() => {
               match r {
-                Ok(v) =>
-                  match v {
+                Ok(s) =>
+                  match s.into_value() {
                     Sample::Value(sample) => println!(
                       "{:10.10} {:10.10} {:3.3} {:3.3} [{}]",
                       topic.name(),

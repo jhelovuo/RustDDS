@@ -18,6 +18,7 @@ use crate::{
       datareader as datareader_with_key,
       datasample::{DataSample as WithKeyDataSample, Sample},
       DataReader as WithKeyDataReader, DataReaderEventStream as WithKeyDataReaderEventStream,
+      BareDataReaderStream as WithKeyBareDataReaderStream,
       DataReaderStream as WithKeyDataReaderStream,
     },
   },
@@ -422,6 +423,13 @@ where
   */
 
   /// An async stream for reading the (bare) data samples
+  pub fn async_bare_sample_stream(self) -> BareDataReaderStream<D, DA> {
+    BareDataReaderStream {
+      keyed_stream: self.keyed_datareader.async_bare_sample_stream(),
+    }
+  }
+
+  /// An async stream for reading the data samples
   pub fn async_sample_stream(self) -> DataReaderStream<D, DA> {
     DataReaderStream {
       keyed_stream: self.keyed_datareader.async_sample_stream(),
@@ -566,7 +574,68 @@ where
 // ----------------------------------------------
 // ----------------------------------------------
 
-// Async interface for the DataReader
+// Async interface for the (bare) DataReader
+
+/// Wraps [`with_key::BareDataReaderStream`](crate::with_key::BareDataReaderStream) and
+/// unwraps [`Sample`](crate::with_key::Sample) and `NoKeyWrapper` on
+/// `poll_next`.
+pub struct BareDataReaderStream<
+  D: 'static,
+  DA: DeserializerAdapter<D> + 'static = CDRDeserializerAdapter<D>,
+> {
+  keyed_stream: WithKeyBareDataReaderStream<NoKeyWrapper<D>, DAWrapper<DA>>,
+}
+
+impl<D, DA> BareDataReaderStream<D, DA>
+where
+  D: 'static,
+  DA: DeserializerAdapter<D>,
+{
+  pub fn async_event_stream(&self) -> DataReaderEventStream<D, DA> {
+    DataReaderEventStream {
+      keyed_stream: self.keyed_stream.async_event_stream(),
+    }
+  }
+}
+
+// https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
+impl<D, DA> Unpin for BareDataReaderStream<D, DA>
+where
+  D: 'static,
+  DA: DeserializerAdapter<D>,
+{
+}
+
+impl<D, DA> Stream for BareDataReaderStream<D, DA>
+where
+  D: 'static,
+  DA: DefaultDecoder<D>,
+{
+  type Item = ReadResult<D>;
+
+  fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+    match Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx) {
+      Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
+      Poll::Ready(Some(Ok(Sample::Value(d)))) => Poll::Ready(Some(Ok(d.d))), /* Unwraps Sample and NoKeyWrapper */
+      // Disposed data is ignored
+      Poll::Ready(Some(Ok(Sample::Dispose(_)))) => Poll::Pending,
+      Poll::Ready(None) => Poll::Ready(None), // This should never happen
+      Poll::Pending => Poll::Pending,
+    }
+  }
+}
+
+impl<D, DA> FusedStream for BareDataReaderStream<D, DA>
+where
+  D: 'static,
+  DA: DefaultDecoder<D>,
+{
+  fn is_terminated(&self) -> bool {
+    false // Never terminate. This means it is always valid to call poll_next().
+  }
+}
+
+// Async interface for the (non-bare) DataReader
 
 /// Wraps [`with_key::DataReaderStream`](crate::with_key::DataReaderStream) and
 /// unwraps [`Sample`](crate::with_key::Sample) and `NoKeyWrapper` on
@@ -603,14 +672,19 @@ where
   D: 'static,
   DA: DefaultDecoder<D>,
 {
-  type Item = ReadResult<D>;
+  type Item = ReadResult<DataSample<D>>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
     match Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx) {
       Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-      Poll::Ready(Some(Ok(Sample::Value(d)))) => Poll::Ready(Some(Ok(d.d))), /* Unwraps Sample and NoKeyWrapper */
-      // Disposed data is ignored
-      Poll::Ready(Some(Ok(Sample::Dispose(_)))) => Poll::Pending,
+      Poll::Ready(Some(Ok(d))) => match d.value() {
+        Sample::Value(_) => match DataSample::<D>::from_with_key(d) {
+          Some(d) => Poll::Ready(Some(Ok(d))),
+          None => Poll::Ready(None), // This should never happen
+        },
+        // Disposed data is ignored
+        Sample::Dispose(_) => Poll::Pending,
+      },
       Poll::Ready(None) => Poll::Ready(None), // This should never happen
       Poll::Pending => Poll::Pending,
     }
