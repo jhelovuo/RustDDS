@@ -20,6 +20,10 @@ Currently, the implementation is complete enough to do data exchange with [ROS2]
 
 The [ros2-client](https://crates.io/crates/ros2-client) is recommended for talking to ROS components. The `ros2` module within RustDDS should not be used anymore.
 
+## Version 0.11.0
+* `DataReaderStream` sample stream now returns full `DataSample`, including sample metadata 
+(`SampleInfo`). The old version returned only bare data value. You can access the old (simpler and faster) async stream as `BareDataReaderStream`.
+
 ## Version 0.10.0
 The `DeserializerAdpter` interface for attaching serialization formats to RTPS was extended
 to support deserialization with a "seed" value. This allows the deserialization process

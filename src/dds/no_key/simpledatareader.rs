@@ -109,6 +109,9 @@ where
           Ok(kdcc) => match DeserializedCacheChange::<D>::from_keyed(kdcc) {
             None => {
               info!("Got dispose from no_key topic.");
+              // This means there is some disgreement over the kind of this Topic between
+              // us and some Writer. They must think it is WITH_KEY, since they sent a
+              // Dispose.
               None
             }
             Some(dcc) => Some(Ok(dcc)),

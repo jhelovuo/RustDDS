@@ -614,14 +614,20 @@ where
   type Item = ReadResult<D>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    match Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx) {
-      Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-      Poll::Ready(Some(Ok(Sample::Value(d)))) => Poll::Ready(Some(Ok(d.d))), /* Unwraps Sample and NoKeyWrapper */
-      // Disposed data is ignored
-      Poll::Ready(Some(Ok(Sample::Dispose(_)))) => Poll::Pending,
-      Poll::Ready(None) => Poll::Ready(None), // This should never happen
-      Poll::Pending => Poll::Pending,
-    }
+    let mut keyed_stream = Pin::new(&mut Pin::into_inner(self).keyed_stream);
+    loop {
+      match keyed_stream.as_mut().poll_next(cx) {
+        Poll::Ready(Some(Err(e))) => break Poll::Ready(Some(Err(e))),
+        Poll::Ready(Some(Ok(Sample::Value(d)))) => break Poll::Ready(Some(Ok(d.d))), /* Unwraps Sample and NoKeyWrapper */
+        // Disposed data is ignored. However, we just received a `Poll::Ready(..)`,
+        // which means we cannot return `Poll::Pending`, because the Ready result
+        // has not left a waker behind to wake us up. Therefore, we need to loop
+        // and try again until we get a returnable result or Pending.
+        Poll::Ready(Some(Ok(Sample::Dispose(_)))) => (), // continue looping
+        Poll::Ready(None) => break Poll::Ready(None),    // This should never happen
+        Poll::Pending => break Poll::Pending,
+      }
+    } // loop
   }
 }
 
@@ -675,19 +681,25 @@ where
   type Item = ReadResult<DataSample<D>>;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-    match Pin::new(&mut Pin::into_inner(self).keyed_stream).poll_next(cx) {
-      Poll::Ready(Some(Err(e))) => Poll::Ready(Some(Err(e))),
-      Poll::Ready(Some(Ok(d))) => match d.value() {
-        Sample::Value(_) => match DataSample::<D>::from_with_key(d) {
-          Some(d) => Poll::Ready(Some(Ok(d))),
-          None => Poll::Ready(None), // This should never happen
+    let mut keyed_stream = Pin::new(&mut Pin::into_inner(self).keyed_stream);
+    loop {
+      match keyed_stream.as_mut().poll_next(cx) {
+        Poll::Ready(Some(Err(e))) => break Poll::Ready(Some(Err(e))),
+        Poll::Ready(Some(Ok(d))) => match d.value() {
+          Sample::Value(_) => match DataSample::<D>::from_with_key(d) {
+            Some(d) => break Poll::Ready(Some(Ok(d))),
+            None => break Poll::Ready(None), // This should never happen
+          },
+          // Disposed data is ignored. However, we just received a `Poll::Ready(..)`,
+          // which means we cannot return `Poll::Pending`, because the Ready result
+          // has not left a waker behind to wake us up. Therefore, we need to loop
+          // and try again until we get a returnable result or Pending.
+          Sample::Dispose(_) => (),
         },
-        // Disposed data is ignored
-        Sample::Dispose(_) => Poll::Pending,
-      },
-      Poll::Ready(None) => Poll::Ready(None), // This should never happen
-      Poll::Pending => Poll::Pending,
-    }
+        Poll::Ready(None) => break Poll::Ready(None), // This should never happen
+        Poll::Pending => break Poll::Pending,
+      }
+    } // loop
   }
 }
 
