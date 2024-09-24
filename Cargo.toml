@@ -1,10 +1,10 @@
 [package]
 name = "rustdds"
 version = "0.11.0"
-authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>", 
-  "Oiva Moisio <oiva.moisio@atostek.com>", 
-  "Miska Melkinen <miska.melkinen@atostek.com>", 
-  "Lauri Eneh <lauri.eneh@atostek.com>", 
+authors = ["Juhana Helovuo <juhana.helovuo@atostek.com>",
+  "Oiva Moisio <oiva.moisio@atostek.com>",
+  "Miska Melkinen <miska.melkinen@atostek.com>",
+  "Lauri Eneh <lauri.eneh@atostek.com>",
   "Olli Huopio <olli.huopio@atostek.com>", 
   "Selim Virtanen <selim.virtanen@atostek.com>"
 ]
