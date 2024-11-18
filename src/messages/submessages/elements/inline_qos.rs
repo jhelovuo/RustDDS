@@ -61,7 +61,9 @@ impl InlineQos {
     let rsi = params
       .parameters
       .iter()
-      .find(|p| p.parameter_id == ParameterId::PID_RELATED_SAMPLE_IDENTITY);
+      // We look for two PIDs, because there is some unclarity about which one should be used.
+      .find(|p| p.parameter_id == ParameterId::PID_RELATED_SAMPLE_IDENTITY
+                || p.parameter_id == ParameterId::PID_RELATED_SAMPLE_IDENTITY_CUSTOM );
 
     let endianness = match representation_id {
       RepresentationIdentifier::PL_CDR_LE => Endianness::LittleEndian,

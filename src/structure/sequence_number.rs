@@ -34,7 +34,7 @@ use log::error;
 pub struct SequenceNumber(i64);
 
 impl SequenceNumber {
-  pub const SEQUENCENUMBER_UNKNOWN: Self = Self((u32::MAX as i64) << 32);
+  pub const UNKNOWN: Self = Self((u32::MAX as i64) << 32);
 
   pub fn new(value: i64) -> Self {
     Self::from(value)
@@ -601,7 +601,7 @@ mod tests {
   },
   {
       sequence_number_unknown,
-      SequenceNumber::SEQUENCENUMBER_UNKNOWN,
+      SequenceNumber::UNKNOWN,
       le = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00],
       be = [0xFF, 0xFF, 0xFF, 0xFF, 0x00, 0x00, 0x00, 0x00]
   },
