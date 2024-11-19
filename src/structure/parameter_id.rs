@@ -85,14 +85,15 @@ impl ParameterId {
   // https://github.com/eProsima/Fast-DDS/commit/359eeaadd0ff0216aa1968a8ea34b5092c4f346e
   // They changed PID_RELATED_SAMPLE_IDENTITY from 0x800f to 0x0083.
   //
-  // PID 0x800f is still supported in FastDDS, and it is called  PID_CUSTOM_RELATED_SAMPLE_IDENTITY, which
-  // naming we will copy, so that future debugging is less confusing. Now FastDDS sends
-  // both of these PIDs in Inline QoS, if it needs to send related_sample_identity. This seems like
+  // PID 0x800f is still supported in FastDDS, and it is called
+  // PID_CUSTOM_RELATED_SAMPLE_IDENTITY, which naming we will copy, so that
+  // future debugging is less confusing. Now FastDDS sends both of these PIDs in
+  // Inline QoS, if it needs to send related_sample_identity. This seems like
   // a good idea for backward compatibility.
   //
-  // The receive behaviour of FastDDS is somewhat unclear. They recognize both versions on receive,
-  // but receiveing related_sample_identity does not work correctly with PID=0x800f in
-  // ROS 2 Jazzy.
+  // The receive behaviour of FastDDS is somewhat unclear. They recognize both
+  // versions on receive, but receiveing related_sample_identity does not work
+  // correctly with PID=0x800f in ROS 2 Jazzy.
   pub const PID_RELATED_SAMPLE_IDENTITY: Self = Self { value: 0x0083 };
   pub const PID_RELATED_SAMPLE_IDENTITY_CUSTOM: Self = Self { value: 0x800f };
 

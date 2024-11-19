@@ -223,9 +223,9 @@ impl MessageBuilder {
     // If we are sending related sample identity, then insert that.
     if let Some(si) = cache_change.write_options.related_sample_identity() {
       let related_sample_identity_serialized = si.write_to_vec_with_ctx(endianness).unwrap();
-      // Insert two parameters, because we are not sure which one is the correct parameter id.
-      // Or what the receiver thinks is correct. This behaviour was observed from
-      // eProsima FastDDS on 2024-11-18.
+      // Insert two parameters, because we are not sure which one is the correct
+      // parameter id. Or what the receiver thinks is correct. This behaviour
+      // was observed from eProsima FastDDS on 2024-11-18.
       param_list.push(Parameter {
         parameter_id: ParameterId::PID_RELATED_SAMPLE_IDENTITY,
         value: related_sample_identity_serialized.clone(),
@@ -360,9 +360,9 @@ impl MessageBuilder {
     // If we are sending related sample identity, then insert that.
     if let Some(si) = cache_change.write_options.related_sample_identity() {
       let related_sample_identity_serialized = si.write_to_vec_with_ctx(endianness).unwrap();
-      // Insert two parameters, because we are not sure which one is the correct parameter id.
-      // Or what the receiver thinks is correct. This behaviour was observed from
-      // eProsima FastDDS on 2024-11-18.
+      // Insert two parameters, because we are not sure which one is the correct
+      // parameter id. Or what the receiver thinks is correct. This behaviour
+      // was observed from eProsima FastDDS on 2024-11-18.
       param_list.push(Parameter {
         parameter_id: ParameterId::PID_RELATED_SAMPLE_IDENTITY,
         value: related_sample_identity_serialized.clone(),
