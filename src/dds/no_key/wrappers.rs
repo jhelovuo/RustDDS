@@ -102,12 +102,10 @@ where
 {
   type DecodedKey = ();
 
-  #[allow(clippy::unused_unit, clippy::semicolon_if_nothing_returned)]
   // transform_decoded_key is supposed to return
   // a value, but in this instance it is of type unit.
-
+  #[allow(clippy::unused_unit, clippy::semicolon_if_nothing_returned)]
   fn transform_decoded_key(_decoded_key: Self::DecodedKey) -> () {
-    // #[allow()]
     ()
   }
 }

@@ -33,7 +33,7 @@ use super::cache_change::CacheChange;
 /// for Readers is scoped over the entire Topic (or Instances in it). This leads
 /// to situations where some sample would be garbage collected by a Reader's
 /// History policy, but must be preserved by a Writer's History Policy.
-
+///
 /// Each topic that has been subscribed to
 /// is contained in a separate TopicCache. One TopicCache contains
 /// only CacheChanges of one serialized IDL datatype. -> all cache changes in

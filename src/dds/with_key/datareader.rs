@@ -162,7 +162,6 @@ where
   /// #   }
   /// # }
   ///
-  /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
@@ -174,7 +173,6 @@ where
   ///   }
   /// }
   /// ```
-
   pub fn read(
     &mut self,
     max_samples: usize,
@@ -486,7 +484,6 @@ where
   /// #   }
   /// # }
   ///
-  /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let mut data_reader = subscriber.create_datareader::<SomeType, CDRDeserializerAdapter<_>>(&topic, None).unwrap();
   ///
@@ -496,7 +493,6 @@ where
   ///   // do something
   /// }
   /// ```
-
   pub fn into_iterator(&mut self) -> ReadResult<impl Iterator<Item = Sample<D, D::K>>> {
     // TODO: We could come up with a more efficient implementation than wrapping a
     // take call

@@ -253,12 +253,9 @@ where
       .fetch_sub(1, Ordering::Relaxed);
   }
 
-  // This one function provides both get_matched_subscriptions and
-  // get_matched_subscription_data TODO: Maybe we could return references to the
-  // subscription data to avoid copying? But then what if the result set changes
-  // while the application processes it?
-
-  /// Manually refreshes liveliness if QoS allows it
+  /// Manually refreshes liveliness
+  ///
+  /// Corresponds to DDS Spec 1.4 Section 2.2.2.4.2.22 assert_liveliness.
   ///
   /// # Examples
   ///
@@ -282,14 +279,11 @@ where
   ///   }
   /// }
   ///
-  /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// data_writer.refresh_manual_liveliness();
   /// ```
-
-  // TODO: What is this function? To what part of DDS spec does it correspond to?
   pub fn refresh_manual_liveliness(&self) {
     if let Some(lv) = self.qos().liveliness {
       match lv {
@@ -752,16 +746,14 @@ where
   ///   }
   /// }
   ///
-  /// // WithKey is important
   /// let topic = domain_participant.create_topic("some_topic".to_string(), "SomeType".to_string(), &qos, TopicKind::WithKey).unwrap();
   /// let data_writer = publisher.create_datawriter::<SomeType, CDRSerializerAdapter<_>>(&topic, None).unwrap();
   ///
   /// data_writer.assert_liveliness().unwrap();
   /// ```
-
-  // TODO: This cannot really fail, so could change type to () (alternatively,
-  // make send error visible) TODO: Better make send failure visible, so
-  // application can see if Discovery has failed.
+  ///
+  /// An `Err` result means that livelines assertion message could not be sent,
+  /// likely because Discovery has too much work to do.
   pub fn assert_liveliness(&self) -> WriteResult<(), ()> {
     self.refresh_manual_liveliness();
 
@@ -773,11 +765,13 @@ where
             writer_guid: self.guid(),
             manual_assertion: true, // by definition of this function
           })
-          .unwrap_or_else(|e| error!("assert_liveness - Failed to send DiscoveryCommand. {e:?}"));
+          .map_err(|e| {
+            error!("assert_liveness - Failed to send DiscoveryCommand. {e:?}");
+            WriteError::WouldBlock { data: () }
+          })
       }
-      _other => (),
+      _other => Ok(()),
     }
-    Ok(())
   }
 
   /// Unimplemented. <b>Do not use</b>.
@@ -963,14 +957,14 @@ where
 
 // This is required, because AsyncWrite contains "D".
 // TODO: Is it ok to promise Unpin here?
-impl<'a, D, SA> Unpin for AsyncWrite<'a, D, SA>
+impl<D, SA> Unpin for AsyncWrite<'_, D, SA>
 where
   D: Keyed,
   SA: SerializerAdapter<D>,
 {
 }
 
-impl<'a, D, SA> Future for AsyncWrite<'a, D, SA>
+impl<D, SA> Future for AsyncWrite<'_, D, SA>
 where
   D: Keyed,
   SA: SerializerAdapter<D>,
@@ -1049,7 +1043,7 @@ where
   Fail(WriteError<()>),
 }
 
-impl<'a, D, SA> Future for AsyncWaitForAcknowledgments<'a, D, SA>
+impl<D, SA> Future for AsyncWaitForAcknowledgments<'_, D, SA>
 where
   D: Keyed,
   SA: SerializerAdapter<D>,

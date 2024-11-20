@@ -24,13 +24,19 @@ use crate::serialization::{
 /// The key is used to distinguish between different Instances of the data in a
 /// DDS Topic.
 ///
+/// DDS WITH_KEY Topics are similar to distributed key-value maps. A Sample
+/// corresponds to a key-value-pair and the `Keyed` trait allows to extract the
+/// key out of the pair. An Instance means all the Samples with the same Key.
+/// These samples can be viewed as updates to the key. WITH_KEY topics also
+/// support a Dispose operation, which corresponds to removing a key from the
+/// map.
+///
 /// A `Keyed` type has an associated type `K`, which is the corresponding key
 /// type. `K` must implement [`Key`]. Otherwise, `K` can be chosen to suit the
 /// application. It is advisable that `K` is something that can be cloned with
 /// reasonable effort.
 ///
 /// [`Key`]: trait.Key.html
-
 pub trait Keyed {
   type K: Key;
 
@@ -91,7 +97,7 @@ impl KeyHash {
 /// Note: When implementing Key, DeserializeOwned cannot and need not be
 /// derived, as it is a type alias. Derive (or implement) the [`Deserialize`]
 /// trait instead.
-
+///
 /// # Example
 /// ```
 /// use rustdds::*;

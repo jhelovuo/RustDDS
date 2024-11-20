@@ -54,7 +54,6 @@ impl Data {
   /// DATA submessage cannot be speedy Readable because deserializing this
   /// requires info from submessage header. Required information is  expect_qos
   /// and expect_payload, which are told on submessage header flags.
-
   pub fn deserialize_data(buffer: &Bytes, flags: BitFlags<DATA_Flags>) -> io::Result<Self> {
     let mut cursor = io::Cursor::new(&buffer);
     let endianness = endianness_flag(flags.bits());

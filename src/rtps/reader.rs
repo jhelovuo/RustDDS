@@ -690,7 +690,7 @@ impl Reader {
     self
       .fragment_assemblers
       .get(&writer_guid)
-      .map_or(false, |fa| fa.is_partially_received(seq))
+      .is_some_and(|fa| fa.is_partially_received(seq))
   }
 
   // common parts of processing DATA or a completed DATAFRAG (when all frags are

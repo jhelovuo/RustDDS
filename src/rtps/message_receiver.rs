@@ -102,7 +102,6 @@ impl Default for MessageReceiverState {
 /// submessages. Then it processes the instructions in the Interpreter
 /// SUbmessages and forwards data in Entity Submessages to the appropriate
 /// Entities. (See RTPS spec Section 8.3.7)
-
 pub(crate) struct MessageReceiver {
   pub available_readers: BTreeMap<EntityId, Reader>,
   // GuidPrefix sent in this channel needs to be RTPSMessage source_guid_prefix. Writer needs this

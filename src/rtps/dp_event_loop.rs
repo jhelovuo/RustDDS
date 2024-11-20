@@ -623,7 +623,7 @@ impl DPEventLoop {
           if *reader_eid == EntityId::P2P_BUILTIN_PARTICIPANT_MESSAGE_READER
             && discovered_participant
               .builtin_endpoint_qos
-              .map_or(false, |beq| beq.is_best_effort())
+              .is_some_and(|beq| beq.is_best_effort())
           {
             qos.reliability = Some(policy::Reliability::BestEffort);
           };

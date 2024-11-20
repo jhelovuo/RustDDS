@@ -615,7 +615,7 @@ pub struct DomainParticipantStatusStream<'a> {
   status_listener: &'a DomainParticipantStatusListener,
 }
 
-impl<'a> Stream for DomainParticipantStatusStream<'a> {
+impl Stream for DomainParticipantStatusStream<'_> {
   type Item = DomainParticipantStatusEvent;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -637,7 +637,7 @@ impl<'a> Stream for DomainParticipantStatusStream<'a> {
   } // fn
 }
 
-impl<'a> FusedStream for DomainParticipantStatusStream<'a> {
+impl FusedStream for DomainParticipantStatusStream<'_> {
   fn is_terminated(&self) -> bool {
     false
   }

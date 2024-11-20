@@ -1111,7 +1111,7 @@ impl Writer {
     let completed = self
       .ack_waiter
       .as_mut()
-      .map_or(false, |aw| aw.reader_acked_or_lost(guid, acked_before));
+      .is_some_and(|aw| aw.reader_acked_or_lost(guid, acked_before));
     if completed {
       self
         .ack_waiter

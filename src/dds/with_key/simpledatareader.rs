@@ -568,7 +568,7 @@ pub struct SimpleDataReaderStream<
 // ----------------------------------------------
 
 // https://users.rust-lang.org/t/take-in-impl-future-cannot-borrow-data-in-a-dereference-of-pin/52042
-impl<'a, D, S, DA> Unpin for SimpleDataReaderStream<'a, D, S, DA>
+impl<D, S, DA> Unpin for SimpleDataReaderStream<'_, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
@@ -576,7 +576,7 @@ where
 {
 }
 
-impl<'a, D, S, DA> Stream for SimpleDataReaderStream<'a, D, S, DA>
+impl<D, S, DA> Stream for SimpleDataReaderStream<'_, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
@@ -633,7 +633,7 @@ where
   } // fn
 } // impl
 
-impl<'a, D, S, DA> FusedStream for SimpleDataReaderStream<'a, D, S, DA>
+impl<D, S, DA> FusedStream for SimpleDataReaderStream<'_, D, S, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
@@ -655,7 +655,7 @@ pub struct SimpleDataReaderEventStream<
   simple_datareader: &'a SimpleDataReader<D, DA>,
 }
 
-impl<'a, D, DA> Stream for SimpleDataReaderEventStream<'a, D, DA>
+impl<D, DA> Stream for SimpleDataReaderEventStream<'_, D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,
@@ -673,7 +673,7 @@ where
   } // fn
 } // impl
 
-impl<'a, D, DA> FusedStream for SimpleDataReaderEventStream<'a, D, DA>
+impl<D, DA> FusedStream for SimpleDataReaderEventStream<'_, D, DA>
 where
   D: Keyed + 'static,
   DA: DeserializerAdapter<D>,

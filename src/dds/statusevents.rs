@@ -219,7 +219,7 @@ pub struct StatusReceiverStream<'a, T> {
   terminated: AtomicBool,
 }
 
-impl<'a, T> Stream for StatusReceiverStream<'a, T> {
+impl<T> Stream for StatusReceiverStream<'_, T> {
   type Item = T;
 
   fn poll_next(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
@@ -242,7 +242,7 @@ impl<'a, T> Stream for StatusReceiverStream<'a, T> {
   } // fn
 }
 
-impl<'a, T> FusedStream for StatusReceiverStream<'a, T> {
+impl<T> FusedStream for StatusReceiverStream<'_, T> {
   fn is_terminated(&self) -> bool {
     self.terminated.load(Ordering::SeqCst)
   }
